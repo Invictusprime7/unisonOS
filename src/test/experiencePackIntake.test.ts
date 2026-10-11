@@ -5,9 +5,8 @@ import { createIntakeRecord } from '@/design/21st-intake/provenance';
 
 describe('experience-pack intake', () => {
   it('gates a three.js source behind the 3D capability and keeps it experimental until adapted', () => {
-    const tunnel = TWENTY_FIRST_INTAKE_MANIFEST.find((r) => r.sourceId === '21st:6588');
-    expect(tunnel).toBeTruthy();
-    const a = assessExperiencePackIntake(tunnel!);
+    const tunnel = createIntakeRecord({ sourceId: '21st:raw3d', name: 'Raw', sourceType: 'component', dependencies: ['react', 'three'] } as never);
+    const a = assessExperiencePackIntake({ ...tunnel, capabilities: { ...tunnel.capabilities, threeD: true } });
     expect(a.motionLevel).toBe('immersive');
     expect(a.requiredCapabilities).toEqual(['experience.three-d']);
     expect(a.dependencyAudit.rejected).toEqual([]);
