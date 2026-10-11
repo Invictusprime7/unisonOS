@@ -46,7 +46,8 @@ import {
 import { ensureViteRootFiles } from '@/services/previewSession';
 import { generateCanonicalRouter } from '@/utils/topologyRouterGenerator';
 import { resolveApprovedExperienceCapabilities } from '@/services/experienceCapabilityResolver';
-import { GENERATED_RUNTIME_PROFILE } from '@/platform/core/generatedRuntimeCapabilities';
+import { GENERATED_RUNTIME_PROFILE, EXPERIENCE_CAPABILITY_ID } from '@/platform/core/generatedRuntimeCapabilities';
+import { resolveExperienceRequirement } from '@/sections/variants';
 import { TEMPLATE_DESIGN_CONTRACT_PATH } from '@/services/templateLayoutContract';
 import { readTemplateDesignContract } from '@/services/templateLayoutContract';
 import { THEME_OVERRIDES_PATH } from '@/services/theme/themeTokenOverrides';
@@ -186,6 +187,11 @@ export function resolveCanonicalLaunchContracts(
     approvedExperienceCapabilities: resolveApprovedExperienceCapabilities({
       webgl: designIntervention.envelope?.webgl,
       foundationCapabilities: uiFoundation.manifest.experience?.capabilities,
+      // Approve before authoring: the Wizard's Immersive choice (or a resolved
+      // registered implementation) is the requirement, since no page exists yet.
+      requiredCapabilities: (selections.needsImmersive || selections.designSelection?.experience === 'immersive')
+        ? [EXPERIENCE_CAPABILITY_ID]
+        : resolveExperienceRequirement(Object.values(designIntervention.activeVariants)).capabilities,
       reachesExperienceLayer: false,
     }),
   };

@@ -28,7 +28,19 @@ export interface SourceKnowledgeScope {
   includeTheme?: boolean;
   /** Include /package.json even when scoped. */
   includeDependencies?: boolean;
+  /** Include the certified motion + 3D facades so the AI composes real primitives. */
+  includeExperience?: boolean;
 }
+
+/** Certified motion/3D facade sources the AI must compose instead of inventing effects. */
+export const EXPERIENCE_KNOWLEDGE_FILES = [
+  '/src/unison/ui/motion.tsx',
+  '/src/unison/ui/animation.ts',
+  '/src/unison/ui/experience/index.ts',
+  '/src/unison/ui/experience/scene.tsx',
+  '/src/unison/ui/experience/stage.tsx',
+  '/src/unison/ui/experience/media.tsx',
+];
 
 /** Deterministic: which optional reads a scoped instruction actually needs. */
 export function scopeForInstruction(instruction: string | undefined): SourceKnowledgeScope {
@@ -37,6 +49,7 @@ export function scopeForInstruction(instruction: string | undefined): SourceKnow
     scoped: true,
     includeTheme: /\b(theme|token|colou?r|palette|font|typograph|css|brand|dark mode|light mode)\b/.test(text),
     includeDependencies: /\b(dependenc|package|install|npm|library|librar)/.test(text),
+    includeExperience: /\b(motion|animat\w*|3d|three|webgl|parallax|scroll|immersive|hover effect|transition|fade|reveal|depth|scene)\b/.test(text),
   };
 }
 
@@ -54,7 +67,8 @@ export function selectSourceKnowledgeWithReport(
   const queue = scope.scoped
     ? [...targets,
       ...(scope.includeTheme ? ['/src/index.css'] : []),
-      ...(scope.includeDependencies ? ['/package.json'] : [])]
+      ...(scope.includeDependencies ? ['/package.json'] : []),
+      ...(scope.includeExperience ? EXPERIENCE_KNOWLEDGE_FILES : [])]
     : [...targets, '/src/index.css', '/package.json',
       ...Object.keys(files).filter((path) => path.startsWith('/src/project-components/site/')).sort()];
   const targetSet = new Set(targets);

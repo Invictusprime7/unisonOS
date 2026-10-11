@@ -724,9 +724,12 @@ export async function commitMutation(
           themePresetId: candidate.meta.themePresetId,
           interactionManifest: candidate.meta.interactionManifest,
           enabledCapabilities: readWizardEnabledCapabilities(workingFiles),
-          approvedExperienceCapabilities: input.options?.compositionUpgrade ? resolveApprovedExperienceCapabilities({
+          // AI edits that compose certified 3D primitives approve them (still gated on device eligibility + budgets).
+          approvedExperienceCapabilities: (input.options?.compositionUpgrade || input.source === 'ai-builder') ? resolveApprovedExperienceCapabilities({
             webgl: candidate.meta.designIntervention?.envelope?.webgl,
             foundationCapabilities: candidate.meta.uiFoundation?.experienceCapabilities,
+            requiredCapabilities: candidate.meta.uiFoundation?.approvedExperienceCapabilities
+              ?? presentationSnapshot?.meta.uiFoundation?.approvedExperienceCapabilities,
             reachesExperienceLayer: runExperiencePreflight(workingFiles).manifest.totalInstances > 0,
           }) : candidate.meta.uiFoundation?.approvedExperienceCapabilities
             ?? presentationSnapshot?.meta.uiFoundation?.approvedExperienceCapabilities,

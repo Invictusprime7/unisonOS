@@ -44,7 +44,7 @@ export function findUnrequestedScopedSideEffects(
   const originalImports = new Set([...original.matchAll(IMPORT_PATTERN)].map((match) => match[0].trim()));
   const candidateImports = new Set([...candidate.matchAll(IMPORT_PATTERN)].map((match) => match[0].trim()));
   const addedImports = addedValues(originalImports, candidateImports);
-  if (addedImports.length > 0 && !/\b(add|create|introduce|import|use|icon|motion|animate|form|button|component)\b/i.test(prompt)) {
+  if (addedImports.length > 0 && !/\b(add|create|introduce|import|use|icon|motion|animat\w*|3d|parallax|scroll|immersive|webgl|hover|transition|form|button|component)\b/i.test(prompt)) {
     reasons.push(`new imports (${addedImports.length})`);
   }
 
