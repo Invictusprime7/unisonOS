@@ -13,6 +13,9 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    // Pre-transform the app entry on server start so the first preview load
+    // after a restart doesn't stall on cold module compilation.
+    warmup: { clientFiles: ['./src/main.tsx', './src/App.tsx'] },
   },
   plugins: [
     react({
