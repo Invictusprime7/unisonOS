@@ -90,7 +90,7 @@ export const HeroSpatialDepth: React.FC<BaseSectionProps<'hero'>> = ({ section, 
         style={{ maxWidth: theme.containerWidth, padding: theme.sectionPadding }}
       >
         {badge && (
-          <span data-ut-slot="hero.badge" className="mb-6 text-xs uppercase tracking-[0.3em]" style={{ color: hsl(theme.colors.mutedForeground ?? theme.colors.foreground) }}>
+          <span data-ut-slot="hero.badge" className="mb-6 text-xs uppercase tracking-[0.3em]" style={{ color: hsl(theme.colors.mutedForeground) }}>
             {badge}
           </span>
         )}

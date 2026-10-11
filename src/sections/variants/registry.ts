@@ -91,6 +91,7 @@ import {
   ctaSignalBannerJSX,
   heroPrismaCinematicJSX,
   heroTunnelImmersiveJSX,
+  heroSpatialDepthJSX,
   heroImageStreamJSX,
 } from './jsxTemplates';
 
@@ -100,6 +101,7 @@ import { HeroImageStream } from './hero/HeroImageStream';
 // 21st.dev certified variant: hero:prisma-cinematic
 import { HeroPrismaCinematic } from './hero/HeroPrismaCinematic';
 import { HeroTunnelImmersive } from './hero/HeroTunnelImmersive';
+import { HeroSpatialDepth } from './hero/HeroSpatialDepth';
 
 // 21st.dev certified variant: cta:signal-banner
 import { CTASignalBanner } from './cta/CTASignalBanner';
@@ -738,6 +740,41 @@ const VARIANT_REGISTRY: VariantRegistry = {
       tags: ['hero', 'immersive', '3d', 'tunnel', 'motion'],
       pageRoles: ['home'],
       renderJSX: heroTunnelImmersiveJSX,
+    },
+    {
+      id: 'hero:spatial-depth',
+      sectionType: 'hero',
+      slug: 'spatial-depth',
+      name: 'Spatial Depth',
+      description: 'Full-viewport hero where image cards fan out into perspective depth around centered display copy',
+      component: HeroSpatialDepth,
+      vfs: { mode: 'portable-recipe', certification: 'approved' },
+      source: {
+        origin: '21st',
+        derivation: 'source-adaptation',
+        sourceId: '21st:30683',
+        sourceUrl: 'https://21st.dev/c/30683',
+        license: 'Owner-authorized adaptation (21st.dev publication declares no upstream license)',
+        adaptationVersion: '1',
+      },
+      generationStatus: 'supported',
+      capabilities: {
+        layout: { geometry: ['centered', 'spatial'], mediaDominance: 'high', density: 'airy', typographyScale: 'monumental' },
+        media: { required: true, minItems: 1, maxItems: 8 },
+        motion: { level: 'motion-rich', reducedMotionRequired: true },
+      },
+      compatibility: { pageRoles: ['home'], experiencePreferences: ['motion-rich', 'immersive'] },
+      lifecycle: { status: 'certified', schemaVersion: 1, implementationVersion: 1, introducedAt: '2026-10-11' },
+      ai: {
+        summary: 'Centered statement hero with project imagery scattered in 3D depth (CSS only, no WebGL).',
+        bestFor: ['portfolio', 'agency', 'studio', 'photography', 'fashion'],
+        avoidFor: ['sites without imagery', 'dense information-first homepages'],
+        contentRequirements: ['short headline', 'one supporting line', '1-8 images', '1-2 CTAs'],
+      },
+      thumbnail: '/variants/hero-tunnel-immersive.svg',
+      tags: ['hero', 'spatial', 'depth', 'motion', 'media'],
+      pageRoles: ['home'],
+      renderJSX: heroSpatialDepthJSX,
     },
     {
       id: 'hero:image-fan',
@@ -2288,6 +2325,7 @@ const VARIANT_LAYOUT_ALIASES: Partial<Record<VariantId, readonly string[]>> = {
   'hero:image-stream': ['image-stream', 'stream', 'corridor'],
   'hero:prisma-cinematic': ['prisma-cinematic', 'cinematic'],
   'hero:tunnel-immersive': ['tunnel', 'tunnel-immersive'],
+  'hero:spatial-depth': ['spatial-depth', 'spatial', 'depth'],
   'cta:signal-banner': ['signal-banner', 'signal'],
   'services:product-cards': ['product-cards', 'products'],
   'stats:metric-cards': ['metric-cards', 'cards'],

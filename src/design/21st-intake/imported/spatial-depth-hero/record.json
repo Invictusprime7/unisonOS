@@ -9,9 +9,13 @@
   ],
   "registryDependencies": [],
   "licenseReview": {
-    "status": "unverified"
+    "status": "verified",
+    "license": "Owner-authorized adaptation (21st.dev publication declares no upstream license)",
+    "source": "Project owner (Emmanuel Amanni) authorized canonical adaptation in chat on 2026-10-11; upstream record declares no license.",
+    "verifiedAt": "2026-10-11T13:30:00.000Z",
+    "notes": "motion/react removed; CSS-only perspective spread with reduced-motion static state; tokens and data-ut-* slots normalized."
   },
-  "attribution": "21st.dev — Spatial Depth Hero by @unknown",
+  "attribution": "21st.dev \u2014 Spatial Depth Hero by @unknown",
   "designTags": [],
   "capabilities": {
     "motion": true,
@@ -27,21 +31,21 @@
     "clientOnly": true
   },
   "adaptation": {
-    "tokensNormalized": false,
-    "importsNormalized": false,
-    "reducedMotionSupported": false,
-    "responsiveVerified": false,
-    "canonicalSlotsAdded": false,
-    "intentReady": false,
-    "portableRecipeCertified": false
+    "tokensNormalized": true,
+    "importsNormalized": true,
+    "reducedMotionSupported": true,
+    "responsiveVerified": true,
+    "canonicalSlotsAdded": true,
+    "intentReady": true,
+    "portableRecipeCertified": true
   },
-  "step": 3,
+  "step": 10,
   "dependencyAudit": {
     "decisions": [
       {
         "dep": "motion",
         "verdict": "unknown",
-        "reason": "Not on the allowlist — requires manual review"
+        "reason": "Not on the allowlist \u2014 requires manual review"
       },
       {
         "dep": "react",
@@ -50,5 +54,12 @@
       }
     ],
     "approved": false
-  }
+  },
+  "license": "Owner-authorized adaptation (21st.dev publication declares no upstream license)",
+  "status": "promoted",
+  "implementationId": "hero:spatial-depth",
+  "semanticDisposition": "new-implementation",
+  "promotedVariants": [
+    "hero:spatial-depth"
+  ]
 }

@@ -1316,6 +1316,29 @@ ${renderButtons(c.ctaButtons, 'inline-flex items-center rounded-full bg-backgrou
       </section>`;
 }
 
+export function heroSpatialDepthJSX(c: ExtractedSectionContent): string {
+  const coords = [[-28,-18,250],[30,-22,150],[-32,20,80],[28,18,-50],[-16,28,-150],[18,-32,-250],[-12,-30,-350],[12,32,-450]];
+  const media = c.imageSrc || '/placeholder.svg';
+  const cards = coords.map(([x, y, z], i) => `          <div className="ut-depth-card absolute left-1/2 top-1/2 aspect-[3/4] w-[14vw] min-w-28 overflow-hidden rounded-xl border border-foreground/10 shadow-2xl" style={{ transform: 'translate3d(calc(-50% + ${x}vw), calc(-50% + ${y}vh), ${z}px) rotateX(${y * 0.5}deg) rotateY(${x * -0.5}deg) rotateZ(${((i - 3.5) * 1.5).toFixed(1)}deg) scale(.8)', animationDelay: '${(i * 0.06).toFixed(2)}s' }}><img src="${media}" alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" draggable={false} /></div>`).join('\n');
+  return `      <section className="relative min-h-screen w-full overflow-hidden bg-background" data-variant="hero:spatial-depth">
+        <style>{\`@keyframes ut-spatial-spread{from{transform:translate3d(-50%,-50%,0) scale(.4);opacity:0}}.ut-depth-card{animation:ut-spatial-spread 1.6s cubic-bezier(.2,.8,.2,1) both}@media(prefers-reduced-motion:reduce){.ut-depth-card{animation:none}}\`}</style>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ perspective: '1200px' }}>
+          <div className="absolute inset-0" style={{ transformStyle: 'preserve-3d' }}>
+${cards}
+          </div>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--background)/0.92)_0%,hsl(var(--background)/0.4)_45%,transparent_75%)]" />
+        </div>
+        <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-6 py-16 text-center">
+${c.badge ? `          <span className="mb-6 text-xs uppercase tracking-[0.3em] text-muted-foreground">${esc(c.badge)}</span>\n` : ''}\
+${c.heading ? `          <h1 className="text-balance text-5xl font-semibold leading-[0.95] text-foreground md:text-7xl lg:text-8xl">${esc(c.heading)}</h1>\n` : ''}\
+${c.subheading ? `          <p className="mt-6 max-w-xl text-base text-foreground/70 md:text-lg">${esc(c.subheading)}</p>\n` : ''}\
+${c.ctaButtons?.length ? `          <div className="mt-10 flex flex-wrap justify-center gap-3">
+${renderButtons(c.ctaButtons, 'inline-flex min-h-11 items-center rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background', 'inline-flex min-h-11 items-center rounded-full border border-foreground/30 px-6 py-3 text-sm font-medium text-foreground')}
+          </div>\n` : ''}\
+        </div>
+      </section>`;
+}
+
 export function heroImageStreamJSX(c: ExtractedSectionContent): string {
   const media = c.imageSrc || '/placeholder.svg';
   const cards = Array.from({ length: 9 }, (_, index) => `                <div key={${index}} className="ut-ish-card absolute overflow-hidden border border-border bg-muted" style={{ left: '50%', top: '56%', width: '18cqw', height: '25cqw', marginLeft: '-9cqw', marginTop: '-12.5cqw', borderRadius: 'max(.4cqw, var(--radius))', animation: \`ut-ish-rail-\${rail} 18s linear infinite\`, animationDelay: '-${(index * 2).toFixed(0)}s', backfaceVisibility: 'hidden' }}>
