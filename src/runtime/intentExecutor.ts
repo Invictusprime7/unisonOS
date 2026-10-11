@@ -609,11 +609,43 @@ const INTENT_HANDLERS: Record<CoreIntent, IntentHandler> = {
   }),
 
   'content.download': async (ctx) => {
-    const url = (ctx.payload?.url as string) || (ctx.payload?.downloadUrl as string) || '';
-    if (url && typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
+    const payload = ctx.payload ?? {};
+    const url = String(payload.url || payload.downloadUrl || ctx.element?.getAttribute('href') || '').trim();
+    if (!url) {
+      return {
+        ok: false,
+        missing: { fields: ['url'], prompt: 'Attach a document before enabling this download.' },
+        error: { code: 'MISSING_DOWNLOAD_URL', message: 'No downloadable document is attached.' },
+      };
+    }
+    const isRelative = url.startsWith('/') && !url.startsWith('//');
+    let allowed = isRelative;
+    if (!allowed) {
+      try {
+        allowed = ['https:', 'http:', 'blob:'].includes(new URL(url, typeof window !== 'undefined' ? window.location.href : undefined).protocol);
+      } catch {
+        allowed = false;
+      }
+    }
+    if (!allowed) {
+      return { ok: false, error: { code: 'INVALID_DOWNLOAD_URL', message: 'The document URL is not allowed.' } };
+    }
+    const rawName = String(payload.filename || payload.fileName || ctx.element?.getAttribute('download') || 'download');
+    const filename = rawName.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'download';
+    if (typeof document !== 'undefined') {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.rel = 'noopener noreferrer';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
     return {
       ok: true,
-      events: [{ name: 'content.downloaded', payload: ctx.payload || {}, timestamp: Date.now() }],
+      data: { url, filename, mimeType: payload.mimeType || null },
+      events: [{ name: 'content.downloaded', payload: { ...payload, url, filename }, timestamp: Date.now() }],
     };
   },
 

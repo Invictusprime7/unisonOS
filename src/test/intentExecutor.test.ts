@@ -44,6 +44,27 @@ describe('intentExecutor overlay fallbacks', () => {
     vi.clearAllMocks();
   });
 
+  it('downloads a bound document with a meaningful filename', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const result = await executeIntent('resume.download', {
+      payload: { url: '/documents/alex-resume.pdf', filename: 'Alex Resume.pdf', mimeType: 'application/pdf' },
+      managers: createManagers(),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result._normalized).toBe('content.download');
+    expect(result.data).toEqual(expect.objectContaining({ filename: 'Alex Resume.pdf' }));
+    expect(click).toHaveBeenCalledOnce();
+    click.mockRestore();
+  });
+
+  it('blocks document downloads until a file is attached', async () => {
+    const result = await executeIntent('content.download', { managers: createManagers() });
+    expect(result.ok).toBe(false);
+    expect(result.missing?.fields).toContain('url');
+    expect(result.error?.code).toBe('MISSING_DOWNLOAD_URL');
+  });
+
   it('opens the contact overlay when contact.submit is missing email', async () => {
     const managers = createManagers();
     const result = await executeIntent('contact.submit', {

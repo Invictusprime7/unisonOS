@@ -1338,6 +1338,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   return (
     <div
       ref={previewContainerRef}
+      data-unison-preview-runtime="true"
       data-unison-preview-revision={revisionId ?? undefined}
       className={cn('flex flex-col h-full bg-background rounded-lg overflow-hidden border border-border', className)}
     >

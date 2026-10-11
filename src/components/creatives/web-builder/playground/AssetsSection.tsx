@@ -5,14 +5,14 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, ChevronDown, ChevronRight, Circle, Eye } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronRight, Eye, FileBox, Grid3X3, List, MoreVertical, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordFieldsEditor } from "../RecordFieldsEditor";
 import { listContentTypes, transitionContentRecord } from "@/services/cmsRecordService";
 import { supabase } from "@/integrations/supabase/client";
-import { registerContentTypes, BUSINESS_PROFILE_RESOURCE_KEY, type ContentTypeRow } from "@/services/resources/resourceRegistry";
+import { getResource, registerContentTypes, BUSINESS_PROFILE_RESOURCE_KEY, type ContentTypeRow } from "@/services/resources/resourceRegistry";
 import { applyResourceOp, getResourceRecord, onResourceInvalidated, queryResource } from "@/services/resources/resourceRuntime";
 import type { ResourceRecord } from "@/services/resources/resourceTypes";
 import {
@@ -21,6 +21,9 @@ import {
 import { adoptLongformFromSite, seedLaunchAssets } from "@/services/resources/seedLaunchAssets";
 import { listCatalog } from "@/services/agent-runtime/catalogOps";
 import type { CreatorData } from "@/types/creatorData";
+import { cn } from "@/lib/utils";
+import { usePlaygroundApi, type PlaygroundResourceUsage } from "@/hooks/usePlaygroundApi";
+import { LiveResourcePreview } from "./LiveResourcePreview";
 
 interface Props {
   businessId?: string | null;
@@ -36,42 +39,12 @@ interface Props {
   onPublishLongform?: (items: { record: ResourceRecord; kind: "articles" | "case-studies"; resourceKey: string }[]) => Promise<void>;
   /** Saved launch data; used to backfill assets for sites generated before launch seeding existed. */
   creatorData?: CreatorData | null;
+  initialTab?: "catalog" | "content" | "business" | "media";
 }
 
 function recordTitle(r: ResourceRecord): string {
   return String(r.name ?? r.title ?? r.question ?? r.author_name ?? r.client_name ?? r.id);
 }
-
-/** Renders a record's real on-site appearance: the preview sends back the
- *  actual rendered markup plus the page's own CSS, shown in a sealed frame. */
-function LiveSnippet({ mark, name }: { mark: string; name?: string }) {
-  const [shot, setShot] = useState<{ html: string; css: string } | null | "missing">(null);
-  useEffect(() => {
-    setShot(null);
-    const onMsg = (e: MessageEvent) => {
-      const d = e.data as { type?: string; mark?: string; html?: string | null; css?: string | null };
-      if (d?.type !== "RESOURCE_SNAPSHOT" || d.mark !== mark) return;
-      setShot(d.html ? { html: d.html, css: d.css ?? "" } : "missing");
-    };
-    window.addEventListener("message", onMsg);
-    const ask = () => document.querySelectorAll("iframe").forEach((f) => f.contentWindow?.postMessage({ type: "SNAPSHOT_RESOURCE", mark, name }, "*"));
-    ask();
-    const retry = setTimeout(ask, 800);
-    return () => { window.removeEventListener("message", onMsg); clearTimeout(retry); };
-  }, [mark, name]);
-  if (shot === "missing") return null;
-  if (!shot) return <p className="text-xs text-muted-foreground">Loading live look…</p>;
-  return (
-    <iframe
-      title="Live appearance"
-      sandbox=""
-      className="pointer-events-none w-full border border-border"
-      style={{ height: "12rem", background: "white" }}
-      srcDoc={`<!doctype html><html><head><style>${shot.css}</style><style>body{margin:0}</style></head><body>${shot.html}</body></html>`}
-    />
-  );
-}
-
 
 interface ScannedItem { meta?: { date?: string | null; readTime?: string | null; author?: string | null } | null; kind: string; section: string; name: string; description: string; price: string | null; image: string | null; html: string }
 const SCAN_GROUP: Record<string, "catalog" | "content"> = { products: "catalog", services: "catalog", testimonials: "content", articles: "content", faqs: "content", team: "content", gallery: "content" };
@@ -191,9 +164,41 @@ function LongformActions({ type, record, businessId, projectId, onPublish }: { t
   );
 }
 
-function AssetList({ type, businessId, projectId, liveIndex, onReveal, onPlace, onPublishLongform }: { type: AssetType; businessId: string; projectId?: string | null; liveIndex: Map<string, string[]>; onReveal?: Props['onReveal']; onPlace?: Props['onPlace']; onPublishLongform?: Props['onPublishLongform'] }) {
+function recordImage(record: ResourceRecord): string | null {
+  const candidate = record.image ?? record.image_url ?? record.cover_image ?? record.thumbnail ?? record.photo ?? record.avatar;
+  return typeof candidate === "string" && candidate.trim() ? candidate : null;
+}
+
+function recordDescription(record: ResourceRecord): string {
+  const candidate = record.description ?? record.excerpt ?? record.bio ?? record.answer ?? record.content ?? record.summary;
+  return typeof candidate === "string" ? candidate : "";
+}
+
+interface SelectedAsset {
+  type: AssetType;
+  record: ResourceRecord;
+  usageId?: string;
+}
+
+function ResourceCardPreview({ type, record }: { type: AssetType; record: ResourceRecord }) {
+  const api = usePlaygroundApi();
+  const ref = `${type.key}#${record.id}`;
+  const [usage, setUsage] = useState<PlaygroundResourceUsage>();
+  useEffect(() => {
+    let alive = true;
+    void api.getUsages(ref).then((items) => { if (alive) setUsage(items[0]); });
+    return () => { alive = false; };
+  }, [api, ref]);
+  return <LiveResourcePreview appearance={{ ref, name: recordTitle(record), usage }} className="h-full" />;
+}
+
+function MediaIframePreview({ url, label }: { url: string; label: string }) {
+  const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070c10}img{width:100%;height:100%;object-fit:cover}</style></head><body><img src=${JSON.stringify(url)} alt=${JSON.stringify(label)}></body></html>`;
+  return <iframe title={`Live media asset ${label}`} sandbox="" loading="lazy" className="pointer-events-none aspect-[4/3] w-full border-0 bg-[#070c10]" srcDoc={html} />;
+}
+
+function AssetList({ type, businessId, projectId, liveIndex, onPublishLongform, search, liveOnly, view, selectedMark, onSelect }: { type: AssetType; businessId: string; projectId?: string | null; liveIndex: Map<string, string[]>; onPublishLongform?: Props['onPublishLongform']; search: string; liveOnly: boolean; view: "grid" | "list"; selectedMark?: string | null; onSelect: (asset: SelectedAsset) => void }) {
   const [rows, setRows] = useState<ResourceRecord[] | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const ctx = useMemo(() => ({ businessId, projectId, mode: "builder" as const }), [businessId, projectId]);
 
@@ -210,19 +215,20 @@ function AssetList({ type, businessId, projectId, liveIndex, onReveal, onPlace, 
       await applyResourceOp({ op: "create", resourceKey: type.key, values: first ? { [first.key]: `New ${type.label}` } : {} }, ctx);
     } catch (e) { toast.error(`Couldn't add to ${type.label}`, { description: e instanceof Error ? e.message : String(e) }); }
   };
-  const remove = async (id: string) => {
-    try {
-      await applyResourceOp({ op: "delete", ref: { resourceKey: type.key, kind: type.def!.kind, recordId: id } }, ctx);
-    } catch (e) { toast.error("Couldn't remove", { description: e instanceof Error ? e.message : String(e) }); }
-  };
+  const visibleRows = (rows ?? []).filter((record) => {
+    const mark = `${type.key}#${record.id}`;
+    if (liveOnly && !liveIndex.has(mark)) return false;
+    const haystack = `${recordTitle(record)} ${recordDescription(record)} ${String(record.category ?? "")}`.toLowerCase();
+    return haystack.includes(search.trim().toLowerCase());
+  });
 
   return (
-    <section className="space-y-2">
-      <header className="flex items-center justify-between">
+    <section className="space-y-3">
+      <header className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h4 className="text-sm font-medium text-foreground">{type.used ? `Live ${type.label}` : type.label}</h4>
-          {type.used && <Badge variant="secondary">On site</Badge>}
-          {rows && <span className="text-xs text-muted-foreground">{rows.length}</span>}
+          <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{type.label}</h4>
+          {type.used && <Badge className="h-5 border-emerald-400/15 bg-emerald-400/10 text-[9px] text-emerald-300 hover:bg-emerald-400/10">On site</Badge>}
+          {rows && <span className="text-[10px] text-slate-600">{visibleRows.length}</span>}
         </div>
         <div className="flex items-center gap-1">
           {LONGFORM.test(type.key) && onPublishLongform && rows && rows.length > 0 && (
@@ -234,43 +240,31 @@ function AssetList({ type, businessId, projectId, liveIndex, onReveal, onPlace, 
               Create all pages
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={add}><Plus className="h-3.5 w-3.5" /> Add</Button>
+          <Button variant="ghost" size="sm" className="h-7 text-[11px] text-slate-400 hover:bg-white/5 hover:text-white" onClick={add}><Plus className="h-3.5 w-3.5" /> Add</Button>
         </div>
       </header>
-      {rows === null && <p className="text-xs text-muted-foreground">Loading…</p>}
-      {rows?.length === 0 && <p className="text-xs text-muted-foreground">Nothing saved yet.</p>}
-      <ul className="divide-y divide-border border-y border-border">
-        {rows?.map((r) => {
+      {rows === null && <div className="h-40 animate-pulse rounded-xl border border-white/5 bg-white/[0.025]" />}
+      {rows?.length === 0 && <div className="flex h-32 items-center justify-center rounded-xl border border-dashed border-white/10 text-xs text-slate-500">Nothing saved yet.</div>}
+      {rows && rows.length > 0 && visibleRows.length === 0 && <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-white/10 text-xs text-slate-500">No assets match these filters.</div>}
+      <ul className={cn(view === "grid" ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3" : "space-y-2")}>
+        {visibleRows.map((r) => {
           const mark = `${type.key}#${r.id}`;
           const live = liveIndex.has(mark);
+          const description = recordDescription(r);
+          const active = selectedMark === mark;
           return (
-            <li key={r.id} className="py-2">
-              <div className="flex items-center gap-2">
-                <button type="button" className="flex flex-1 items-center gap-2 text-left text-sm text-foreground" onClick={() => setOpen(open === r.id ? null : r.id)}>
-                  {open === r.id ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                  <span className="truncate">{recordTitle(r)}</span>
-                  {live && <Circle className="h-2 w-2 fill-primary text-primary" aria-label="Shown on site" />}
-                  {typeof r.status === "string" && <Badge variant="outline">{r.status}</Badge>}
-                </button>
-                {live && onReveal && (
-                  <Button variant="ghost" size="icon" aria-label="Show on site" onClick={() => onReveal(mark, liveIndex.get(mark) ?? [])}><Eye className="h-3.5 w-3.5" /></Button>
-                )}
-                {!live && onPlace && (
-                  <Button variant="ghost" size="sm" aria-label="Place on page" onClick={() => onPlace(
-                    `Add the saved ${type.label.toLowerCase()} "${recordTitle(r)}" (resource ${mark}) to the most relevant page of the site, rendering it with its saved fields. Keep all existing content and button destinations unchanged.`,
-                  )}>Place on page</Button>
-                )}
-                {type.def && type.def.kind !== "content" && (
-                  <Button variant="ghost" size="icon" aria-label="Remove" onClick={() => remove(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                )}
-              </div>
-              {open === r.id && (
-                <div className="space-y-2 pt-2">
-                  <LiveSnippet mark={mark} name={live ? undefined : recordTitle(r)} />
-                  {LONGFORM.test(type.key) && <LongformActions type={type} record={r} businessId={businessId} projectId={projectId} onPublish={onPublishLongform} />}
-                  <RecordFieldsEditor mark={mark} businessId={businessId} projectId={projectId} />
+            <li key={r.id}>
+              <button type="button" onClick={() => onSelect({ type, record: r })} className={cn("group w-full overflow-hidden rounded-xl border text-left transition-all duration-200", active ? "border-emerald-400/80 bg-[#111b20] shadow-[0_0_0_2px_rgba(52,211,153,0.08),0_10px_30px_rgba(0,0,0,0.3)]" : "border-white/[0.08] bg-[#10171d] hover:-translate-y-0.5 hover:border-white/20 hover:bg-[#131c23]", view === "list" && "flex min-h-[104px]")}>
+                <div className={cn("relative overflow-hidden bg-[radial-gradient(circle_at_70%_20%,rgba(45,212,191,0.18),transparent_42%),linear-gradient(145deg,#111b22,#080d12)]", view === "grid" ? "aspect-[16/9]" : "w-40 shrink-0")}>
+                  <ResourceCardPreview type={type} record={r} />
+                  <span className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full border border-emerald-400/15 bg-[#07110e]/85 px-2 py-1 text-[9px] font-medium text-emerald-300 backdrop-blur"><span className={cn("h-1.5 w-1.5 rounded-full", live ? "bg-emerald-400" : "bg-slate-500")} />{live ? "Live" : "Saved"}</span>
                 </div>
-              )}
+                <div className="min-w-0 flex-1 p-3.5">
+                  <div className="flex items-start justify-between gap-2"><h5 className="truncate text-sm font-semibold text-slate-100">{recordTitle(r)}</h5><MoreVertical className="h-4 w-4 shrink-0 text-slate-600" /></div>
+                  {description && <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-slate-400">{description}</p>}
+                  <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500"><span className="rounded-full bg-white/5 px-2 py-1">{String(r.category ?? type.label)}</span>{typeof r.status === "string" && <span className="capitalize">{r.status}</span>}</div>
+                </div>
+              </button>
             </li>
           );
         })}
@@ -279,9 +273,126 @@ function AssetList({ type, businessId, projectId, liveIndex, onReveal, onPlace, 
   );
 }
 
-export function AssetsSection({ businessId, projectId, industry, vfsFiles = {}, formsSlot, onReveal, onPlace, onPublishLongform, creatorData }: Props) {
+function ApiResourceEditor({ asset, onUpdated }: { asset: SelectedAsset; onUpdated: (record: ResourceRecord) => void }) {
+  const api = usePlaygroundApi();
+  const definition = getResource(asset.type.key);
+  const fields = definition?.schema.filter((field) => field.editable && field.type !== "json") ?? [];
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(Object.fromEntries(fields.map((field) => [field.key, asset.record[field.key] == null ? "" : String(asset.record[field.key])])));
+  }, [asset.record.id, asset.type.key]);
+
+  const save = async (key: string, nextDraft?: string) => {
+    const field = fields.find((candidate) => candidate.key === key);
+    const raw = nextDraft ?? draft[key] ?? "";
+    if (!field || raw === String(asset.record[key] ?? "")) return;
+    let value: unknown = raw;
+    if (["number", "money", "money-cents", "rating"].includes(field.type)) value = raw.trim() ? Number(raw) : null;
+    if (field.type === "boolean") value = raw === "true";
+    setSaving(key);
+    try {
+      const record = field.type === "image" ? await api.replaceAsset(`${asset.type.key}#${asset.record.id}`, raw) : await api.updateResource(`${asset.type.key}#${asset.record.id}`, { [key]: value });
+      if (record) onUpdated(record);
+    } catch (error) {
+      toast.error(`Couldn't update ${field.label.toLowerCase()}`, { description: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {fields.map((field) => <label key={field.key} className="block"><span className="mb-2 flex items-center justify-between text-[11px] font-medium text-slate-300">{field.label}{saving === field.key ? <span className="text-[9px] text-emerald-300">Saving…</span> : null}</span>{field.type === "textarea" || field.type === "richtext" ? <textarea rows={4} value={draft[field.key] ?? ""} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} onBlur={() => void save(field.key)} className="w-full resize-none rounded-xl border border-white/10 bg-[#0d141b] px-3 py-2.5 text-xs text-white outline-none focus:border-emerald-400/40" /> : field.type === "boolean" ? <button type="button" onClick={() => { const next = draft[field.key] === "true" ? "false" : "true"; setDraft((current) => ({ ...current, [field.key]: next })); void save(field.key, next); }} className={cn("flex h-8 w-14 items-center rounded-full p-1 transition", draft[field.key] === "true" ? "justify-end bg-emerald-400" : "justify-start bg-white/10")}><span className="h-6 w-6 rounded-full bg-white shadow" /></button> : <input type={["number", "money", "money-cents", "rating"].includes(field.type) ? "number" : field.type === "email" ? "email" : field.type === "image" || field.type === "url" ? "url" : "text"} value={draft[field.key] ?? ""} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} onBlur={() => void save(field.key)} className="h-10 w-full rounded-xl border border-white/10 bg-[#0d141b] px-3 text-xs text-white outline-none focus:border-emerald-400/40" />}</label>)}
+    </div>
+  );
+}
+
+function AssetInspector({ asset, onReveal, onPlace, onRemove, onAssetChange }: { asset: SelectedAsset | null; onReveal?: Props["onReveal"]; onPlace?: Props["onPlace"]; onRemove: (asset: SelectedAsset) => Promise<void>; onAssetChange: (asset: SelectedAsset) => void }) {
+  const api = usePlaygroundApi();
+  const [usages, setUsages] = useState<PlaygroundResourceUsage[]>([]);
+  useEffect(() => {
+    if (!asset) { setUsages([]); return; }
+    void api.getUsages(`${asset.type.key}#${asset.record.id}`).then(setUsages);
+  }, [api, asset?.record.id, asset?.type.key]);
+  if (!asset) {
+    return (
+      <aside className="flex min-h-full flex-col border-l border-white/[0.08] bg-[#0b1218]">
+        <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035]"><FileBox className="h-6 w-6 text-slate-600" /></div>
+          <p className="mt-4 text-sm font-medium text-slate-300">Select an asset</p>
+          <p className="mt-1 max-w-[220px] text-[11px] leading-relaxed text-slate-600">Choose a card to edit its data, inspect its appearance, and see every place it is used.</p>
+        </div>
+      </aside>
+    );
+  }
+
+  const { type, record } = asset;
+  const mark = `${type.key}#${record.id}`;
+  const files = usages.map((usage) => usage.file);
+  const live = files.length > 0;
+  const image = recordImage(record);
+
+  return (
+    <aside className="flex min-h-full flex-col border-l border-white/[0.08] bg-[#0b1218]">
+      <div className="border-b border-white/[0.08] p-5">
+        <div className="flex items-start gap-3">
+          <div className="h-[72px] w-28 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[radial-gradient(circle_at_60%_20%,rgba(45,212,191,0.18),transparent_50%),#081015]">
+            <LiveResourcePreview appearance={{ ref: mark, name: recordTitle(record), usage: usages.find((usage) => usage.id === asset.usageId) ?? usages[0] }} className="h-full" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-[10px] font-medium text-emerald-300"><span className={cn("h-2 w-2 rounded-full", live ? "bg-emerald-400" : "bg-slate-500")} />{live ? "Live" : "Saved"}</div>
+            <h4 className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-white">{recordTitle(record)}</h4>
+            <p className="mt-1 text-[10px] text-slate-600">Updated in real time</p>
+          </div>
+        </div>
+      </div>
+
+      <Tabs defaultValue="data" className="w-full flex-1">
+        <TabsList className="grid h-11 w-full grid-cols-3 rounded-none border-b border-white/[0.08] bg-white/[0.02] p-0">
+          {(["data", "appearance", "usage"] as const).map((tab) => <TabsTrigger key={tab} value={tab} className="h-11 rounded-none border-b-2 border-transparent text-[11px] capitalize text-slate-500 data-[state=active]:border-emerald-400 data-[state=active]:bg-emerald-400/[0.07] data-[state=active]:text-slate-100">{tab}</TabsTrigger>)}
+        </TabsList>
+        <TabsContent value="data" className="m-0 space-y-4 p-5">
+          <ApiResourceEditor asset={asset} onUpdated={(record) => onAssetChange({ ...asset, record })} />
+        </TabsContent>
+        <TabsContent value="appearance" className="m-0 space-y-5 p-5">
+          <div>
+            <p className="mb-2 text-[11px] font-medium text-slate-300">Cover image</p>
+            <div className="aspect-[16/7] overflow-hidden rounded-xl border border-white/10 bg-[#081015]">{image ? <img src={image} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[10px] text-slate-600">No cover image</div>}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[10px]">
+            <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3"><p className="text-slate-600">Resource type</p><p className="mt-1 font-medium text-slate-300">{type.label}</p></div>
+            <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3"><p className="text-slate-600">Visibility</p><p className="mt-1 font-medium text-slate-300">{live ? "Published" : "Library only"}</p></div>
+          </div>
+          <LiveResourcePreview appearance={{ ref: mark, name: recordTitle(record), usage: usages.find((usage) => usage.id === asset.usageId) ?? usages[0] }} className="h-44 rounded-xl border border-white/10" />
+        </TabsContent>
+        <TabsContent value="usage" className="m-0 space-y-4 p-5">
+          <div className="flex items-center justify-between"><p className="text-[11px] font-medium text-slate-300">Used on ({files.length} locations)</p>{live && onReveal ? <button type="button" onClick={() => onReveal(mark, files)} className="text-[10px] font-medium text-sky-400 hover:text-sky-300">Manage</button> : null}</div>
+          {usages.length > 0 ? <ul className="divide-y divide-white/[0.07] overflow-hidden rounded-xl border border-white/[0.07]">{usages.map((usage) => <li key={usage.id}><button type="button" onClick={() => { onAssetChange({ ...asset, usageId: usage.id }); void api.focusAppearance(usage.id); }} className={cn("flex w-full items-center gap-3 bg-white/[0.02] px-3 py-3 text-left transition hover:bg-white/[0.05]", asset.usageId === usage.id && "bg-emerald-400/[0.06]")}><FileBox className="h-4 w-4 text-slate-500" /><div className="min-w-0 flex-1"><p className="truncate text-[11px] text-slate-300">{usage.pageName}</p><p className="mt-0.5 truncate text-[9px] text-slate-600">{usage.sectionName} · {usage.role}</p></div><ArrowUpRight className="h-3.5 w-3.5 text-slate-600" /></button></li>)}</ul> : <p className="rounded-xl border border-dashed border-white/10 p-5 text-center text-[10px] text-slate-600">This asset is not used on a page yet.</p>}
+        </TabsContent>
+      </Tabs>
+
+      <div className="sticky bottom-0 mt-auto border-t border-white/[0.08] bg-[#0b1218]/95 p-4 backdrop-blur">
+        <div className="flex gap-2">
+          {live && onReveal ? <Button size="sm" className="flex-1 border border-white/10 bg-white/[0.06] text-[11px] text-slate-100 hover:bg-white/10" onClick={() => onReveal(mark, files)}>View on site <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" /></Button> : null}
+          {!live && onPlace ? <Button size="sm" className="flex-1 bg-emerald-400 text-[11px] font-semibold text-emerald-950 hover:bg-emerald-300" onClick={() => onPlace(`Add the saved ${type.label.toLowerCase()} "${recordTitle(record)}" (resource ${mark}) to the most relevant page of the site, rendering it with its saved fields. Keep all existing content and button destinations unchanged.`)}>Place on page <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" /></Button> : null}
+          {type.def && type.def.kind !== "content" ? <Button variant="outline" size="icon" className="border-white/10 bg-white/[0.04] text-slate-500 hover:bg-red-500/10 hover:text-red-300" aria-label="Delete asset" onClick={() => void onRemove(asset)}><Trash2 className="h-3.5 w-3.5" /></Button> : null}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+export function AssetsSection({ businessId, projectId, industry, vfsFiles = {}, formsSlot, onReveal, onPlace, onPublishLongform, creatorData, initialTab = "catalog" }: Props) {
+  const api = usePlaygroundApi();
   const [contentReady, setContentReady] = useState(0);
   const [showMore, setShowMore] = useState(false);
+  const [search, setSearch] = useState("");
+  const [liveOnly, setLiveOnly] = useState(false);
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [selectedAsset, setSelectedAsset] = useState<SelectedAsset | null>(null);
   const backfillTried = useRef<string | null>(null);
 
   useEffect(() => {
@@ -331,21 +442,60 @@ export function AssetsSection({ businessId, projectId, industry, vfsFiles = {}, 
     return () => { alive = false; };
   }, [businessId, projectId, vfsFiles]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const types = useMemo(() => listAssetTypes({ industry, vfsFiles }), [industry, vfsFiles, contentReady]);
   const liveIndex = useMemo(() => buildRenderedResourceIndex(vfsFiles), [vfsFiles]);
   const images = useMemo(() => listSiteImages(vfsFiles), [vfsFiles]);
 
+  useEffect(() => {
+    if (!businessId || selectedAsset) return;
+    let alive = true;
+    api.listResources({ group: initialTab === "content" ? "content" : "catalog" })
+      .then((resources) => {
+        const first = resources.find((resource) => isRelevantAsset(resource.type)) ?? resources[0];
+        if (alive && first) setSelectedAsset({ type: first.type, record: first.record, usageId: first.usages[0]?.id });
+      })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [api, businessId, initialTab, selectedAsset]);
+
+  const selectedMark = selectedAsset ? `${selectedAsset.type.key}#${selectedAsset.record.id}` : null;
+  useEffect(() => onResourceInvalidated((invalidation) => {
+    if (!selectedAsset || invalidation.resourceKey !== selectedAsset.type.key || !invalidation.recordIds.includes(selectedAsset.record.id)) return;
+    void api.inspect(`${selectedAsset.type.key}#${selectedAsset.record.id}`).then((resource) => {
+      if (resource) setSelectedAsset((current) => current ? { type: resource.type, record: resource.record, usageId: current.usageId ?? resource.usages[0]?.id } : current);
+    });
+  }), [api, selectedAsset]);
+
   if (!businessId) return <p className="text-sm text-muted-foreground">Save the site to a business to manage its assets.</p>;
+
+  const removeSelected = async (asset: SelectedAsset) => {
+    try {
+      await api.deleteResource(`${asset.type.key}#${asset.record.id}`);
+      setSelectedAsset(null);
+    } catch (error) {
+      toast.error("Couldn't remove", { description: error instanceof Error ? error.message : String(error) });
+    }
+  };
+  const selectAsset = async (asset: SelectedAsset) => {
+    const ref = `${asset.type.key}#${asset.record.id}`;
+    const usages = await api.getUsages(ref);
+    const next = { ...asset, usageId: usages[0]?.id };
+    setSelectedAsset(next);
+    if (next.usageId) await api.focusAppearance(next.usageId);
+  };
 
   const renderGroup = (group: "catalog" | "content") => {
     const all = types.filter((t) => t.group === group);
-    const relevant = all.filter(isRelevantAsset);
-    const rest = all.filter((t) => !isRelevantAsset(t));
+    const filtered = typeFilter === "all" ? all : all.filter((type) => type.key === typeFilter);
+    const relevant = filtered.filter(isRelevantAsset);
+    const rest = filtered.filter((t) => !isRelevantAsset(t));
     return (
-      <div className="space-y-6">
-        <SiteScanList group={group} businessId={businessId} projectId={projectId} onSaved={() => setContentReady((n) => n + 1)} />
-        {relevant.map((t) => <AssetList key={t.key} type={t} businessId={businessId} projectId={projectId} liveIndex={liveIndex} onReveal={onReveal} onPlace={onPlace} onPublishLongform={onPublishLongform} />)}
+      <div className="space-y-7">
+        <details className="rounded-xl border border-white/[0.07] bg-white/[0.025] px-4 py-3">
+          <summary className="cursor-pointer text-xs font-medium text-slate-400">Found on the current preview</summary>
+          <div className="pt-4"><SiteScanList group={group} businessId={businessId} projectId={projectId} onSaved={() => setContentReady((n) => n + 1)} /></div>
+        </details>
+        {relevant.map((t) => <AssetList key={t.key} type={t} businessId={businessId} projectId={projectId} liveIndex={liveIndex} onPublishLongform={onPublishLongform} search={search} liveOnly={liveOnly} view={view} selectedMark={selectedMark} onSelect={(asset) => void selectAsset(asset)} />)}
         {group === "content" && formsSlot}
         {relevant.length === 0 && group === "catalog" && <p className="text-sm text-muted-foreground">This site doesn't sell or list items yet.</p>}
         {rest.length > 0 && (
@@ -353,7 +503,7 @@ export function AssetsSection({ businessId, projectId, industry, vfsFiles = {}, 
             <Button variant="ghost" size="sm" onClick={() => setShowMore((v) => !v)}>
               {showMore ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />} Add more types ({rest.length})
             </Button>
-            {showMore && <div className="space-y-6 pt-3">{rest.map((t) => <AssetList key={t.key} type={t} businessId={businessId} projectId={projectId} liveIndex={liveIndex} onReveal={onReveal} onPlace={onPlace} onPublishLongform={onPublishLongform} />)}</div>}
+            {showMore && <div className="space-y-6 pt-3">{rest.map((t) => <AssetList key={t.key} type={t} businessId={businessId} projectId={projectId} liveIndex={liveIndex} onPublishLongform={onPublishLongform} search={search} liveOnly={liveOnly} view={view} selectedMark={selectedMark} onSelect={(asset) => void selectAsset(asset)} />)}</div>}
           </div>
         )}
       </div>
@@ -361,36 +511,56 @@ export function AssetsSection({ businessId, projectId, industry, vfsFiles = {}, 
   };
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-base font-semibold text-foreground">Assets</h3>
-        <p className="text-xs text-muted-foreground">Everything this site shows, saved for this business. Edits update the live preview.</p>
-      </div>
-      <Tabs defaultValue="catalog">
-        <TabsList>
-          <TabsTrigger value="catalog">Catalog</TabsTrigger>
-          <TabsTrigger value="content">Content</TabsTrigger>
-          <TabsTrigger value="business">Business</TabsTrigger>
-          <TabsTrigger value="media">Media</TabsTrigger>
+    <div className="grid min-h-full grid-cols-[minmax(0,1fr)_360px] bg-[#080d12]">
+      <div className="min-w-0 border-b border-white/[0.07] px-7 pb-0 pt-7">
+        <div className="mb-5">
+          <h3 className="text-2xl font-semibold tracking-[-0.03em] text-slate-100">Assets</h3>
+          <p className="mt-1 text-xs text-slate-500">Everything this site shows, synchronized with the live preview.</p>
+        </div>
+        <Tabs defaultValue={initialTab}>
+        <TabsList className="h-11 w-full max-w-[520px] justify-start rounded-xl border border-white/[0.08] bg-white/[0.035] p-1">
+          <TabsTrigger className="h-9 flex-1 rounded-lg text-xs text-slate-400 data-[state=active]:bg-emerald-400/10 data-[state=active]:text-emerald-300 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(52,211,153,0.18)]" value="catalog">Catalog</TabsTrigger>
+          <TabsTrigger className="h-9 flex-1 rounded-lg text-xs text-slate-400 data-[state=active]:bg-emerald-400/10 data-[state=active]:text-emerald-300" value="content">Content</TabsTrigger>
+          <TabsTrigger className="h-9 flex-1 rounded-lg text-xs text-slate-400 data-[state=active]:bg-emerald-400/10 data-[state=active]:text-emerald-300" value="business">Business</TabsTrigger>
+          <TabsTrigger className="h-9 flex-1 rounded-lg text-xs text-slate-400 data-[state=active]:bg-emerald-400/10 data-[state=active]:text-emerald-300" value="media">Media</TabsTrigger>
         </TabsList>
-        <TabsContent value="catalog" className="pt-4">{renderGroup("catalog")}</TabsContent>
-        <TabsContent value="content" className="pt-4">{renderGroup("content")}</TabsContent>
-        <TabsContent value="business" className="pt-4">
-          <RecordFieldsEditor mark={`${BUSINESS_PROFILE_RESOURCE_KEY}#${businessId}`} businessId={businessId} projectId={projectId} />
+        <div className="-mx-7 mt-5 border-t border-white/[0.07] bg-[#0a1015] px-7 py-4">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button type="button" onClick={() => setLiveOnly((value) => !value)} className={cn("flex h-9 items-center gap-2 rounded-xl border px-3 text-[11px] transition-colors", liveOnly ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/[0.025] text-slate-400 hover:text-white")}><span className={cn("h-2 w-2 rounded-full", liveOnly ? "bg-emerald-400" : "bg-slate-600")} />{liveOnly ? "Live only" : "All status"}<ChevronDown className="h-3 w-3" /></button>
+            <label className="flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.025] px-3 text-[11px] text-slate-400"><SlidersHorizontal className="h-3.5 w-3.5" /><select aria-label="Filter by resource type" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="bg-transparent pr-2 text-[11px] text-slate-400 outline-none"><option value="all">All resources</option>{types.map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}</select></label>
+            <div className="ml-auto flex h-9 min-w-[240px] items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3"><Search className="h-3.5 w-3.5 text-slate-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search assets..." className="min-w-0 flex-1 bg-transparent text-xs text-slate-200 outline-none placeholder:text-slate-600" /></div>
+            <div className="flex h-9 overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]"><button type="button" aria-label="Grid view" onClick={() => setView("grid")} className={cn("px-3 text-slate-500", view === "grid" && "bg-white/[0.07] text-slate-200")}><Grid3X3 className="h-3.5 w-3.5" /></button><button type="button" aria-label="List view" onClick={() => setView("list")} className={cn("border-l border-white/10 px-3 text-slate-500", view === "list" && "bg-white/[0.07] text-slate-200")}><List className="h-4 w-4" /></button></div>
+          </div>
+        </div>
+        <TabsContent value="catalog" className="-mx-7 mt-0 px-7 py-6">{renderGroup("catalog")}</TabsContent>
+        <TabsContent value="content" className="-mx-7 mt-0 px-7 py-6">{renderGroup("content")}</TabsContent>
+        <TabsContent value="business" className="-mx-7 mt-0 px-7 py-6">
+          <div className="grid gap-4 xl:grid-cols-[minmax(280px,.8fr)_minmax(380px,1.2fr)]">
+            <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#10171d]"><LiveResourcePreview appearance={{ ref: `${BUSINESS_PROFILE_RESOURCE_KEY}#${businessId}`, name: creatorData?.businessInfo.businessName || "Business profile" }} className="h-64" /><div className="border-t border-white/[0.07] px-4 py-3"><p className="text-xs font-medium text-slate-200">Live business identity</p><p className="mt-1 text-[10px] text-slate-500">Rendered from the current site runtime.</p></div></div>
+            <div className="rounded-xl border border-white/[0.08] bg-[#0d151b] p-5"><RecordFieldsEditor mark={`${BUSINESS_PROFILE_RESOURCE_KEY}#${businessId}`} businessId={businessId} projectId={projectId} /></div>
+          </div>
         </TabsContent>
-        <TabsContent value="media" className="pt-4">
-          {images.length === 0 ? <p className="text-sm text-muted-foreground">No images on the site yet.</p> : (
-            <ul className="grid grid-cols-3 gap-3">
+        <TabsContent value="media" className="-mx-7 mt-0 px-7 py-6">
+          {images.length === 0 ? <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-white/10 text-xs text-slate-500">No images on the site yet.</div> : (
+            <ul className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-4">
               {images.map((img) => (
-                <li key={img.url} className="space-y-1">
-                  <img src={img.url} alt="" loading="lazy" className="aspect-square w-full object-cover" />
-                  <p className="truncate text-xs text-muted-foreground">{img.files.map((f) => f.split("/").pop()).join(", ")}</p>
+                <li key={img.url} className="group overflow-hidden rounded-xl border border-white/[0.08] bg-[#10171d]">
+                  <MediaIframePreview url={img.url} label={img.files[0]?.split("/").pop() ?? "media"} />
+                  <p className="truncate px-3 py-2.5 text-[10px] text-slate-500">{img.files.map((f) => f.split("/").pop()).join(", ")}</p>
                 </li>
               ))}
             </ul>
           )}
         </TabsContent>
       </Tabs>
+        <div className="sticky bottom-0 -mx-3 mb-4 mt-2 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#101820]/95 px-4 py-3 shadow-[0_-12px_30px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-400/10 text-emerald-300"><ArrowUpRight className="h-4 w-4 rotate-45" /></div>
+          <div><p className="text-[11px] font-medium text-slate-200">Live Sync with Preview</p><p className="mt-0.5 text-[9px] text-slate-600">Select a resource to highlight it. Edits update live.</p></div>
+          <div className="ml-auto hidden items-center gap-2 text-[10px] text-slate-500 lg:flex"><span className="h-2 w-2 rounded-full bg-emerald-400" />{selectedAsset ? recordTitle(selectedAsset.record) : "Waiting for selection"}</div>
+          {selectedAsset && liveIndex.has(selectedMark ?? "") && onReveal ? <Button variant="outline" size="sm" className="ml-2 h-8 border-white/10 bg-white/[0.04] text-[10px] text-slate-200" onClick={() => onReveal(selectedMark ?? "", liveIndex.get(selectedMark ?? "") ?? [])}>Open Preview <ArrowUpRight className="ml-1.5 h-3 w-3" /></Button> : null}
+        </div>
+      </div>
+      <AssetInspector asset={selectedAsset} onReveal={onReveal} onPlace={onPlace} onRemove={removeSelected} onAssetChange={setSelectedAsset} />
     </div>
   );
 }
