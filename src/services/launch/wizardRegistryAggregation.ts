@@ -1,3 +1,6 @@
+import { resolveEligibleImplementations } from '@/services/designImplementationEligibility';
+import { getDesignImplementation as getImplementationForEligibility } from '@/services/designImplementationRegistry';
+const isKnownImplementation = (id: string) => Boolean(getImplementationForEligibility(id as never));
 /**
  * Wizard Registry Aggregation — Single unified registry context for launch.
  *
@@ -213,7 +216,26 @@ export function buildWizardAggregatedRegistryContext(options: {
   ).filter(([type]) => !isAppSurfaceSection(type)).map(([type, entry]) => {
     const artifact = getArtifact(type);
     const executable = getGenerationVariantsForSection(type, pack);
-    const allowedVariantIds = executable.map(variant => variant.id);
+    // Canonical eligibility resolver orders (and, for authored contracts,
+    // narrows) the pack-executable set. Never widens it; empty → keep pack set.
+    const executableIds = executable.map(variant => variant.id as string);
+    const experiencePreference = options.designSelection?.experience;
+    const ranked = resolveEligibleImplementations({
+      sectionType: type,
+      industry: options.industry,
+      themePresetId: options.themePresetId,
+      artDirectionPackId: pack.id,
+      experiencePreference,
+      availableCapabilities: experiencePreference === 'immersive' ? ['experience.three-d'] : [],
+      seed: options.seed,
+    }).map(candidate => candidate.implementationId as string);
+    const executableSet = new Set(executableIds);
+    const rankedExecutable = ranked.filter(id => executableSet.has(id));
+    const rankedSet = new Set(rankedExecutable);
+    // Executable ids the resolver doesn't know (e.g. pack-only aliases) keep their pack order after ranked ones.
+    const unknownToResolver = executableIds.filter(id => !rankedSet.has(id) && !ranked.includes(id) && !isKnownImplementation(id));
+    const ordered = [...rankedExecutable, ...unknownToResolver];
+    const allowedVariantIds = (ordered.length > 0 ? ordered : executableIds) as typeof executableIds;
 
     return {
       type,
