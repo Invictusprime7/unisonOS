@@ -1,5 +1,10 @@
-/// <reference path="../deno.d.ts" />
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
+
+// Local shadow so isolated `tsc` checks resolve Deno without the global lib.
+declare const Deno: {
+  env: { get(key: string): string | undefined };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { verifyAuth, authError } from "../_shared/auth.ts";
 import { safeParseBody, sanitizeString, isNonEmptyString } from "../_shared/validate.ts";
