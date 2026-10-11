@@ -38,7 +38,7 @@
     "intentReady": true,
     "portableRecipeCertified": true
   },
-  "step": 9,
+  "step": 10,
   "dependencyAudit": {
     "decisions": [
       {
@@ -56,5 +56,6 @@
   },
   "status": "promoted",
   "implementationId": "hero:tunnel-immersive",
-  "semanticDisposition": "new-implementation"
+  "semanticDisposition": "new-implementation",
+  "archivePath": "src/design/21st-intake/archive/tunnel-hero"
 }

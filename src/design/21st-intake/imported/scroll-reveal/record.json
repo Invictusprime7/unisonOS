@@ -55,5 +55,6 @@
   "status": "promoted",
   "implementationId": "motion:reveal",
   "semanticDisposition": "merge-as-mode",
-  "notes": "Already covered by @/unison/ui/motion <Reveal> (in-view, once, reduced-motion). Recorded as merge-as-mode; no new primitive."
+  "notes": "Already covered by @/unison/ui/motion <Reveal> (in-view, once, reduced-motion). Recorded as merge-as-mode; no new primitive.",
+  "archivePath": "src/design/21st-intake/archive/scroll-reveal"
 }

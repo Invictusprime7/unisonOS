@@ -1,0 +1,36 @@
+{
+  "id": "hero:tunnel-immersive",
+  "sectionType": "hero",
+  "slug": "tunnel-immersive",
+  "name": "Tunnel Immersive",
+  "description": "Full-viewport hero with rings receding into a depth tunnel behind centered display copy",
+  "componentName": "HeroTunnelImmersive",
+  "componentPath": "./hero/HeroTunnelImmersive",
+  "jsxFn": "heroTunnelImmersiveJSX",
+  "thumbnail": "/variants/hero-tunnel-immersive.svg",
+  "tags": [
+    "hero",
+    "immersive",
+    "3d",
+    "tunnel",
+    "motion"
+  ],
+  "pageRoles": [
+    "home"
+  ],
+  "aliases": [
+    "tunnel",
+    "tunnel-immersive"
+  ],
+  "generationStatus": "supported",
+  "recordSlug": "tunnel-hero",
+  "source": {
+    "origin": "21st",
+    "sourceId": "21st:6588",
+    "sourceUrl": "https://21st.dev/c/6588",
+    "author": "m.umairwaheedansari",
+    "derivation": "source-adaptation",
+    "license": "Owner-authorized adaptation (21st.dev publication by @m.umairwaheedansari declares no upstream license)",
+    "adaptationVersion": "1"
+  }
+}
