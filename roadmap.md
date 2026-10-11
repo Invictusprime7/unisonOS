@@ -71,3 +71,4 @@
 - [~] Direct WYSIWYG + project-isolated backend (guidebook 2026-10-09): Phases 0,1,2,4,5,6,9 done; Phase 7 shared-mode slice done (public resolve_published_site_backend + publishedRuntimeBackend read client); Phase 8 shared-mode slice done (deploy backend preflight + unison.runtime.json injected into deploys); Phase 3 (per-site databases) blocked on Supabase account choice; Phase 10 and dedicated-mode reads follow Phase 3
 - [x] P0 CMS-to-published consistency: published sites live-read catalog + business profile via the public read gateway (flat body, hash path); booking reads already correct; 35/35 tests
 - [x] P0 AI editing E2E tests: src/test/aiEditEndToEnd.test.ts — multi-file atomic edits, page creation + route ops, broken-import and empty-file gates, stale-candidate refuse/rebase (5/5)
+- [ ] Motion/3D: App Builder launch can't generate it; in-builder AI can't apply motion edits
