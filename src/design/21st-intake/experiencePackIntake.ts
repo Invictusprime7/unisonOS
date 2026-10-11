@@ -50,7 +50,7 @@ export function assessExperiencePackIntake(record: TwentyFirstComponentRecord): 
   if (motionLevel !== 'none' && !adaptation.reducedMotionSupported) blockers.push('reduced-motion-fallback-missing');
   if (requiresThreeD && !adaptation.importsNormalized) blockers.push('three-d-must-adapt-onto-unison-experience-primitives');
   if (!adaptation.tokensNormalized) blockers.push('tokens-not-normalized');
-  if (record.licenseReview?.status !== 'approved') blockers.push('license-review-pending');
+  if (record.licenseReview?.status !== 'verified') blockers.push('license-review-pending');
 
   const experiencePreferences: VariantCompatibilityContract['experiencePreferences'] =
     motionLevel === 'immersive' ? ['immersive']

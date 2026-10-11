@@ -32,8 +32,11 @@ const REJECTED = new Set([
   'next', 'server-only', 'gsap', 'react-spring', '@react-spring/web', 'animejs',
   'swiper', 'keen-slider', 'react-slick', 'slick-carousel', 'react-icons',
   '@heroicons/react', 'bootstrap', 'bulma', 'headlessui', '@headlessui/react',
-  '@mui/material', 'antd', 'three', '@react-three/fiber', '@react-three/drei',
+  '@mui/material', 'antd',
 ]);
+/** 3D runtime: allowed only through the explicit 3D capability gate, then adapted onto @/unison/ui/experience. */
+const CAPABILITY_GATED = new Set(['three', '@react-three/fiber', '@react-three/drei']);
+const GATE_3D = process.argv.includes('--capability=threeD');
 
 function rootName(dep) {
   return dep.startsWith('@') ? dep.split('/').slice(0, 2).join('/') : dep.split('/')[0];
@@ -44,6 +47,11 @@ function classify(dep) {
   if (REJECTED.has(root)) return { dep, verdict: 'rejected', reason: 'Disallowed runtime or duplicate subsystem' };
   if (ALLOWED_SCOPES.some((s) => dep.startsWith(s))) return { dep, verdict: 'allowed', reason: 'Approved behavior primitive scope' };
   if (BASELINE.has(root)) return { dep, verdict: 'allowed', reason: 'Baseline stack' };
+  if (CAPABILITY_GATED.has(root)) {
+    return GATE_3D
+      ? { dep, verdict: 'capability-gated', reason: 'Permitted by explicit 3D capability gate; must adapt onto @/unison/ui/experience' }
+      : { dep, verdict: 'rejected', reason: 'Requires --capability=threeD' };
+  }
   return { dep, verdict: 'unknown', reason: 'Not on the allowlist — requires manual review' };
 }
 
