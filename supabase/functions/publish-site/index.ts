@@ -1,3 +1,4 @@
+/// <reference path="../deno.d.ts" />
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { verifyAuth, authError } from "../_shared/auth.ts";

@@ -5,7 +5,8 @@
  * validation for all edge functions.
  */
 
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+/// <reference path="../deno.d.ts" />
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 
 export interface AuthenticatedUser {
   id: string;

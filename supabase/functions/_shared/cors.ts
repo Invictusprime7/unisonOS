@@ -5,6 +5,8 @@
  * while allowing development flexibility.
  */
 
+/// <reference path="../deno.d.ts" />
+
 /** Trusted origins for production CORS */
 const TRUSTED_ORIGINS: string[] = [
   "https://unison-tasks.vercel.app",
