@@ -643,9 +643,12 @@ export async function runLaunchPipeline(
         approvedExperienceCapabilities: resolveApprovedExperienceCapabilities({
           webgl: canonicalPlan.designIntervention.envelope?.webgl,
           foundationCapabilities: canonicalPlan.uiFoundationContract.experienceCapabilities,
-          requiredCapabilities: resolveExperienceRequirement(
-            Object.values(canonicalPlan.designIntervention.activeVariants),
-          ).capabilities,
+          requiredCapabilities: [
+            ...resolveExperienceRequirement(
+              Object.values(canonicalPlan.designIntervention.activeVariants),
+            ).capabilities,
+            ...canonicalPlan.uiFoundationContract.approvedExperienceCapabilities,
+          ],
           reachesExperienceLayer:
             runExperiencePreflight(candidateFiles).manifest.totalInstances > 0,
         }),
