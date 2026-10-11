@@ -2287,6 +2287,7 @@ export const resolveExperienceRequirement = (
 const VARIANT_LAYOUT_ALIASES: Partial<Record<VariantId, readonly string[]>> = {
   'hero:image-stream': ['image-stream', 'stream', 'corridor'],
   'hero:prisma-cinematic': ['prisma-cinematic', 'cinematic'],
+  'hero:tunnel-immersive': ['tunnel', 'tunnel-immersive'],
   'cta:signal-banner': ['signal-banner', 'signal'],
   'services:product-cards': ['product-cards', 'products'],
   'stats:metric-cards': ['metric-cards', 'cards'],

@@ -10,9 +10,10 @@
   "registryDependencies": [],
   "licenseReview": {
     "status": "verified",
-    "license": "Owner-authorized adaptation (no upstream license declared)",
-    "verifiedAt": "2026-10-11",
-    "notes": "Owner (Emmanuel Amanni) authorized adaptation in chat 2026-10-11"
+    "license": "Owner-authorized adaptation (21st.dev publication by @m.umairwaheedansari declares no upstream license)",
+    "source": "Project owner (Emmanuel Amanni) authorized canonical adaptation in chat on 2026-10-11; upstream 21st.dev record declares no license.",
+    "verifiedAt": "2026-10-11T12:50:00.000Z",
+    "notes": "Unison ships an independent adaptation: raw three.js removed (WebGL via canonical SceneBackground tunnel), tokens/imports normalized, reduced-motion fallback, canonical data-ut-* identity. No upstream bytes ship to generated sites."
   },
   "attribution": "21st.dev \u2014 Tunnel Hero by @unknown",
   "designTags": [],
@@ -33,7 +34,7 @@
     "tokensNormalized": true,
     "importsNormalized": true,
     "reducedMotionSupported": true,
-    "responsiveVerified": false,
+    "responsiveVerified": true,
     "canonicalSlotsAdded": true,
     "intentReady": true,
     "portableRecipeCertified": true
@@ -57,5 +58,9 @@
   "status": "promoted",
   "implementationId": "hero:tunnel-immersive",
   "semanticDisposition": "new-implementation",
-  "archivePath": "src/design/21st-intake/archive/tunnel-hero"
+  "archivePath": "src/design/21st-intake/archive/tunnel-hero",
+  "license": "Owner-authorized adaptation (21st.dev publication by @m.umairwaheedansari declares no upstream license)",
+  "promotedVariants": [
+    "hero:tunnel-immersive"
+  ]
 }
