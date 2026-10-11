@@ -72,3 +72,7 @@
 - [x] P0 CMS-to-published consistency: published sites live-read catalog + business profile via the public read gateway (flat body, hash path); booking reads already correct; 35/35 tests
 - [x] P0 AI editing E2E tests: src/test/aiEditEndToEnd.test.ts — multi-file atomic edits, page creation + route ops, broken-import and empty-file gates, stale-candidate refuse/rebase (5/5)
 - [ ] Motion/3D: App Builder launch can't generate it; in-builder AI can't apply motion edits
+- [x] Registry expansion: eligibility resolver now orders/narrows Wizard per-section design lists
+- [x] 3D/motion intake: three.js sources gated (not rejected) behind --capability=threeD; experiencePackIntake.ts assesses motion level, 3D capability, blockers, lifecycle
+- [x] Quarantined 5 sources: Halide Topo Hero, Spatial Depth Hero, Tunnel Hero (three.js), Reveal, Scroll Reveal
+- [ ] Adapt quarantined sources onto Unison experience primitives + reduced-motion, license review, then promote (needs owner license sign-off)
