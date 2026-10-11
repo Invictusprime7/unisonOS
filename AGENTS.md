@@ -23,4 +23,3 @@
 - Code-terminal file commands emit FileOps to `onPatch` and the host commits them via `commitBuilderFiles` inside `runExclusive('terminal')`; the terminal never writes the VFS itself. Why: the old `onWriteFile` → `importFiles` path bypassed save, checkpoints and the coordinator.
 - Catalog, content and business profile go through `src/services/resources/resourceRuntime.ts`; why: one edit path, separate tables.
 - Save, preflight, scoped-edit, preview, site-backend and editor-command rules: `src/services/AGENTS.md`; AI provider order: `supabase/functions/_shared/AGENTS.md`.
-- 21st motion/3D sources pass through `src/design/21st-intake/experiencePackIntake.ts`; three.js deps are capability-gated (never shipped raw) and must be adapted onto `@/unison/ui/experience` before promotion; why: WebGL guards, budgets and fallbacks live only in the experience primitives.
