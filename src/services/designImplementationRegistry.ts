@@ -50,6 +50,10 @@ export interface DesignImplementation {
   vocabularyRefs?: readonly VocabularyRef[];
   pageRoles?: SectionVariant['pageRoles'];
   experience?: SectionVariant['experience'];
+  capabilities?: SectionVariant['capabilities'];
+  compatibility?: SectionVariant['compatibility'];
+  lifecycle?: SectionVariant['lifecycle'];
+  ai?: SectionVariant['ai'];
 }
 
 let cachedIndex: Map<string, DesignImplementation> | null = null;
@@ -117,6 +121,10 @@ function buildIndex(): Map<string, DesignImplementation> {
         experience: variant.experience
           ? { ...variant.experience, vocabulary: { ...variant.experience.vocabulary } }
           : undefined,
+        capabilities: variant.capabilities,
+        compatibility: variant.compatibility,
+        lifecycle: variant.lifecycle ? { ...variant.lifecycle } : undefined,
+        ai: variant.ai ? { ...variant.ai } : undefined,
       });
     }
   }
