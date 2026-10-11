@@ -75,4 +75,5 @@
 - [x] Registry expansion: eligibility resolver now orders/narrows Wizard per-section design lists
 - [x] 3D/motion intake: three.js sources gated (not rejected) behind --capability=threeD; experiencePackIntake.ts assesses motion level, 3D capability, blockers, lifecycle
 - [x] Quarantined 5 sources: Halide Topo Hero, Spatial Depth Hero, Tunnel Hero (three.js), Reveal, Scroll Reveal
-- [ ] Adapt quarantined sources onto Unison experience primitives + reduced-motion, license review, then promote (needs owner license sign-off)
+- [x] Tunnel Hero promoted as hero:tunnel-immersive (DOM rings + SceneBackground tunnel 3D); Scroll Reveal merged into existing <Reveal>
+- [ ] Next intake: Spatial Depth Hero, Reveal, Halide Topo Hero (need `motion` → framer-motion adaptation)

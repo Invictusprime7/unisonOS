@@ -5,9 +5,8 @@ import { createIntakeRecord } from '@/design/21st-intake/provenance';
 
 describe('experience-pack intake', () => {
   it('gates a three.js source behind the 3D capability and keeps it experimental until adapted', () => {
-    const tunnel = TWENTY_FIRST_INTAKE_MANIFEST.find((r) => r.sourceId === '21st:6588');
-    expect(tunnel).toBeTruthy();
-    const a = assessExperiencePackIntake(tunnel!);
+    const tunnel = createIntakeRecord({ sourceId: '21st:raw3d', name: 'Raw', sourceType: 'component', dependencies: ['react', 'three'] } as never);
+    const a = assessExperiencePackIntake({ ...tunnel, capabilities: { ...tunnel.capabilities, threeD: true } });
     expect(a.motionLevel).toBe('immersive');
     expect(a.requiredCapabilities).toEqual(['experience.three-d']);
     expect(a.dependencyAudit.rejected).toEqual([]);
@@ -35,5 +34,25 @@ describe('experience-pack intake', () => {
     const a = assessExperiencePackIntake(record);
     expect(a.blockers).toEqual([]);
     expect(a.lifecycleStatus).toBe('candidate');
+  });
+});
+
+import { getDesignImplementation } from '@/services/designImplementationRegistry';
+import { resolveEligibleImplementations } from '@/services/designImplementationEligibility';
+import { heroTunnelImmersiveJSX } from '@/sections/variants/jsxTemplates';
+
+describe('tunnel-immersive promotion', () => {
+  it('is registered with 21st provenance and only offered to immersive sites', () => {
+    expect(getDesignImplementation('hero:tunnel-immersive' as never)).toBeTruthy();
+    const base = { sectionType: 'hero' as const, pageRole: 'home' as const };
+    const standard = resolveEligibleImplementations({ ...base, experiencePreference: 'standard' }).map((c) => c.implementationId);
+    expect(standard).not.toContain('hero:tunnel-immersive');
+    const immersive = resolveEligibleImplementations({ ...base, experiencePreference: 'immersive', availableCapabilities: ['experience.three-d'] }).map((c) => c.implementationId);
+    expect(immersive).toContain('hero:tunnel-immersive');
+  });
+  it('generated markup honours reduced motion and ships no raw three.js', () => {
+    const jsx = heroTunnelImmersiveJSX({ heading: 'Into depth', ctaButtons: [{ text: 'Start', href: '#', isPrimary: true }] });
+    expect(jsx).toContain('prefers-reduced-motion');
+    expect(jsx).not.toMatch(/three/);
   });
 });

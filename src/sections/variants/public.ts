@@ -87,6 +87,7 @@ import { GalleryCaseStudy } from './gallery/GalleryCaseStudy';
 import { HeroImageStream } from './hero/HeroImageStream';
 import { HeroLaunchShowcase } from './hero/HeroLaunchShowcase';
 import { HeroPrismaCinematic } from './hero/HeroPrismaCinematic';
+import { HeroTunnelImmersive } from './hero/HeroTunnelImmersive';
 import { HeroCentered } from './hero/HeroCentered';
 import { HeroSplitImage } from './hero/HeroSplitImage';
 import { HeroFullBleed } from './hero/HeroFullBleed';
@@ -128,6 +129,7 @@ export const PUBLIC_IMPLEMENTATIONS: Readonly<Record<string, ComponentType<BaseS
   'hero:image-stream': HeroImageStream,
   'hero:launch-showcase': HeroLaunchShowcase,
   'hero:prisma-cinematic': HeroPrismaCinematic,
+  'hero:tunnel-immersive': HeroTunnelImmersive,
   'hero:centered': HeroCentered,
   'hero:split-image': HeroSplitImage,
   'hero:full-bleed': HeroFullBleed,
@@ -316,6 +318,7 @@ export {
   HeroImageStream,
   HeroLaunchShowcase,
   HeroPrismaCinematic,
+  HeroTunnelImmersive,
   HeroCentered,
   HeroSplitImage,
   HeroFullBleed,

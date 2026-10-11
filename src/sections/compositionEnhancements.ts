@@ -11,6 +11,8 @@ export const COMPOSITION_ENHANCEMENTS = [
   { id: 'depth-gallery', category: 'media', vocabularyId: 'depth-gallery', sectionTypes: ['gallery'], canvasRoots: 1, imports: ["import { DepthGallery } from '@/unison/ui/experience/media';", "import * as ExperienceTabs from '@/unison/ui/radix/tabs';", "import { Container } from '@/unison/ui/layout';"] },
 ] as const;
 
+/** The tunnel hero's WebGL layer is the scene backdrop's tunnel variant. */
+const TUNNEL_HERO_ID = 'hero:tunnel-immersive';
 export type EnhancementId = typeof COMPOSITION_ENHANCEMENTS[number]['id'];
 export type EnhancementReason = 'selected' | 'incompatible-capability' | 'missing-assets' | 'performance-budget' | 'missing-implementation' | 'not-applicable';
 export interface EnhancementDecision {
@@ -40,8 +42,9 @@ export function resolveCompositionEnhancements(
       if (!(recipe.sectionTypes as readonly string[]).includes(section.type)) continue;
       let reason: EnhancementReason = 'selected';
       if (!getDesignImplementation(implementationId)) reason = 'missing-implementation';
+      else if (recipe.id === 'immersive-hero' && implementationId === TUNNEL_HERO_ID) reason = 'not-applicable';
       else if (recipe.id === 'immersive-hero' && (!envelope?.immersiveRequested || !['home', 'immersive'].includes(template.pageRole || 'home'))) reason = 'not-applicable';
-      else if (recipe.id === 'scene-backdrop' && envelope?.immersiveRequested && ['home', 'immersive'].includes(template.pageRole || 'home')) reason = 'not-applicable';
+      else if (recipe.id === 'scene-backdrop' && implementationId !== TUNNEL_HERO_ID && envelope?.immersiveRequested && ['home', 'immersive'].includes(template.pageRole || 'home')) reason = 'not-applicable';
       else if (recipe.id === 'scene-backdrop' && section.sourceSectionId) reason = 'not-applicable';
       else if (recipe.canvasRoots && (!envelope || envelope.webgl === 'ineligible')) reason = 'incompatible-capability';
       else if (recipe.id === 'scene-backdrop' && !envelope?.backgroundCandidates.includes('3d-scene')) reason = 'incompatible-capability';
@@ -79,7 +82,7 @@ export function emitCompositionEnhancements(activation?: CompositionActivation):
         return `if (${condition} && typeof Reveal === 'function') content = <Reveal>{content}</Reveal>;`;
       case 'scene-backdrop':
         // Keep the canonical hero, its media and actions intact. The scene is decorative.
-        return `if (${condition} && typeof SceneBackground === 'function') content = <div className="relative isolate"><div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 overflow-hidden opacity-20"><SceneBackground className="z-0" /></div>{content}</div>;`;
+        return `if (${condition} && typeof SceneBackground === 'function') content = <div className="relative isolate"><div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 overflow-hidden opacity-20"><SceneBackground className="z-0"${decision.implementationId === TUNNEL_HERO_ID ? ' variant="tunnel"' : ''} /></div>{content}</div>;`;
       case 'immersive-hero':
         return `if (${condition} && typeof ImmersiveHero === 'function') content = <div data-ut-enhancement="immersive-hero"><ImmersiveHero intensity="cinematic" className="rounded-none">{content}</ImmersiveHero></div>;`;
       case 'depth-gallery':

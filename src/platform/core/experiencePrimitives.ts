@@ -338,8 +338,48 @@ export function ParticleScene({ count = 1600 }: { count?: number }) {
 }
 
 /** Page-band background scene. */
-export function BackgroundScene({ variant = 'aurora' }: { variant?: 'aurora' | 'starfield' | 'mesh' }) {
+function TunnelRings({ layers = 48, points = 96 }: { layers?: number; points?: number }) {
   const material = useExperienceMaterial();
+  const positions = React.useMemo(() => {
+    const buffer = new Float32Array(layers * points * 3);
+    let o = 0;
+    for (let l = 0; l < layers; l += 1) {
+      const z = -l * 0.6;
+      const wobbleX = 0.4 * Math.sin(l * 0.35);
+      const wobbleY = 0.3 * Math.cos(l * 0.22);
+      for (let p = 0; p < points; p += 1) {
+        const a = (p / points) * Math.PI * 2;
+        buffer[o++] = Math.cos(a) * 2.2 + wobbleX;
+        buffer[o++] = Math.sin(a) * 2.2 + wobbleY;
+        buffer[o++] = z;
+      }
+    }
+    return buffer;
+  }, [layers, points]);
+  const group = React.useRef<THREE.Group>(null);
+  useFrame((_state, delta) => {
+    if (!group.current) return;
+    group.current.position.z = (group.current.position.z + delta * 1.2) % 0.6;
+    group.current.rotation.z += delta * 0.04;
+  });
+  return (
+    <group ref={group}>
+      <Points positions={positions} stride={3} frustumCulled={false}>
+        <PointMaterial transparent size={0.035} sizeAttenuation depthWrite={false} color={material.accent} />
+      </Points>
+    </group>
+  );
+}
+
+export function BackgroundScene({ variant = 'aurora' }: { variant?: 'aurora' | 'starfield' | 'mesh' | 'tunnel' }) {
+  const material = useExperienceMaterial();
+  if (variant === 'tunnel') {
+    return (
+      <SceneHost camera={{ position: [0, 0, 2], fov: 70 }}>
+        <TunnelRings />
+      </SceneHost>
+    );
+  }
   return (
     <SceneHost>
       <LightRig preset="soft" />
@@ -598,7 +638,7 @@ export function ParticleField({ density = 'medium', className }: { density?: Par
   );
 }
 
-export type SceneBackgroundVariant = 'aurora' | 'starfield' | 'mesh';
+export type SceneBackgroundVariant = 'aurora' | 'starfield' | 'mesh' | 'tunnel';
 
 /** Page-band background layer; place at most one per band. */
 export function SceneBackground({
