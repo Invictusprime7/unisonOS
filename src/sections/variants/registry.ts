@@ -727,7 +727,7 @@ const VARIANT_REGISTRY: VariantRegistry = {
         motion: { level: 'immersive', reducedMotionRequired: true },
       },
       compatibility: { pageRoles: ['home'], experiencePreferences: ['immersive'] },
-      lifecycle: { status: 'certified', schemaVersion: 1, implementationVersion: '1.0.0', introducedAt: '2026-10-11' },
+      lifecycle: { status: 'certified', schemaVersion: 1, implementationVersion: 1, introducedAt: '2026-10-11' },
       ai: {
         summary: 'Dark, centered statement hero with a receding depth tunnel.',
         bestFor: ['technology', 'agency', 'studio', 'launches'],
