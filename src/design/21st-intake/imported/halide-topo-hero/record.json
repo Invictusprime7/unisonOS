@@ -10,7 +10,7 @@
   "licenseReview": {
     "status": "unverified"
   },
-  "attribution": "21st.dev — Halide Topo Hero by @unknown",
+  "attribution": "21st.dev \u2014 Halide Topo Hero by @unknown",
   "designTags": [],
   "capabilities": {
     "motion": false,
@@ -44,5 +44,8 @@
       }
     ],
     "approved": true
-  }
+  },
+  "status": "retired",
+  "semanticDisposition": "retire-source",
+  "notes": "Fetched source is a generic counter placeholder, not the published Halide Topo Hero design. Needs a re-fetch of the real source (or a similar 21st hero) before adaptation; nothing fabricated."
 }
