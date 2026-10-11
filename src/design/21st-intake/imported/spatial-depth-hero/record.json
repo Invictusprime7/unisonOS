@@ -61,5 +61,6 @@
   "semanticDisposition": "new-implementation",
   "promotedVariants": [
     "hero:spatial-depth"
-  ]
+  ],
+  "archivePath": "src/design/21st-intake/archive/spatial-depth-hero"
 }

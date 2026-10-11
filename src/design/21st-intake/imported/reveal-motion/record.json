@@ -59,5 +59,6 @@
   "status": "promoted",
   "implementationId": "motion:reveal",
   "semanticDisposition": "merge-as-mode",
-  "notes": "Covered by the canonical <Reveal> primitive (in-view, once, stagger, reduced motion). No new primitive."
+  "notes": "Covered by the canonical <Reveal> primitive (in-view, once, stagger, reduced motion). No new primitive.",
+  "archivePath": "src/design/21st-intake/archive/reveal-motion"
 }
