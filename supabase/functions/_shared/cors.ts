@@ -5,7 +5,8 @@
  * while allowing development flexibility.
  */
 
-/// <reference path="../deno.d.ts" />
+// Local shadow so isolated `tsc` checks resolve Deno without the global lib.
+declare const Deno: { env: { get(key: string): string | undefined } };
 
 /** Trusted origins for production CORS */
 const TRUSTED_ORIGINS: string[] = [
