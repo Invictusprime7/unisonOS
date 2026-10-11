@@ -5,7 +5,14 @@
  * validation for all edge functions.
  */
 
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — remote module resolved by the edge runtime; isolated tsc cannot fetch it
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+
+// Local shadow so isolated `tsc` checks resolve Deno without the global lib.
+declare const Deno: { env: { get(key: string): string | undefined } };
+
+type SupabaseClient = ReturnType<typeof createClient>;
 
 export interface AuthenticatedUser {
   id: string;

@@ -5,6 +5,9 @@
  * while allowing development flexibility.
  */
 
+// Local shadow so isolated `tsc` checks resolve Deno without the global lib.
+declare const Deno: { env: { get(key: string): string | undefined } };
+
 /** Trusted origins for production CORS */
 const TRUSTED_ORIGINS: string[] = [
   "https://unison-tasks.vercel.app",

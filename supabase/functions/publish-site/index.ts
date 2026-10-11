@@ -1,4 +1,10 @@
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
+
+// Local shadow so isolated `tsc` checks resolve Deno without the global lib.
+declare const Deno: {
+  env: { get(key: string): string | undefined };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { verifyAuth, authError } from "../_shared/auth.ts";
 import { safeParseBody, sanitizeString, isNonEmptyString } from "../_shared/validate.ts";
@@ -192,17 +198,18 @@ Deno.serve(async (req) => {
     let attestationMeta: PublishResponse["attestation"] = { enforced: false };
     if (body.publishAttestation !== undefined && body.publishAttestation !== null) {
       const verdict = await verifyPublishAttestation(body.publishAttestation, files);
-      if (!verdict.ok) {
+      if (verdict.ok !== true) {
+        const failure = verdict as { code: string; message: string; details?: unknown };
         console.warn(
           "[publish-site] attestation rejected user=%s code=%s message=%s",
           auth.user.id,
-          verdict.code,
-          verdict.message,
+          failure.code,
+          failure.message,
         );
-        return errorResponse(verdict.message, 412, corsHeaders, {
+        return errorResponse(failure.message, 412, corsHeaders, {
           status: "error",
           provider: provider ?? "unknown",
-          attestation: { enforced: true, code: verdict.code, details: verdict.details },
+          attestation: { enforced: true, code: failure.code, details: failure.details },
         });
       }
       attestationMeta = {
