@@ -90,6 +90,7 @@ import {
   servicesProductCardsJSX,
   ctaSignalBannerJSX,
   heroPrismaCinematicJSX,
+  heroTunnelImmersiveJSX,
   heroImageStreamJSX,
 } from './jsxTemplates';
 
@@ -98,6 +99,7 @@ import { HeroImageStream } from './hero/HeroImageStream';
 
 // 21st.dev certified variant: hero:prisma-cinematic
 import { HeroPrismaCinematic } from './hero/HeroPrismaCinematic';
+import { HeroTunnelImmersive } from './hero/HeroTunnelImmersive';
 
 // 21st.dev certified variant: cta:signal-banner
 import { CTASignalBanner } from './cta/CTASignalBanner';
@@ -698,6 +700,44 @@ const VARIANT_REGISTRY: VariantRegistry = {
       tags: ['hero', 'cinematic', 'editorial', 'full-bleed', 'media'],
       pageRoles: ['home'],
       renderJSX: heroPrismaCinematicJSX,
+    },
+    {
+      id: 'hero:tunnel-immersive',
+      sectionType: 'hero',
+      slug: 'tunnel-immersive',
+      name: 'Tunnel Immersive',
+      description: 'Full-viewport hero with rings receding into a depth tunnel behind centered display copy',
+      component: HeroTunnelImmersive,
+      vfs: { mode: 'portable-recipe', certification: 'approved' },
+      source: {
+        origin: '21st',
+        derivation: 'source-adaptation',
+        sourceId: '21st:6588',
+        sourceUrl: 'https://21st.dev/c/6588',
+        author: 'm.umairwaheedansari',
+        license: 'Owner-authorized adaptation (21st.dev publication by @m.umairwaheedansari declares no upstream license)',
+        adaptationVersion: '1',
+      },
+      generationStatus: 'supported',
+      // The WebGL tunnel comes only from the canonical scene-backdrop
+      // enhancement (SceneBackground variant="tunnel"); DOM rings otherwise.
+      experience: { status: 'enabled', vocabulary: { category: 'background', id: '3d-scene' } },
+      capabilities: {
+        layout: { geometry: ['centered', 'spatial'], mediaDominance: 'low', density: 'airy', typographyScale: 'monumental' },
+        motion: { level: 'immersive', reducedMotionRequired: true },
+      },
+      compatibility: { pageRoles: ['home'], experiencePreferences: ['immersive'] },
+      lifecycle: { status: 'certified', schemaVersion: 1, implementationVersion: '1.0.0', introducedAt: '2026-10-11' },
+      ai: {
+        summary: 'Dark, centered statement hero with a receding depth tunnel.',
+        bestFor: ['technology', 'agency', 'studio', 'launches'],
+        avoidFor: ['photo-led businesses that need their imagery above the fold'],
+        contentRequirements: ['short headline', 'one supporting line', '1-2 CTAs'],
+      },
+      thumbnail: '/variants/hero-tunnel-immersive.svg',
+      tags: ['hero', 'immersive', '3d', 'tunnel', 'motion'],
+      pageRoles: ['home'],
+      renderJSX: heroTunnelImmersiveJSX,
     },
     {
       id: 'hero:image-fan',

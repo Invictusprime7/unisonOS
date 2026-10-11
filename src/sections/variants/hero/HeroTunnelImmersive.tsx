@@ -89,8 +89,8 @@ export const HeroTunnelImmersive: React.FC<BaseSectionProps<'hero'>> = ({ sectio
               <a
                 key={`${cta.label}-${index}`}
                 href={cta.href || '#'}
-                data-ut-slot={`hero.cta.${index}`}
-                data-ut-intent={(cta as { intent?: string }).intent}
+                data-ut-intent={cta.intent ?? 'nav.goto'}
+                data-ut-cta={index === 0 ? 'cta.hero' : 'cta.hero-secondary'}
                 className="inline-flex items-center rounded-full px-6 py-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={index === 0
                   ? { background: hsl(theme.colors.background), color: hsl(theme.colors.foreground) }
