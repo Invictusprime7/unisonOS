@@ -193,17 +193,18 @@ Deno.serve(async (req) => {
     let attestationMeta: PublishResponse["attestation"] = { enforced: false };
     if (body.publishAttestation !== undefined && body.publishAttestation !== null) {
       const verdict = await verifyPublishAttestation(body.publishAttestation, files);
-      if (!verdict.ok) {
+      if (verdict.ok !== true) {
+        const failure = verdict as { code: string; message: string; details?: unknown };
         console.warn(
           "[publish-site] attestation rejected user=%s code=%s message=%s",
           auth.user.id,
-          verdict.code,
-          verdict.message,
+          failure.code,
+          failure.message,
         );
-        return errorResponse(verdict.message, 412, corsHeaders, {
+        return errorResponse(failure.message, 412, corsHeaders, {
           status: "error",
           provider: provider ?? "unknown",
-          attestation: { enforced: true, code: verdict.code, details: verdict.details },
+          attestation: { enforced: true, code: failure.code, details: failure.details },
         });
       }
       attestationMeta = {
