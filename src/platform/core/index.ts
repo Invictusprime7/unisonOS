@@ -18,6 +18,7 @@
 // Identity / intent surface
 export * from './coreIntents';
 export * from './intentSurfaceRegistry';
+export * from './actionAffinity';
 
 // Blueprint & capabilities
 export * from './blueprintSchema';

@@ -92,6 +92,22 @@ describe('resolvePreviewAction', () => {
       {},
     )).toEqual({ action: 'acknowledge' });
   });
+
+  it('routes portfolio and case-study labels through the shared affinity vocabulary', () => {
+    expect(resolvePreviewAction(
+      'nav.goto',
+      'View Case Study',
+      { ...emptyInventory, navHrefs: ['/case-studies'] },
+      { '/src/pages/CaseStudies.tsx': 'export default function CaseStudies(){return null}' },
+      { category: 'redirect', confidence: 1, suggestedPageType: 'gallery', reason: 'test' },
+      false,
+      {},
+    )).toEqual({
+      action: 'navigate',
+      route: '/case-studies',
+      vfsPath: '/src/pages/CaseStudies.tsx',
+    });
+  });
 });
 
 describe('buildRoutePolicy', () => {

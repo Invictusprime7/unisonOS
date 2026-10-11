@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { SetupWizardPanel } from "./setup-wizard/SetupWizardPanel";
 import { useSetupWizard, type SetupStepId } from "@/hooks/useSetupWizard";
+import { PlaygroundApiProvider, usePlaygroundApi } from "@/hooks/usePlaygroundApi";
 import type { UseCreatorPlaygroundReturn } from "@/hooks/useCreatorPlayground";
 import type { BuilderPageType, FunnelRole, PageRegistry } from "@/types/pageRegistry";
 import type {
@@ -38,6 +39,8 @@ import {
   createCanonicalComponentInstance,
 } from "@/services/canonicalComponentRegistry";
 import { LaunchTasksPanel } from "./playground/LaunchTasksPanel";
+import { LiveRuntimePreview } from "./playground/LiveResourcePreview";
+import type { LaunchTask } from "@/services/playground/launchReadiness";
 import { getProductSurfaces, getServiceSurfaces, buildCatalogTopology, type CatalogSurface } from "@/services/catalogTopology";
 import {
   AlertTriangle,
@@ -111,21 +114,19 @@ type Section =
   | "popups"
   | "services"
   | "assets"
+  | "media"
   | "business";
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ElementType; highlight?: boolean; group?: string }[] = [
-  { id: "launch", label: "Launch Wizard", icon: Rocket, highlight: true },
+  { id: "launch", label: "Launch", icon: Rocket, highlight: true },
   { id: "overview", label: "Overview", icon: Gauge },
   { id: "pages", label: "Pages", icon: FileText, group: "Build" },
-  { id: "funnels", label: "Funnels", icon: GitBranch },
-  { id: "intent_registry", label: "Intent Registry", icon: Link2 },
-  { id: "readiness", label: "Readiness", icon: ShieldCheck },
   { id: "components", label: "Components", icon: Blocks },
-  { id: "customization", label: "Customization", icon: Star },
-  { id: "popups", label: "Popups", icon: MessageSquare },
-  { id: "assets", label: "Assets", icon: Package, group: "Manage" },
-  { id: "calendars", label: "Calendars", icon: Calendar },
-  { id: "business", label: "Business Setup", icon: Settings },
+  { id: "assets", label: "Assets", icon: Package },
+  { id: "media", label: "Media", icon: ImageIcon },
+  { id: "intent_registry", label: "Operations", icon: Settings, group: "Manage" },
+  { id: "readiness", label: "Readiness", icon: ShieldCheck },
+  { id: "customization", label: "AI / Inspector", icon: Star },
 ];
 
 const INTENT_LABELS: Record<string, string> = {
@@ -164,6 +165,36 @@ const SETUP_STEP_IDS = new Set<SetupStepId>([
   "seo",
   "analytics",
 ]);
+
+function PlaygroundLaunchReadinessCard({ fallbackReady, fallbackTotal, onNavigate }: { fallbackReady: number; fallbackTotal: number; onNavigate: (section: Section) => void }) {
+  const api = usePlaygroundApi();
+  const [summary, setSummary] = useState({ ready: fallbackReady, total: fallbackTotal, percent: fallbackTotal ? Math.round((fallbackReady / fallbackTotal) * 100) : 0 });
+  const [tasks, setTasks] = useState<LaunchTask[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    void Promise.all([api.getLaunchReadiness(), api.getLaunchTasks()]).then(([nextSummary, nextTasks]) => {
+      if (!alive) return;
+      setSummary(nextSummary);
+      setTasks(nextTasks);
+    });
+    return () => { alive = false; };
+  }, [api]);
+
+  return (
+    <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5 shadow-[0_14px_35px_rgba(0,0,0,0.2)]">
+      <p className="text-[11px] font-semibold text-slate-200">Launch Readiness</p>
+      <div className="mt-3 flex items-center gap-3">
+        <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full" style={{ background: `conic-gradient(rgb(52 211 153) ${summary.percent * 3.6}deg, rgb(30 41 50) 0deg)` }}><div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#0b1218] text-[11px] font-semibold text-slate-100">{summary.ready}/{summary.total}</div></div>
+        <div><p className="text-[11px] font-medium text-slate-200">{summary.ready === summary.total && summary.total > 0 ? "Ready to launch" : "Almost there!"}</p><p className="mt-1 text-[9px] leading-relaxed text-slate-500">Complete a few more steps to launch.</p></div>
+      </div>
+      <ul className="mt-3 space-y-2 text-[9px]">
+        {tasks.slice(0, 4).map((task) => <li key={task.id}><button type="button" onClick={() => task.target?.playgroundSection && onNavigate(task.target.playgroundSection as Section)} className="flex w-full items-center gap-2 text-left text-slate-400"><span className={cn("h-1.5 w-1.5 rounded-full", task.status === "ready" ? "bg-emerald-400" : "border border-slate-500")} /><span className="flex-1 truncate">{task.title}</span>{task.status === "ready" ? <CheckCircle className="h-3.5 w-3.5 text-emerald-400" /> : <span className="h-3.5 w-3.5 rounded-full border border-slate-500" />}</button></li>)}
+      </ul>
+      <Button variant="outline" size="sm" className="mt-3 h-8 w-full justify-between border-white/10 bg-white/[0.035] px-3 text-[10px] text-slate-200 hover:bg-white/[0.07]" onClick={() => onNavigate("readiness")}>View Checklist <ArrowRight className="h-3 w-3" /></Button>
+    </div>
+  );
+}
 
 interface CreatorPlaygroundModalProps {
   open: boolean;
@@ -244,7 +275,7 @@ export function CreatorPlaygroundModal({
   onPublishLongform,
 }: CreatorPlaygroundModalProps) {
   const [activeSection, setActiveSection] = useState<Section>(
-    initialSection || "overview",
+    initialSection || "assets",
   );
   const [selectedBindingId, setSelectedBindingId] = useState<string | null>(initialBindingId || null);
   const [businessFocusField, setBusinessFocusField] = useState<PlaygroundSetupField | null>(initialSetupField || null);
@@ -329,48 +360,72 @@ export function CreatorPlaygroundModal({
   };
 
   return (
+    <PlaygroundApiProvider
+      businessId={businessId}
+      projectId={projectId}
+      siteId={siteId}
+      industry={industry ?? wizardSelections?.industryOverlay ?? null}
+      systemType={systemType}
+      vfsFiles={vfsFiles}
+      notificationEmail={setupSnapshot?.notificationEmail ?? null}
+      customDomain={setupSnapshot?.customDomain ?? null}
+      publishBlockers={controlPlane.overview.blockedLaunchTasks}
+      pageRegistry={playground.pageRegistry}
+    >
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[92vw] h-[82vh] flex flex-col p-0 gap-0 bg-[#09090f] border border-emerald-500/30 shadow-[0_0_60px_rgba(0,200,100,0.12)] overflow-hidden [&>button]:text-emerald-400 [&>button]:hover:text-white">
-        <DialogHeader className="px-5 py-3 border-b border-emerald-500/20 bg-[#0a0a14] flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-1.5 rounded-lg bg-emerald-500/20 shadow-[0_0_12px_rgba(0,200,100,0.3)]">
-                <Zap className="h-4 w-4 text-emerald-400" />
-              </div>
-              <div>
-                <DialogTitle className="text-sm font-bold text-emerald-400 tracking-wide">
-                  Creator's Playground
-                </DialogTitle>
-                <p className="text-[10px] text-emerald-400/50 mt-0.5">
-                  Structure • Behavior • Readiness
-                </p>
+      <DialogContent className="h-[94vh] w-[96vw] max-w-[1540px] gap-0 overflow-hidden border border-white/10 bg-[#080d12] p-0 shadow-[0_30px_100px_rgba(0,0,0,0.72),0_0_50px_rgba(16,185,129,0.07)] [&>button]:right-4 [&>button]:top-4 [&>button]:z-20 [&>button]:rounded-lg [&>button]:border [&>button]:border-white/10 [&>button]:bg-white/5 [&>button]:p-2 [&>button]:text-slate-400 [&>button]:hover:text-white">
+        <DialogHeader className="h-[76px] flex-shrink-0 border-b border-white/10 bg-[#091016] p-0 pr-16">
+          <div className="flex h-full items-center">
+            <div className="flex h-full w-[234px] shrink-0 items-center gap-3 border-r border-white/10 px-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-400/15 bg-emerald-400/10 shadow-[0_0_24px_rgba(52,211,153,0.12)]"><Zap className="h-5 w-5 text-emerald-300" /></div>
+              <span className="text-base font-semibold tracking-[-0.03em] text-white">Unison</span>
+            </div>
+            <div className="flex min-w-[380px] items-center gap-4 px-7">
+              <DialogTitle className="text-base font-semibold tracking-[-0.025em] text-white">Creator's Playground</DialogTitle>
+              <div className="hidden items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-[11px] text-slate-300 xl:flex">
+                <Briefcase className="h-3.5 w-3.5 text-indigo-300" />
+                <span className="max-w-[130px] truncate">{playground.creatorData.businessInfo.businessName || "Active workspace"}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
               </div>
             </div>
-            {playground.isDirty && (
-              <Badge variant="outline" className="text-[10px] h-5 px-2 border-amber-500/50 text-amber-400 bg-amber-500/10">
-                Unsaved Changes
-              </Badge>
-            )}
+            <div className="mx-auto hidden h-10 max-w-[420px] flex-1 items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 text-slate-500 lg:flex">
+              <Search className="h-4 w-4" />
+              <span className="flex-1 text-xs">Search assets, pages, or anything...</span>
+              <kbd className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-500">⌘ K</kbd>
+            </div>
+            <div className="ml-5 flex items-center gap-3">
+              <div className="hidden rounded-xl border border-emerald-400/10 bg-emerald-400/[0.07] px-3 py-2 md:block">
+                <div className="flex items-center gap-2 text-[11px] font-medium text-emerald-300">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
+                  Live Preview Connected
+                </div>
+                <p className="mt-0.5 pl-4 text-[10px] text-slate-500">Edits sync in real time</p>
+              </div>
+              <div className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-3 text-xs text-slate-200">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-emerald-400 text-[9px] text-emerald-300">{setupWizard.completedCount}</span>
+                <span>{setupWizard.completedCount}/{setupWizard.totalCount} Ready</span>
+              </div>
+              {playground.isDirty && <Badge variant="outline" className="hidden h-7 border-amber-500/30 bg-amber-500/10 px-2 text-[10px] text-amber-300 xl:inline-flex">Unsaved</Badge>}
+            </div>
           </div>
         </DialogHeader>
 
         <div className="flex flex-1 min-h-0">
-          <nav className="w-48 flex-shrink-0 border-r border-emerald-500/15 bg-[#0a0a12] py-2">
+          <nav className="flex w-[234px] flex-shrink-0 flex-col overflow-hidden border-r border-white/10 bg-[#091016] px-3 py-4">
+            <div className="flex-1 overflow-y-auto">
             {NAV_ITEMS.map(({ id, label, icon: Icon, highlight, group }) => (
               <React.Fragment key={id}>
-              {group && <div className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">{group}</div>}
+              {group && <div className="px-3 pb-1 pt-5 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-600">{group}</div>}
               <button
                 key={id}
                 onClick={() => openPlaygroundSection(id)}
                 className={cn(
-                  "w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium transition-all duration-150",
+                  "mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all duration-150",
                   activeSection === id
-                    ? highlight
-                      ? "bg-violet-500/15 text-violet-400 border-r-2 border-violet-400"
-                      : "bg-emerald-500/15 text-emerald-400 border-r-2 border-emerald-400"
+                    ? "border border-emerald-400/10 bg-emerald-400/10 text-emerald-300 shadow-[inset_2px_0_0_rgba(52,211,153,0.8)]"
                     : highlight
-                      ? "text-violet-400/70 hover:text-violet-400 hover:bg-violet-500/10"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/30",
+                      ? "text-indigo-300/80 hover:bg-white/5 hover:text-indigo-200"
+                      : "text-slate-400 hover:bg-white/5 hover:text-slate-100",
                 )}
               >
                 <Icon className="h-3.5 w-3.5 flex-shrink-0" />
@@ -396,11 +451,13 @@ export function CreatorPlaygroundModal({
               </button>
               </React.Fragment>
             ))}
+            </div>
+            <PlaygroundLaunchReadinessCard fallbackReady={setupWizard.completedCount} fallbackTotal={setupWizard.totalCount} onNavigate={setActiveSection} />
           </nav>
 
-          <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(circle_at_50%_-20%,rgba(24,79,82,0.12),transparent_42%)]">
             <ScrollArea className="flex-1">
-              <div className="p-5">
+              <div className={cn("p-6", (activeSection === "assets" || activeSection === "media" || activeSection === "pages" || activeSection === "components") && "p-0")}>
                 {activeSection === "launch" && (
                   <>
                     <LaunchTasksPanel
@@ -428,8 +485,8 @@ export function CreatorPlaygroundModal({
                 )}
                 {activeSection === "pages" && <PagesSection playground={playground} controlPlane={controlPlane} onPageSelect={onPageSelect} onPageAdd={onPageAdd} onPageRemove={onPageRemove} />}
                 {activeSection === "funnels" && <FunnelsSection playground={playground} controlPlane={controlPlane} onFunnelCreate={onFunnelCreate} />}
-                {(activeSection === "assets" || activeSection === "products" || activeSection === "services" || activeSection === "forms") && (
-                  <AssetsSection businessId={businessId} projectId={projectId} industry={industry ?? wizardSelections?.industryOverlay ?? null} vfsFiles={vfsFiles} creatorData={playground.creatorData} formsSlot={<FormsSection playground={playground} />} onReveal={(mark, files) => {
+                {(activeSection === "assets" || activeSection === "media" || activeSection === "products" || activeSection === "services" || activeSection === "forms") && (
+                  <AssetsSection key={activeSection} initialTab={activeSection === "media" ? "media" : "catalog"} businessId={businessId} projectId={projectId} industry={industry ?? wizardSelections?.industryOverlay ?? null} vfsFiles={vfsFiles} creatorData={playground.creatorData} formsSlot={<FormsSection playground={playground} />} onReveal={(mark, files) => {
                     const slug = (f: string) => (f.split("/").pop() ?? "").replace(/\.(t|j)sx?$/, "").replace(/Page$/, "").toLowerCase();
                     const names = files.map(slug);
                     const page = controlPlane.pages.find((pg) => names.includes((pg.path.replace(/^\//, "") || "home").toLowerCase()) || names.includes(pg.title.replace(/\s+/g, "").toLowerCase()));
@@ -491,6 +548,7 @@ export function CreatorPlaygroundModal({
         </div>
       </DialogContent>
     </Dialog>
+    </PlaygroundApiProvider>
   );
 }
 
@@ -624,10 +682,10 @@ function PagesSection({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-bold text-foreground">Pages</h2>
-        <Badge variant="outline" className="text-[10px]">{pages.length} pages</Badge>
+    <div className="space-y-5 p-6">
+      <div className="flex items-end justify-between">
+        <div><h2 className="text-2xl font-bold tracking-tight text-white">Pages</h2><p className="mt-1 text-xs text-slate-500">Every route rendered from the live site runtime.</p></div>
+        <Badge variant="outline" className="border-white/10 bg-white/[0.03] text-[10px] text-slate-300">{pages.length} live routes</Badge>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -647,72 +705,26 @@ function PagesSection({
         <Button size="sm" onClick={handleAdd} disabled={!newTitle.trim()} className="h-8 px-3"><Plus className="h-3.5 w-3.5 mr-1" />Add</Button>
       </div>
 
-      <div className="space-y-1">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {pages.map((page) => (
-          <div key={page.pageId} className="group flex items-stretch gap-3 px-3 py-3 rounded-xl hover:bg-muted/30 cursor-pointer border border-border/20" onClick={() => onPageSelect?.(page.pageId)}>
-            <div className="flex w-20 flex-shrink-0 items-center justify-center rounded-lg border border-border/20 bg-background/40">
-              {page.previewThumbnailUrl ? (
-                <img src={page.previewThumbnailUrl} alt={page.title} className="h-14 w-full rounded-lg object-cover" />
-              ) : (
-                <div className="px-2 text-center text-[10px] text-muted-foreground">
-                  {page.routeState === "preview_ready" || page.routeState === "published" ? "Preview ready" : "No preview"}
-                </div>
-              )}
-            </div>
-            <GripVertical className="mt-1 h-3.5 w-3.5 text-muted-foreground/30 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-sm font-medium truncate">{page.title}</span>
-                {page.isHome && <Home className="h-3 w-3 text-amber-400 flex-shrink-0" />}
-                <Badge variant="outline" className="text-[9px] h-5 px-1.5 uppercase">{page.routeState.replace(/_/g, " ")}</Badge>
-                <Badge variant="outline" className="text-[9px] h-5 px-1.5">{page.pageRole}</Badge>
-                {page.funnelRoles.map((role) => (
-                  <Badge key={`${page.pageId}-${role}`} variant="secondary" className="text-[9px] h-5 px-1.5">
-                    {role}
-                  </Badge>
-                ))}
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <span className="text-[10px] text-muted-foreground font-mono truncate">{page.path}</span>
-                <Badge variant="outline" className="text-[9px] h-4 px-1.5">{page.pageType}</Badge>
-                <Badge variant="outline" className={cn("text-[9px] h-4 px-1.5", getReadinessBadgeClass(page.previewStatus))}>Preview {page.previewStatus}</Badge>
-                <Badge variant="outline" className={cn("text-[9px] h-4 px-1.5", getReadinessBadgeClass(page.publishStatus))}>Publish {page.publishStatus}</Badge>
-                <Badge variant="outline" className="text-[9px] h-4 px-1.5">{page.boundIntentCount} intent{page.boundIntentCount === 1 ? "" : "s"}</Badge>
-                {!page.showInNav && <Badge variant="outline" className="text-[9px] h-4 px-1.5">hidden</Badge>}
-              </div>
-              {(page.funnelNames.length > 0 || page.routeIssues.length > 0 || page.previewError) && (
-                <div className="mt-2 space-y-1">
-                  {page.funnelNames.length > 0 && (
-                    <div className="text-[10px] text-muted-foreground">
-                      Funnels: <span className="text-foreground">{page.funnelNames.join(", ")}</span>
-                    </div>
-                  )}
-                  {page.routeIssues.length > 0 && (
-                    <div className="text-[10px] text-amber-400">
-                      Route health: {page.routeIssues[0]?.message}
-                    </div>
-                  )}
-                  {page.previewError && (
-                    <div className="text-[10px] text-red-400">
-                      Preview error: {page.previewError}
-                    </div>
-                  )}
-                </div>
-              )}
-              {page.previewLastSyncedAt && (
-                <div className="mt-1 text-[10px] text-muted-foreground">
-                  Last synced: {new Date(page.previewLastSyncedAt).toLocaleString()}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(event) => { event.stopPropagation(); playground.updatePage(page.pageId, { showInNav: !page.showInNav }); }}>
+          <article key={page.pageId} className="group overflow-hidden rounded-2xl border border-white/[0.08] bg-[#10171d] transition hover:-translate-y-0.5 hover:border-emerald-400/30 hover:shadow-[0_18px_45px_rgba(0,0,0,.28)]">
+            <button type="button" className="block w-full text-left" onClick={() => onPageSelect?.(page.pageId)}>
+              <LiveRuntimePreview kind="page" route={page.path} name={page.title} className="h-44 border-b border-white/[0.07]" />
+            </button>
+            <div className="p-4">
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h3 className="truncate text-sm font-semibold text-white">{page.title}</h3>{page.isHome ? <Home className="h-3.5 w-3.5 shrink-0 text-amber-400" /> : null}</div><p className="mt-1 truncate font-mono text-[10px] text-slate-500">{page.path}</p></div>
+                <div className="flex items-center gap-1 opacity-70 transition group-hover:opacity-100">
+              <Button variant="ghost" size="icon" aria-label={page.showInNav ? "Hide page from navigation" : "Show page in navigation"} className="h-7 w-7 text-slate-400" onClick={(event) => { event.stopPropagation(); playground.updatePage(page.pageId, { showInNav: !page.showInNav }); }}>
                 {page.showInNav ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3 text-muted-foreground" />}
               </Button>
-              {!page.isHome && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(event) => { event.stopPropagation(); playground.setHomePage(page.pageId); }}><Star className="h-3 w-3" /></Button>}
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={(event) => { event.stopPropagation(); playground.removePage(page.pageId); onPageRemove?.(page.pageId, page.path); }}><Trash2 className="h-3 w-3" /></Button>
+              {!page.isHome && <Button variant="ghost" size="icon" aria-label="Set as home page" className="h-7 w-7 text-slate-400" onClick={(event) => { event.stopPropagation(); playground.setHomePage(page.pageId); }}><Star className="h-3 w-3" /></Button>}
+              <Button variant="ghost" size="icon" aria-label="Delete page" className="h-7 w-7 text-slate-500 hover:text-red-300" onClick={(event) => { event.stopPropagation(); playground.removePage(page.pageId); onPageRemove?.(page.pageId, page.path); }}><Trash2 className="h-3 w-3" /></Button>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5"><Badge variant="outline" className="h-5 border-white/10 text-[9px] text-slate-400">{page.pageType}</Badge><Badge variant="outline" className={cn("h-5 text-[9px]", getReadinessBadgeClass(page.previewStatus))}>Preview {page.previewStatus}</Badge><Badge variant="outline" className="h-5 border-white/10 text-[9px] text-slate-400">{page.boundIntentCount} intents</Badge></div>
             </div>
-          </div>
+          </article>
         ))}
       </div>
     </div>
@@ -2532,11 +2544,11 @@ function ComponentsSection({
   const pagesById = playground.pageRegistry.pages;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-foreground">Canonical Components</h2>
-          <p className="text-xs text-muted-foreground mt-1">Reusable forms, booking, checkout, and chat blocks now live on the same business graph as the rest of the playground.</p>
+          <h2 className="text-2xl font-bold tracking-tight text-white">Components</h2>
+          <p className="mt-1 text-xs text-slate-500">Reusable graph nodes rendered exactly as they appear on their assigned pages.</p>
         </div>
         <Badge variant="outline" className="text-[10px]">{componentList.length} instances</Badge>
       </div>
@@ -2569,17 +2581,19 @@ function ComponentsSection({
       {componentList.length === 0 ? (
         <p className="text-sm text-muted-foreground">No canonical component instances exist yet.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {componentList.map((component) => {
             const readiness = readinessReport.componentReadiness[component.instanceId];
             const pageLabels = component.usedOnPages.map((pageId) => pagesById[pageId]?.title || pageId).join(", ") || "none";
+            const previewRoute = pagesById[component.usedOnPages[0]]?.path ?? "/";
             const bindingSummary = Object.entries(component.bindings || {})
               .map(([key, value]) => `${key}: ${value}`)
               .join(" • ") || "no bindings";
 
             return (
-              <div key={component.instanceId} className="rounded-xl border border-border/30 bg-muted/10 p-4">
-                <div className="flex items-start justify-between gap-3">
+              <article key={component.instanceId} className="group overflow-hidden rounded-2xl border border-white/[0.08] bg-[#10171d] transition hover:-translate-y-0.5 hover:border-emerald-400/30">
+                <LiveRuntimePreview kind="component" targetId={component.instanceId} componentSlug={component.componentSlug} name={component.label} route={previewRoute} className="h-44 border-b border-white/[0.07]" />
+                <div className="flex items-start justify-between gap-3 p-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-medium text-foreground">{component.label}</div>
@@ -2587,8 +2601,8 @@ function ComponentsSection({
                       <Badge variant="outline" className={cn("text-[9px] h-5 px-1.5", getReadinessBadgeClass(readiness?.previewStatus))}>Preview {readiness?.previewStatus || component.status || "draft"}</Badge>
                       <Badge variant="outline" className={cn("text-[9px] h-5 px-1.5", getReadinessBadgeClass(readiness?.publishStatus))}>Publish {readiness?.publishStatus || component.status || "draft"}</Badge>
                     </div>
-                    <div className="mt-2 text-[11px] text-muted-foreground">Pages: {pageLabels}</div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">Bindings: {bindingSummary}</div>
+                    <div className="mt-2 truncate text-[11px] text-muted-foreground">Pages: {pageLabels}</div>
+                    <div className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">Bindings: {bindingSummary}</div>
                     {readiness?.missingDependencies.length ? (
                       <div className="mt-2 text-[11px] text-amber-400">
                         Needs: {readiness.missingDependencies.join(", ")}
@@ -2598,13 +2612,14 @@ function ComponentsSection({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-destructive"
+                    aria-label={`Delete ${component.label}`}
+                    className="h-7 w-7 text-slate-500 hover:text-red-300"
                     onClick={() => playground.removeComponentInstance(component.instanceId)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>

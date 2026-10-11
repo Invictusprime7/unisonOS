@@ -5,8 +5,11 @@ import { readFileSync } from 'node:fs';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
+const projectRoot = process.cwd();
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  root: projectRoot,
   server: {
     host: "::",
     port: 8080,
@@ -20,7 +23,7 @@ export default defineConfig(({ mode }) => ({
       enforce: 'pre',
       configureServer(server) {
         const runnerHtml = readFileSync(
-          path.resolve(__dirname, 'node_modules/@codesandbox/sandpack-client/sandpack/index.html'),
+          path.resolve(projectRoot, 'node_modules/@codesandbox/sandpack-client/sandpack/index.html'),
           'utf8',
         );
         server.middlewares.use((request, response, next) => {
@@ -66,9 +69,10 @@ export default defineConfig(({ mode }) => ({
     })
   ].filter(Boolean),
   resolve: {
+    preserveSymlinks: true,
     alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@radix-ui/react-compose-refs": path.resolve(__dirname, "./src/lib/compose-refs-shim.ts"),
+      "@": path.resolve(projectRoot, "./src"),
+      "@radix-ui/react-compose-refs": path.resolve(projectRoot, "./src/lib/compose-refs-shim.ts"),
     },
     dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
   },

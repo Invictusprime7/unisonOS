@@ -20,6 +20,7 @@ import {
   resolveDeterministicIntentSurface,
   type PreviewIntentInventory,
 } from '@/runtime/deterministicIntentUi';
+import { resolveActionPageAffinity } from '@/platform/core/actionAffinity';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,18 +94,6 @@ const SCROLL_DEFS: Partial<Record<string, ScrollDef>> = {
 };
 
 // ── Intent → preferred page name (for VFS/nav-href lookup) ──────────────────
-
-const INTENT_PAGE_AFFINITY: Partial<Record<string, string[]>> = {
-  'pay.checkout':         ['checkout', 'cart', 'pricing'],
-  'cart.checkout':        ['cart', 'checkout'],
-  'auth.login':           ['login', 'signin', 'auth'],
-  'auth.register':        ['signup', 'register', 'auth'],
-  'booking.create':       ['booking', 'book', 'schedule', 'appointments'],
-  'contact.submit':       ['contact'],
-  'newsletter.subscribe': ['newsletter', 'subscribe'],
-  'quote.request':        ['quote', 'estimate'],
-  'lead.capture':         ['contact', 'lead'],
-};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -203,7 +192,7 @@ export function resolvePreviewAction(
 
   // ── 3. Navigate — page already exists in VFS or in the site nav ──────────
   // 3a. Check intent-specific page affinity candidates
-  const affinityCandidates = INTENT_PAGE_AFFINITY[intent] ?? [];
+  const affinityCandidates = resolveActionPageAffinity(intent, buttonLabel);
   const surface = resolveDeterministicIntentSurface(intent, payload, inv);
   if (surface.kind === 'cart') {
     return { action: 'cart', step: surface.step };

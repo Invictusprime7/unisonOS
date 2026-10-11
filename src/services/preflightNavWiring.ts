@@ -18,6 +18,7 @@
 import * as ts from 'typescript';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import type { BuilderPage } from '@/types/pageRegistry';
+import { PAGE_ROLE_ALIASES, resolveActionPageAffinity } from '@/platform/core/actionAffinity';
 
 type PageId = string;
 
@@ -64,26 +65,6 @@ function isInteractiveTag(tagName: string, attrs: ts.JsxAttributes): boolean {
 }
 
 // Label → pageRole alias map. Lowercased, punctuation-stripped form.
-const ROLE_ALIASES: Record<string, string[]> = {
-  home: ['home'],
-  services: ['services', 'service', 'our services', 'what we do', 'offerings'],
-  pricing: ['pricing', 'plans', 'packages', 'price'],
-  about: ['about', 'about us', 'our story', 'who we are'],
-  contact: ['contact', 'contact us', 'get in touch', 'reach us', 'get a quote'],
-  booking: ['book', 'book now', 'book online', 'booking', 'reserve', 'schedule', 'appointment'],
-  shop: ['shop', 'store', 'products', 'collection', 'browse', 'shop now', 'buy'],
-  cart: ['cart', 'view cart', 'bag', 'basket'],
-  checkout: ['checkout', 'check out'],
-  donate: ['donate', 'donate now', 'give', 'support us', 'contribute'],
-  blog: ['blog', 'articles', 'news', 'journal', 'read more'],
-  gallery: ['gallery', 'portfolio', 'work', 'our work'],
-  faq: ['faq', 'faqs', 'questions'],
-  menu: ['menu', 'our menu', 'view menu'],
-  team: ['team', 'our team', 'staff', 'people'],
-  events: ['events', 'event', 'upcoming events'],
-  account: ['account', 'my account', 'sign in', 'log in', 'login'],
-};
-
 function normalizeText(value: string): string {
   return value
     .replace(/\{[^}]*\}/g, ' ')
@@ -108,11 +89,13 @@ function normalizeRoute(path: string): string {
 }
 
 interface PageIndex {
+  byTitle: Map<string, BuilderPage>;
   byRoute: Map<string, BuilderPage>; // normalized route → page
   byLabel: Map<string, BuilderPage>; // normalized title/role token → page
 }
 
 function buildPageIndex(snapshot: SiteBundleSnapshot): PageIndex {
+  const byTitle = new Map<string, BuilderPage>();
   const byRoute = new Map<string, BuilderPage>();
   const byLabel = new Map<string, BuilderPage>();
 
@@ -122,19 +105,22 @@ function buildPageIndex(snapshot: SiteBundleSnapshot): PageIndex {
     byRoute.set(route.replace(/^\//, ''), page);
 
     const title = normalizeText(page.title || '');
-    if (title) byLabel.set(title, page);
+    if (title) {
+      byTitle.set(title, page);
+      byLabel.set(title, page);
+    }
 
     const role = (page.pageRole || page.pageType || '').toString().toLowerCase();
     if (role) {
       byLabel.set(role, page);
-      const aliases = ROLE_ALIASES[role] || [];
+      const aliases = PAGE_ROLE_ALIASES[role] || [];
       for (const alias of aliases) {
         if (!byLabel.has(alias)) byLabel.set(alias, page);
       }
     }
   }
 
-  return { byRoute, byLabel };
+  return { byRoute, byLabel, byTitle };
 }
 
 function getScriptKind(filePath: string): ts.ScriptKind {
@@ -218,7 +204,10 @@ function resolvePageForElement(
       // anchor — treating a multi-page site like a single-page site. A bare
       // `#` (placeholder, no fragment) is never a route.
       const fragment = href.replace(/^#\/?/, '').trim();
-      if (!fragment) return null;
+      if (!fragment) {
+        // A bare placeholder is not a route, but its label can still resolve
+        // through the canonical affinity vocabulary below.
+      } else {
 
       // Try resolving the fragment as a route path first (`#/services` →
       // `/services`), then fall back to label matching against the
@@ -230,6 +219,7 @@ function resolvePageForElement(
       const fragmentLabel = normalizeText(fragment.replace(/[-_]+/g, ' '));
       const byFragmentLabel = fragmentLabel ? index.byLabel.get(fragmentLabel) : undefined;
       if (byFragmentLabel && byFragmentLabel.pageId !== currentPageId) return byFragmentLabel;
+      }
 
       // No page matches this hash fragment — it's most likely a genuine
       // same-page scroll anchor (e.g. `#pricing-table` with no separate
@@ -248,6 +238,15 @@ function resolvePageForElement(
   if (!label) return null;
   const direct = index.byLabel.get(label);
   if (direct && direct.pageId !== currentPageId) return direct;
+  const affinityCandidates = resolveActionPageAffinity(null, label);
+  for (const candidate of affinityCandidates) {
+    const page = index.byTitle.get(candidate);
+    if (page && page.pageId !== currentPageId) return page;
+  }
+  for (const candidate of affinityCandidates) {
+    const page = index.byLabel.get(candidate);
+    if (page && page.pageId !== currentPageId) return page;
+  }
   // Token-level fallback
   for (const [alias, page] of index.byLabel) {
     if (page.pageId === currentPageId) continue;

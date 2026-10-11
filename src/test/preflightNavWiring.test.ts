@@ -220,4 +220,24 @@ describe('preflightNavWiring', () => {
     expect(result.wired).toBe(0);
     expect(result.files['/src/App.tsx']).toBe(src);
   });
+
+  it('uses shared action affinity for case-study and portfolio CTAs', () => {
+    const result = preflightNavWiring(
+      {
+        '/src/pages/Home.tsx': `export default function Home(){return <main>
+          <button>View Case Study</button><a href="#">View Portfolio</a>
+        </main>}`,
+      },
+      snapshot({
+        home: { title: 'Home', path: '/', isHome: true, filePath: '/src/pages/Home.tsx' },
+        cases: { title: 'Case Studies', path: '/case-studies', pageRole: 'custom' },
+        work: { title: 'Portfolio', path: '/work', pageRole: 'gallery' },
+      }),
+    );
+
+    expect(result.wired).toBe(2);
+    const out = result.files['/src/pages/Home.tsx'];
+    expect(out).toContain('data-ut-target-page-id="cases"');
+    expect(out).toContain('data-ut-target-page-id="work"');
+  });
 });

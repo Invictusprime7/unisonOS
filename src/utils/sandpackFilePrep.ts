@@ -552,6 +552,55 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
       };
       snap();
     }
+    // Playground graph cards use isolated runtime iframes. Navigate each clone
+    // to its assigned route, then return the exact rendered resource/component
+    // with the generated site's own styles.
+    if (event.data?.type === 'SNAPSHOT_PLAYGROUND_GRAPH' && typeof event.data.requestId === 'string') {
+      var graphRequest = event.data;
+      var graphTries = 0;
+      var graphSnapshot = function () {
+        var node = null;
+        var clean = function (value) { return String(value || '').replace(/"/g, ''); };
+        if (graphRequest.kind === 'resource' && graphRequest.targetId) {
+          node = document.querySelector('[data-ut-resource^="' + clean(graphRequest.targetId) + '"]');
+        }
+        if (graphRequest.kind === 'component') {
+          if (graphRequest.targetId) {
+            node = document.querySelector('[data-ut-component-instance-id="' + clean(graphRequest.targetId) + '"], [data-ut-component-id="' + clean(graphRequest.targetId) + '"]');
+          }
+          if (!node && graphRequest.componentSlug) {
+            node = document.querySelector('[data-ut-component-slug="' + clean(graphRequest.componentSlug) + '"], [data-component="' + clean(graphRequest.componentSlug) + '"], [data-component*="' + clean(graphRequest.componentSlug) + '"]');
+          }
+        }
+        // Legacy authored sites may lack runtime marks. Visible labels still
+        // provide a deterministic fallback without fabricating a preview.
+        if (!node && typeof graphRequest.name === 'string' && graphRequest.name.trim().length > 2) {
+          var wanted = graphRequest.name.trim().toLowerCase();
+          var labels = document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,strong,dt,figcaption,blockquote,a,button');
+          for (var n = 0; n < labels.length; n++) {
+            var labelText = (labels[n].textContent || '').trim().toLowerCase();
+            if (labelText === wanted || (labelText.length < wanted.length + 40 && labelText.indexOf(wanted) !== -1)) { node = labels[n]; break; }
+          }
+        }
+        if (!node) {
+          if (++graphTries < 18) { setTimeout(graphSnapshot, 160); return; }
+          window.parent.postMessage({ type: 'PLAYGROUND_GRAPH_SNAPSHOT', requestId: graphRequest.requestId, html: null, css: null }, '*');
+          return;
+        }
+        var graphHost = node.matches('article,li,section,form,[data-component]') ? node : (node.closest('article,li,section,form,[data-component],[data-ut-section]') || node);
+        var graphCss = '';
+        try {
+          for (var si = 0; si < document.styleSheets.length; si++) {
+            try {
+              var graphRules = document.styleSheets[si].cssRules;
+              for (var ri = 0; ri < graphRules.length; ri++) graphCss += graphRules[ri].cssText + '\\n';
+            } catch (e) { /* cross-origin stylesheet */ }
+          }
+        } catch (e) { /* ignore */ }
+        window.parent.postMessage({ type: 'PLAYGROUND_GRAPH_SNAPSHOT', requestId: graphRequest.requestId, html: graphHost.outerHTML, css: graphCss }, '*');
+      };
+      graphSnapshot();
+    }
     // Live Preview asset scan (Playground Assets): read-only discovery of
     // repeated items actually rendered on the page, saved or not.
     if (event.data?.type === 'SCAN_ASSETS') {
