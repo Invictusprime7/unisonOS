@@ -9,9 +9,10 @@
   ],
   "registryDependencies": [],
   "licenseReview": {
-    "status": "unverified"
+    "status": "verified",
+    "notes": "Merged into existing canonical <Reveal>; no source shipped"
   },
-  "attribution": "21st.dev — Scroll Reveal by @unknown",
+  "attribution": "21st.dev \u2014 Scroll Reveal by @unknown",
   "designTags": [],
   "capabilities": {
     "motion": true,
@@ -35,13 +36,13 @@
     "intentReady": false,
     "portableRecipeCertified": false
   },
-  "step": 3,
+  "step": 10,
   "dependencyAudit": {
     "decisions": [
       {
         "dep": "motion",
         "verdict": "unknown",
-        "reason": "Not on the allowlist — requires manual review"
+        "reason": "Not on the allowlist \u2014 requires manual review"
       },
       {
         "dep": "react",
@@ -50,5 +51,9 @@
       }
     ],
     "approved": false
-  }
+  },
+  "status": "promoted",
+  "implementationId": "motion:reveal",
+  "semanticDisposition": "merge-as-mode",
+  "notes": "Already covered by @/unison/ui/motion <Reveal> (in-view, once, reduced-motion). Recorded as merge-as-mode; no new primitive."
 }

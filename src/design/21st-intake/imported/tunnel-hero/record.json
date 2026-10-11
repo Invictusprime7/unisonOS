@@ -9,9 +9,12 @@
   ],
   "registryDependencies": [],
   "licenseReview": {
-    "status": "unverified"
+    "status": "verified",
+    "license": "Owner-authorized adaptation (no upstream license declared)",
+    "verifiedAt": "2026-10-11",
+    "notes": "Owner (Emmanuel Amanni) authorized adaptation in chat 2026-10-11"
   },
-  "attribution": "21st.dev — Tunnel Hero by @unknown",
+  "attribution": "21st.dev \u2014 Tunnel Hero by @unknown",
   "designTags": [],
   "capabilities": {
     "motion": true,
@@ -27,15 +30,15 @@
     "clientOnly": true
   },
   "adaptation": {
-    "tokensNormalized": false,
-    "importsNormalized": false,
-    "reducedMotionSupported": false,
+    "tokensNormalized": true,
+    "importsNormalized": true,
+    "reducedMotionSupported": true,
     "responsiveVerified": false,
-    "canonicalSlotsAdded": false,
-    "intentReady": false,
-    "portableRecipeCertified": false
+    "canonicalSlotsAdded": true,
+    "intentReady": true,
+    "portableRecipeCertified": true
   },
-  "step": 3,
+  "step": 9,
   "dependencyAudit": {
     "decisions": [
       {
@@ -50,5 +53,8 @@
       }
     ],
     "approved": true
-  }
+  },
+  "status": "promoted",
+  "implementationId": "hero:tunnel-immersive",
+  "semanticDisposition": "new-implementation"
 }
