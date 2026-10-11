@@ -91,6 +91,14 @@ export interface WizardRegistryImplementationSummary {
   visualSignature?: ImplementationVisualSignature;
   /** Canonical compatibility edges for Wizard and AI selection. */
   compatibleExperiencePreferences?: readonly import('@/services/wizardDesignSelection').WizardExperiencePreference[];
+  /** Authored capability facts (Registry Expansion Phase 1); absent on legacy entries. */
+  capabilities?: import('@/sections/variants/types').VariantCapabilityContract;
+  /** Explicit compatibility declaration; absent means no authored restriction. */
+  compatibility?: import('@/sections/variants/types').VariantCompatibilityContract;
+  /** Release-maturity lifecycle; absent on legacy entries (treated as certified). */
+  lifecycle?: import('@/sections/variants/types').VariantLifecycleContract;
+  /** AI-facing semantic description for derived design-source context. */
+  ai?: import('@/sections/variants/types').VariantAiContract;
   /** Derived from the artifact owner; absent on older persisted contexts. */
   artifactContract?: {
     artifactId: string;
@@ -334,6 +342,10 @@ export function buildWizardAggregatedRegistryContext(options: {
         componentStates: resolveComponentStateContract(implementation),
         visualSignature,
         compatibleExperiencePreferences: compatibleExperiencePreferences(visualSignature),
+        capabilities: implementation.capabilities,
+        compatibility: implementation.compatibility,
+        lifecycle: implementation.lifecycle,
+        ai: implementation.ai,
         artifactContract: artifact ? {
           artifactId: artifact.artifactId,
           dataSourceKind: artifact.dataSource.kind,
