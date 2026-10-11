@@ -62,5 +62,10 @@
   "license": "Owner-authorized adaptation (21st.dev publication by @m.umairwaheedansari declares no upstream license)",
   "promotedVariants": [
     "hero:tunnel-immersive"
-  ]
+  ],
+  "reviewEvidence": {
+    "componentPath": "src/sections/variants/hero/HeroTunnelImmersive.tsx",
+    "componentSha256": "37b5cece74f2aa03dc115191355695b5681622ab887645980f80f35773f3f526",
+    "reviewedAt": "2026-10-11T12:50:00.000Z"
+  }
 }
