@@ -1,0 +1,48 @@
+{
+  "sourceId": "21st:9993",
+  "name": "Halide Topo Hero",
+  "sourceUrl": "https://21st.dev/c/9993",
+  "sourceType": "component",
+  "dependencies": [
+    "react"
+  ],
+  "registryDependencies": [],
+  "licenseReview": {
+    "status": "unverified"
+  },
+  "attribution": "21st.dev — Halide Topo Hero by @unknown",
+  "designTags": [],
+  "capabilities": {
+    "motion": false,
+    "threeD": false,
+    "media": false,
+    "forms": false,
+    "carousel": false
+  },
+  "compatibility": {
+    "react19": true,
+    "tailwind3": true,
+    "vite": true,
+    "clientOnly": false
+  },
+  "adaptation": {
+    "tokensNormalized": false,
+    "importsNormalized": false,
+    "reducedMotionSupported": false,
+    "responsiveVerified": false,
+    "canonicalSlotsAdded": false,
+    "intentReady": false,
+    "portableRecipeCertified": false
+  },
+  "step": 3,
+  "dependencyAudit": {
+    "decisions": [
+      {
+        "dep": "react",
+        "verdict": "allowed",
+        "reason": "Baseline stack"
+      }
+    ],
+    "approved": true
+  }
+}

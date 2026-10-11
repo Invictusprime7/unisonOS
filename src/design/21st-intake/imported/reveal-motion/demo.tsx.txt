@@ -1,0 +1,21 @@
+import Reveal from "@/components/ui/reveal";
+
+export default function RevealDemo() {
+  return (
+    <div className="flex min-h-[320px] w-full items-center justify-center p-8">
+      <div className="text-center">
+        <Reveal index={0}>
+          <h2 className="text-5xl font-bold tracking-tight">This text</h2>
+        </Reveal>
+        <Reveal index={1}>
+          <p className="mt-2 text-3xl font-medium">will be revealed</p>
+        </Reveal>
+        <Reveal index={2}>
+          <p className="mt-3 text-xl text-muted-foreground">
+            when it comes into view.
+          </p>
+        </Reveal>
+      </div>
+    </div>
+  );
+}

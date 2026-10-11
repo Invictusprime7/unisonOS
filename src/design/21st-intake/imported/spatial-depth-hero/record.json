@@ -1,0 +1,54 @@
+{
+  "sourceId": "21st:30683",
+  "name": "Spatial Depth Hero",
+  "sourceUrl": "https://21st.dev/c/30683",
+  "sourceType": "component",
+  "dependencies": [
+    "motion",
+    "react"
+  ],
+  "registryDependencies": [],
+  "licenseReview": {
+    "status": "unverified"
+  },
+  "attribution": "21st.dev — Spatial Depth Hero by @unknown",
+  "designTags": [],
+  "capabilities": {
+    "motion": true,
+    "threeD": false,
+    "media": true,
+    "forms": false,
+    "carousel": false
+  },
+  "compatibility": {
+    "react19": true,
+    "tailwind3": true,
+    "vite": true,
+    "clientOnly": true
+  },
+  "adaptation": {
+    "tokensNormalized": false,
+    "importsNormalized": false,
+    "reducedMotionSupported": false,
+    "responsiveVerified": false,
+    "canonicalSlotsAdded": false,
+    "intentReady": false,
+    "portableRecipeCertified": false
+  },
+  "step": 3,
+  "dependencyAudit": {
+    "decisions": [
+      {
+        "dep": "motion",
+        "verdict": "unknown",
+        "reason": "Not on the allowlist — requires manual review"
+      },
+      {
+        "dep": "react",
+        "verdict": "allowed",
+        "reason": "Baseline stack"
+      }
+    ],
+    "approved": false
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "sourceId": "21st:6588",
+  "name": "Tunnel Hero",
+  "sourceUrl": "https://21st.dev/c/6588",
+  "sourceType": "component",
+  "dependencies": [
+    "react",
+    "three"
+  ],
+  "registryDependencies": [],
+  "licenseReview": {
+    "status": "unverified"
+  },
+  "attribution": "21st.dev — Tunnel Hero by @unknown",
+  "designTags": [],
+  "capabilities": {
+    "motion": true,
+    "threeD": true,
+    "media": false,
+    "forms": false,
+    "carousel": false
+  },
+  "compatibility": {
+    "react19": true,
+    "tailwind3": true,
+    "vite": true,
+    "clientOnly": true
+  },
+  "adaptation": {
+    "tokensNormalized": false,
+    "importsNormalized": false,
+    "reducedMotionSupported": false,
+    "responsiveVerified": false,
+    "canonicalSlotsAdded": false,
+    "intentReady": false,
+    "portableRecipeCertified": false
+  },
+  "step": 3,
+  "dependencyAudit": {
+    "decisions": [
+      {
+        "dep": "react",
+        "verdict": "allowed",
+        "reason": "Baseline stack"
+      },
+      {
+        "dep": "three",
+        "verdict": "capability-gated",
+        "reason": "Permitted by explicit 3D capability gate; must adapt onto @/unison/ui/experience"
+      }
+    ],
+    "approved": true
+  }
+}
