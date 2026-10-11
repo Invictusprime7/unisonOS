@@ -1297,6 +1297,25 @@ ${renderButtons(c.ctaButtons, 'inline-flex items-center gap-2 rounded-full bg-ba
       </section>`;
 }
 
+export function heroTunnelImmersiveJSX(c: ExtractedSectionContent): string {
+  const rings = Array.from({ length: 9 }, (_, i) => `          <span className="ut-tunnel-ring absolute left-1/2 top-1/2 aspect-square w-[140vmax] rounded-full border border-dashed border-background/30" style={{ animationDelay: '-${i}s', transform: 'translate(-50%, -50%) scale(${(1 - i / 9).toFixed(2)})' }} />`).join('\n');
+  return `      <section className="relative min-h-screen w-full overflow-hidden bg-foreground" data-variant="hero:tunnel-immersive">
+        <style>{\`@keyframes ut-tunnel-recede{from{transform:translate(-50%,-50%) scale(1.6);opacity:0}20%{opacity:1}to{transform:translate(-50%,-50%) scale(.05);opacity:0}}.ut-tunnel-ring{animation:ut-tunnel-recede 9s linear infinite}@media(prefers-reduced-motion:reduce){.ut-tunnel-ring{animation:none;opacity:.5}}\`}</style>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+${rings}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,hsl(var(--foreground)/0.85)_70%)]" />
+        </div>
+        <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-6 py-16 text-center">
+${c.badge ? `          <span className="mb-6 text-xs uppercase tracking-[0.3em] text-background/70">${esc(c.badge)}</span>\n` : ''}\
+${c.heading ? `          <h1 className="text-balance text-5xl font-semibold leading-[0.95] text-background md:text-7xl lg:text-8xl">${esc(c.heading)}</h1>\n` : ''}\
+${c.subheading ? `          <p className="mt-6 max-w-xl text-base text-background/75 md:text-lg">${esc(c.subheading)}</p>\n` : ''}\
+${c.ctaButtons?.length ? `          <div className="mt-10 flex flex-wrap justify-center gap-3">
+${renderButtons(c.ctaButtons, 'inline-flex items-center rounded-full bg-background px-6 py-3 text-sm font-medium text-foreground', 'inline-flex items-center rounded-full border border-background/50 px-6 py-3 text-sm font-medium text-background')}
+          </div>\n` : ''}\
+        </div>
+      </section>`;
+}
+
 export function heroImageStreamJSX(c: ExtractedSectionContent): string {
   const media = c.imageSrc || '/placeholder.svg';
   const cards = Array.from({ length: 9 }, (_, index) => `                <div key={${index}} className="ut-ish-card absolute overflow-hidden border border-border bg-muted" style={{ left: '50%', top: '56%', width: '18cqw', height: '25cqw', marginLeft: '-9cqw', marginTop: '-12.5cqw', borderRadius: 'max(.4cqw, var(--radius))', animation: \`ut-ish-rail-\${rail} 18s linear infinite\`, animationDelay: '-${(index * 2).toFixed(0)}s', backfaceVisibility: 'hidden' }}>
