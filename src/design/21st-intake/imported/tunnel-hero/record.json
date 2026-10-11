@@ -66,6 +66,14 @@
   "reviewEvidence": {
     "componentPath": "src/sections/variants/hero/HeroTunnelImmersive.tsx",
     "componentSha256": "37b5cece74f2aa03dc115191355695b5681622ab887645980f80f35773f3f526",
-    "reviewedAt": "2026-10-11T12:50:00.000Z"
+    "reviewedAt": "2026-10-11T12:50:00.000Z",
+    "sourceSha256": "f9132c725c02a04e1a8c7828f449d0e8e6c6fb7021274b663c90c3a64758bcc5",
+    "checks": [
+      "dependency-allowlist",
+      "three-d-capability-gate",
+      "token-normalization",
+      "reduced-motion",
+      "portable-recipe"
+    ]
   }
 }
