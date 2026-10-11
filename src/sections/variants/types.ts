@@ -46,6 +46,85 @@ export interface ExtractedSectionContent {
   listItems?: string[];
 }
 
+/**
+ * Authored capability facts for a variant (Registry Expansion milestone, Phase 1).
+ * These are declared facts about the implementation — derived visual signatures
+ * prefer them over string inference from slug/name/tags.
+ */
+export interface VariantCapabilityContract {
+  layout?: {
+    geometry?: readonly (
+      | 'centered'
+      | 'split'
+      | 'asymmetric'
+      | 'full-bleed'
+      | 'layered'
+      | 'spatial'
+    )[];
+    mediaDominance?: 'low' | 'medium' | 'high';
+    density?: 'airy' | 'balanced' | 'dense';
+    typographyScale?: 'restrained' | 'display' | 'monumental';
+  };
+  behavior?: {
+    supportsVideo?: boolean;
+    supportsFilters?: boolean;
+    supportsCarousel?: boolean;
+    supportsMarquee?: boolean;
+    supportsSticky?: boolean;
+    supportsLightbox?: boolean;
+    supportsForm?: boolean;
+    supportsMultipleCtas?: boolean;
+    supportsCatalogData?: boolean;
+  };
+  media?: {
+    required?: boolean;
+    minItems?: number;
+    maxItems?: number;
+    preferredOrientations?: readonly ('portrait' | 'landscape' | 'square')[];
+  };
+  motion?: {
+    level?: 'none' | 'restrained' | 'motion-rich' | 'immersive';
+    reducedMotionRequired?: boolean;
+  };
+}
+
+/**
+ * Explicit compatibility declaration. Absent fields mean "no authored
+ * restriction" (legacy entries stay universally eligible); newly certified
+ * entries must declare this or be marked universal at promotion time.
+ */
+export interface VariantCompatibilityContract {
+  industries?: readonly string[];
+  pageRoles?: readonly import('../types').TemplatePageRole[];
+  artDirectionFamilies?: readonly string[];
+  artDirectionPacks?: readonly string[];
+  themePresets?: readonly string[];
+  experiencePreferences?: readonly import('@/services/wizardDesignSelection').WizardExperiencePreference[];
+  excludedIndustries?: readonly string[];
+}
+
+/**
+ * Release-maturity lifecycle, distinct from `generationStatus` (which is a
+ * generation preference). `certified` is the only status eligible for
+ * production resolution of new sites.
+ */
+export interface VariantLifecycleContract {
+  status: 'experimental' | 'candidate' | 'certified' | 'deprecated' | 'retired';
+  schemaVersion: number;
+  implementationVersion: number;
+  introducedAt?: string;
+  deprecatedAt?: string;
+}
+
+/** AI-facing semantic description, derived into Builder design-source context. */
+export interface VariantAiContract {
+  summary: string;
+  bestFor?: readonly string[];
+  avoidFor?: readonly string[];
+  contentRequirements?: readonly string[];
+  compositionNotes?: readonly string[];
+}
+
 /** Metadata for a single section layout variant */
 export interface SectionVariant<T extends SectionType = SectionType> {
   /** Unique ID: "hero:centered", "hero:split-image", "hero:full-bleed" */
@@ -98,6 +177,14 @@ export interface SectionVariant<T extends SectionType = SectionType> {
    * refined by whatever an implementation declares here.
    */
   states?: Partial<import('./componentStates').ComponentStateContract>;
+  /** Authored capability facts; preferred over string inference when present. */
+  capabilities?: VariantCapabilityContract;
+  /** Explicit compatibility declaration (see VariantCompatibilityContract). */
+  compatibility?: VariantCompatibilityContract;
+  /** Release-maturity lifecycle; absent on legacy entries (treated as certified). */
+  lifecycle?: VariantLifecycleContract;
+  /** AI-facing semantic description for derived design-source context. */
+  ai?: VariantAiContract;
   /**
    * @deprecated Legacy source metadata retained only while nonportable families
    * migrate. It must not be invoked to write or replace canonical VFS output.
