@@ -10,3 +10,4 @@
 - Article/case-study pages are built deterministically by `resources/longformPages.ts` and committed with an `add_page` route op; why: AI-prompted page creation timed out on large sites.
 - Backend per site is chosen only by `project-backend/projectBackendResolver.ts`; catalog/content rows carry `project_id`, written and filtered by `cms-records`/`site-runtime-read`. Why: sites under one business must not share saved items.
 - Editing surfaces issue `EditorCommand`s via `editor/editorCommandService.ts`, routed per property to ResourceRuntime or host `commitMutation` executors. Why: one editing protocol, no parallel writer.
+- Preview selection identity comes from `editor/editableObjectDescriptor.ts` (resource mark → source locator + instance index → unbound); reacquire matches exact objectId only. Why: guessing the first matching JSX tag edited the wrong repeated card.
