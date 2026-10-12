@@ -11,6 +11,7 @@ import { RESOURCE_ADAPTERS, filterWritableValues } from './resourceAdapters';
 import { getResource } from './resourceRegistry';
 import { withProjectBackend } from '@/services/project-backend/projectBackendGateway';
 import { callProjectBackend } from '@/services/project-backend/projectBackendClient';
+import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
 import type { ProjectBackendDescriptor } from '@/services/project-backend/projectBackendTypes';
 
 /** Dedicated sites: catalog commands go through the private project-backend connection. */
