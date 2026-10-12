@@ -1084,6 +1084,58 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     if (data.type === 'EDIT_MODE_CLEAR_SELECTION') {
       clearSelected();
     }
+    // M1c: after a Sandpack rebuild the iframe document is recreated and the
+    // previous selection is lost. The parent replays the last selection
+    // identity; we resolve the same object and re-apply the highlight.
+    if (data.type === 'UT_REACQUIRE_SELECTION' && data.selection) {
+      const sel = data.selection;
+      let resolved: Element | null = null;
+      try {
+        // 1) Resource mark is the strongest identity for saved-record values.
+        if (sel.resource) {
+          const marked = Array.prototype.slice.call(
+            document.querySelectorAll('[data-ut-resource="' + String(sel.resource).replace(/"/g, '') + '"]')
+          ) as Element[];
+          if (marked.length === 1) resolved = marked[0];
+          else if (marked.length > 1 && typeof sel.repeatIndex === 'number') resolved = marked[sel.repeatIndex] || null;
+        }
+        // 2) Stable selector, disambiguated by repeat index when duplicated.
+        if (!resolved && sel.selector) {
+          const matches = Array.prototype.slice.call(document.querySelectorAll(String(sel.selector))) as Element[];
+          if (matches.length === 1) resolved = matches[0];
+          else if (matches.length > 1 && typeof sel.repeatIndex === 'number') resolved = matches[sel.repeatIndex] || null;
+        }
+        // 3) Structural path within the same section (tag chain + repeat index).
+        if (!resolved && sel.structuralPath) {
+          const parts = String(sel.structuralPath).split('>').filter(Boolean);
+          let scope: Element | null = null;
+          if (sel.sectionId) {
+            scope = document.querySelector('[data-ut-section-id="' + String(sel.sectionId).replace(/"/g, '') + '"]')
+              || document.querySelector('[data-ut-section="' + String(sel.sectionId).replace(/"/g, '') + '"]');
+          }
+          let cur: Element | null = scope || document.body;
+          let ok = true;
+          for (let i = 0; i < parts.length; i++) {
+            if (!cur) { ok = false; break; }
+            const part = parts[i];
+            const repeated = part.endsWith('[]');
+            const tag = repeated ? part.slice(0, -2) : part;
+            const kids = Array.prototype.filter.call(cur.children, (c: Element) => c.tagName.toLowerCase() === tag) as Element[];
+            if (!kids.length) { ok = false; break; }
+            cur = (repeated && typeof sel.repeatIndex === 'number' && i === parts.length - 1)
+              ? (kids[sel.repeatIndex] || null)
+              : kids[0];
+          }
+          if (ok && cur && cur !== document.body) resolved = cur;
+        }
+      } catch (_) { resolved = null; }
+      if (resolved) {
+        clearSelected();
+        selectedEl = resolved as HTMLElement;
+        (resolved as HTMLElement).classList.add('__ut-selected');
+      }
+      window.parent.postMessage({ type: 'UT_REACQUIRE_RESULT', ok: !!resolved }, '*');
+    }
     // Read-only verification probe: answers what is actually painted.
     if (data.type === 'UT_PROBE' && Array.isArray(data.checks)) {
       const bodyText = (document.body && document.body.innerText) || '';
