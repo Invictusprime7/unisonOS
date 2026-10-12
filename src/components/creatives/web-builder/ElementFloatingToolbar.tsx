@@ -41,6 +41,7 @@ import { buildWebBuilderAIContext } from '@/utils/aiAssistantContext';
 import { buildCatalogContext, renderCatalogContextForPrompt, type SelectedSectionRef } from '@/utils/catalogContext';
 import runBuilderTurn from '@/services/builderBrainClient';
 import { useToolbarCommands } from './toolbarCommandAdapter';
+import { uploadForPlacement } from '@/services/assets/uploadPlacement';
 import type { EditorTarget } from '@/services/editor/editorCommandTypes';
 
 interface SelectedElement {
@@ -473,9 +474,13 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = () => replaceImage(reader.result as string);
-    reader.readAsDataURL(file);
+    // M2: upload into this site's storage and place a durable link — never
+    // embed the file as inline data in page source or saved records.
+    const pending = toast.loading('Uploading image…');
+    void uploadForPlacement(file, projectId ?? null)
+      .then((placed) => { toast.dismiss(pending); replaceImage(placed.url); })
+      .catch((err) => { toast.dismiss(pending); toast.error(err instanceof Error ? err.message : 'Upload failed'); })
+      .finally(() => { if (imageInputRef.current) imageInputRef.current.value = ''; });
   };
 
   const handleImageGenerate = async () => {
