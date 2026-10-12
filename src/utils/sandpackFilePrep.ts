@@ -913,7 +913,25 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
         pagePath = hashRoute || '/';
       } catch (_) { pagePath = '/'; }
     }
+    // M1 identity: index among repeated siblings (cards in a grid) and a
+    // structural locator so the same item is re-found after rerender.
+    let repeatIndex: number | null = null;
+    let structuralPath = '';
+    try {
+      let n: Element | null = el; let hops = 0; const parts: string[] = [];
+      while (n && n.parentElement && hops < 12) {
+        const p = n.parentElement;
+        const same = Array.prototype.filter.call(p.children, (c: Element) => c.tagName === n!.tagName && c.className === n!.className) as Element[];
+        if (repeatIndex === null && same.length > 1) repeatIndex = same.indexOf(n);
+        parts.unshift(n.tagName.toLowerCase() + (same.length > 1 ? '[]' : ''));
+        if (n.tagName === 'SECTION' || n.hasAttribute('data-ut-section-id')) break;
+        n = p; hops++;
+      }
+      structuralPath = parts.join('>');
+    } catch (_) { /* best effort */ }
     return {
+      repeatIndex,
+      structuralPath,
       elementId,
       slotId,
       blockId,
