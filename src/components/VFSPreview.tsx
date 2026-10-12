@@ -765,6 +765,15 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   const editActivationKeyRef = useRef(0);
   const directHoverRef = useRef<HTMLElement | null>(null);
   const directSelectedRef = useRef<HTMLElement | null>(null);
+  // M1c: last selection identity, replayed into the iframe after a rebuild so
+  // the highlight re-attaches to the same object.
+  const lastSelectionRef = useRef<{
+    selector?: string;
+    sectionId?: string | null;
+    structuralPath?: string;
+    repeatIndex?: number | null;
+    resource?: string | null;
+  } | null>(null);
 
   const clearDirectPreviewSelection = useCallback(() => {
     if (directHoverRef.current) {
