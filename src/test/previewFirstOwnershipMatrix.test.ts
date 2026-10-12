@@ -49,7 +49,7 @@ const MATRIX: FixtureCase[] = [
   { fixture: 'salon', element: 'hero headline (static)', command: { type: 'set-text', target: { selector: '.hero h1' }, text: 'Hi' }, expectedLane: 'source' },
   // E-commerce
   { fixture: 'ecommerce', element: 'product name', command: { type: 'set-text', target: { resourceMark: mark('products', 'p1', 'name') }, text: 'Tee' }, expectedLane: 'resource' },
-  { fixture: 'ecommerce', element: 'product image', command: { type: 'replace-asset', target: { resourceMark: mark('products', 'p1', 'image') }, url: 'https://cdn.example.com/x.png', assetRef: { url: 'https://cdn.example.com/x.png', projectId: 'p1', assetId: 'a1' } }, expectedLane: 'resource' },
+  { fixture: 'ecommerce', element: 'product image', command: { type: 'replace-asset', target: { resourceMark: mark('products', 'p1', 'image') }, url: 'https://cdn.example.com/x.png', assetRef: assetRef('p1') }, expectedLane: 'resource' },
   // Restaurant
   { fixture: 'restaurant', element: 'menu item price', command: { type: 'update-resource-field', target: {}, values: { price: 1200 } }, expectedLane: 'resource' },
   // Portfolio / case study
@@ -106,7 +106,7 @@ describe('M0 ownership fixture matrix', () => {
 
   it('an image owned by another site is rejected before any write', async () => {
     const result = await executeEditorCommand(
-      { type: 'replace-asset', target: { resourceMark: mark('products', 'p1', 'image') }, url: 'https://cdn.example.com/x.png', assetRef: { url: 'https://cdn.example.com/x.png', projectId: 'other-site', assetId: 'a9' } },
+      { type: 'replace-asset', target: { resourceMark: mark('products', 'p1', 'image') }, url: 'https://cdn.example.com/x.png', assetRef: assetRef('other-site') },
       ctx,
     );
     expect(result.ok).toBe(false);
