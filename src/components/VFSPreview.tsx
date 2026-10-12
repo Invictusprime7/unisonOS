@@ -800,6 +800,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
   const clearSelectedElement = useCallback(() => {
     clearDirectPreviewSelection();
+    lastSelectionRef.current = null;
     const win = getPreviewWindow();
     if (win) {
       win.postMessage({ type: 'EDIT_MODE_CLEAR_SELECTION' }, '*');
