@@ -22,7 +22,7 @@ const sessionId = '11111111-1111-4111-8111-111111111111';
 const userId = '22222222-2222-4222-8222-222222222222';
 
 beforeEach(() => {
-  process.env.VITE_SUPABASE_URL = 'https://nfrdomdvyrbwuokathtw.supabase.co';
+  process.env.VITE_SUPABASE_URL = 'https://oruwtgdjurstvhgqcvbv.supabase.co';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-only';
   process.env.SUPABASE_OAUTH_CLIENT_ID = 'client-id';
   process.env.SUPABASE_OAUTH_CLIENT_SECRET = 'client-secret';
