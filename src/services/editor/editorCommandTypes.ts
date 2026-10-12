@@ -16,6 +16,17 @@ export interface EditorTarget {
   /** Raw `data-ut-resource` mark, when the element renders a saved record field. */
   resourceMark?: string | null;
   revisionId?: string | null;
+  /** M1 unified identity (see editableObjectDescriptor.ts). Optional for back-compat. */
+  objectId?: string | null;
+  ownerKind?: 'resource' | 'source' | 'unbound' | null;
+  resourceKey?: string | null;
+  recordId?: string | null;
+  field?: string | null;
+  /** Position among sibling repeats of the same template (0-based). */
+  instanceId?: number | null;
+  /** Stable source locator, e.g. "/src/pages/Home.tsx:42:6". */
+  sourceLocator?: string | null;
+  projectId?: string | null;
 }
 
 interface Base<T extends string> { type: T; target: EditorTarget }
