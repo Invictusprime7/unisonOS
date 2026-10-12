@@ -765,6 +765,15 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   const editActivationKeyRef = useRef(0);
   const directHoverRef = useRef<HTMLElement | null>(null);
   const directSelectedRef = useRef<HTMLElement | null>(null);
+  // M1c: last selection identity, replayed into the iframe after a rebuild so
+  // the highlight re-attaches to the same object.
+  const lastSelectionRef = useRef<{
+    selector?: string;
+    sectionId?: string | null;
+    structuralPath?: string;
+    repeatIndex?: number | null;
+    resource?: string | null;
+  } | null>(null);
 
   const clearDirectPreviewSelection = useCallback(() => {
     if (directHoverRef.current) {
@@ -791,6 +800,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
   const clearSelectedElement = useCallback(() => {
     clearDirectPreviewSelection();
+    lastSelectionRef.current = null;
     const win = getPreviewWindow();
     if (win) {
       win.postMessage({ type: 'EDIT_MODE_CLEAR_SELECTION' }, '*');
@@ -950,6 +960,11 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
               activationKey: editActivationKeyRef.current,
               revisionId,
             }, '*');
+            // Fresh iframe document (rebuild) — re-attach the highlight to the
+            // same object the user had selected before the redraw.
+            if (enableSelection && lastSelectionRef.current) {
+              win.postMessage({ type: 'UT_REACQUIRE_SELECTION', selection: lastSelectionRef.current }, '*');
+            }
           }
         }
         return;
@@ -960,7 +975,20 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         // A selection is only valid for the canonical revision that rendered it.
         if (revisionId && data.element.revisionId && data.element.revisionId !== revisionId) return;
         clearDirectPreviewSelection();
+        const sa = data.element.scopeAncestors ?? {};
+        lastSelectionRef.current = {
+          selector: data.element.selector,
+          sectionId: sa.sectionId ?? null,
+          structuralPath: sa.structuralPath,
+          repeatIndex: typeof sa.repeatIndex === 'number' ? sa.repeatIndex : null,
+          resource: sa.resource ?? data.element.attributes?.['data-ut-resource'] ?? null,
+        };
         onElementSelect?.(data.element);
+        return;
+      }
+      if (data.type === 'UT_REACQUIRE_RESULT' && data.ok === false) {
+        // The selected object no longer exists in the redrawn preview — drop it.
+        lastSelectionRef.current = null;
         return;
       }
 
