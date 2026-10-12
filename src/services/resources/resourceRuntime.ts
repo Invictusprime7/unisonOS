@@ -84,8 +84,13 @@ export async function applyResourceOp(op: ResourceDataOp, ctx: ResourceContext):
   const v = validateResourceOp(op);
   if (v.ok === false) throw new Error(v.reason);
   const { def } = v;
+  // M0 telemetry: one mutation event per record write (key, op, record id).
+  const correlationId = newEditorCorrelationId();
+  const startedAt = Date.now();
   const adapter = RESOURCE_ADAPTERS[def.storage.adapter];
-  const result = await withProjectBackend(ctx.projectId, async (d) => {
+  let result: ResourceRecord | null;
+  try {
+    result = await withProjectBackend(ctx.projectId, async (d) => {
     if (dedicated(d, def, ctx.projectId)) {
       const pid = ctx.projectId;
       if (op.op === 'create') return rec(await callProjectBackend({ projectId: pid, action: 'create', resource: def.key, values: filterWritableValues(def, op.values) }));
