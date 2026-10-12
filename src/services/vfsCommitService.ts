@@ -1,4 +1,5 @@
 import { updateResolvedCompositionVariants } from '@/sections/compositionToFileSet';
+import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
 import { isCustomizerPageEdit } from '@/services/builder/customizerDraft';
 import {
   normalizeAuthoredPath,

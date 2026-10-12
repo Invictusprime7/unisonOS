@@ -7,6 +7,7 @@
  * strict stale-revision check.
  */
 import { fnv1a, type AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
+import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
 
 export type MutationSurface = 'ai-builder' | 'toolbar-ai' | 'toolbar' | 'terminal' | 'command-menu' | 'autosave' | 'catalog';
 
