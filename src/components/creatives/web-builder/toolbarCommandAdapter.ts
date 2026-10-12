@@ -97,10 +97,24 @@ export function useToolbarCommands(
         return unsupported(cmd, 'route');
       };
 
+      // Binding lane: intents are a canonical data-ut-intent attribute on the
+      // element, saved through the same page-source commit as other attributes.
+      const binding: LaneExecutor = async (cmd) => {
+        if (cmd.type === 'bind-intent' && handlers.onUpdateAttributes) {
+          const intent = cmd.intent.trim();
+          if (!/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/.test(intent)) {
+            return { ok: false, command: cmd.type, lane: 'binding', savedTo: null, changedFields: [], error: 'That is not a valid action name.' };
+          }
+          handlers.onUpdateAttributes(selector, { 'data-ut-intent': intent });
+          return ok(cmd, 'binding', 'page source', ['data-ut-intent']);
+        }
+        return unsupported(cmd, 'binding');
+      };
+
       const result = await executeEditorCommand(command, {
         source: 'toolbar',
         resource: resource as ResourceContext,
-        executors: { source, presentation, route },
+        executors: { source, presentation, route, binding },
       });
       if (!result.ok && result.error) {
         toast.error('Could not apply that change', { description: result.error });
