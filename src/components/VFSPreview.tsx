@@ -959,6 +959,11 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
               activationKey: editActivationKeyRef.current,
               revisionId,
             }, '*');
+            // Fresh iframe document (rebuild) — re-attach the highlight to the
+            // same object the user had selected before the redraw.
+            if (enableSelection && lastSelectionRef.current) {
+              win.postMessage({ type: 'UT_REACQUIRE_SELECTION', selection: lastSelectionRef.current }, '*');
+            }
           }
         }
         return;
