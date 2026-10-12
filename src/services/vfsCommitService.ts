@@ -399,6 +399,42 @@ async function assertNoStaleOverwriteOfAiRevision(input: CommitMutationInput): P
 export async function commitMutation(
   input: CommitMutationInput,
 ): Promise<CommitMutationResult> {
+  // M0 telemetry: one mutation event per commit with base → result revision.
+  const correlationId = newEditorCorrelationId();
+  const startedAt = Date.now();
+  try {
+    const result = await commitMutationInner(input);
+    recordMutationEvent({
+      correlationId,
+      at: Date.now(),
+      kind: 'commit',
+      surface: input.source,
+      baseRevisionId: input.identity.revisionId || null,
+      resultRevisionId: result.persistedRevisionId,
+      ok: result.status === 'committed',
+      error: result.status === 'committed' ? undefined : 'rejected',
+      durationMs: Date.now() - startedAt,
+    });
+    return result;
+  } catch (err) {
+    recordMutationEvent({
+      correlationId,
+      at: Date.now(),
+      kind: 'commit',
+      surface: input.source,
+      baseRevisionId: input.identity.revisionId || null,
+      resultRevisionId: null,
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      durationMs: Date.now() - startedAt,
+    });
+    throw err;
+  }
+}
+
+async function commitMutationInner(
+  input: CommitMutationInput,
+): Promise<CommitMutationResult> {
   const diagnostics: CommitDiagnostic[] = [];
   const log = (
     stage: string,
