@@ -102,7 +102,12 @@ export async function applyResourceOp(op: ResourceDataOp, ctx: ResourceContext):
     if (op.op === 'update') return adapter.update(def, ctx, op.ref.recordId, filterWritableValues(def, op.values));
     await adapter.delete!(def, ctx, op.ref.recordId);
     return null;
-  });
+    });
+  } catch (err) {
+    recordMutationEvent({ correlationId, at: Date.now(), kind: 'resource-op', surface: 'resource-runtime', baseRevisionId: null, resultRevisionId: null, resourceKey: def.key, resourceOp: op.op, recordId: op.op === 'create' ? null : op.ref.recordId, ok: false, error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - startedAt });
+    throw err;
+  }
+  recordMutationEvent({ correlationId, at: Date.now(), kind: 'resource-op', surface: 'resource-runtime', baseRevisionId: null, resultRevisionId: null, resourceKey: def.key, resourceOp: op.op, recordId: op.op === 'create' ? result?.id ?? null : op.ref.recordId, ok: true, durationMs: Date.now() - startedAt });
   const recordId = op.op === 'create' ? result?.id ?? '' : op.ref.recordId;
   invalidateResource({ resourceKey: def.key, kind: def.kind, businessId: ctx.businessId, projectId: ctx.projectId ?? null, recordIds: recordId ? [recordId] : [], sourceTables: def.storage.table ? [def.storage.table] : undefined });
   emitAgentEvent({ kind: 'data_change', message: `${op.op === 'create' ? 'Added to' : op.op === 'update' ? 'Updated' : 'Removed from'} ${def.label}`, status: 'ok' });
