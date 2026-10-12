@@ -7,6 +7,7 @@
  * strict stale-revision check.
  */
 import { fnv1a, type AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
+import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
 
 export type MutationSurface = 'ai-builder' | 'toolbar-ai' | 'toolbar' | 'terminal' | 'command-menu' | 'autosave' | 'catalog';
 
@@ -18,7 +19,19 @@ let lastCommit: { surface: MutationSurface; revisionId: string | null; at: numbe
 export function runExclusive<T>(surface: MutationSurface, task: () => Promise<T>): Promise<T> {
   const isAi = surface === 'ai-builder' || surface === 'toolbar-ai';
   if (isAi) activeAiEdits += 1;
-  const run = tail.then(task, task);
+  // M0 telemetry: one event per serialized surface run (duration + outcome).
+  const correlationId = newEditorCorrelationId();
+  const startedAt = Date.now();
+  const run = tail.then(task, task).then(
+    (value) => {
+      recordMutationEvent({ correlationId, at: Date.now(), kind: 'surface-run', surface, baseRevisionId: null, resultRevisionId: null, ok: true, durationMs: Date.now() - startedAt });
+      return value;
+    },
+    (err) => {
+      recordMutationEvent({ correlationId, at: Date.now(), kind: 'surface-run', surface, baseRevisionId: null, resultRevisionId: null, ok: false, error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - startedAt });
+      throw err;
+    },
+  );
   tail = run.catch(() => undefined).finally(() => { if (isAi) activeAiEdits -= 1; });
   return run;
 }
