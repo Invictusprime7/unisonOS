@@ -1,3 +1,4 @@
+import { describeSelection } from '@/services/editor/editableObjectDescriptor';
 import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 /* cache-bust: 20260309 */
 import { shouldPauseAutosave, runExclusive, recordCommit, getLastCommit } from '@/services/builder/builderMutationCoordinator';
@@ -762,6 +763,16 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       section: typeof el.section === 'string' ? el.section : el.section?.id ?? el.section?.label,
       intent: attrs['data-ut-intent'],
       scopeAncestors: el.scopeAncestors,
+      descriptor: (() => {
+        const sa = (el.scopeAncestors ?? {}) as { pagePath?: string; sectionId?: string | null; resource?: string | null; structuralPath?: string; repeatIndex?: number | null };
+        return describeSelection({
+          pagePath: sa.pagePath || '/',
+          sectionId: sa.sectionId ?? null,
+          resourceMark: attrs['data-ut-resource'] || sa.resource || null,
+          sourceLocator: sa.structuralPath ? `${sa.sectionId ?? ''}|${sa.structuralPath}` : null,
+          instanceIndex: sa.repeatIndex ?? null,
+        });
+      })(),
       provenance: {
         sourceTable: el.scopeAncestors?.sourceTable,
         rowId: el.scopeAncestors?.rowId,
