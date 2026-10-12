@@ -15,6 +15,7 @@ vi.mock('@/services/resources/resourceRuntime', async (importOriginal) => {
   };
 });
 
+import { registerContentTypes } from '@/services/resources/resourceRegistry';
 import { executeEditorCommand } from '@/services/editor/editorCommandService';
 import { resolvePropertyOwner } from '@/services/editor/propertyOwnerResolver';
 import { getEditorCommandEvents, resetEditorCommandEvents } from '@/services/editor/editorTelemetry';
