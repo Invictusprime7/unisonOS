@@ -10,6 +10,7 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { executeEditorCommand, type LaneExecutor } from '@/services/editor/editorCommandService';
+import { resolvePropertyOwner } from '@/services/editor/propertyOwnerResolver';
 import type { EditorCommand, EditorCommandResult, EditorCommandType } from '@/services/editor/editorCommandTypes';
 import type { ResourceContext } from '@/services/resources/resourceTypes';
 
@@ -111,13 +112,24 @@ export function useToolbarCommands(
         return unsupported(cmd, 'binding');
       };
 
+      // M2 pending/error states. Saved-record writes are awaited, so only they
+      // report "Saved"; page-source edits hand off to the queued page save,
+      // which reports its own outcome — never imply persistence early.
+      const lane = resolvePropertyOwner(command);
+      const pending = lane === 'resource' ? toast.loading('Saving to the linked item…') : null;
       const result = await executeEditorCommand(command, {
         source: 'toolbar',
         resource: resource as ResourceContext,
         executors: { source, presentation, route, binding },
       });
+      if (pending !== null) toast.dismiss(pending);
       if (!result.ok && result.error) {
         toast.error('Could not apply that change', { description: result.error });
+      } else if (result.ok && lane === 'resource') {
+        const undo = result.undo;
+        toast.success(`Saved to ${result.savedTo ?? 'the linked item'}`, undo
+          ? { action: { label: 'Undo', onClick: () => { void undo().then(() => toast.success('Change undone')).catch(() => toast.error('Could not undo')); } } }
+          : undefined);
       }
       return result;
     },

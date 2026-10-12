@@ -7,7 +7,7 @@
 - [x] M1a: EditableObjectDescriptor + EditorTarget identity (tested)
 - [x] M1b: preview clicks carry repeat index + structural locator → descriptor; AI scoped to that instance
 - [x] M1c: reacquire selection highlight after rerender — VFSPreview stores last selection identity (selector/section/structuralPath/repeatIndex/resource), bridge resolves it after rebuild (resource mark → selector+index → structural path) and re-applies highlight; drops selection when object vanished
-- [ ] M2 (PR2/3): Preview as sole primary edit UI — [x] inspector routes data-bound text/media to resource commands (replace "Edit it from the content panel" dead-end), [x] fill missing lane executors (binding), [x] upload picker from preview context (site storage, no inline data); [ ] optimistic pending/rollback states, six-fixture reload exit check
+- [ ] M2 (PR2/3): Preview as sole primary edit UI — [x] inspector routes data-bound text/media to resource commands (replace "Edit it from the content panel" dead-end), [x] fill missing lane executors (binding), [x] upload picker from preview context (site storage, no inline data); [x] pending/saved/error + undo states; [ ] six-fixture reload exit check (needs signed-in browser run)
 - [ ] M3 (PR4): unified Resources UX (Records/Collections), one canonical record type per use case (testimonials/projects/FAQ collisions), catalogOperations delegates to Resource Runtime
 - [ ] M4 (PR5): retire Creator Playground overlap behind `previewFirstResources` flag; PlaygroundSyncController hydrate-only
 - [ ] M5: tenant scoping/RLS verification, dedicated-backend content/profile adapters, expected-revision concurrency on record updates
