@@ -4,7 +4,7 @@ import "./index.css";
 import "@/design-system/unison-x-loveable-design-d5be96/design-system/unison/styles/tokens.css";
 import "./styles/unison-theme.css";
 import { UNISON_FONT_LINKS } from "@/design-system/unison-x-loveable-design-d5be96/design-system/unison/styles/fonts";
-import { installPipelineBypassGuard } from "@/platform/core";
+import { installPipelineBypassGuard } from "@/platform/core/pipelineBypassGuard";
 
 // Enforce global dark theme (dark premium) across the whole app
 document.documentElement.classList.add('dark');

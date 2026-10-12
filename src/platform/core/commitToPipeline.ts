@@ -35,6 +35,8 @@ import type { CompiledContract } from './contractCompiler';
 import { PreviewGate, PublishGate, type GateVerdict } from './gates';
 import { readWizardInteractionManifest } from '@/services/wizardInteractionEnrichment';
 
+export { installPipelineBypassGuard } from './pipelineBypassGuard';
+
 // ============================================================================
 // Commit Source — every legal caller MUST identify itself.
 // ============================================================================
@@ -213,28 +215,4 @@ export function publishPipelineCommit(commit: CommitResult): void {
       /* noop — non-browser env */
     }
   }
-}
-
-// ============================================================================
-// Dev-mode guard — warn (don't throw) when bypass paths are detected.
-//
-// PR4 promotes this to a hard CI lint rule. For now it's an observability
-// surface so we can quantify the bypass volume before flipping the switch.
-// ============================================================================
-
-let bypassWarningInstalled = false;
-
-export function installPipelineBypassGuard(): void {
-  if (bypassWarningInstalled) return;
-  if (typeof window === 'undefined') return;
-  if (!import.meta.env?.DEV) return;
-  bypassWarningInstalled = true;
-
-  // Counter exposed for the Debug Agent / Intent Inspector.
-  const counter = { commits: 0, bypasses: 0 };
-  (window as unknown as { __unisonPipelineStats?: typeof counter }).__unisonPipelineStats = counter;
-
-  onPipelineCommit(() => {
-    counter.commits += 1;
-  });
 }

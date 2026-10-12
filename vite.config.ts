@@ -66,7 +66,7 @@ export default defineConfig(({ mode }) => ({
     }),
     mode === "analyze" && visualizer({
       filename: "dist/bundle-analysis.html",
-      open: true,
+      open: false,
       gzipSize: true,
       brotliSize: true,
     })
@@ -87,128 +87,6 @@ export default defineConfig(({ mode }) => ({
     chunkSizeWarningLimit: 1000,
     // Optimize for modern browsers
     target: 'esnext',
-    rollupOptions: {
-      output: {
-        // Comprehensive manual chunk splitting for optimal loading
-        manualChunks: (id: string) => {
-          // Builder-only runtime libraries are large enough to make the
-          // WebBuilder route appear permanently suspended when bundled into
-          // the shared vendor chunk. Keep them independently cacheable and
-          // loadable in parallel with the route shell.
-          if (id.includes('@babel/standalone')) {
-            return 'babel-standalone';
-          }
-          if (id.includes('@codesandbox/sandpack')) {
-            return 'sandpack-runtime';
-          }
-
-          // React core, router, and React-dependent utilities (must stay together)
-          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router') ||
-              id.includes('use-callback-ref') || id.includes('use-sidecar') || 
-              id.includes('use-sync-external-store') || id.includes('scheduler') ||
-              id.includes('aria-hidden') || id.includes('react-remove-scroll')) {
-            return 'react-core';
-          }
-          
-          // Heavy creative tools (loaded on demand)
-          if (id.includes('fabric')) {
-            return 'fabric-canvas';
-          }
-          if (id.includes('@monaco-editor')) {
-            return 'monaco-editor';
-          }
-          if (id.includes('@huggingface/transformers')) {
-            return 'ai-transformers';
-          }
-          
-          // UI Component libraries
-          if (id.includes('@radix-ui')) {
-            return 'radix-ui';
-          }
-          if (id.includes('lucide-react')) {
-            return 'icons';
-          }
-          
-          // Charts and visualization
-          if (id.includes('recharts') || id.includes('html2canvas')) {
-            return 'charts-viz';
-          }
-          
-          // Backend and data fetching
-          if (id.includes('@supabase') || id.includes('@tanstack/react-query')) {
-            return 'backend-api';
-          }
-          
-          // Utilities and smaller libraries
-          if (id.includes('clsx') || id.includes('tailwind-merge') || id.includes('class-variance-authority') || 
-              id.includes('date-fns') || id.includes('nanoid') || id.includes('zod')) {
-            return 'utils';
-          }
-          
-          // Form handling
-          if (id.includes('react-hook-form') || id.includes('@hookform')) {
-            return 'form-handling';
-          }
-          
-          // Syntax highlighting and code tools - split languages separately
-          if (id.includes('react-syntax-highlighter') || id.includes('prismjs')) {
-            return 'syntax-highlighting';
-          }
-          if (id.includes('refractor/lang')) {
-            return 'syntax-languages';
-          }
-          if (id.includes('refractor')) {
-            return 'refractor-core';
-          }
-          
-          // Animation libraries
-          if (id.includes('framer-motion') || id.includes('motion')) {
-            return 'animation';
-          }
-          
-          // CodeMirror / code editor
-          if (id.includes('@codemirror') || id.includes('@lezer')) {
-            return 'codemirror';
-          }
-          
-          // Markdown and rich text
-          if (id.includes('marked') || id.includes('dompurify') || id.includes('turndown')) {
-            return 'markdown';
-          }
-          
-          // PDF generation
-          if (id.includes('jspdf') || id.includes('html2pdf')) {
-            return 'pdf-export';
-          }
-          
-          // Image processing
-          if (id.includes('heic2any') || id.includes('browser-image-compression')) {
-            return 'image-processing';
-          }
-          
-          // Embla carousel
-          if (id.includes('embla-carousel')) {
-            return 'carousel';
-          }
-          
-          // React Select and similar
-          if (id.includes('react-select') || id.includes('react-day-picker')) {
-            return 'form-widgets';
-          }
-          
-          // Sonner toast
-          if (id.includes('sonner')) {
-            return 'toast';
-          }
-
-          // Node modules vendor chunk - group smaller packages together
-          if (id.includes('node_modules')) {
-            // Don't split every package individually - causes module resolution issues
-            return 'vendor';
-          }
-        },
-      }
-    },
     // Enable minification
     minify: 'esbuild',
   },

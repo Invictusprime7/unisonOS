@@ -11,7 +11,7 @@ import { useLaunch } from "@/contexts/useLaunchHooks";
 import { AppRouteElement } from "@/routes/AppRouteElement";
 import { appRoutes } from "@/routes/routeConfig";
 import { SupabaseBootstrap } from "@/hooks/useSupabaseBootstrap";
-import { readLauncherHandoff } from "@/services/launcherHandoffPersistence";
+import { readLauncherHandoff } from "@/services/launcherHandoffStore";
 
 const queryClient = new QueryClient();
 

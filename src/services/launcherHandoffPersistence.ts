@@ -6,9 +6,18 @@ import {
   PUBLISHED_RUNTIME_MODULE_PATH,
   type PublishedRuntimeConfig,
 } from '@/services/canonicalLaunchVfs';
+import {
+  HANDOFF_TTL_MS,
+  LAUNCHER_HANDOFF_KEY,
+  launcherHandoffStorageAvailable,
+  type LauncherHandoffSnapshot,
+} from '@/services/launcherHandoffStore';
 
-const LAUNCHER_HANDOFF_KEY = 'unison.systemLauncher.pendingHandoff.v1';
-const HANDOFF_TTL_MS = 30 * 60 * 1000;
+export {
+  clearLauncherHandoff,
+  readLauncherHandoff,
+  type LauncherHandoffSnapshot,
+} from '@/services/launcherHandoffStore';
 
 const COMPACT_UNISON_METADATA_PATHS = new Set([
   '/.unison/app-context.json',
@@ -43,14 +52,6 @@ const ROOT_ONLY_FILES = new Set([
 
 const SOURCE_FILE_EXTENSION = /\.(?:tsx?|jsx?|mjs|cjs|css|scss|less|json|svg|png|jpe?g|gif|webp|avif|woff2?|ttf|otf)$/i;
 
-export interface LauncherHandoffSnapshot {
-  targetPath: '/web-builder';
-  createdAt: string;
-  expiresAt: number;
-  routeState: Record<string, unknown>;
-  launchState?: LaunchState;
-}
-
 export type LauncherHandoffRecoveryMode = 'compact-vfs' | 'durable-revision';
 
 const DURABLE_HANDOFF_IDENTITY_FIELDS = [
@@ -60,10 +61,6 @@ const DURABLE_HANDOFF_IDENTITY_FIELDS = [
   'draftId',
   'revisionId',
 ] as const;
-
-function storageAvailable() {
-  return typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
-}
 
 function toSerializableRecord(value: Record<string, unknown>) {
   return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
@@ -339,7 +336,7 @@ function buildFallbackRouteState(routeState: Record<string, unknown>) {
 }
 
 function persistCompactLauncherHandoff(compactRouteState: Record<string, unknown>) {
-  if (!storageAvailable()) return;
+  if (!launcherHandoffStorageAvailable()) return;
   const createdAt = new Date().toISOString();
 
   try {
@@ -454,33 +451,4 @@ export function buildLauncherNavigationState(
   routeState: Record<string, unknown>,
 ): Record<string, unknown> {
   return buildFallbackRouteState(routeState);
-}
-
-export function readLauncherHandoff(): LauncherHandoffSnapshot | null {
-  if (!storageAvailable()) return null;
-
-  try {
-    const raw = window.sessionStorage.getItem(LAUNCHER_HANDOFF_KEY);
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw) as LauncherHandoffSnapshot;
-    if (!parsed || parsed.targetPath !== '/web-builder' || Date.now() > parsed.expiresAt) {
-      window.sessionStorage.removeItem(LAUNCHER_HANDOFF_KEY);
-      return null;
-    }
-
-    return parsed;
-  } catch {
-    window.sessionStorage.removeItem(LAUNCHER_HANDOFF_KEY);
-    return null;
-  }
-}
-
-export function clearLauncherHandoff() {
-  if (!storageAvailable()) return;
-  try {
-    window.sessionStorage.removeItem(LAUNCHER_HANDOFF_KEY);
-  } catch {
-    // ignore storage failures
-  }
 }
