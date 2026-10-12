@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getResource } from '@/services/resources/resourceRuntime';
+import { getResource } from '@/services/resources/resourceRegistry';
 import { describeSelection, reacquireSelection, descriptorToTarget } from '@/services/editor/editableObjectDescriptor';
 
 const key = ['services', 'catalog:services', 'products'].find((k) => getResource(k)) ?? 'services';
