@@ -9,6 +9,7 @@ import { canIssue } from './editorCapabilities';
 import { resolvePropertyOwner } from './propertyOwnerResolver';
 import { executeResourceCommand } from './executors/resourceExecutor';
 import { assetBelongsTo, toAssetRef } from '@/services/assets/assetRef';
+import { newEditorCorrelationId, recordEditorCommandEvent, toEditorCommandEvent } from './editorTelemetry';
 import type { EditorCommand, EditorCommandResult, EditorCommandSource, EditorOwnerLane } from './editorCommandTypes';
 
 /** Host-supplied executor for lanes owned by page source / topology / bindings. */
