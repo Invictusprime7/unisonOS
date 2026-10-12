@@ -10,6 +10,9 @@ declare const Deno: { env: { get(key: string): string | undefined } };
 
 /** Trusted origins for production CORS */
 const TRUSTED_ORIGINS: string[] = [
+  "https://unisonos.ai",
+  "https://www.unisonos.ai",
+  "https://unisonos.vercel.app",
   "https://unison-tasks.vercel.app",
   "https://unison-tasks-official.vercel.app",
   "https://unison-tasks.netlify.app",
@@ -17,12 +20,18 @@ const TRUSTED_ORIGINS: string[] = [
   "https://unisontasks.com",
 ];
 
-function isUnisonTasksVercelDeployment(origin: string): boolean {
+function isUnisonVercelDeployment(origin: string): boolean {
   try {
     const { protocol, hostname } = new URL(origin);
     return (
       protocol === "https:" &&
-      hostname.startsWith("unison-tasks-official-") &&
+      (
+        (
+          hostname.startsWith("unisonos-") &&
+          hostname.endsWith("-unrealdev02s-projects.vercel.app")
+        ) ||
+        hostname.startsWith("unison-tasks-official-")
+      ) &&
       hostname.endsWith(".vercel.app")
     );
   } catch {
@@ -73,7 +82,7 @@ export function getCorsHeaders(req: Request): Record<string, string> {
 
   const allowedOrigin =
     allowedOrigins.includes(origin) ||
-    isUnisonTasksVercelDeployment(origin) ||
+    isUnisonVercelDeployment(origin) ||
     isLovableHostedOrigin(origin) ||
     isLocalDev
       ? origin
