@@ -32,6 +32,16 @@ interface FixtureCase {
 
 const mark = (resourceKey: string, recordId: string, field: string) => `${resourceKey}#${recordId}.${field}`;
 
+const assetRef = (projectId: string) => ({
+  url: 'https://cdn.example.com/x.png',
+  alt: '',
+  assetId: 'a1',
+  projectId,
+  siteId: null,
+  bucket: 'site-assets' as const,
+  path: 'public/images/x.png',
+});
+
 const MATRIX: FixtureCase[] = [
   // Salon / service booking
   { fixture: 'salon', element: 'service name', command: { type: 'set-text', target: { resourceMark: mark('services', 's1', 'name') }, text: 'Cut & Blowdry' }, expectedLane: 'resource' },
