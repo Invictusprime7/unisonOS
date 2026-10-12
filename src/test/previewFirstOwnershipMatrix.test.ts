@@ -54,7 +54,10 @@ const MATRIX: FixtureCase[] = [
 ];
 
 describe('M0 ownership fixture matrix', () => {
-  beforeEach(() => resetEditorCommandEvents());
+  beforeEach(() => {
+    resetEditorCommandEvents();
+    registerContentTypes([{ id: 't-articles', slug: 'articles', name: 'Articles', field_schema: [{ key: 'title' }, { key: 'body', type: 'textarea' }] }]);
+  });
 
   it('every editable element type resolves to exactly one canonical owner', () => {
     for (const c of MATRIX) {
