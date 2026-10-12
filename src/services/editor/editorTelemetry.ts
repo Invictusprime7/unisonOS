@@ -58,6 +58,51 @@ export function resetEditorCommandEvents(): void {
   events.length = 0;
 }
 
+// ── Mutation telemetry (M0 remainder) ────────────────────────────────────────
+// One event per canonical mutation: which surface ran it, the base revision it
+// started from, the revision it produced, and whether it succeeded. Pure
+// observability — never influences save behavior.
+
+export interface MutationEvent {
+  correlationId: string;
+  at: number;
+  kind: 'commit' | 'resource-op' | 'surface-run';
+  surface: string;
+  baseRevisionId: string | null;
+  resultRevisionId: string | null;
+  /** resource-op only: resource key, op and record id. */
+  resourceKey?: string;
+  resourceOp?: string;
+  recordId?: string | null;
+  ok: boolean;
+  error?: string;
+  durationMs: number;
+}
+
+const MAX_MUTATION_EVENTS = 200;
+const mutationEvents: MutationEvent[] = [];
+const mutationListeners = new Set<(event: MutationEvent) => void>();
+
+export function recordMutationEvent(event: MutationEvent): void {
+  mutationEvents.push(event);
+  if (mutationEvents.length > MAX_MUTATION_EVENTS) mutationEvents.splice(0, mutationEvents.length - MAX_MUTATION_EVENTS);
+  for (const fn of mutationListeners) fn(event);
+}
+
+export function getMutationEvents(): readonly MutationEvent[] {
+  return mutationEvents;
+}
+
+export function onMutationEvent(fn: (event: MutationEvent) => void): () => void {
+  mutationListeners.add(fn);
+  return () => mutationListeners.delete(fn);
+}
+
+/** Test helper: clears the mutation ring buffer. */
+export function resetMutationEvents(): void {
+  mutationEvents.length = 0;
+}
+
 export function toEditorCommandEvent(
   correlationId: string,
   source: EditorCommandSource,
