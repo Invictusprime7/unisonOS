@@ -3,7 +3,7 @@
 ## Active: Preview-First Resource & Editing Consolidation (guidebook: docs/milestones/PREVIEW_FIRST_RESOURCE_CONSOLIDATION_2026-10-11.md)
 
 - [x] M0 (PR1): editor command instrumentation (correlation IDs, lane, save target) + golden ownership fixture matrix test
-- [ ] M0 remainder: instrument runExclusive/commitMutation/applyResourceOp with revision IDs; live stale-overwrite repro per fixture
+- [x] M0 remainder: mutation telemetry — commitMutation (base→result revision IDs), runExclusive (surface/duration/outcome), applyResourceOp (key/op/recordId) all record MutationEvents in editorTelemetry; 4 new tests pass
 - [x] M1a: EditableObjectDescriptor + EditorTarget identity (tested)
 - [x] M1b: preview clicks carry repeat index + structural locator → descriptor; AI scoped to that instance
 - [x] M1c: reacquire selection highlight after rerender — VFSPreview stores last selection identity (selector/section/structuralPath/repeatIndex/resource), bridge resolves it after rebuild (resource mark → selector+index → structural path) and re-applies highlight; drops selection when object vanished

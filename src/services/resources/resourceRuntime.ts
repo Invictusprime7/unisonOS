@@ -11,6 +11,7 @@ import { RESOURCE_ADAPTERS, filterWritableValues } from './resourceAdapters';
 import { getResource } from './resourceRegistry';
 import { withProjectBackend } from '@/services/project-backend/projectBackendGateway';
 import { callProjectBackend } from '@/services/project-backend/projectBackendClient';
+import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
 import type { ProjectBackendDescriptor } from '@/services/project-backend/projectBackendTypes';
 
 /** Dedicated sites: catalog commands go through the private project-backend connection. */
@@ -84,8 +85,13 @@ export async function applyResourceOp(op: ResourceDataOp, ctx: ResourceContext):
   const v = validateResourceOp(op);
   if (v.ok === false) throw new Error(v.reason);
   const { def } = v;
+  // M0 telemetry: one mutation event per record write (key, op, record id).
+  const correlationId = newEditorCorrelationId();
+  const startedAt = Date.now();
   const adapter = RESOURCE_ADAPTERS[def.storage.adapter];
-  const result = await withProjectBackend(ctx.projectId, async (d) => {
+  let result: ResourceRecord | null;
+  try {
+    result = await withProjectBackend(ctx.projectId, async (d) => {
     if (dedicated(d, def, ctx.projectId)) {
       const pid = ctx.projectId;
       if (op.op === 'create') return rec(await callProjectBackend({ projectId: pid, action: 'create', resource: def.key, values: filterWritableValues(def, op.values) }));
@@ -97,7 +103,12 @@ export async function applyResourceOp(op: ResourceDataOp, ctx: ResourceContext):
     if (op.op === 'update') return adapter.update(def, ctx, op.ref.recordId, filterWritableValues(def, op.values));
     await adapter.delete!(def, ctx, op.ref.recordId);
     return null;
-  });
+    });
+  } catch (err) {
+    recordMutationEvent({ correlationId, at: Date.now(), kind: 'resource-op', surface: 'resource-runtime', baseRevisionId: null, resultRevisionId: null, resourceKey: def.key, resourceOp: op.op, recordId: op.op === 'create' ? null : op.ref.recordId, ok: false, error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - startedAt });
+    throw err;
+  }
+  recordMutationEvent({ correlationId, at: Date.now(), kind: 'resource-op', surface: 'resource-runtime', baseRevisionId: null, resultRevisionId: null, resourceKey: def.key, resourceOp: op.op, recordId: op.op === 'create' ? result?.id ?? null : op.ref.recordId, ok: true, durationMs: Date.now() - startedAt });
   const recordId = op.op === 'create' ? result?.id ?? '' : op.ref.recordId;
   invalidateResource({ resourceKey: def.key, kind: def.kind, businessId: ctx.businessId, projectId: ctx.projectId ?? null, recordIds: recordId ? [recordId] : [], sourceTables: def.storage.table ? [def.storage.table] : undefined });
   emitAgentEvent({ kind: 'data_change', message: `${op.op === 'create' ? 'Added to' : op.op === 'update' ? 'Updated' : 'Removed from'} ${def.label}`, status: 'ok' });
