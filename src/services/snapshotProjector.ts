@@ -642,6 +642,29 @@ export function acknowledgePendingVfsOperations(
   return acknowledged;
 }
 
+/** Finalizes a specific pending mutation once its accepted revision has been persisted. */
+export function finalizePendingVfsOperation(input: {
+  scope?: string | null;
+  operationId?: string | null;
+  candidateRevisionId?: string | null;
+  acceptedRevisionId?: string | null;
+}): string | null {
+  const operationId = input.operationId?.trim();
+  if (!operationId) return null;
+  const operation = pendingVfsOperations.get(operationId);
+  if (!operation || operationScopeKey(operation.scope) !== operationScopeKey(input.scope)) return null;
+  const acceptedRevisionId = input.acceptedRevisionId?.trim() || null;
+  const candidateRevisionId = input.candidateRevisionId?.trim() || null;
+  if (acceptedRevisionId && candidateRevisionId && candidateRevisionId !== acceptedRevisionId) {
+    return null;
+  }
+  if (acceptedRevisionId && operation.candidateRevisionId && operation.candidateRevisionId !== acceptedRevisionId) {
+    return null;
+  }
+  const [removedId] = removeOperationLineage([operationId], input.scope);
+  return removedId ?? null;
+}
+
 export function clearPendingVfsOperations(scope?: string | null): void {
   if (scope === undefined) {
     pendingVfsOperations.clear();

@@ -214,7 +214,17 @@ import { loadCanonicalComponentGraph } from '@/services/componentGraphPersistenc
 import { inferCanonicalComponentSlug } from '@/services/canonicalComponentRegistry';
 import { buildCanonicalLaunchArtifacts } from '@/services/canonicalLaunchVfs';
 import { clearLauncherHandoff, readLauncherHandoff } from '@/services/launcherHandoffPersistence';
-import { acknowledgePendingVfsOperations, assertNoMinimalFallbackPreview, projectSnapshotVfsFiles, resolveSnapshot, recordPendingVfsMutation, clearPendingVfsOperations, restorePendingVfsOperations, serializePendingVfsOperations } from '@/services/snapshotProjector';
+import {
+  acknowledgePendingVfsOperations,
+  assertNoMinimalFallbackPreview,
+  finalizePendingVfsOperation,
+  projectSnapshotVfsFiles,
+  resolveSnapshot,
+  recordPendingVfsMutation,
+  clearPendingVfsOperations,
+  restorePendingVfsOperations,
+  serializePendingVfsOperations,
+} from '@/services/snapshotProjector';
 import { projectCommittedWizardRuntime } from '@/services/committedWizardRuntime';
 import { createVfsHandoffSignature } from '@/services/vfsHandoffSignature';
 import { isPreviewPipelineError } from '@/services/previewPipelineError';
@@ -848,6 +858,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   // and avoids the misleading "dynamic className" toast.
   /** Working set before the latest optimistic toolbar edit, restored if the save is refused. */
   const toolbarPreEditRef = useRef<Record<string, string> | null>(null);
+  const toolbarMutationGuardRef = useRef<Map<string, number>>(new Map());
   const applyMutatorAcrossVFS = useCallback((
     selector: string,
     mutate: (code: string) => string | null,
@@ -3246,6 +3257,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     if ((!files || Object.keys(files).length === 0) && !options.fileOps?.length && !options.routeOps?.length) return null;
 
     const beforeFiles = virtualFSRef.current.getSandpackFiles();
+    const hasNoEffectiveContentChange = Object.entries(files ?? {}).length > 0 && Object.entries(files ?? {}).every(([path, content]) => beforeFiles[path] === content);
+    if (hasNoEffectiveContentChange) {
+      return beforeFiles;
+    }
+
     const snapshot = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot
       ?? effectiveRouteState?.siteBundleSnapshot
       ?? null;
@@ -3608,6 +3624,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     commitToolbarMutationRef.current = (nextCode, summary, path) => {
       const targetPath = path ?? (activePagePath?.endsWith('.tsx') ? activePagePath : launchEntryPoint);
       if (!targetPath || !nextCode) return;
+      const guardKey = `${targetPath}:${summary}:${nextCode.slice(0, 160)}`;
+      const lastAttempt = toolbarMutationGuardRef.current.get(guardKey) ?? 0;
+      if (Date.now() - lastAttempt < 2500) return;
+      toolbarMutationGuardRef.current.set(guardKey, Date.now());
       void runExclusive('toolbar', async () => {
         const before = virtualFSRef.current.getSandpackFiles();
         const baseline = await captureIntentBaseline(before, [targetPath]);
@@ -4644,6 +4664,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     ) {
       recordPendingVfsMutation({
         scope: pendingProjectionScope,
+        operationId: pendingMutationKey,
         baseRevisionId: currentRevisionIdRef.current || null,
         beforeFiles: lastPersistedVfsFilesRef.current,
         afterFiles: currentVfsFiles,
@@ -4778,6 +4799,14 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           operationIds: acknowledgedOperationIds,
           acceptedRevisionId: commit.persistedRevisionId,
         });
+        if (typeof pendingMutationKey === 'string' && pendingMutationKey.trim()) {
+          finalizePendingVfsOperation({
+            scope: pendingProjectionScope,
+            operationId: pendingMutationKey,
+            candidateRevisionId: commit.persistedRevisionId,
+            acceptedRevisionId: commit.persistedRevisionId,
+          });
+        }
         markBuilderRecoveryPersisted(snapshot, existingDraftId, undefined, commit.persistedRevisionId);
         if (!isActiveBuilderCommitScope(activeCommitScopeRef.current, capturedCommitScope)) {
           // The old project's durable commit succeeded, but its completion must
@@ -8760,6 +8789,17 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             />
               )}
             </div>
+          </div>
+        )}
+
+        {/* Direct canvas text/object toolbar for Fabric selections */}
+        {selectedObject && viewMode === 'canvas' && builderMode === 'select' && (
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-40 max-w-[96vw]">
+            <DirectEditToolbar
+              fabricCanvas={fabricCanvas}
+              selectedObject={selectedObject}
+              onPropertyChange={() => fabricCanvas?.renderAll()}
+            />
           </div>
         )}
 

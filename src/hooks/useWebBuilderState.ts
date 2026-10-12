@@ -223,11 +223,11 @@ export const useWebBuilderState = (fabricCanvas: FabricCanvas | null) => {
 
   // Selection management
   const setSelectedObject = useCallback((obj: any | null) => {
-    setState(prev => ({ ...prev, selectedObject: obj, selectedHTMLElement: null }));
+    setState(prev => ({ ...prev, selectedObject: obj }));
   }, []);
 
   const setSelectedHTMLElement = useCallback((element: any | null) => {
-    setState(prev => ({ ...prev, selectedHTMLElement: element, selectedObject: null }));
+    setState(prev => ({ ...prev, selectedHTMLElement: element }));
   }, []);
 
   const clearSelection = useCallback(() => {
