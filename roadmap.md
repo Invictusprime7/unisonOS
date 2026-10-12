@@ -4,7 +4,8 @@
 
 - [x] M0 (PR1): editor command instrumentation (correlation IDs, lane, save target) + golden ownership fixture matrix test
 - [ ] M0 remainder: instrument runExclusive/commitMutation/applyResourceOp with revision IDs; live stale-overwrite repro per fixture
-- [ ] M1 (PR2): unified object metadata/selector — versioned objectId, ownerKind, instanceId on EditorTarget; selection survives rerenders for repeated cards
+- [x] M1a: EditableObjectDescriptor + EditorTarget identity (tested)
+- [ ] M1b: wire preview click bridge to describeSelection/reacquireSelection; M1 (PR2): unified object metadata/selector — versioned objectId, ownerKind, instanceId on EditorTarget; selection survives rerenders for repeated cards
 - [ ] M2 (PR2/3): Preview as sole primary edit UI — inspector routes data-bound text/media to resource commands (replace "Edit it from the content panel" dead-end), fill missing lane executors, upload picker from preview context
 - [ ] M3 (PR4): unified Resources UX (Records/Collections), one canonical record type per use case (testimonials/projects/FAQ collisions), catalogOperations delegates to Resource Runtime
 - [ ] M4 (PR5): retire Creator Playground overlap behind `previewFirstResources` flag; PlaygroundSyncController hydrate-only
