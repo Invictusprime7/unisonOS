@@ -25,12 +25,16 @@ import type { BindingOp, FileOp, PresentationOp } from '@/types/patchPlan';
 import type { PlaygroundBinding } from '@/platform/core/playground';
 import type { ThemeEdit } from '@/services/theme/themeEdit';
 import { toCompositionRole } from './semanticPresentationOps';
+import { parseResourceProvenance } from '@/services/resources/resourceRuntime';
+import type { ResourceEntityRef } from '@/services/resources/resourceTypes';
 
 export type InspectorExecution =
   | { kind: 'presentation'; summary: string; ops: PresentationOp[] }
   | { kind: 'theme'; summary: string; themeEdit: ThemeEdit }
   | { kind: 'binding'; summary: string; bindingOps: BindingOp[] }
   | { kind: 'source'; summary: string; fileOps: FileOp[] }
+  /** M2: data-bound text/media saves to its saved record, never the JSX. */
+  | { kind: 'resource'; summary: string; ref: ResourceEntityRef; values: Record<string, unknown> }
   | { kind: 'rejected'; reason: string };
 
 export interface InspectorExecutionContext {
@@ -47,6 +51,8 @@ export interface InspectorExecutionContext {
   composedSections?: readonly string[] | null;
   /** Snapshot-owned bindings keyed by binding id. Intent edits require one. */
   bindings?: Record<string, PlaygroundBinding> | null;
+  /** `data-ut-resource` mark of the selected element (resourceKey#id.field). */
+  resourceMark?: string | null;
 }
 
 /** Copy slots the composition plan owns directly. */
@@ -115,6 +121,17 @@ export function planInspectorExecution(
   context: InspectorExecutionContext,
 ): InspectorExecution {
   const op: InspectorPatchOp = plan.op;
+
+  // M2: a selection marked as a saved-record field edits that record directly.
+  if (op.type === 'set-slot-text' || op.type === 'set-slot-asset') {
+    const ref = parseResourceProvenance(context.resourceMark);
+    if (ref) {
+      const value = String(op.value ?? '');
+      if (!value.trim()) return { kind: 'rejected', reason: 'Enter a value before applying this change.' };
+      const field = ref.field ?? (op.type === 'set-slot-asset' ? 'image' : 'name');
+      return { kind: 'resource', summary: plan.description, ref: { ...ref, field }, values: { [field]: value } };
+    }
+  }
 
   if (op.type === 'set-variant') {
     if (!op.sectionId || !op.variantId) {
@@ -232,7 +249,7 @@ export function planInspectorExecution(
   if (!literal) {
     return {
       kind: 'rejected',
-      reason: `Slot "${op.slotId}" renders text from data, not literal copy. Edit it from the content panel.`,
+      reason: `Slot "${op.slotId}" renders text from data that is not linked to a saved item, so it cannot be edited here. Ask the AI Builder to link or rewrite it.`,
     };
   }
   const textStart = target.end + 1;

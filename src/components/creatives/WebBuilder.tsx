@@ -3531,7 +3531,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
    * so a deterministic edit never depends on a language model.
    */
   const applyInspectorPatchPlan = useCallback(async (
-    plan: Extract<InspectorPatchPlan, { ok: true }>,
+    plan: Extract<InspectorPatchPlan, { ok: true }> & { resourceMark?: string | null },
   ): Promise<boolean> => {
     const files = virtualFSRef.current.getSandpackFiles();
     const snapshot = resolveSnapshot(files, effectiveRouteState as any).snapshot
@@ -3553,6 +3553,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       pageRole,
       composedSections,
       bindings: snapshot?.bindings ?? null,
+      resourceMark: plan.resourceMark ?? null,
     });
 
     if (execution.kind === 'rejected') {
@@ -3564,6 +3565,18 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     }
     if (execution.kind === 'theme') {
       return commitThemeTokenOps([], execution.summary, execution.themeEdit);
+    }
+    if (execution.kind === 'resource') {
+      if (!businessId) { toast.error('This site is not linked to a business yet.'); return false; }
+      try {
+        const { applyResourceOp } = await import('@/services/resources/resourceRuntime');
+        await applyResourceOp({ op: 'update', ref: execution.ref, values: execution.values }, { businessId, projectId: projectId ?? null, mode: 'builder' });
+        toast.success(`${execution.summary} — saved to the linked item`);
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not save this item');
+        return false;
+      }
     }
     if (execution.kind === 'binding') {
       const committed = await commitBindingOps(execution.bindingOps, execution.summary);
@@ -3581,7 +3594,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     );
     if (committed) toast.success(execution.summary);
     return Boolean(committed);
-  }, [effectiveRouteState, commitPresentationOps, commitThemeTokenOps, commitBindingOps, commitBuilderFiles]);
+  }, [effectiveRouteState, commitPresentationOps, commitThemeTokenOps, commitBindingOps, commitBuilderFiles, businessId, projectId]);
 
 
   // ── Preview Floating Toolbar → VFSCommitService bridge ───────────────────
@@ -8859,7 +8872,13 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                     // Already-validated canonical plans execute directly on the
                     // canonical rails (presentation / theme / source) through
                     // VFSCommitService — no AI round-trip, no DOM-only writes.
-                    void applyInspectorPatchPlan(plan);
+                    const attrs = (selectedHTMLElement.attributes ?? {}) as Record<string, string>;
+                    void applyInspectorPatchPlan({
+                      ...plan,
+                      resourceMark: attrs['data-ut-resource']
+                        || (selectedHTMLElement.scopeAncestors as { resource?: string | null } | undefined)?.resource
+                        || null,
+                    });
                     setPropertyPanelOpen(false);
                   }}
                   onContextualAIRequest={(prompt) => {
