@@ -969,7 +969,20 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         // A selection is only valid for the canonical revision that rendered it.
         if (revisionId && data.element.revisionId && data.element.revisionId !== revisionId) return;
         clearDirectPreviewSelection();
+        const sa = data.element.scopeAncestors ?? {};
+        lastSelectionRef.current = {
+          selector: data.element.selector,
+          sectionId: sa.sectionId ?? null,
+          structuralPath: sa.structuralPath,
+          repeatIndex: typeof sa.repeatIndex === 'number' ? sa.repeatIndex : null,
+          resource: sa.resource ?? data.element.attributes?.['data-ut-resource'] ?? null,
+        };
         onElementSelect?.(data.element);
+        return;
+      }
+      if (data.type === 'UT_REACQUIRE_RESULT' && data.ok === false) {
+        // The selected object no longer exists in the redrawn preview — drop it.
+        lastSelectionRef.current = null;
         return;
       }
 
