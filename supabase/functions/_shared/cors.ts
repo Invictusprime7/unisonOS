@@ -13,6 +13,7 @@ const TRUSTED_ORIGINS: string[] = [
   "https://unisonos.ai",
   "https://www.unisonos.ai",
   "https://unisonos.vercel.app",
+  "https://unisonai.vercel.app",
   "https://unison-tasks.vercel.app",
   "https://unison-tasks-official.vercel.app",
   "https://unison-tasks.netlify.app",
