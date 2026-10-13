@@ -17,6 +17,7 @@ import Editor, { OnMount, loader } from '@monaco-editor/react';
 type IStandaloneCodeEditor = Parameters<OnMount>[0];
 import { cn } from '@/lib/utils';
 import { isUnisonProtectedPath } from '@/services/unisonCanonicalRegistry';
+import { getMonacoModelUri, MonacoVFSSync, normalizeVFSPath, type MonacoAPI } from '@/services/monacoVFSSync';
 
 // ---------------------------------------------------------------------------
 // Fallback plain-text editor when Monaco fails to load
@@ -100,6 +101,8 @@ interface VFSMonacoEditorProps {
   value: string;
   onChange?: (value: string) => void;
   fileName?: string;           // e.g. "App.tsx" — used for language detection
+  filePath?: string;
+  projectFiles?: Record<string, string>;
   language?: string;           // override language
   readOnly?: boolean;
   isAIProcessing?: boolean;
@@ -194,6 +197,8 @@ const VFSMonacoEditor: React.FC<VFSMonacoEditorProps> = ({
   value,
   onChange,
   fileName,
+  filePath,
+  projectFiles = {},
   language: languageOverride,
   readOnly = false,
   isAIProcessing = false,
@@ -203,9 +208,25 @@ const VFSMonacoEditor: React.FC<VFSMonacoEditorProps> = ({
 }) => {
   const editorRef = useRef<IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<any>(null);
+  const vfsSyncRef = useRef<MonacoVFSSync | null>(null);
+  const projectFilesRef = useRef(projectFiles);
+  const valueRef = useRef(value);
   const [isFormatting, setIsFormatting] = useState(false);
 
   const language = detectLanguage(fileName, languageOverride);
+  const modelPath = filePath ?? (fileName?.startsWith('/') ? fileName : `/src/${fileName || 'Untitled.tsx'}`);
+  projectFilesRef.current = projectFiles;
+  valueRef.current = value;
+
+  const syncProjectModels = useCallback((monaco: unknown) => {
+    if (!vfsSyncRef.current) vfsSyncRef.current = new MonacoVFSSync();
+    const normalizedPath = normalizeVFSPath(modelPath);
+    const files = {
+      ...projectFilesRef.current,
+      [normalizedPath]: editorRef.current?.getValue() ?? valueRef.current,
+    };
+    vfsSyncRef.current.syncAll(files, monaco as MonacoAPI);
+  }, [modelPath]);
 
   // Auto-protect canonical Unison files — they're deterministically
   // regenerated from CreatorData, so any manual edit is overwritten on
@@ -232,39 +253,7 @@ const VFSMonacoEditor: React.FC<VFSMonacoEditorProps> = ({
   const handleEditorDidMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-
-    // ---- TypeScript / JSX configuration ----
-    const tsOpts = {
-      target: monaco.languages.typescript.ScriptTarget.ESNext,
-      allowNonTsExtensions: true,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      module: monaco.languages.typescript.ModuleKind.ESNext,
-      noEmit: true,
-      esModuleInterop: true,
-      jsx: monaco.languages.typescript.JsxEmit.React,
-      reactNamespace: 'React',
-      allowJs: true,
-      typeRoots: ['node_modules/@types'],
-      lib: ['es2020', 'dom', 'dom.iterable'],
-    };
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions(tsOpts);
-    monaco.languages.typescript.javascriptDefaults.setCompilerOptions(tsOpts);
-
-    // React type stubs for IntelliSense
-    monaco.languages.typescript.typescriptDefaults.addExtraLib(
-      `declare module 'react' {
-        export interface FC<P = {}> { (props: P): JSX.Element | null; }
-        export function useState<S>(init: S | (() => S)): [S, (v: S | ((p: S) => S)) => void];
-        export function useEffect(effect: () => void | (() => void), deps?: any[]): void;
-        export function useRef<T>(init: T): { current: T };
-        export function useCallback<T extends (...a: any[]) => any>(cb: T, deps: any[]): T;
-        export function useMemo<T>(factory: () => T, deps: any[]): T;
-        export function useContext<T>(ctx: React.Context<T>): T;
-        export interface CSSProperties { [k: string]: any; }
-        export namespace JSX { interface Element {} interface IntrinsicElements { [e: string]: any; } }
-      }`,
-      'ts:react.d.ts',
-    );
+    syncProjectModels(monaco);
 
     // ---- Tailwind class completions inside className="" ----
     const tailwindClasses = [
@@ -350,7 +339,16 @@ const VFSMonacoEditor: React.FC<VFSMonacoEditorProps> = ({
       noSemanticValidation: false,
       noSyntaxValidation: false,
     });
-  }, [handleFormat, onSave]);
+  }, [handleFormat, onSave, syncProjectModels]);
+
+  useEffect(() => {
+    if (monacoRef.current) syncProjectModels(monacoRef.current);
+  }, [projectFiles, syncProjectModels]);
+
+  useEffect(() => () => {
+    vfsSyncRef.current?.dispose();
+    vfsSyncRef.current = null;
+  }, []);
 
   // Update language when file changes
   useEffect(() => {
@@ -391,6 +389,7 @@ const VFSMonacoEditor: React.FC<VFSMonacoEditorProps> = ({
 
         <Editor
           height="100%"
+          path={getMonacoModelUri(modelPath)}
           language={language}
           value={value}
           onChange={(v) => onChange?.(v || '')}

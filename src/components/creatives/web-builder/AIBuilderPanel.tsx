@@ -79,6 +79,7 @@ import { buildComponentBehaviorMap, formatBehaviorMapForPrompt } from '@/service
 import { htmlDocToReactComponent as htmlDocToReactComponentFn } from '@/utils/htmlToJsx';
 import { AIGatewayOptions, type GatewayConfig } from './AIGatewayOptions';
 import { vfsEventBus } from '@/services/vfsEventBus';
+import { diagnosticsAggregator } from '@/services/diagnosticsAggregator';
 import { enhancePromptForAI, type AnalyzedPrompt } from '@/services/promptIntelligence';
 import { DebugAgentPanel } from './DebugAgentPanel';
 import { interpretPrompt, type TaskPlan } from '@/unison';
@@ -2038,6 +2039,15 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           });
           if (useCanonicalComposer) {
             const page = canonicalPageContext!;
+            const editorDiagnostics = diagnosticsAggregator.getDiagnosticsForFiles(
+              Object.keys(vfsFiles ?? {}),
+              ['typescript'],
+            ).slice(0, 12);
+            const editorDiagnosticsContext = editorDiagnostics.length > 0
+              ? `Current VFS TypeScript diagnostics (baseline evidence; some may predate this request. Fix relevant errors without rewriting unrelated files):\n${editorDiagnostics
+                .map((diagnostic) => `- ${diagnostic.file}:${diagnostic.line ?? '?'}:${diagnostic.column ?? '?'} TS${diagnostic.code ?? ''}: ${diagnostic.message.slice(0, 400)}`)
+                .join('\n')}`
+              : '';
             const selectionContext = layoutOps?.selectionSelector
               ? JSON.stringify({
                   selector: layoutOps.selectionSelector,
@@ -2077,6 +2087,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   ? 'Reuse the existing shared cart runtime so add-to-cart, bag counts and checkout read the same live items; never use a second hard-coded cart. Preserve existing navigation actions and destinations, including the interactive bag link.'
                   : '',
                 selectionContext ? `Selected rendered element: ${selectionContext}` : '',
+                editorDiagnosticsContext,
                 previewSnapshot,
                 businessDataContext ? `Business data: ${businessDataContext}` : '',
                 backendStateContext,

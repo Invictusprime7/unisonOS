@@ -348,6 +348,7 @@ export function VFSCodeView({
 
   // Derive active file
   const activeFile = useMemo(() => getActiveFile(), [getActiveFile, activeFileId, nodes]);
+  const projectFiles = useMemo(() => getSandpackFiles(), [getSandpackFiles, nodes]);
 
   // Open files for tabs
   const openFiles = useMemo(() => getOpenFiles(), [getOpenFiles, nodes, activeFileId]);
@@ -771,6 +772,8 @@ export function VFSCodeView({
                     <VFSMonacoEditor
                       height="100%"
                       fileName={activeFile.name}
+                      filePath={activeFile.path || `/src/${activeFile.name}`}
+                      projectFiles={projectFiles}
                       value={activeFile.content}
                       onChange={handleFileChange}
                       isAIProcessing={isAIProcessing}

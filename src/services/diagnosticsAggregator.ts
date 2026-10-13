@@ -341,6 +341,17 @@ class DiagnosticsAggregatorService {
     return Array.from(this.diagnostics.values()).filter(d => !d.resolved && d.channel === channel);
   }
 
+  /** Get unresolved diagnostics limited to the current VFS paths and sources. */
+  getDiagnosticsForFiles(filePaths: Iterable<string>, sources?: readonly DiagnosticSource[]): Diagnostic[] {
+    const paths = new Set(filePaths);
+    const allowedSources = sources ? new Set(sources) : null;
+    return this.getSnapshot().diagnostics.filter(diagnostic =>
+      !!diagnostic.file
+      && paths.has(diagnostic.file)
+      && (!allowedSources || allowedSources.has(diagnostic.source)),
+    );
+  }
+
   subscribe(listener: (snapshot: DiagnosticSnapshot) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
