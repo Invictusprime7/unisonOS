@@ -8,6 +8,7 @@ import { Send, Bot, User, AlertCircle, Loader2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AIGatewayOptions, type GatewayConfig, DEFAULT_CONFIG } from "@/components/creatives/web-builder/AIGatewayOptions";
 import { cn } from "@/lib/utils";
+import { getSupabaseFunctionHeaders, getSupabaseFunctionUrl } from '@/integrations/supabase/supabaseFunctionRequest';
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -15,7 +16,7 @@ interface ChatMessage {
   id: string;
 }
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const CHAT_URL = getSupabaseFunctionUrl('chat');
 
 export function AIChatStream() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -48,12 +49,12 @@ export function AIChatStream() {
     let assistantText = "";
 
     try {
-      const token = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const authHeaders = await getSupabaseFunctionHeaders();
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...authHeaders,
         },
         body: JSON.stringify({
           messages: [...messages, userMsg].map((m) => ({

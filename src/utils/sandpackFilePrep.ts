@@ -1,3 +1,4 @@
+import * as Babel from '@babel/standalone';
 import { normalizeImageCompatibility } from '@/utils/imageCompatibility';
 import { rewritePreviewModuleSpecifiers } from '@/utils/previewModuleSpecifiers';
 import { GENERATED_RUNTIME_PROFILE } from '@/platform/core/generatedRuntimeCapabilities';
@@ -40,6 +41,38 @@ import { buildGeneratedUiFoundation, normalizeFoundationLocalImports } from '@/p
 import { repairThemeFontImportLine } from '@/components/onboarding/themeFonts';
 
 const UI_MANIFEST_PATH = '/.unison/ui-manifest.json';
+
+function injectPreviewSourceLocators(source: string, filePath: string): string {
+  if (source.length > 200_000) return source;
+  const packages = (Babel as any).packages;
+  const edits: Array<{ position: number; attribute: string }> = [];
+  try {
+    const ast = packages.parser.parse(source, { sourceType: 'unambiguous', plugins: ['jsx', 'typescript'] });
+    packages.traverse.default(ast, {
+      JSXOpeningElement(path: any) {
+        const node = path.node;
+        const tagName = node.name?.type === 'JSXIdentifier' ? node.name.name : '';
+        if (!/^[a-z]/.test(tagName)) return;
+        const hasLocator = node.attributes.some((attribute: any) => (
+          attribute.type === 'JSXAttribute' && attribute.name?.name === 'data-ut-source-locator'
+        ));
+        const start = node.loc?.start;
+        if (hasLocator || !start || typeof node.end !== 'number') return;
+        const position = node.end - (node.selfClosing ? 2 : 1);
+        const locator = `${filePath}:${start.line}:${start.column + 1}`;
+        edits.push({ position, attribute: ` data-ut-source-locator="${locator}"` });
+      },
+    });
+  } catch {
+    return source;
+  }
+  if (edits.length === 0) return source;
+  let instrumented = source;
+  for (const edit of edits.sort((left, right) => right.position - left.position)) {
+    instrumented = instrumented.slice(0, edit.position) + edit.attribute + instrumented.slice(edit.position);
+  }
+  return instrumented;
+}
 
 /**
  * Single source of truth for re-materializing the Unison UI foundation into a
@@ -839,6 +872,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     artifactId: string | null;
     elementRole: string | null;
     entityKind: string | null;
+    sourceLocator: string | null;
     bindingId: string | null;
     bindingKey: string | null;
     sourceTable: string | null;
@@ -862,6 +896,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     let artifactId: string | null = null;
     let elementRole: string | null = null;
     let entityKind: string | null = null;
+    let sourceLocator: string | null = null;
     let bindingId: string | null = null;
     let bindingKey: string | null = null;
     let sourceTable: string | null = null;
@@ -891,6 +926,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
       if (!artifactId) artifactId = cur.getAttribute('data-ut-registry-key');
       if (!elementRole) elementRole = cur.getAttribute('data-ut-role');
       if (!entityKind) entityKind = cur.getAttribute('data-ut-entity');
+      if (!sourceLocator) sourceLocator = cur.getAttribute('data-ut-source-locator');
       if (!bindingId) bindingId = cur.getAttribute('data-ut-binding-id');
       if (!bindingKey) bindingKey = cur.getAttribute('data-ut-binding-key') || cur.getAttribute('data-element-key');
       if (!sourceTable) sourceTable = cur.getAttribute('data-ut-source-table');
@@ -932,6 +968,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     return {
       repeatIndex,
       structuralPath,
+      sourceLocator,
       elementId,
       slotId,
       blockId,
@@ -4611,7 +4648,9 @@ export function prepareSandpackFiles(
     }
 
     // Fix imports in content to match flattened paths
-    let processedContent = content;
+    let processedContent = /\.(tsx|jsx)$/i.test(path) && !path.startsWith('/src/unison/')
+      ? injectPreviewSourceLocators(content, path)
+      : content;
 
     // Repair legacy/generated payloads that serialized THEME as undefined/null.
     if (!isWizardRuntime && /\.(tsx?|jsx?)$/.test(normalizedPath) && /const\s+THEME\s*=\s*(undefined|null);/.test(processedContent)) {

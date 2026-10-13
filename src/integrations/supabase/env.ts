@@ -21,9 +21,34 @@ const cleanEnvValue = (value: unknown): string => {
   }
 };
 
-export const SUPABASE_URL =
+const REMOTE_SUPABASE_URL =
   cleanEnvValue(import.meta.env.VITE_SUPABASE_URL) ||
   'https://nfrdomdvyrbwuokathtw.supabase.co';
+
+export function resolveSupabaseClientUrl(remoteUrl: string, isDev: boolean, browserOrigin?: string | null): string {
+  if (!isDev || !browserOrigin) return remoteUrl;
+  try {
+    return `${new URL(browserOrigin).origin}/__supabase`;
+  } catch {
+    return remoteUrl;
+  }
+}
+
+export function resolveSupabaseAuthStorageKey(remoteUrl: string): string | undefined {
+  try {
+    const projectRef = new URL(remoteUrl).hostname.match(/^([a-z0-9-]+)\.supabase\.co$/i)?.[1];
+    return projectRef ? `sb-${projectRef}-auth-token` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export const SUPABASE_AUTH_STORAGE_KEY = resolveSupabaseAuthStorageKey(REMOTE_SUPABASE_URL);
+export const SUPABASE_URL = resolveSupabaseClientUrl(
+  REMOTE_SUPABASE_URL,
+  import.meta.env.DEV === true && import.meta.env.VITE_SUPABASE_DEV_PROXY !== 'false',
+  typeof window === 'undefined' ? null : window.location.origin,
+);
 export const SUPABASE_PUBLISHABLE_KEY =
   cleanEnvValue(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY) ||
   cleanEnvValue(import.meta.env.VITE_SUPABASE_ANON_KEY) ||

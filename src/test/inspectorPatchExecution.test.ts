@@ -56,6 +56,17 @@ describe('inspector patch execution', () => {
     expect(next).toContain('data-ut-slot="hero.media"');
   });
 
+  it('routes composition-owned copy without requiring a source JSX slot', () => {
+    const result = planInspectorExecution(
+      plan({ type: 'set-slot-text', sectionId: null, sectionType: 'hero' as never, selector: '', slotId: 'hero.headline', value: 'New headline' }),
+      { files: {}, pageRole: 'home', composedSections: ['hero'] },
+    );
+    expect(result).toMatchObject({
+      kind: 'presentation',
+      ops: [{ type: 'setSectionCopy', pageRole: 'home', sectionType: 'hero', copy: { headline: 'New headline' } }],
+    });
+  });
+
   it('refuses to rewrite text rendered from data', () => {
     const result = planInspectorExecution(
       plan({ type: 'set-slot-text', sectionId: 'hero-1', selector: '', slotId: 'hero.dynamic', value: 'Nope' }),

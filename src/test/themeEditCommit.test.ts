@@ -109,6 +109,6 @@ describe('Theme edit canonical closure', () => {
     expect(undo.status, JSON.stringify(undo.diagnostics)).toBe('committed');
     expect(undo.vfsFiles).toEqual(result.vfsFiles);
     const stale = commitMutation({ source: 'theme-change', identity: { ...identity, revisionId: next.persistedRevisionId! }, current: { vfsFiles: next.vfsFiles, siteBundleSnapshot: next.siteBundleSnapshot, playground: next.playground }, patch: nextPatch });
-    await expect(stale).rejects.toThrow('stale');
+    await expect(stale).rejects.toThrow('newer revision');
   }, 30000);
 });

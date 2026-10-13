@@ -3,6 +3,7 @@ import {
   resolveInspectorModel,
   buildInspectorPatchPlan,
   buildContextualAIPrompt,
+  resolveSlotSectionType,
   sectionSelector,
   slotSelector,
   type InspectorSelection,
@@ -29,6 +30,12 @@ function heroSelection(overrides: Partial<InspectorSelection> = {}): InspectorSe
 }
 
 describe('property inspector model (M9)', () => {
+  it('recovers section family from a canonical slot when DOM ancestors omit it', () => {
+    expect(resolveSlotSectionType(null, 'hero.headline')).toBe('hero');
+    expect(resolveSlotSectionType('services', 'hero.headline')).toBe('services');
+    expect(resolveSlotSectionType(null, null)).toBeNull();
+  });
+
   it('resolves canonical section + slot identity from a preview selection', () => {
     const model = resolveInspectorModel(heroSelection());
     expect(model.scope).toBe('slot');

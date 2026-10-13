@@ -52,6 +52,10 @@ function createDependencies() {
 }
 
 describe('WebBuilder save outcome', () => {
+  it('serializes autosave through the shared builder mutation coordinator', () => {
+    expect(source.text).toContain("runExclusive('autosave'");
+  });
+
   it('leaves an unchanged canonical draft without prompting or writing after a page switch', () => {
     const files = { '/src/pages/Home.tsx': 'home', '/src/pages/Gallery.tsx': 'gallery' };
     const dependencies = {

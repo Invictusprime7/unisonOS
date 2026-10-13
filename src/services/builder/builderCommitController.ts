@@ -13,7 +13,7 @@
  * canonical input, and `commitMutation` remains the only mutation boundary.
  */
 import type { CommitMutationInput, CommitMutationResult } from '@/services/vfsCommitService';
-import type { PresentationOp } from '@/types/patchPlan';
+import type { PatchSource, PresentationOp } from '@/types/patchPlan';
 import type { SiteBundleSnapshot } from '@/platform/core';
 
 /** Identity + canonical state the builder holds for the open site. */
@@ -35,6 +35,16 @@ export interface BuilderCommitContext {
 }
 
 export type BuilderCommitIdentity = CommitMutationInput['identity'];
+
+export function shouldSkipNoopFilePatch(
+  source: PatchSource,
+  files: Record<string, string>,
+  currentFiles: Record<string, string>,
+): boolean {
+  if (source === 'preview-toolbar') return false;
+  const entries = Object.entries(files);
+  return entries.length > 0 && entries.every(([path, content]) => currentFiles[path] === content);
+}
 
 /**
  * A commit is only possible when the workspace is bound to a signed-in user,

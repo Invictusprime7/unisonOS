@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/env';
+import { resolveSupabaseClientUrl, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/env';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
@@ -13,7 +13,8 @@ describe('Supabase backend identity', () => {
   const fallbackKey = /'((?:eyJ|sb_publishable_)[^']+)'/.exec(envSource)![1];
 
   it('keeps the fallback URL on the project selected for this deployment', () => {
-    expect(SUPABASE_URL).toBe(fallbackUrl);
+    expect(resolveSupabaseClientUrl(fallbackUrl, false, 'http://localhost:3000')).toBe(fallbackUrl);
+    expect(resolveSupabaseClientUrl(fallbackUrl, true, 'http://localhost:3000')).toBe('http://localhost:3000/__supabase');
     expect(fallbackRef).toBe(linkedRef);
     if (fallbackKey.startsWith('eyJ')) {
       const payload = JSON.parse(Buffer.from(fallbackKey.split('.')[1], 'base64url').toString());

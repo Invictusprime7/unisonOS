@@ -113,6 +113,13 @@ export function slotSelector(sectionId: string | null, slotId: string): string {
   return sectionId ? `${sectionSelector(sectionId)} ${slot}` : slot;
 }
 
+/** Preview slot namespaces carry their section family when the DOM has no section wrapper. */
+export function resolveSlotSectionType(sectionType: string | null | undefined, slotId: string | null | undefined): SectionType | null {
+  if (sectionType) return sectionType as SectionType;
+  const prefix = slotId?.split('.')[0]?.trim();
+  return prefix ? prefix as SectionType : null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Model resolution
 // ─────────────────────────────────────────────────────────────────────────────

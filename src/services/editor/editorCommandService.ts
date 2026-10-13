@@ -37,6 +37,9 @@ export async function executeEditorCommand(command: EditorCommand, ctx: EditorCo
     return result;
   };
   const fail = (error: string): EditorCommandResult => finish({ ok: false, command: command.type, lane, savedTo: null, changedFields: [], error });
+  if (command.target.ownerKind === 'unbound' && !command.target.slotId) {
+    return fail('This element has no stable source or resource identity and is read-only. Choose a binding before editing.');
+  }
   if (!canIssue(ctx.source, command.type)) return fail(`This action isn't available from here.`);
   try {
     let cmd = command;

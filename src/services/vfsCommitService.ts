@@ -216,6 +216,87 @@ export class CommitRejectedError extends Error {
   }
 }
 
+const DRAFT_COMMIT_TAILS = new Map<string, Promise<void>>();
+const LATEST_QUEUED_COMMITS = new Map<string, CommitMutationResult>();
+
+function rebaseQueuedFileOnlyCommit(
+  input: CommitMutationInput,
+  latest: CommitMutationResult,
+): { input: CommitMutationInput } | { coalesced: CommitMutationResult } {
+  const patch = input.patch;
+  const structuredMutation = Boolean(
+    patch.candidate || patch.themeEdit || patch.routeOps?.length || patch.playgroundOps.length
+    || patch.bindingOps.length || patch.dataOps.length || patch.backendOps.length
+    || patch.presentationOps.length || patch.businessSystem || input.options?.customizerPagePath
+    || input.options?.compositionUpgrade || input.options?.restoreRevisionId
+    || input.options?.reviewedComposition || input.options?.reviewedArtifact,
+  );
+  if (structuredMutation || patch.fileOps.length === 0 || input.source === 'wizard-launch' || input.source === 'system-restore') {
+    throw new Error('[VFSCommitService] A newer revision was accepted before this structured edit. Reload and reapply it to the latest version.');
+  }
+
+  const baseFiles = input.current.vfsFiles;
+  const latestFiles = latest.vfsFiles;
+  const fileOps: PatchPlan['fileOps'] = [];
+  const conflicts: string[] = [];
+  for (const op of patch.fileOps) {
+    const hadBase = Object.prototype.hasOwnProperty.call(baseFiles, op.path);
+    const hasLatest = Object.prototype.hasOwnProperty.call(latestFiles, op.path);
+    if (op.type === 'delete') {
+      if (!hadBase || !hasLatest) continue;
+      if (latestFiles[op.path] !== baseFiles[op.path]) conflicts.push(op.path);
+      else fileOps.push(op);
+      continue;
+    }
+
+    if (hadBase && baseFiles[op.path] === op.contents) continue;
+    if (hasLatest && latestFiles[op.path] === op.contents) continue;
+    const latestStillMatchesBase = hadBase
+      ? hasLatest && latestFiles[op.path] === baseFiles[op.path]
+      : !hasLatest;
+    if (!latestStillMatchesBase) conflicts.push(op.path);
+    else fileOps.push(op);
+  }
+
+  if (conflicts.length > 0) {
+    throw new Error(`[VFSCommitService] This edit overlaps a newer saved revision at ${[...new Set(conflicts)].join(', ')}. Reload and reapply the change.`);
+  }
+  if (fileOps.length === 0) {
+    return {
+      coalesced: {
+        ...latest,
+        source: input.source,
+        diagnostics: [...latest.diagnostics, {
+          stage: 'queue', level: 'info', message: 'identical file changes already exist in the latest accepted revision',
+        }],
+      },
+    };
+  }
+
+  const snapshot = latest.siteBundleSnapshot;
+  return {
+    input: {
+      ...input,
+      identity: { ...input.identity, revisionId: latest.persistedRevisionId ?? '' },
+      current: {
+        ...input.current,
+        vfsFiles: latestFiles,
+        siteBundleSnapshot: snapshot ?? input.current.siteBundleSnapshot,
+        playground: latest.playground ?? input.current.playground,
+      },
+      patch: { ...patch, fileOps },
+      options: {
+        ...input.options,
+        industry: snapshot?.industry ?? input.options?.industry,
+        selectedTemplateId: snapshot?.meta?.templateId ?? input.options?.selectedTemplateId,
+        selectedThemeId: snapshot?.meta?.themePresetId ?? input.options?.selectedThemeId,
+        themePresetId: snapshot?.meta?.themePresetId ?? input.options?.themePresetId,
+        themeTokens: snapshot?.themeTokens ?? input.options?.themeTokens,
+      },
+    },
+  };
+}
+
 // ----------------------------------------------------------------------------
 // Guard 1 — Preview artifact leakage
 // ----------------------------------------------------------------------------
@@ -404,7 +485,34 @@ export async function commitMutation(
   const correlationId = newEditorCorrelationId();
   const startedAt = Date.now();
   try {
-    const result = await commitMutationInner(input);
+    let result: CommitMutationResult;
+    if (input.options?.dryRun) {
+      result = await commitMutationInner(input);
+    } else {
+      const queueKey = input.identity.draftId || input.identity.projectId || 'anonymous';
+      const previousTail = DRAFT_COMMIT_TAILS.get(queueKey) ?? Promise.resolve();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const tail = previousTail.catch(() => undefined).then(() => gate);
+      DRAFT_COMMIT_TAILS.set(queueKey, tail);
+      await previousTail.catch(() => undefined);
+      try {
+        const latest = LATEST_QUEUED_COMMITS.get(queueKey);
+        const preparation = latest?.persistedRevisionId
+          && latest.persistedRevisionId !== (input.identity.revisionId || '')
+          ? rebaseQueuedFileOnlyCommit(input, latest)
+          : { input };
+        result = 'coalesced' in preparation
+          ? preparation.coalesced
+          : await commitMutationInner(preparation.input);
+        if (result.status === 'committed' && result.persistedRevisionId) {
+          LATEST_QUEUED_COMMITS.set(queueKey, result);
+        }
+      } finally {
+        release();
+        if (DRAFT_COMMIT_TAILS.get(queueKey) === tail) DRAFT_COMMIT_TAILS.delete(queueKey);
+      }
+    }
     recordMutationEvent({
       correlationId,
       at: Date.now(),
@@ -2205,6 +2313,8 @@ function recordPersistFailure(key: string, signature: string): void {
 export function __resetPersistCircuitForTests(): void {
   PERSIST_IN_FLIGHT.clear();
   PERSIST_FAILURES.clear();
+  DRAFT_COMMIT_TAILS.clear();
+  LATEST_QUEUED_COMMITS.clear();
 }
 
 const REVISION_ROW_CACHE = new Map<string, Record<string, unknown>>();

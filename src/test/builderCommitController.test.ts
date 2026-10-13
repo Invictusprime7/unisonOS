@@ -7,6 +7,7 @@ import {
   buildCommitInput,
   filterRedundantPresentationOps,
   commitAdoptionRecord,
+  shouldSkipNoopFilePatch,
 } from '@/services/builder/builderCommitController';
 import type { SiteBundleSnapshot } from '@/platform/core';
 
@@ -101,6 +102,13 @@ describe('builder commit controller', () => {
       vfsHash: 'h',
       revisionId: 'r',
     });
+  });
+
+  it('does not mistake an optimistic toolbar write for a durable no-op', () => {
+    const currentFiles = { '/src/pages/Home.tsx': 'export default function Home(){return <h1>Edited</h1>}' };
+    expect(shouldSkipNoopFilePatch('preview-toolbar', currentFiles, currentFiles)).toBe(false);
+    expect(shouldSkipNoopFilePatch('playground-edit', currentFiles, currentFiles)).toBe(true);
+    expect(shouldSkipNoopFilePatch('playground-edit', { '/src/pages/Home.tsx': 'old' }, currentFiles)).toBe(false);
   });
 
   it('leaves no hand-rolled commit envelope in the builder', () => {

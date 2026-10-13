@@ -109,6 +109,27 @@ export function splitTopLevelCommas(input: string): string[] {
   return out;
 }
 
+export type UniqueSourceMutation =
+  | { kind: 'match'; path: string; before: string; after: string }
+  | { kind: 'ambiguous'; paths: string[] }
+  | { kind: 'none' };
+
+export function findUniqueSourceMutation(
+  files: Record<string, string>,
+  excludedPath: string | null | undefined,
+  mutate: (source: string) => string | null,
+): UniqueSourceMutation {
+  const matches: Array<Extract<UniqueSourceMutation, { kind: 'match' }>> = [];
+  for (const [path, before] of Object.entries(files)) {
+    if (path === excludedPath || !/\.(tsx|jsx)$/i.test(path)) continue;
+    const after = mutate(before);
+    if (after && after !== before) matches.push({ kind: 'match', path, before, after });
+  }
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) return { kind: 'ambiguous', paths: matches.map(({ path }) => path).sort() };
+  return { kind: 'none' };
+}
+
 export function findBoundsForSingleSelector(
   source: string,
   selector: string
@@ -172,6 +193,16 @@ export function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function unescapeCssString(value: string): string {
+  return value.replace(/\\(?:([0-9a-fA-F]{1,6})\s?|([\r\n\f])|(.))/g, (_match, hexEscape: string | undefined, lineContinuation: string | undefined, escapedCharacter: string | undefined) => {
+    if (hexEscape) {
+      const codePoint = parseInt(hexEscape, 16);
+      return codePoint === 0 || codePoint > 0x10ffff ? '\uFFFD' : String.fromCodePoint(codePoint);
+    }
+    return lineContinuation ? '' : escapedCharacter ?? '';
+  });
+}
+
 /** Parse leading `[name="value"]` / `[name=value]` / `[name]` selectors. */
 export function parseAttributeSelectors(part: string): { attrs: Array<{ name: string; value: string | null }>; rest: string } {
   const attrs: Array<{ name: string; value: string | null }> = [];
@@ -180,8 +211,8 @@ export function parseAttributeSelectors(part: string): { attrs: Array<{ name: st
   while (true) {
     const m = rest.match(re);
     if (!m) break;
-    const value = m[3] ?? m[4] ?? m[5] ?? null;
-    attrs.push({ name: m[1], value: value !== null ? value.trim() : null });
+    const rawValue = m[3] ?? m[4] ?? m[5] ?? null;
+    attrs.push({ name: m[1], value: rawValue !== null ? unescapeCssString(rawValue.trim()) : null });
     rest = (rest.slice(0, m.index!) + rest.slice(m.index! + m[0].length)).trim();
   }
   return { attrs, rest };

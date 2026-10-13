@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { createAuthRecoveryFetch } from './authSessionRecovery';
 
-import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, isSupabaseEnvConfigured } from './env';
+import { SUPABASE_URL, SUPABASE_AUTH_STORAGE_KEY, SUPABASE_PUBLISHABLE_KEY, isSupabaseEnvConfigured } from './env';
 
 const supabaseFetch = createAuthRecoveryFetch(async () => {
 	// Only a rejected refresh credential clears the local session.
@@ -18,6 +18,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 		autoRefreshToken: true,
 		persistSession: true,
 		detectSessionInUrl: true,
+		...(SUPABASE_AUTH_STORAGE_KEY ? { storageKey: SUPABASE_AUTH_STORAGE_KEY } : {}),
 	},
 	global: {
 		fetch: supabaseFetch,

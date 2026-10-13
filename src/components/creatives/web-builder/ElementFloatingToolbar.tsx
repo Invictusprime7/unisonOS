@@ -43,6 +43,8 @@ import runBuilderTurn from '@/services/builderBrainClient';
 import { useToolbarCommands } from './toolbarCommandAdapter';
 import { uploadForPlacement } from '@/services/assets/uploadPlacement';
 import type { EditorTarget } from '@/services/editor/editorCommandTypes';
+import { descriptorToTarget, type EditableObjectDescriptor } from '@/services/editor/editableObjectDescriptor';
+import { resolveSlotSectionType } from '@/services/builder/propertyInspectorModel';
 
 interface SelectedElement {
   tagName?: string;
@@ -59,12 +61,13 @@ interface SelectedElement {
   } | null;
   /** Captured by the Preview selection bridge — drives EditScopeResolver. */
   scopeAncestors?: ScopeAncestors;
+  descriptor?: EditableObjectDescriptor;
 }
 
 interface ElementFloatingToolbarProps {
   element: SelectedElement | null;
   onUpdateStyles: (selector: string, styles: Record<string, string>) => void;
-  onUpdateText: (selector: string, text: string) => void;
+  onUpdateText: (selector: string, text: string, target: EditorTarget) => void | boolean | Promise<void | boolean>;
   onUpdateAttributes?: (selector: string, attributes: Record<string, string>) => void;
   onReplaceImage: (selector: string, src: string) => void;
   onDelete: (selector: string) => void;
@@ -420,10 +423,16 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   if (!element || !element.selector) return null;
 
   const selector = element.selector;
+  const slotId = element.scopeAncestors?.slotId ?? null;
+  const descriptorTarget = element.descriptor ? descriptorToTarget(element.descriptor) : {};
   const target: EditorTarget = {
+    ...descriptorTarget,
     selector,
-    pagePath: activePagePath ?? undefined,
-    resourceMark: element.attributes?.['data-ut-resource'] ?? null,
+    pagePath: element.scopeAncestors?.pagePath || activePagePath || undefined,
+    sectionId: element.scopeAncestors?.sectionId ?? element.descriptor?.sectionId ?? null,
+    sectionType: resolveSlotSectionType(element.scopeAncestors?.sectionType, slotId),
+    slotId,
+    resourceMark: element.attributes?.['data-ut-resource'] ?? descriptorTarget.resourceMark ?? null,
   };
   const styles = element.styles || {};
   const isImage = element.tagName?.toLowerCase() === 'img';

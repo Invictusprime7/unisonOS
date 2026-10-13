@@ -5,6 +5,7 @@
  * telemetry event per command with a correlation ID.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
 
 vi.mock('@/services/resources/resourceRuntime', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/resources/resourceRuntime')>();
@@ -15,11 +16,13 @@ vi.mock('@/services/resources/resourceRuntime', async (importOriginal) => {
   };
 });
 
+import { applyResourceOp } from '@/services/resources/resourceRuntime';
 import { registerContentTypes } from '@/services/resources/resourceRegistry';
-import { executeEditorCommand } from '@/services/editor/editorCommandService';
+import { executeEditorCommand, type LaneExecutor } from '@/services/editor/editorCommandService';
 import { resolvePropertyOwner } from '@/services/editor/propertyOwnerResolver';
 import { getEditorCommandEvents, resetEditorCommandEvents } from '@/services/editor/editorTelemetry';
 import type { EditorCommand, EditorOwnerLane } from '@/services/editor/editorCommandTypes';
+import { useToolbarCommands } from '@/components/creatives/web-builder/toolbarCommandAdapter';
 
 const ctx = { source: 'inspector' as const, resource: { businessId: 'b1', projectId: 'p1', mode: 'builder' as const } };
 
@@ -31,6 +34,12 @@ interface FixtureCase {
 }
 
 const mark = (resourceKey: string, recordId: string, field: string) => `${resourceKey}#${recordId}.${field}`;
+const ref = (resourceKey: string, recordId: string, field: string) => ({
+  resourceKey,
+  kind: 'catalog' as const,
+  recordId,
+  field,
+});
 
 const assetRef = (projectId: string) => ({
   url: 'https://cdn.example.com/x.png',
@@ -45,13 +54,13 @@ const assetRef = (projectId: string) => ({
 const MATRIX: FixtureCase[] = [
   // Salon / service booking
   { fixture: 'salon', element: 'service name', command: { type: 'set-text', target: { resourceMark: mark('services', 's1', 'name') }, text: 'Cut & Blowdry' }, expectedLane: 'resource' },
-  { fixture: 'salon', element: 'service price', command: { type: 'update-resource-field', target: {}, values: { price: 4500 } }, expectedLane: 'resource' },
+  { fixture: 'salon', element: 'service price', command: { type: 'update-resource-field', target: { resourceMark: mark('services', 's1', 'price') }, ref: ref('services', 's1', 'price'), values: { price: 4500 } }, expectedLane: 'resource' },
   { fixture: 'salon', element: 'hero headline (static)', command: { type: 'set-text', target: { selector: '.hero h1' }, text: 'Hi' }, expectedLane: 'source' },
   // E-commerce
   { fixture: 'ecommerce', element: 'product name', command: { type: 'set-text', target: { resourceMark: mark('products', 'p1', 'name') }, text: 'Tee' }, expectedLane: 'resource' },
   { fixture: 'ecommerce', element: 'product image', command: { type: 'replace-asset', target: { resourceMark: mark('products', 'p1', 'image') }, url: 'https://cdn.example.com/x.png', assetRef: assetRef('p1') }, expectedLane: 'resource' },
   // Restaurant
-  { fixture: 'restaurant', element: 'menu item price', command: { type: 'update-resource-field', target: {}, values: { price: 1200 } }, expectedLane: 'resource' },
+  { fixture: 'restaurant', element: 'menu item price', command: { type: 'update-resource-field', target: { resourceMark: mark('menu_items', 'm1', 'price') }, ref: ref('menu_items', 'm1', 'price'), values: { price: 1200 } }, expectedLane: 'resource' },
   // Portfolio / case study
   { fixture: 'portfolio', element: 'project title', command: { type: 'set-text', target: { resourceMark: mark('projects', 'pr1', 'title') }, text: 'New title' }, expectedLane: 'resource' },
   { fixture: 'portfolio', element: 'article body', command: { type: 'set-text', target: { resourceMark: mark('content:articles', 'c1', 'body') }, text: 'Body' }, expectedLane: 'resource' },
@@ -77,6 +86,72 @@ describe('M0 ownership fixture matrix', () => {
 
   it('a resource mark always wins over source for text edits', () => {
     expect(resolvePropertyOwner({ type: 'set-text', target: { resourceMark: mark('products', 'p1', 'name'), selector: '.card h3' }, text: 'x' })).toBe('resource');
+  });
+
+  it('keeps explicitly unbound selections read-only instead of guessing a source writer', async () => {
+    const source = vi.fn(async (command: EditorCommand) => ({
+      ok: true,
+      command: command.type,
+      lane: 'source' as const,
+      savedTo: 'source',
+      changedFields: ['text'],
+    }));
+    const result = await executeEditorCommand({
+      type: 'set-text',
+      target: { ownerKind: 'unbound', selector: '.unknown h1' },
+      text: 'New copy',
+    }, { ...ctx, executors: { source } });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('read-only');
+    expect(source).not.toHaveBeenCalled();
+  });
+
+  it('preserves canonical slot metadata through the floating toolbar command adapter', async () => {
+    const target = { selector: '[data-ut-slot="hero\\.headline"]', pagePath: '/src/pages/Home.tsx', slotId: 'hero.headline', sectionType: 'hero' };
+    const onUpdateText = vi.fn(() => true);
+    const { result } = renderHook(() => useToolbarCommands({
+      onUpdateText,
+      onUpdateStyles: vi.fn(),
+      onUpdateAttributes: vi.fn(),
+      onReplaceImage: vi.fn(),
+      onDelete: vi.fn(),
+      onDuplicate: vi.fn(),
+    }, { businessId: 'b1', projectId: 'p1' }));
+    let succeeded = false;
+
+    await act(async () => {
+      succeeded = (await result.current({ type: 'set-text', target, text: 'New headline' })).ok;
+    });
+
+    expect(succeeded).toBe(true);
+    expect(onUpdateText).toHaveBeenCalledExactlyOnceWith(target.selector, 'New headline', target);
+  });
+
+  it('dispatches each matrix command to exactly one matching writer', async () => {
+    const lanes = ['source', 'presentation', 'route', 'binding'] as const;
+    const executors = Object.fromEntries(lanes.map((lane) => [lane, vi.fn<LaneExecutor>(async (command) => ({
+      ok: true,
+      command: command.type,
+      lane,
+      savedTo: `${lane} fixture writer`,
+      changedFields: [command.type],
+    }))])) as Record<(typeof lanes)[number], ReturnType<typeof vi.fn<LaneExecutor>>>;
+
+    for (const c of MATRIX) {
+      vi.clearAllMocks();
+      const result = await executeEditorCommand(c.command, { ...ctx, executors });
+      expect(result.ok, `${c.fixture} / ${c.element}`).toBe(true);
+      expect(result.lane, `${c.fixture} / ${c.element}`).toBe(c.expectedLane);
+      for (const lane of lanes) {
+        expect(executors[lane], `${c.fixture} / ${c.element} / ${lane}`).toHaveBeenCalledTimes(
+          lane === c.expectedLane ? 1 : 0,
+        );
+      }
+      expect(vi.mocked(applyResourceOp), `${c.fixture} / ${c.element} / resource`).toHaveBeenCalledTimes(
+        c.expectedLane === 'resource' ? 1 : 0,
+      );
+    }
   });
 
   it('resource commands execute through the resource lane and record telemetry', async () => {

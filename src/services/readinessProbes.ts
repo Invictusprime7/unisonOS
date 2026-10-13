@@ -16,6 +16,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseFunctionUrl } from '@/integrations/supabase/supabaseFunctionRequest';
 
 export type ProbeState = 'ok' | 'fail' | 'pending' | 'na';
 
@@ -110,7 +111,7 @@ async function probeNotificationsSink(): Promise<ProbeResult> {
 }
 
 async function probePublishEdge(): Promise<ProbeResult> {
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-site`;
+  const url = getSupabaseFunctionUrl('publish-site');
   try {
     const { ms, value } = await timed(() =>
       fetch(url, {

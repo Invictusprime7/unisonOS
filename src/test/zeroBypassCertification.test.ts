@@ -93,7 +93,7 @@ vi.mock('@/integrations/supabase/client', () => {
   };
 });
 
-import { commitMutation } from '@/services/vfsCommitService';
+import { __resetPersistCircuitForTests, commitMutation } from '@/services/vfsCommitService';
 import { commitToPipeline } from '@/platform/core/commitToPipeline';
 import { runFullPreflight } from '@/services/runFullPreflight';
 import { resolvePlaygroundControlPlane } from '@/services/playgroundControlPlaneResolver';
@@ -152,6 +152,7 @@ async function launch(files = LAUNCH_FILES) {
 beforeEach(() => {
   revisionStore.length = 0;
   draftProjection.length = 0;
+  __resetPersistCircuitForTests();
   vi.clearAllMocks();
   resetMutationLedger();
 });

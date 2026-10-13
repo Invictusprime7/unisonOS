@@ -12,6 +12,8 @@ export interface EditorTarget {
   selector?: string | null;
   pagePath?: string | null;
   sectionId?: string | null;
+  sectionType?: string | null;
+  slotId?: string | null;
   componentPath?: string | null;
   /** Raw `data-ut-resource` mark, when the element renders a saved record field. */
   resourceMark?: string | null;

@@ -447,8 +447,8 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     expect(revisionStore[0].patch_json).not.toHaveProperty('_commitMetadata');
     expect(revisionStore).toHaveLength(1);
 
-    await expect(commitMutation({ source: 'ai-builder', identity: IDENTITY,
-      current: { vfsFiles: before, siteBundleSnapshot: snapshot as never },
+    await expect(commitMutation({ source: 'ai-builder', identity: { ...IDENTITY, revisionId: rewritten.persistedRevisionId! },
+      current: { vfsFiles: rewritten.vfsFiles, siteBundleSnapshot: { ...snapshot, vfsFiles: rewritten.vfsFiles } as never },
       patch: legacyFilesToPatchPlan({ [routerPath]: 'export default function App(){return <main>Unauthorized router</main>}' }),
     })).rejects.toThrow('Canonical App.tsx is compiler-owned');
   });
@@ -1042,17 +1042,19 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
       });
 
       await vi.waitFor(() => expect(lastCanonicalCommitPayload).not.toBeNull());
-      await expect(commitMutation({
+      const queuedDuplicate = commitMutation({
         source: 'ai-builder',
         identity: IDENTITY,
         current: { vfsFiles: {}, activePagePath: '/src/App.tsx' },
         patch: legacyFilesToPatchPlan(files, 'overlap during timeout recovery'),
         options: { selections: { industry: 'portfolio' } as never },
-      })).rejects.toThrow('another save for this project is still in progress');
+      });
       await vi.runAllTimersAsync();
       const result = await pending;
+      const duplicate = await queuedDuplicate;
       expect(result.status).toBe('committed');
       expect(result.persistedRevisionId).toBe(recoveredRevisionId);
+      expect(duplicate.persistedRevisionId).toBe(recoveredRevisionId);
       expect(revisionStore).toHaveLength(2);
       const persistedPatch = lastCanonicalCommitPayload?.p_patch_json as {
         fileOps?: Array<Record<string, unknown>>;
@@ -1061,7 +1063,7 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it('refuses an overlapping AI save while the same draft is being persisted', async () => {
+  it('queues and coalesces an identical AI save while the same draft is being persisted', async () => {
     const files = { '/src/App.tsx': 'export default function App(){return null}' };
     mockPipeline(files);
     mockPreflight(files);
@@ -1076,12 +1078,94 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
       options: { selections: { industry: 'portfolio' } as never },
     };
     const first = commitMutation(input);
+    let secondSettled = false;
+    const second = commitMutation(input).finally(() => { secondSettled = true; });
     try {
       await vi.waitFor(() => expect(lastCanonicalCommitPayload).not.toBeNull());
-      await expect(commitMutation(input)).rejects.toThrow('another save for this project is still in progress');
+      await Promise.resolve();
+      expect(secondSettled).toBe(false);
     } finally { release(); }
-    expect((await first).status).toBe('committed');
+    const firstResult = await first;
+    const secondResult = await second;
+    expect(firstResult.status).toBe('committed');
+    expect(secondResult.persistedRevisionId).toBe(firstResult.persistedRevisionId);
     expect(revisionStore).toHaveLength(1);
+  });
+
+  it('rebases queued non-overlapping file edits onto the latest accepted VFS', async () => {
+    const baseFiles = {
+      '/src/App.tsx': 'export default function App(){return null}',
+      '/src/pages/Home.tsx': 'export default function Home(){return <h1>Home</h1>}',
+      '/src/pages/About.tsx': 'export default function About(){return <h1>About</h1>}',
+    };
+    mockPipeline(baseFiles);
+    mockPreflight(baseFiles);
+    mockIntents();
+    const launch = await commitMutation({
+      source: 'wizard-launch',
+      identity: IDENTITY,
+      current: { vfsFiles: {} },
+      patch: legacyFilesToPatchPlan(baseFiles, 'queue rebase fixture'),
+      options: { selections: { industry: 'portfolio' } as never },
+    });
+
+    (commitToPipeline as unknown as ReturnType<typeof vi.fn>).mockImplementation((canonicalInput: { existingVfsFiles: Record<string, string> }) => {
+      const files = canonicalInput.existingVfsFiles;
+      return {
+        source: 'playground-edit',
+        committedAt: new Date().toISOString(),
+        siteBundleSnapshot: { vfsFiles: files, routerFile: { path: '/src/App.tsx', content: files['/src/App.tsx'] }, meta: {} },
+        runtimeManifest: { version: 1 },
+        playground: { pages: [], theme: {} } as never,
+        capabilities: [],
+        gate: { previewReady: true, publishReady: true, preview: { ok: true, reasons: [] }, publish: { ok: true, reasons: [] } },
+      };
+    });
+    (runFullPreflight as unknown as ReturnType<typeof vi.fn>).mockImplementation((files: Record<string, string>) => ({
+      files,
+      stages: { earlyRepair: 'ok', finalRepair: 'ok' },
+    }));
+
+    const home = commitMutation({
+      source: 'preview-toolbar',
+      identity: { ...IDENTITY, revisionId: launch.persistedRevisionId! },
+      current: { vfsFiles: launch.vfsFiles, siteBundleSnapshot: launch.siteBundleSnapshot ?? undefined },
+      patch: legacyFilesToPatchPlan({ '/src/pages/Home.tsx': 'export default function Home(){return <h1>Home edit</h1>}' }, 'home edit'),
+    });
+    const about = commitMutation({
+      source: 'preview-toolbar',
+      identity: { ...IDENTITY, revisionId: launch.persistedRevisionId! },
+      current: { vfsFiles: launch.vfsFiles, siteBundleSnapshot: launch.siteBundleSnapshot ?? undefined },
+      patch: legacyFilesToPatchPlan({ '/src/pages/About.tsx': 'export default function About(){return <h1>About edit</h1>}' }, 'about edit'),
+    });
+
+    const [homeResult, aboutResult] = await Promise.all([home, about]);
+    expect(homeResult.status).toBe('committed');
+    expect(aboutResult.status).toBe('committed');
+    expect(aboutResult.parentRevisionId).toBe(homeResult.persistedRevisionId);
+    expect(aboutResult.vfsFiles['/src/pages/Home.tsx']).toContain('Home edit');
+    expect(aboutResult.vfsFiles['/src/pages/About.tsx']).toContain('About edit');
+
+    const conflictingBase = {
+      source: 'preview-toolbar' as const,
+      identity: { ...IDENTITY, revisionId: aboutResult.persistedRevisionId! },
+      current: { vfsFiles: aboutResult.vfsFiles, siteBundleSnapshot: aboutResult.siteBundleSnapshot ?? undefined },
+    };
+    const firstHomeEdit = commitMutation({
+      ...conflictingBase,
+      patch: legacyFilesToPatchPlan({ '/src/pages/Home.tsx': 'export default function Home(){return <h1>First edit</h1>}' }, 'first overlapping edit'),
+    });
+    const secondHomeEdit = commitMutation({
+      ...conflictingBase,
+      patch: legacyFilesToPatchPlan({ '/src/pages/Home.tsx': 'export default function Home(){return <h1>Second edit</h1>}' }, 'second overlapping edit'),
+    });
+    const [firstConflictResult, secondConflictResult] = await Promise.allSettled([firstHomeEdit, secondHomeEdit]);
+
+    expect(firstConflictResult.status).toBe('fulfilled');
+    expect(secondConflictResult.status).toBe('rejected');
+    if (secondConflictResult.status === 'rejected') {
+      expect(String(secondConflictResult.reason)).toContain('overlaps a newer saved revision');
+    }
   });
 
   it('chains five commits across sources and persists a revision per step', async () => {

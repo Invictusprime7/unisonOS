@@ -1,4 +1,4 @@
-import { describeSelection } from '@/services/editor/editableObjectDescriptor';
+import { describeSelection, type EditableObjectDescriptor } from '@/services/editor/editableObjectDescriptor';
 import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 /* cache-bust: 20260309 */
 import { shouldPauseAutosave, runExclusive, recordCommit, getLastCommit } from '@/services/builder/builderMutationCoordinator';
@@ -31,6 +31,7 @@ import {
   buildCommitOptions,
   filterRedundantPresentationOps,
   commitAdoptionRecord,
+  shouldSkipNoopFilePatch,
 } from '@/services/builder/builderCommitController';
 import { VFSPreview, type VFSPreviewHandle } from '../VFSPreview';
 import { DeployButton } from '@/components/DeployButton';
@@ -269,6 +270,7 @@ import {
   withSourceManipulation,
   safeFindElement,
   findJSXClosingTag,
+  findUniqueSourceMutation,
 } from "./web-builder/jsxSourceUtils";
 
 
@@ -752,6 +754,15 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     // with the route the preview actually shows (nav clicks inside the preview
     // change the route without changing the Builder's page tab).
     selectionPageSyncRef.current?.(el.scopeAncestors?.pagePath ?? null);
+    const attrs = (el.attributes ?? {}) as Record<string, string>;
+    const ancestors = el.scopeAncestors ?? {};
+    const descriptor = describeSelection({
+      pagePath: ancestors.pagePath || '/',
+      sectionId: ancestors.sectionId ?? null,
+      resourceMark: attrs['data-ut-resource'] || ancestors.resource || null,
+      sourceLocator: ancestors.sourceLocator ?? null,
+      instanceIndex: ancestors.repeatIndex ?? null,
+    });
     setSelectedHTMLElement({
       tagName: el.tagName,
       textContent: el.textContent,
@@ -762,9 +773,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       imageTarget: el.imageTarget,
       section: el.section,
       scopeAncestors: el.scopeAncestors,
+      descriptor,
     });
     // Click-to-target: the AI chat scopes its next message to this element.
-    const attrs = (el.attributes ?? {}) as Record<string, string>;
     window.dispatchEvent(new CustomEvent('unison:builder-target', { detail: {
       tagName: String(el.tagName ?? '').toLowerCase(),
       text: String(el.textContent ?? '').trim().slice(0, 80),
@@ -773,16 +784,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       section: typeof el.section === 'string' ? el.section : el.section?.id ?? el.section?.label,
       intent: attrs['data-ut-intent'],
       scopeAncestors: el.scopeAncestors,
-      descriptor: (() => {
-        const sa = (el.scopeAncestors ?? {}) as { pagePath?: string; sectionId?: string | null; resource?: string | null; structuralPath?: string; repeatIndex?: number | null };
-        return describeSelection({
-          pagePath: sa.pagePath || '/',
-          sectionId: sa.sectionId ?? null,
-          resourceMark: attrs['data-ut-resource'] || sa.resource || null,
-          sourceLocator: sa.structuralPath ? `${sa.sectionId ?? ''}|${sa.structuralPath}` : null,
-          instanceIndex: sa.repeatIndex ?? null,
-        });
-      })(),
+      descriptor,
       provenance: {
         sourceTable: el.scopeAncestors?.sourceTable,
         rowId: el.scopeAncestors?.rowId,
@@ -864,7 +866,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     mutate: (code: string) => string | null,
     onActivePageSuccess: (next: string) => void,
     snapshotLabel: string,
-  ): { ok: boolean; reason?: 'no-match' | 'no-change' } => {
+  ): { ok: boolean; reason?: 'no-match' | 'no-change' | 'ambiguous' } => {
     // 1. Active page first
     const next = mutate(previewCode);
     if (next && next !== previewCode) {
@@ -889,27 +891,29 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const activePath = ctx.activePagePath;
     try {
       const allFiles = virtualFS.getSandpackFiles();
-      for (const [path, code] of Object.entries(allFiles)) {
-        if (!path.endsWith('.tsx') && !path.endsWith('.jsx')) continue;
-        if (path === activePath) continue;
-        const attempt = mutate(code);
-        if (attempt && attempt !== code) {
-          toolbarPreEditRef.current = allFiles;
-          try {
-            pushAISnapshot(ctx.projectId ?? null, {
-              label: `${snapshotLabel} (${path.split('/').pop()})`,
-              source: 'manual',
-              before: { [path]: code },
-              after: { [path]: attempt },
-              changedPaths: [path],
-              meta: { origin: 'floating-toolbar' },
-            });
-          } catch (err) { console.warn('[applyMutatorAcrossVFS] snapshot failed:', err); }
-          // canonical-vfs-exempt: optimistic HMR projection; the same mutation is chained through commitMutation below
-          virtualFS.importFiles({ [path]: attempt });
-          commitToolbarMutationRef.current?.(attempt, snapshotLabel.replace(/^Manual · /, ''), path);
-          return { ok: true };
-        }
+      const match = findUniqueSourceMutation(allFiles, activePath, mutate);
+      if (match.kind === 'ambiguous') {
+        toast.error('Could not safely edit this element because its source matches multiple files.', {
+          description: match.paths.slice(0, 3).join(', '),
+        });
+        return { ok: false, reason: 'ambiguous' };
+      }
+      if (match.kind === 'match') {
+        toolbarPreEditRef.current = allFiles;
+        try {
+          pushAISnapshot(ctx.projectId ?? null, {
+            label: `${snapshotLabel} (${match.path.split('/').pop()})`,
+            source: 'manual',
+            before: { [match.path]: match.before },
+            after: { [match.path]: match.after },
+            changedPaths: [match.path],
+            meta: { origin: 'floating-toolbar' },
+          });
+        } catch (err) { console.warn('[applyMutatorAcrossVFS] snapshot failed:', err); }
+        // canonical-vfs-exempt: optimistic HMR projection; the same mutation is chained through commitMutation below
+        virtualFS.importFiles({ [match.path]: match.after });
+        commitToolbarMutationRef.current?.(match.after, snapshotLabel.replace(/^Manual · /, ''), match.path);
+        return { ok: true };
       }
     } catch (err) {
       console.warn('[applyMutatorAcrossVFS] VFS scan failed:', err);
@@ -946,6 +950,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       `Manual · style ${Object.keys(styles).join(', ').slice(0, 40)}`,
     );
     if (!res.ok) {
+      if (res.reason === 'ambiguous') return;
       console.warn('[WebBuilder] mutateJSXStyles failed for selector', selector);
       toast.error('Could not update styles — element not found in source. Try the AI edit instead.');
     }
@@ -967,6 +972,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       `Manual · text "${text.slice(0, 30)}"`,
     );
     if (!res.ok) {
+      if (res.reason === 'ambiguous') return;
       toast.error('Could not update text — element contains nested markup or was not found. Try the AI edit instead.');
     }
   }, [applyMutatorAcrossVFS, selectedHTMLElement, setSelectedHTMLElement]);
@@ -990,6 +996,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       'Manual · replace image',
     );
     if (!res.ok) {
+      if (res.reason === 'ambiguous') return;
       toast.error('Could not replace image. Try selecting the <img> directly.');
     }
   }, [applyMutatorAcrossVFS, selectedHTMLElement, setSelectedHTMLElement]);
@@ -1016,6 +1023,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       `Manual · attrs ${Object.keys(attributes).join(', ').slice(0, 40)}`,
     );
     if (!res.ok) {
+      if (res.reason === 'ambiguous') return;
       toast.error('Could not update attributes for the selected element.');
     }
   }, [applyMutatorAcrossVFS, selectedHTMLElement, setSelectedHTMLElement]);
@@ -3257,8 +3265,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     if ((!files || Object.keys(files).length === 0) && !options.fileOps?.length && !options.routeOps?.length) return null;
 
     const beforeFiles = virtualFSRef.current.getSandpackFiles();
-    const hasNoEffectiveContentChange = Object.entries(files ?? {}).length > 0 && Object.entries(files ?? {}).every(([path, content]) => beforeFiles[path] === content);
-    if (hasNoEffectiveContentChange) {
+    const source = options.source ?? 'ai-builder';
+    if (shouldSkipNoopFilePatch(source, files ?? {}, beforeFiles)) {
       return beforeFiles;
     }
 
@@ -3283,7 +3291,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
 
     try {
       const commit = await commitMutation({
-        source: options.source ?? 'ai-builder',
+        source,
         identity: commitIdentity,
         current: buildCanonicalCommitCurrent(beforeFiles, snapshot),
         patch: {
@@ -4843,7 +4851,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
 
     // Prevent a slower, older request from finishing after a newer AI edit and
     // replacing builder_drafts.vfs_files with stale state.
-    const queued = saveQueueRef.current.then(persist, persist);
+    const previousSave = saveQueueRef.current;
+    const queued = runExclusive('autosave', () => previousSave.then(persist, persist));
     saveQueueRef.current = queued.catch(() => false);
     return queued;
   }, [
@@ -8809,7 +8818,23 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             <ElementFloatingToolbar
               element={selectedHTMLElement}
               onUpdateStyles={handleFloatingStyleUpdate}
-              onUpdateText={handleFloatingTextUpdate}
+              onUpdateText={async (selector, text, target) => {
+                if (!target.slotId) return handleFloatingTextUpdate(selector, text);
+                return applyInspectorPatchPlan({
+                  ok: true,
+                  pagePath: target.pagePath ?? activePagePath ?? null,
+                  description: `Update ${target.slotId}`,
+                  resourceMark: target.resourceMark,
+                  op: {
+                    type: 'set-slot-text',
+                    sectionId: target.sectionId ?? null,
+                    sectionType: target.sectionType as import('@/sections/types').SectionType | null,
+                    selector,
+                    slotId: target.slotId,
+                    value: text,
+                  },
+                });
+              }}
               onUpdateAttributes={handleFloatingAttributeUpdate}
               onReplaceImage={handleFloatingImageReplace}
               onDelete={handleFloatingDelete}

@@ -7,7 +7,7 @@ import { agentOperations } from '@/services/agent-runtime/operations';
  * and Inngest for workflow automation.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase as supabaseClient } from '@/integrations/supabase/client';
 import type { 
   IntentManagers, 
   LeadData, 
@@ -23,12 +23,7 @@ import { setupEventBridge, type EventBridgeContext } from './inngest-event-bridg
 
 // ============ SUPABASE CLIENT ============
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-const supabase = supabaseUrl && supabaseAnonKey 
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+const supabase = supabaseClient;
 
 // ============ STORAGE ============
 

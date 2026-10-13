@@ -47,6 +47,8 @@ export interface ScopeAncestors {
   bindingId?: string | null;
   /** Stable element key used for VFS/JSX mutation lookup. */
   bindingKey?: string | null;
+  /** Authored VFS file and JSX location injected into the preview copy. */
+  sourceLocator?: string | null;
   /** Runtime provenance for canonical editable data rows. */
   sourceTable?: string | null;
   rowId?: string | null;

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { supabase as supabaseClient } from '@/integrations/supabase/client';
+import { getSupabaseFunctionHeaders, getSupabaseFunctionUrl } from '@/integrations/supabase/supabaseFunctionRequest';
 const supabase = supabaseClient as any;
 import { toast } from 'sonner';
 import { sanitizeTsxFile } from '@/utils/tsxSanitizer';
@@ -276,12 +277,12 @@ const MonacoEditor: React.FC<React.ComponentProps<typeof Editor>> = (props) => {
   const getAICompletion = async (context: string): Promise<string | null> => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-code-assistant`,
+        getSupabaseFunctionUrl('ai-code-assistant'),
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            ...await getSupabaseFunctionHeaders(),
           },
           body: JSON.stringify({
             messages: [
@@ -338,12 +339,12 @@ const MonacoEditor: React.FC<React.ComponentProps<typeof Editor>> = (props) => {
   const getAIAssistance = async (prompt: string, mode: 'code' | 'design' | 'review'): Promise<string | null> => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-code-assistant`,
+        getSupabaseFunctionUrl('ai-code-assistant'),
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            ...await getSupabaseFunctionHeaders(),
           },
           body: JSON.stringify({
             messages: [

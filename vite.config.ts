@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "node:path";
 import { readFileSync } from 'node:fs';
@@ -8,15 +8,30 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 const projectRoot = process.cwd();
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  root: projectRoot,
-  server: {
-    host: "::",
-    port: 8080,
-    // Pre-transform the app entry on server start so the first preview load
-    // after a restart doesn't stall on cold module compilation.
-    warmup: { clientFiles: ['./src/main.tsx', './src/App.tsx'] },
-  },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, projectRoot, 'VITE_');
+  const supabaseTarget = (env.VITE_SUPABASE_URL || 'https://nfrdomdvyrbwuokathtw.supabase.co').replace(/\/+$/, '');
+
+  return {
+    root: projectRoot,
+    server: {
+      host: "::",
+      port: 8080,
+      // Keep browser Supabase traffic on the app origin in local development;
+      // this also proxies Realtime websocket upgrades.
+      proxy: {
+        '/__supabase': {
+          target: supabaseTarget,
+          changeOrigin: true,
+          secure: true,
+          ws: true,
+          rewrite: (requestPath) => requestPath.replace(/^\/__supabase/, ''),
+        },
+      },
+      // Pre-transform the app entry on server start so the first preview load
+      // after a restart doesn't stall on cold module compilation.
+      warmup: { clientFiles: ['./src/main.tsx', './src/App.tsx'] },
+    },
   plugins: [
     react({
       jsxImportSource: undefined, // Use automatic JSX runtime
@@ -111,4 +126,5 @@ export default defineConfig(({ mode }) => ({
       'html2canvas'
     ]
   },
-}));
+  };
+});

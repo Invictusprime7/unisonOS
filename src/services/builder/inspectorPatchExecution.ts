@@ -168,6 +168,31 @@ export function planInspectorExecution(
     return { kind: 'rejected', reason: 'This selection is not bound to a canonical slot.' };
   }
 
+  if (op.type === 'set-slot-text') {
+    const text = String(op.value ?? '');
+    if (!text.trim()) return { kind: 'rejected', reason: 'Enter some text before applying this change.' };
+    if (/[<>{}]/.test(text)) {
+      return { kind: 'rejected', reason: 'Text cannot contain code or markup characters.' };
+    }
+
+    const copySlot = op.slotId.split('.').pop() ?? op.slotId;
+    const copyField = COMPOSITION_COPY_SLOTS[op.slotId] ?? COMPOSITION_COPY_SLOTS[copySlot];
+    const compositionRole = toCompositionRole(context.pageRole);
+    const sectionType = op.sectionType ?? null;
+    if (copyField && compositionRole && sectionType && context.composedSections?.includes(sectionType)) {
+      return {
+        kind: 'presentation',
+        summary: plan.description,
+        ops: [{
+          type: 'setSectionCopy',
+          pageRole: compositionRole,
+          sectionType,
+          copy: { [copyField]: text },
+        }],
+      };
+    }
+  }
+
   const target = findSlotTag(context.files, op.sectionId, op.slotId);
   if (!target) {
     return {
@@ -221,29 +246,13 @@ export function planInspectorExecution(
     };
   }
 
-  // set-slot-text — prefer the snapshot-owned composition plan; fall back to a
-  // literal text child rewrite when the plan does not own this copy.
+  // Non-composition slot text can only be edited when the source owns a literal.
   const text = String(op.value ?? '');
   if (!text.trim()) return { kind: 'rejected', reason: 'Enter some text before applying this change.' };
   if (/[<>{}]/.test(text)) {
     return { kind: 'rejected', reason: 'Text cannot contain code or markup characters.' };
   }
 
-  const copyField = COMPOSITION_COPY_SLOTS[op.slotId];
-  const compositionRole = toCompositionRole(context.pageRole);
-  const sectionType = op.sectionType ?? null;
-  if (copyField && compositionRole && sectionType && context.composedSections?.includes(sectionType)) {
-    return {
-      kind: 'presentation',
-      summary: plan.description,
-      ops: [{
-        type: 'setSectionCopy',
-        pageRole: compositionRole,
-        sectionType,
-        copy: { [copyField]: text },
-      }],
-    };
-  }
   const after = target.content.slice(target.end + 1);
   const literal = /^([^<>{}]*)</.exec(after);
   if (!literal) {
