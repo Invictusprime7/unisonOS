@@ -122,6 +122,7 @@ import {
   projectCanonicalLaunchCandidateSnapshot,
 } from '@/services/launch/canonicalLaunchPlan';
 import { createWizardCompileArtifact } from '@/platform/core/snapshotSeal';
+import { resolveLaunchCapabilities } from '@/services/launch/launchCapabilities';
 
 export interface LaunchOrchestratorInput {
   systemId: BusinessSystemType;
@@ -258,9 +259,13 @@ export async function runLaunchPipeline(
       systemIndustry: SYSTEM_TO_INDUSTRY_OVERLAY[input.systemId],
     });
     const compositionMeta = getCompositionMeta(generationCategory);
+    const launchCapabilities = resolveLaunchCapabilities(
+      industryProfile?.defaultCapabilities ?? [],
+      input.primaryGoal === 'sell_offers' || input.customerNeeds.includes('buy_offer'),
+    );
     const canonicalIntents = uniqueValues<string>([
       ...(industryProfile
-        ? getAllowedIntents(industryProfile.defaultCapabilities)
+        ? getAllowedIntents(launchCapabilities)
         : system.intents),
       ...(compositionMeta?.intents || []),
     ]);
@@ -362,6 +367,7 @@ export async function runLaunchPipeline(
       generationCategory,
       industryOverlay,
       industryProfile,
+      launchCapabilities,
       canonicalIntents,
       launchContract,
       seed,
@@ -465,7 +471,7 @@ export async function runLaunchPipeline(
     visionBrief: plan.selections.visionPrompt,
     goals: [plan.selections.primaryGoal, ...plan.selections.secondaryGoals],
     intents: plan.canonicalIntents,
-    capabilities: plan.industryProfile?.defaultCapabilities || [],
+    capabilities: plan.launchCapabilities,
     bindingGuide,
     seed: plan.seed,
     themePresetId: input.theme.id,
@@ -557,7 +563,7 @@ export async function runLaunchPipeline(
     },
     canonical: {
       pages: canonicalPages,
-      capabilities: plan.industryProfile?.defaultCapabilities || [],
+      capabilities: plan.launchCapabilities,
       intents: plan.canonicalIntents,
     },
     generation: {
@@ -639,7 +645,7 @@ export async function runLaunchPipeline(
         backendRequired: false,
         wizardSelections: plan.selections,
         businessRuntime,
-        enabledCapabilities: plan.industryProfile?.defaultCapabilities || [],
+        enabledCapabilities: plan.launchCapabilities,
         approvedExperienceCapabilities: resolveApprovedExperienceCapabilities({
           webgl: canonicalPlan.designIntervention.envelope?.webgl,
           foundationCapabilities: canonicalPlan.uiFoundationContract.experienceCapabilities,
@@ -821,6 +827,8 @@ export async function runLaunchPipeline(
     await seedLaunchAssets({
       businessId: commit.confirmed.businessId,
       projectId: commit.confirmed.projectId,
+      industry: plan.industryProfile?.industry || plan.generationCategory,
+      enableProductCommerce: plan.selections.sellsProducts,
       creatorData: (commit.result.playground ?? materializedPlayground)?.creatorData ?? null,
     });
   } catch (error) {

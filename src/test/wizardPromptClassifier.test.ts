@@ -39,4 +39,13 @@ describe("wizardPromptClassifier", () => {
     expect(classifyPromptForWizard("")).toBeNull();
     expect(classifyPromptForWizard("hi")).toBeNull();
   });
+
+  it("keeps a restaurant identity when the focused request adds commerce language", () => {
+    const analysis = classifyPromptForWizard(
+      "Bistro restaurant website with online ordering, checkout, a gift shop, and menu dishes",
+    );
+
+    expect(analysis?.industry).toBe("restaurant");
+    expect(analysis?.systemId).toBe("booking");
+  });
 });

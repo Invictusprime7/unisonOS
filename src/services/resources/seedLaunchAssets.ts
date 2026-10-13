@@ -8,7 +8,8 @@
 import { createCatalogItem, listCatalog } from '@/services/agent-runtime/catalogOps';
 import { loadBusinessProfile, saveBusinessProfile, type BusinessProfilePatch } from '@/services/businessProfileService';
 import { createContentRecord, listContentRecords, listContentTypes, mutateContentRecord } from '@/services/cmsRecordService';
-import type { CreatorData } from '@/types/creatorData';
+import type { CreatorData, CreatorProduct } from '@/types/creatorData';
+import { normalizeIndustryKey } from '@/platform/core/industryMatrix';
 
 /** Content types a fresh launch can seed, mapped from CreatorData collections. */
 const SEED_CONTENT_TYPES: Record<string, { displayName: string; fields: { key: string; label: string; type: string }[] }> = {
@@ -51,14 +52,48 @@ interface LongformPlan { title?: string; name?: string; excerpt?: string; descri
 
 export interface SeedLaunchAssetsResult { created: number; profileFields: string[] }
 
-export async function seedLaunchAssets(input: { businessId: string; projectId?: string | null; creatorData?: CreatorData | null }): Promise<SeedLaunchAssetsResult> {
+export function resolveProductCatalogSurface(
+  industry: string | null | undefined,
+  product: Pick<CreatorProduct, 'name' | 'category' | 'tags' | 'fulfillmentType'>,
+): 'menu' | 'products' {
+  if (normalizeIndustryKey(String(industry ?? '')) !== 'restaurant') return 'products';
+  const productContext = [product.name, product.category, ...(product.tags ?? []), product.fulfillmentType]
+    .filter(Boolean)
+    .join(' ');
+  return /\b(gift cards?|merch(?:andise)?|apparel|t-?shirts?|souvenirs?|retail|store credit)\b/i.test(productContext)
+    ? 'products'
+    : 'menu';
+}
+
+export function resolveProductCatalogSurfaces(
+  industry: string | null | undefined,
+  product: Pick<CreatorProduct, 'name' | 'category' | 'tags' | 'fulfillmentType'>,
+  enableProductCommerce = false,
+): Array<'menu' | 'products'> {
+  const surface = resolveProductCatalogSurface(industry, product);
+  return surface === 'menu' && enableProductCommerce ? ['menu', 'products'] : [surface];
+}
+
+export async function seedLaunchAssets(input: { businessId: string; projectId?: string | null; industry?: string | null; enableProductCommerce?: boolean; creatorData?: CreatorData | null }): Promise<SeedLaunchAssetsResult> {
   const data = input.creatorData;
   const result: SeedLaunchAssetsResult = { created: 0, profileFields: [] };
   if (!data) return result;
-  const existing = await listCatalog(input.businessId, ['products', 'services', 'testimonials'], input.projectId).catch(() => []);
+  const existing = await listCatalog(input.businessId, ['products', 'services', 'menu', 'testimonials'], input.projectId).catch(() => []);
   const have = new Set(existing.map((i) => `${i.surfaceId}:${i.name.trim().toLowerCase()}`));
   const plans: { surface: string; name: string; description?: string; price?: number | null; extra?: Record<string, unknown> }[] = [
-    ...Object.values(data.products ?? {}).map((p) => ({ surface: 'products', name: p.name, description: p.description, price: p.price })),
+    ...Object.values(data.products ?? {}).flatMap((p) =>
+      resolveProductCatalogSurfaces(input.industry, p, input.enableProductCommerce).map((surface) => ({
+        surface,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        extra: surface === 'menu' ? {
+          category: p.category,
+          featured: p.featured,
+          available: p.status !== 'draft' && p.status !== 'archived' && p.visibility !== 'hidden',
+          sort_order: p.sortOrder,
+        } : undefined,
+      }))),
     ...Object.values(data.services ?? {}).map((s) => ({ surface: 'services', name: s.name, description: s.description, price: s.price ?? null })),
     ...Object.values(data.testimonials ?? {}).filter((t) => t.content?.trim()).map((t) => ({
       surface: 'testimonials', name: t.author, description: t.content,
@@ -71,7 +106,7 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
     if (!name || have.has(`${p.surface}:${name.toLowerCase()}`)) continue;
     await createCatalogItem(input.businessId, p.surface, isTestimonial
       ? { name, description: p.description ?? null, ...(p.extra ?? {}) }
-      : { name, description: p.description ?? null, price: p.price ?? null, active: true }, input.projectId);
+      : { name, description: p.description ?? null, price: p.price ?? null, active: true, ...(p.extra ?? {}) }, input.projectId);
     have.add(`${p.surface}:${name.toLowerCase()}`);
     result.created += 1;
   }

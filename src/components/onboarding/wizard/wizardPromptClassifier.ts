@@ -45,6 +45,42 @@ interface IndustryRule {
   defaultGoal: PrimaryGoal;
 }
 
+const INDUSTRY_IDENTITY_KEYWORDS: Record<string, string[]> = {
+  saas: ["saas", "software company", "software", "developer platform", "developer tool"],
+  salon: ["salon", "hair salon", "barbershop", "barber", "spa", "beauty salon"],
+  restaurant: ["restaurant", "cafe", "bakery", "bistro", "diner", "eatery", "food truck", "pizzeria", "coffee shop", "catering business"],
+  contractor: ["contractor", "construction company", "roofing company", "plumber", "electrician", "hvac", "carpenter", "renovation business"],
+  "local-service": ["local service", "cleaning company", "landscaping business", "pest control", "auto detailing", "moving company", "lawn care"],
+  "real-estate": ["real estate", "realtor", "property brokerage", "real estate agency"],
+  ecommerce: ["ecommerce", "e-commerce", "online store", "retail business", "fashion brand"],
+  portfolio: ["portfolio", "photographer", "photography studio", "artist portfolio", "creative portfolio"],
+  coaching: ["coaching business", "consulting business", "coach", "therapist", "counselor"],
+  agency: ["agency", "marketing agency", "creative studio", "design agency", "legal practice"],
+  nonprofit: ["nonprofit", "non-profit", "charity", "nonprofit organization", "foundation"],
+};
+
+function findIndustryIdentity(text: string): { industry: string; keyword: string; index: number } | null {
+  const matches: Array<{ industry: string; keyword: string; index: number }> = [];
+  for (const [industry, keywords] of Object.entries(INDUSTRY_IDENTITY_KEYWORDS)) {
+    for (const keyword of keywords) {
+      let fromIndex = 0;
+      while (fromIndex < text.length) {
+        const index = text.indexOf(keyword, fromIndex);
+        if (index < 0) break;
+        const before = text[index - 1] ?? "";
+        const after = text[index + keyword.length] ?? "";
+        if (!/[a-z0-9]/i.test(before) && !/[a-z0-9]/i.test(after)) {
+          matches.push({ industry, keyword, index });
+          break;
+        }
+        fromIndex = index + keyword.length;
+      }
+    }
+  }
+  matches.sort((a, b) => a.index - b.index || b.keyword.length - a.keyword.length);
+  return matches[0] ?? null;
+}
+
 const INDUSTRY_RULES: IndustryRule[] = [
   {
     industry: "saas",
@@ -147,26 +183,33 @@ function extractBusinessName(prompt: string): string | null {
 }
 
 export function classifyPromptForWizard(rawPrompt: string): WizardPromptAnalysis | null {
-  const text = String(rawPrompt || "").trim().toLowerCase();
+  const text = String(rawPrompt || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
   if (text.length < 3) return null;
 
   let bestRule = INDUSTRY_RULES[0];
   let maxScore = 0;
   let matched: string[] = [];
 
-  for (const rule of INDUSTRY_RULES) {
-    let score = 0;
-    const ruleMatches: string[] = [];
-    for (const kw of rule.keywords) {
-      if (text.includes(kw)) {
-        score += kw.length > 5 ? 2 : 1;
-        ruleMatches.push(kw);
+  const identity = findIndustryIdentity(text);
+  if (identity) {
+    bestRule = INDUSTRY_RULES.find((rule) => rule.industry === identity.industry) ?? bestRule;
+    matched = [identity.keyword];
+    maxScore = identity.keyword.length > 5 ? 2 : 1;
+  } else {
+    for (const rule of INDUSTRY_RULES) {
+      let score = 0;
+      const ruleMatches: string[] = [];
+      for (const kw of rule.keywords) {
+        if (text.includes(kw)) {
+          score += kw.length > 5 ? 2 : 1;
+          ruleMatches.push(kw);
+        }
       }
-    }
-    if (score > maxScore) {
-      maxScore = score;
-      bestRule = rule;
-      matched = ruleMatches;
+      if (score > maxScore) {
+        maxScore = score;
+        bestRule = rule;
+        matched = ruleMatches;
+      }
     }
   }
 

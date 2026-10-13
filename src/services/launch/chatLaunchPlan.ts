@@ -24,15 +24,15 @@ export interface ChatLaunchPlan {
 
 const PAGE_KEYWORDS: Record<PageChoice, string[]> = {
   about: ["about", "our story", "our studio", "who we are"],
-  services: ["services", "treatments", "offerings", "what we do"],
+  services: ["services", "treatments", "offerings", "what we do", "menu", "dishes", "food menu", "drinks menu"],
   pricing: ["pricing", "prices", "packages", "rates", "plans"],
   gallery: ["gallery", "portfolio", "lookbook", "our work"],
   faq: ["faq", "questions"],
   contact: ["contact", "get in touch", "inquiry", "enquiry"],
   booking: ["book", "booking", "appointment", "reservation", "viewing"],
-  checkout: ["checkout", "cart"],
+  checkout: ["checkout", "cart", "online ordering", "order online", "takeout", "take-out", "pickup", "delivery"],
   blog: ["blog", "journal", "articles", "news"],
-  shop: ["shop", "store", "products", "collection"],
+  shop: ["shop", "store", "products", "collection", "gift shop", "merch", "merchandise"],
 };
 
 const FAMILY_KEYWORDS: Record<string, string[]> = {
@@ -48,17 +48,22 @@ const hit = (text: string, words: string[]) => words.some((w) => new RegExp(`\\b
 
 export function deriveChatLaunchPlan(brief: string): ChatLaunchPlan {
   const text = String(brief || "");
-  const analysis = classifyPromptForWizard(text);
+  const confirmedDirection = text.match(
+    /(?:^|\n)Confirmed site direction:\s*([\s\S]*?)(?=\n\s*Conversation details:|$)/i,
+  )?.[1]?.trim();
+  const analysis = classifyPromptForWizard(confirmedDirection || text);
   const confident = Boolean(analysis && analysis.confidence > 0.55);
   const mentionedPages = (Object.keys(PAGE_KEYWORDS) as PageChoice[]).filter((p) => hit(text, PAGE_KEYWORDS[p]));
   const family = Object.keys(FAMILY_KEYWORDS).find((f) => hit(text, FAMILY_KEYWORDS[f])) ?? null;
   const defaults = confident ? analysis!.selectedPages : [];
+  const focusedGoal = FOCUSED_GOALS.find(({ pattern }) => pattern.test(text))?.goal;
+  const focusedNeed = focusedGoal ? GOAL_CUSTOMER_NEED[focusedGoal] : undefined;
   return {
     industry: confident ? analysis!.industry : null,
     systemId: confident ? analysis!.systemId : null,
     businessName: analysis?.businessName ?? null,
-    primaryGoal: confident ? analysis!.primaryGoal : null,
-    customerNeeds: confident ? analysis!.customerNeeds : [],
+    primaryGoal: focusedGoal ?? (confident ? analysis!.primaryGoal : null),
+    customerNeeds: focusedNeed ? [focusedNeed] : confident ? analysis!.customerNeeds : [],
     // Pages the chat named win; industry defaults only fill in when none were named.
     selectedPages: mentionedPages.length ? Array.from(new Set([...mentionedPages])) : defaults,
     themePresetId: family ?? (confident ? analysis!.themePresetId : null),
@@ -94,3 +99,19 @@ export function buildSyncedVisionBrief(plan: ChatLaunchPlan | null, final: Final
   lines.push(`Planning chat (content and wording only): ${plan.brief.trim()}`);
   return lines.join("\n");
 }
+
+const FOCUSED_GOALS: Array<{ goal: PrimaryGoal; pattern: RegExp }> = [
+  { goal: "sell_offers", pattern: /\b(order online|online ordering|take[- ]?out|pickup|delivery|gift shop|gift cards?|merch|checkout|cart|sell products?)\b/i },
+  { goal: "book_appointments", pattern: /\b(reserv(?:e|ation)|book (?:a )?(?:table|appointment|service)|appointments?)\b/i },
+  { goal: "drive_calls", pattern: /\b(call us|phone us|directions|visit us|walk[- ]?ins?)\b/i },
+  { goal: "showcase_work", pattern: /\b(showcase|portfolio|gallery|our work|lookbook)\b/i },
+  { goal: "grow_email_list", pattern: /\b(newsletter|email list|subscribe)\b/i },
+  { goal: "collect_leads", pattern: /\b(quote|estimate|contact us|inquiry|enquiry|lead form)\b/i },
+];
+
+const GOAL_CUSTOMER_NEED: Partial<Record<PrimaryGoal, CustomerNeed>> = {
+  collect_leads: "fill_form",
+  book_appointments: "book_service",
+  sell_offers: "buy_offer",
+  showcase_work: "explore_immersive",
+};

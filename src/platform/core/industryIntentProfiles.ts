@@ -12,6 +12,7 @@
  * auto-derived from `intents` for back-compat with existing callers.
  */
 import type { CoreIntent } from './coreIntents';
+import { normalizeIndustryKey } from './industryMatrix';
 import type {
   BindingSectionType,
   BindingSlotRole,
@@ -304,7 +305,7 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
     'coupon.claim':       { level: 'optional' },
     'pay.checkout':       { level: 'optional' },
     'quote.request':      { level: 'forbidden' },
-    'cart.add':           { level: 'forbidden' },
+    'cart.add':           { level: 'optional' },
     'donation.start':     { level: 'forbidden' },
   }),
 
@@ -496,11 +497,11 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
 };
 
 export function getIndustryIntentProfile(industry: string): IndustryIntentProfile | undefined {
-  return INDUSTRY_INTENT_PROFILES[industry];
+  return INDUSTRY_INTENT_PROFILES[normalizeIndustryKey(industry)];
 }
 
 export function isIntentForbiddenForIndustry(industry: string, intent: CoreIntent): boolean {
-  return INDUSTRY_INTENT_PROFILES[industry]?.forbidden.includes(intent) ?? false;
+  return getIndustryIntentProfile(industry)?.forbidden.includes(intent) ?? false;
 }
 
 // ============================================================================

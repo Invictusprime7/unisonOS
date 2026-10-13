@@ -5,6 +5,7 @@
  * indexes rendered `data-ut-resource` marks. It stores nothing.
  */
 import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
+import { normalizeIndustryKey } from '@/platform/core/industryMatrix';
 import { listResources, BUSINESS_PROFILE_RESOURCE_KEY } from './resourceRegistry';
 import type { ResourceDefinition } from './resourceTypes';
 
@@ -40,17 +41,18 @@ const INDUSTRY_RANK: Record<string, string[]> = {
 };
 
 export function normalizeIndustry(industry?: string | null): string {
-  const k = String(industry ?? '').trim().toLowerCase().replace(/_/g, '-');
-  if (/salon|barber|spa|beauty|wellness/.test(k)) return 'salon';
-  if (/restaurant|cafe|food|bakery|bar/.test(k)) return 'restaurant';
-  if (/shop|store|commerce|retail/.test(k)) return 'ecommerce';
-  if (/agency|studio|design|marketing|legal|consult/.test(k)) return 'agency';
-  if (/photo/.test(k)) return 'photography';
-  if (/real/.test(k)) return 'real-estate';
-  if (/fitness|gym|yoga/.test(k)) return 'fitness';
-  if (/coach/.test(k)) return 'coaching';
-  if (/nonprofit|charity/.test(k)) return 'nonprofit';
-  return k.includes('service') || /hvac|clean|contract|plumb|dental|health/.test(k) ? 'local-service' : k;
+  const key = String(industry ?? '').trim().toLowerCase().replace(/_/g, '-');
+  if (/salon|barber|spa|beauty|wellness/.test(key)) return 'salon';
+  if (/restaurant|cafe|food|bakery|bar/.test(key)) return 'restaurant';
+  if (/shop|store|commerce|retail/.test(key)) return 'ecommerce';
+  if (/agency|studio|design|marketing|legal|consult/.test(key)) return 'agency';
+  if (/photo/.test(key)) return 'photography';
+  if (/real/.test(key)) return 'real-estate';
+  if (/fitness|gym|yoga/.test(key)) return 'fitness';
+  if (/coach/.test(key)) return 'coaching';
+  if (/nonprofit|charity/.test(key)) return 'nonprofit';
+  if (key.includes('service') || /hvac|clean|contract|plumb|dental|health/.test(key)) return 'local-service';
+  return normalizeIndustryKey(key);
 }
 
 function rankFor(industry: string, key: string): number {

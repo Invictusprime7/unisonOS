@@ -343,7 +343,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, CapabilityDefinition> = {
       },
     ],
     requiredOverlays: ['cart-overlay', 'checkout-form'],
-    supportedIndustries: ['ecommerce'],
+    supportedIndustries: ['ecommerce', 'restaurant'],
     crmEntryStage: 'New Customer',
     requiresAuth: false,
     minPlan: 'starter',

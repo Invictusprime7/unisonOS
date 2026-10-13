@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AIMessage } from "@/components/ai/AIAssistantCore";
+import { deriveChatLaunchPlan } from "@/services/launch/chatLaunchPlan";
 import {
   buildConfirmedSiteBrief,
   describeAssistantFailure,
@@ -58,5 +59,18 @@ describe("homepage assistant failures", () => {
     expect(describeAssistantFailure("boom")).toBe("Failed to get AI response");
     expect(isSiteDiscoveryResponse({ mode: "site-discovery" })).toBe(true);
     expect(isSiteDiscoveryResponse({ choices: [] })).toBe(false);
+  });
+
+  it("keeps confirmed restaurant identity while honoring focused ordering intent", () => {
+    const plan = deriveChatLaunchPlan([
+      "Confirmed site direction: A local restaurant website is a great project! What specific type of cuisine or dining style best describes your restaurant, and who is your primary audience?",
+      "Conversation details: Restaurant website for local business. Add online ordering, checkout, and a gift shop.",
+    ].join("\n\n"));
+
+    expect(plan.industry).toBe("restaurant");
+    expect(plan.systemId).toBe("booking");
+    expect(plan.primaryGoal).toBe("sell_offers");
+    expect(plan.customerNeeds).toContain("buy_offer");
+    expect(plan.selectedPages).toEqual(expect.arrayContaining(["checkout", "shop"]));
   });
 });

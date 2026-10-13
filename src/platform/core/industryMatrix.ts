@@ -328,6 +328,16 @@ const INDUSTRY_ALIASES: Record<string, string> = {
   fitness: 'coaching',
   content: 'nonprofit',
   landing: 'agency',
+  cafe: 'restaurant',
+  bakery: 'restaurant',
+  bistro: 'restaurant',
+  diner: 'restaurant',
+  eatery: 'restaurant',
+  pizzeria: 'restaurant',
+  foodtruck: 'restaurant',
+  'food-truck': 'restaurant',
+  'coffee-shop': 'restaurant',
+  'restaurant-hospitality': 'restaurant',
 };
 
 // ============================================================================
@@ -335,7 +345,7 @@ const INDUSTRY_ALIASES: Record<string, string> = {
 // ============================================================================
 
 export function normalizeIndustryKey(industry: string): string {
-  const key = industry.trim().toLowerCase();
+  const key = industry.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/[\s_]+/g, '-');
   return INDUSTRY_ALIASES[key] || key;
 }
 

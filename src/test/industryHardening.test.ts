@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   INDUSTRY_INTENT_PROFILES,
+  getIndustryIntentProfile,
   synthesizeIndustryBindings,
 } from '@/platform/core/industryIntentProfiles';
+import { getIndustryProfile, normalizeIndustryKey } from '@/platform/core/industryMatrix';
 import {
   buildUIIntentContract,
   getUIIntentProfile,
@@ -26,6 +28,15 @@ const HARDENED_INDUSTRIES = [
 ] as const;
 
 describe('Industry hardening — intent profiles', () => {
+  it.each(['cafe', 'caf\u00e9', 'bakery', 'bistro', 'food truck', 'restaurant-hospitality'])(
+    'resolves %s to the canonical restaurant profile',
+    (alias) => {
+      expect(normalizeIndustryKey(alias)).toBe('restaurant');
+      expect(getIndustryProfile(alias)?.industry).toBe('restaurant');
+      expect(getIndustryIntentProfile(alias)?.industry).toBe('restaurant');
+    },
+  );
+
   it.each(HARDENED_INDUSTRIES)('%s ships a unified intent map (profileFromMap)', (industry) => {
     const profile = INDUSTRY_INTENT_PROFILES[industry];
     expect(profile, `profile for ${industry}`).toBeDefined();
@@ -102,6 +113,24 @@ describe('Industry hardening — UI intent profiles', () => {
 });
 
 describe('Industry hardening — forbidden intents are stripped', () => {
+  it('keeps cart actions forbidden for salon', () => {
+    expect(getIndustryIntentProfile('salon')?.forbidden).toContain('cart.add');
+  });
+
+  it('keeps restaurant cart actions available as an explicit optional intent', () => {
+    const result = synthesizeIndustryBindings(
+      INDUSTRY_INTENT_PROFILES.restaurant,
+      [{
+        sourcePageRole: 'services', sourceSection: 'services', sourceSlot: 'card-cta',
+        coreIntent: 'cart.add', intent: 'checkout.start', targetRef: 'menu-item-1',
+      }],
+      { availablePageRoles: new Set(['home', 'services', 'checkout']) },
+    );
+
+    expect(result.strippedForbidden).toHaveLength(0);
+    expect(result.kept).toHaveLength(1);
+  });
+
   it('ecommerce strips booking.create bindings', () => {
     const profile = INDUSTRY_INTENT_PROFILES.ecommerce;
     const result = synthesizeIndustryBindings(

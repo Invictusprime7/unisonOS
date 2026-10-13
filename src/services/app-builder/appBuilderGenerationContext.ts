@@ -4,6 +4,7 @@ import type { AppBuildContract } from '@/services/app-builder/appBuilderContract
 import { resolveDesignSourceBundle, isGenericImplementationId } from './design/designSystemResolver';
 import type { DesignSourceBundle } from './design/DesignSourceBundle';
 import { materializeDesignSources, type DesignSourceMaterialization } from './design/designSourceMaterializer';
+import { getIndustryProfile } from '@/platform/core/industryMatrix';
 
 export interface AppBuilderGenerationContext {
   contract: AppBuildContract;
@@ -14,12 +15,34 @@ export interface AppBuilderGenerationContext {
   runtimeContextForPage: (pageId: string) => string;
 }
 
+export function buildIndustryAuthoringContext(industry: string, enabledCapabilities: readonly string[]): string {
+  const profile = getIndustryProfile(industry);
+  if (!profile) {
+    return `INDUSTRY AUTHORING CONTRACT: preserve the selected business identity "${industry}". Treat focused owner requests as additive and do not reclassify the business from a page-level feature request.`;
+  }
+
+  const catalogBySeedKey: Record<string, string> = {
+    menu_items: 'catalog.menu',
+    products: 'catalog.products',
+    services: 'catalog.services',
+  };
+  const industryCatalogs = [...new Set(profile.seedDataKeys.flatMap((key) => catalogBySeedKey[key] ?? []))];
+  return [
+    `INDUSTRY AUTHORING CONTRACT: canonical industry ${profile.industry} (${profile.name}). Keep this business identity even when the owner requests a focused feature.`,
+    `Industry seed data: ${profile.seedDataKeys.join(', ')}. Generate domain-specific copy and assets for these data types rather than substituting a generic catalog.`,
+    `Industry catalog targets: ${industryCatalogs.join(', ') || 'none'}. Launch capabilities: ${enabledCapabilities.join(', ') || 'none'}.`,
+    'A focused user intent is additive to the selected industry: implement it with enabled capabilities and matching industry data; do not change the business category or invent unprovisioned tables, APIs, or controllers.',
+  ].join('\n');
+}
+
 export function buildAppBuilderGenerationContext(contract: AppBuildContract): AppBuilderGenerationContext {
   const { business, runtime } = contract;
   const designSources = resolveDesignSourceBundle(contract);
   const materialization = materializeDesignSources(designSources);
+  const industryContext = buildIndustryAuthoringContext(business.industry, business.capabilities);
   const compose = (modules: string) => [
     `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}.`,
+    industryContext,
     `Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.`,
     business.bindingGuide ? `Binding guide: ${business.bindingGuide}` : '',
     `Protected paths: ${runtime.protectedPaths.join(', ')}.`,
