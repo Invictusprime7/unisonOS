@@ -49,6 +49,26 @@ describe('launch orchestrator canonical handoff', () => {
     expect(source).not.toContain('industryOverlay: plan.generationCategory');
   });
 
+  it('threads focused launch capabilities through authoring, preflight, seeding, commit and Live Preview', () => {
+    const resolvedCapabilities = position('const launchCapabilities = resolveLaunchCapabilities(');
+    const appBuilderContract = position('const appBuildContract = buildAppBuildContract({');
+    const canonicalPreflight = position('await buildCanonicalLaunchArtifactsAsync(');
+    const catalogSeed = position('await seedLaunchAssets({');
+    const commit = position('const result = await commitMutation({');
+    const livePreview = position('livePreviewRuntime.hydrateFromRegistry(committed.siteBundleSnapshot.pageRegistry)');
+
+    expect(source).toContain('capabilities: plan.launchCapabilities');
+    expect(source).toContain('enabledCapabilities: plan.launchCapabilities');
+    expect(source).toContain('launchCapabilities,');
+    expect(source).toContain('enableProductCommerce: plan.selections.sellsProducts');
+    expect(resolvedCapabilities).toBeLessThan(appBuilderContract);
+    expect(appBuilderContract).toBeLessThan(canonicalPreflight);
+    expect(canonicalPreflight).toBeLessThan(commit);
+    expect(commit).toBeLessThan(catalogSeed);
+    expect(commit).toBeLessThan(livePreview);
+    expect(catalogSeed).toBeLessThan(livePreview);
+  });
+
   it('builds post-App Builder business and intent runtime contracts before sealing', () => {
     const stage4bResult = position('const appBuild = await run.stage("app-build"');
     const profileLoad = position('await loadBusinessProfile(input.existingBusinessId)');
@@ -107,7 +127,8 @@ describe('launch orchestrator canonical handoff', () => {
     expect(source).toContain('generatedFiles: candidateFiles');
     expect(source).toContain('compileArtifact: createWizardCompileArtifact(siteBundleSnapshot)');
     expect(source).toContain('approvedExperienceCapabilities: resolveApprovedExperienceCapabilities({');
-    expect(source).toContain('requiredCapabilities: resolveExperienceRequirement(');
+    expect(source).toContain('requiredCapabilities: [');
+    expect(source).toContain('...resolveExperienceRequirement(');
     expect(source).toContain('webgl: canonicalPlan.designIntervention.envelope?.webgl');
     expect(source).not.toContain('enrichWizardPagesWithAI');
     expect(source).not.toContain('runBuilderTurn');

@@ -4,7 +4,8 @@ import type { AppBuildContract } from '@/services/app-builder/appBuilderContract
 import { resolveDesignSourceBundle, isGenericImplementationId } from './design/designSystemResolver';
 import type { DesignSourceBundle } from './design/DesignSourceBundle';
 import { materializeDesignSources, type DesignSourceMaterialization } from './design/designSourceMaterializer';
-import { getIndustryProfile } from '@/platform/core/industryMatrix';
+import { getAllIndustries, getIndustryProfile } from '@/platform/core/industryMatrix';
+import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
 
 export interface AppBuilderGenerationContext {
   contract: AppBuildContract;
@@ -15,23 +16,62 @@ export interface AppBuilderGenerationContext {
   runtimeContextForPage: (pageId: string) => string;
 }
 
+export interface IndustrySeedDataTarget {
+  target: string;
+  catalogSurface?: string;
+}
+
+export const INDUSTRY_SEED_DATA_TARGETS: Record<string, IndustrySeedDataTarget> = {
+  business_name: { target: 'BusinessProfile.name and CreatorData.businessInfo.businessName' },
+  business_email: { target: 'BusinessProfile.email and CreatorData.businessInfo.email' },
+  features: { target: 'authored feature sections, not a product catalog' },
+  pricing_tiers: { target: 'catalog.pricing / pricing_plans', catalogSurface: 'pricing' },
+  services: { target: 'catalog.services / services', catalogSurface: 'services' },
+  operating_hours: { target: 'BusinessProfile.hours and CreatorData.businessInfo.hours' },
+  menu_items: { target: 'catalog.menu / menu_items', catalogSurface: 'menu' },
+  service_areas: { target: 'owner-provided service-area content; do not invent coverage zones' },
+  programs: { target: 'catalog.services / services when represented as bookable programs', catalogSurface: 'services' },
+  credentials: { target: 'owner-supplied CreatorData.team and about-page content; never invent qualifications' },
+  specialties: { target: 'catalog.services categories and owner-supplied page content', catalogSurface: 'services' },
+  products: { target: 'catalog.products / products', catalogSurface: 'products' },
+  shipping_info: { target: 'owner-supplied shipping policy content; do not invent shipping rules or APIs' },
+  portfolio_items: { target: 'CMS gallery content from CreatorData.gallery' },
+  mission_statement: { target: 'BusinessProfile.description and CreatorData.businessInfo.description' },
+  case_studies: { target: 'CMS case-studies content from CreatorData.caseStudies' },
+};
+
+export function getIndustrySeedDataTargets(industry: string): Array<{
+  key: string;
+  target: IndustrySeedDataTarget;
+}> {
+  return getIndustryProfile(industry)?.seedDataKeys.map((key) => ({
+    key,
+    target: INDUSTRY_SEED_DATA_TARGETS[key] ?? {
+      target: 'authored industry content; do not invent a catalog, table, or backend surface',
+    },
+  })) ?? [];
+}
+
+export function getUnmappedIndustrySeedDataKeys(): string[] {
+  return [...new Set(getAllIndustries().flatMap((profile) => profile.seedDataKeys))]
+    .filter((key) => !INDUSTRY_SEED_DATA_TARGETS[key]);
+}
+
 export function buildIndustryAuthoringContext(industry: string, enabledCapabilities: readonly string[]): string {
   const profile = getIndustryProfile(industry);
   if (!profile) {
     return `INDUSTRY AUTHORING CONTRACT: preserve the selected business identity "${industry}". Treat focused owner requests as additive and do not reclassify the business from a page-level feature request.`;
   }
 
-  const catalogBySeedKey: Record<string, string> = {
-    menu_items: 'catalog.menu',
-    products: 'catalog.products',
-    services: 'catalog.services',
-  };
-  const industryCatalogs = [...new Set(profile.seedDataKeys.flatMap((key) => catalogBySeedKey[key] ?? []))];
+  const seedTargets = getIndustrySeedDataTargets(industry);
+  const industryCatalogs = [...new Set(seedTargets
+    .map(({ key }) => INDUSTRY_SEED_DATA_TARGETS[key]?.catalogSurface)
+    .filter((surface): surface is string => !!surface))];
   return [
     `INDUSTRY AUTHORING CONTRACT: canonical industry ${profile.industry} (${profile.name}). Keep this business identity even when the owner requests a focused feature.`,
-    `Industry seed data: ${profile.seedDataKeys.join(', ')}. Generate domain-specific copy and assets for these data types rather than substituting a generic catalog.`,
+    `Industry seed data targets:\n${seedTargets.map(({ key, target }) => `- ${key} → ${target.target}`).join('\n')}`,
     `Industry catalog targets: ${industryCatalogs.join(', ') || 'none'}. Launch capabilities: ${enabledCapabilities.join(', ') || 'none'}.`,
-    'A focused user intent is additive to the selected industry: implement it with enabled capabilities and matching industry data; do not change the business category or invent unprovisioned tables, APIs, or controllers.',
+    'Use owner-provided facts for prices, credentials, service areas, mission, and shipping terms; do not fabricate them. A focused user intent is additive to the selected industry: implement it with enabled capabilities and matching industry data; do not change the business category or invent unprovisioned tables, APIs, or controllers.',
   ].join('\n');
 }
 

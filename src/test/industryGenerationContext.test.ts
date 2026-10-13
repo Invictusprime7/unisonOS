@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildIndustryAuthoringContext } from '@/services/app-builder/appBuilderGenerationContext';
+import {
+  buildIndustryAuthoringContext,
+  getIndustrySeedDataTargets,
+  getUnmappedIndustrySeedDataKeys,
+} from '@/services/app-builder/appBuilderGenerationContext';
 import { resolveLaunchCapabilities } from '@/services/launch/launchCapabilities';
+import { getAllIndustries } from '@/platform/core/industryMatrix';
+import { getCapabilitiesForIndustry, getCapability, isCapabilitySupportedForIndustry } from '@/platform/core/capabilityRegistry';
+import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
 import { createEmptyCreatorData } from '@/types/creatorData';
 
 const catalogMocks = vi.hoisted(() => ({
@@ -24,6 +31,22 @@ import { resolveProductCatalogSurface, resolveProductCatalogSurfaces, seedLaunch
 import { normalizeIndustry } from '@/services/resources/assetCatalog';
 
 describe('industry-aware generation context', () => {
+  it('maps every industry seed key to a canonical target and existing catalog surface', () => {
+    expect(getUnmappedIndustrySeedDataKeys()).toEqual([]);
+    const catalogSurfaces = new Set(listCatalogSurfaces().map((surface) => surface.surfaceId));
+
+    for (const industry of getAllIndustries()) {
+      const targets = getIndustrySeedDataTargets(industry.industry);
+      expect(targets.map(({ key }) => key)).toEqual(industry.seedDataKeys);
+      for (const { key, target } of targets) {
+        expect(target.target, `${industry.industry}.${key}`).toBeTruthy();
+        if (target.catalogSurface) {
+          expect(catalogSurfaces.has(target.catalogSurface), `${industry.industry}.${key} catalog`).toBe(true);
+        }
+      }
+    }
+  });
+
   it('preserves legacy asset ranking aliases while resolving new cuisine aliases', () => {
     expect(normalizeIndustry('beauty')).toBe('salon');
     expect(normalizeIndustry('fitness')).toBe('fitness');
@@ -63,6 +86,68 @@ describe('industry-aware generation context', () => {
     );
   });
 
+  it('seeds SaaS subscription tiers into pricing and commerce only when selected', async () => {
+    catalogMocks.listCatalog.mockResolvedValue([]);
+    catalogMocks.createCatalogItem.mockResolvedValue({});
+    const creatorData = createEmptyCreatorData('Demo Software');
+    creatorData.products.pro = {
+      productId: 'pro',
+      name: 'Professional',
+      description: 'For growing teams',
+      price: 49,
+      currency: 'USD',
+      category: 'Plans',
+      billingType: 'subscription',
+      billingInterval: 'month',
+      featured: true,
+      status: 'active',
+      sortOrder: 0,
+    };
+
+    await seedLaunchAssets({
+      businessId: 'business-saas',
+      projectId: 'project-saas',
+      industry: 'software company',
+      enableProductCommerce: true,
+      creatorData,
+    });
+
+    expect(catalogMocks.createCatalogItem).toHaveBeenCalledWith(
+      'business-saas', 'pricing', expect.objectContaining({
+        name: 'Professional', price: 49, billing_interval: 'month', highlighted: true,
+      }), 'project-saas',
+    );
+    expect(catalogMocks.createCatalogItem).toHaveBeenCalledWith(
+      'business-saas', 'products', expect.objectContaining({ name: 'Professional', price: 49 }), 'project-saas',
+    );
+  });
+
+  it('keeps service catalog metadata intact for service-led industries', async () => {
+    catalogMocks.listCatalog.mockResolvedValue([]);
+    catalogMocks.createCatalogItem.mockResolvedValue({});
+    const creatorData = createEmptyCreatorData('Demo Service');
+    creatorData.services.tuneup = {
+      serviceId: 'tuneup',
+      name: 'Seasonal Tune-up',
+      description: 'Preventative maintenance',
+      price: 120,
+      duration: 90,
+      category: 'Maintenance',
+      featured: true,
+      visibility: 'public',
+      bookable: true,
+      sortOrder: 2,
+    };
+
+    await seedLaunchAssets({ businessId: 'business-service', industry: 'plumber', creatorData });
+
+    expect(catalogMocks.createCatalogItem).toHaveBeenCalledWith(
+      'business-service', 'services', expect.objectContaining({
+        name: 'Seasonal Tune-up', category: 'Maintenance', duration_minutes: 90, featured: true, active: true,
+      }), undefined,
+    );
+  });
+
   it('gives cafe aliases the restaurant seed and catalog contract without locking focused intent', () => {
     const context = buildIndustryAuthoringContext('cafe', ['booking', 'catalog.menu']);
 
@@ -97,11 +182,62 @@ describe('industry-aware generation context', () => {
     }, true)).toEqual(['menu', 'products']);
   });
 
+  it('routes SaaS subscription tiers to pricing and only adds checkout products for focused commerce', () => {
+    const plan = {
+      name: 'Professional',
+      category: 'Plans',
+      tags: [],
+      fulfillmentType: 'digital' as const,
+      billingType: 'subscription' as const,
+    };
+    expect(resolveProductCatalogSurface('software company', plan)).toBe('pricing');
+    expect(resolveProductCatalogSurfaces('saas', plan)).toEqual(['pricing']);
+    expect(resolveProductCatalogSurfaces('saas', plan, true)).toEqual(['pricing', 'products']);
+  });
+
   it('adds product checkout only when a focused goal asks to sell offers', () => {
     const restaurantDefaults = ['booking', 'contact'] as const;
-    expect(resolveLaunchCapabilities(restaurantDefaults, false)).toEqual(restaurantDefaults);
-    expect(resolveLaunchCapabilities(restaurantDefaults, true)).toEqual([
+    expect(resolveLaunchCapabilities(restaurantDefaults, 'restaurant')).toEqual(restaurantDefaults);
+    expect(resolveLaunchCapabilities(restaurantDefaults, 'restaurant', {
+      primaryGoal: 'sell_offers', customerNeeds: ['buy_offer'],
+    })).toEqual([
       'booking', 'contact', 'commerce',
     ]);
+  });
+
+  it('keeps industry defaults supported and adds focused packs only when their registry allows them', () => {
+    const focusedRequests = [
+      { request: { primaryGoal: 'collect_leads' as const }, capability: 'lead-capture' as const },
+      { request: { primaryGoal: 'book_appointments' as const }, capability: 'booking' as const },
+      { request: { primaryGoal: 'sell_offers' as const }, capability: 'commerce' as const },
+      { request: { primaryGoal: 'drive_calls' as const }, capability: 'contact' as const },
+      { request: { primaryGoal: 'grow_email_list' as const }, capability: 'newsletter' as const },
+      { request: { customerNeeds: ['request_quote'] as const }, capability: 'quoting' as const },
+      { request: { customerNeeds: ['book_service'] as const }, capability: 'booking' as const },
+      { request: { customerNeeds: ['buy_offer'] as const }, capability: 'commerce' as const },
+      { request: { customerNeeds: ['fill_form'] as const }, capability: 'lead-capture' as const },
+      { request: { customerNeeds: ['browse_services'] as const }, capability: 'booking' as const },
+    ];
+
+    for (const industry of getAllIndustries()) {
+      for (const capability of industry.defaultCapabilities) {
+        expect(getCapability(capability).supportedIndustries, `${industry.industry}.${capability}`)
+          .toContain(industry.industry);
+      }
+
+      for (const { request, capability } of focusedRequests) {
+        const resolved = resolveLaunchCapabilities(industry.defaultCapabilities, industry.industry, request);
+        const expected = industry.defaultCapabilities.includes(capability)
+          || getCapability(capability).supportedIndustries.includes(industry.industry);
+        expect(resolved.includes(capability), `${industry.industry}.${capability}`).toBe(expected);
+      }
+    }
+  });
+
+  it('resolves capability packs and compiler support through canonical industry aliases', () => {
+    expect(getCapabilitiesForIndustry('software company').map((capability) => capability.id))
+      .toContain('lead-capture');
+    expect(isCapabilitySupportedForIndustry('commerce', 'photography studio')).toBe(true);
+    expect(isCapabilitySupportedForIndustry('commerce', 'realtor')).toBe(false);
   });
 });

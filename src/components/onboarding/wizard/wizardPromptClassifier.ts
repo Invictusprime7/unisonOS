@@ -13,6 +13,7 @@
 
 import type { BusinessSystemType } from "@/data/templates/types";
 import { THEME_PRESETS, type ThemePreset } from "@/components/onboarding/themePresets";
+import { normalizeIndustryKey } from '@/platform/core/industryMatrix';
 import {
   CUSTOMER_NEEDS,
   PRIMARY_GOALS,
@@ -46,17 +47,17 @@ interface IndustryRule {
 }
 
 const INDUSTRY_IDENTITY_KEYWORDS: Record<string, string[]> = {
-  saas: ["saas", "software company", "software", "developer platform", "developer tool"],
-  salon: ["salon", "hair salon", "barbershop", "barber", "spa", "beauty salon"],
+  saas: ["saas", "software company", "software as a service", "developer platform", "developer tool", "tech startup"],
+  salon: ["salon", "hair salon", "barbershop", "barber", "spa", "beauty salon", "nail salon", "medspa"],
   restaurant: ["restaurant", "cafe", "bakery", "bistro", "diner", "eatery", "food truck", "pizzeria", "coffee shop", "catering business"],
   contractor: ["contractor", "construction company", "roofing company", "plumber", "electrician", "hvac", "carpenter", "renovation business"],
-  "local-service": ["local service", "cleaning company", "landscaping business", "pest control", "auto detailing", "moving company", "lawn care"],
-  "real-estate": ["real estate", "realtor", "property brokerage", "real estate agency"],
-  ecommerce: ["ecommerce", "e-commerce", "online store", "retail business", "fashion brand"],
-  portfolio: ["portfolio", "photographer", "photography studio", "artist portfolio", "creative portfolio"],
-  coaching: ["coaching business", "consulting business", "coach", "therapist", "counselor"],
-  agency: ["agency", "marketing agency", "creative studio", "design agency", "legal practice"],
-  nonprofit: ["nonprofit", "non-profit", "charity", "nonprofit organization", "foundation"],
+  "local-service": ["local service", "cleaning company", "landscaping business", "pest control", "auto detailing", "moving company", "lawn care", "dental practice", "health clinic"],
+  "real-estate": ["real estate", "realtor", "property brokerage", "real estate agency", "property management company"],
+  ecommerce: ["ecommerce", "e-commerce", "online store", "retail business", "fashion brand", "online retailer"],
+  portfolio: ["portfolio", "photographer", "photography studio", "artist portfolio", "creative portfolio", "design portfolio"],
+  coaching: ["coaching business", "consulting business", "coach", "therapist", "counselor", "fitness coach"],
+  agency: ["agency", "marketing agency", "creative studio", "design agency", "legal practice", "digital agency"],
+  nonprofit: ["nonprofit", "non-profit", "charity", "nonprofit organization", "foundation", "ngo"],
 };
 
 function findIndustryIdentity(text: string): { industry: string; keyword: string; index: number } | null {
@@ -192,7 +193,8 @@ export function classifyPromptForWizard(rawPrompt: string): WizardPromptAnalysis
 
   const identity = findIndustryIdentity(text);
   if (identity) {
-    bestRule = INDUSTRY_RULES.find((rule) => rule.industry === identity.industry) ?? bestRule;
+    const canonicalIndustry = normalizeIndustryKey(identity.industry);
+    bestRule = INDUSTRY_RULES.find((rule) => normalizeIndustryKey(rule.industry) === canonicalIndustry) ?? bestRule;
     matched = [identity.keyword];
     maxScore = identity.keyword.length > 5 ? 2 : 1;
   } else {
@@ -215,13 +217,14 @@ export function classifyPromptForWizard(rawPrompt: string): WizardPromptAnalysis
 
   // Calculate confidence
   const confidence = maxScore >= 4 ? 0.96 : maxScore >= 2 ? 0.84 : maxScore === 1 ? 0.72 : 0.55;
+  const canonicalIndustry = normalizeIndustryKey(bestRule.industry);
   const businessName = extractBusinessName(rawPrompt);
-  const primaryGoal = getIndustryPrimaryGoal(bestRule.industry) || bestRule.defaultGoal;
-  const customerNeeds = getIndustryCustomerNeeds(bestRule.industry);
-  const selectedPages = getIndustryDefaultPageChoices(bestRule.industry);
+  const primaryGoal = getIndustryPrimaryGoal(canonicalIndustry) || bestRule.defaultGoal;
+  const customerNeeds = getIndustryCustomerNeeds(canonicalIndustry);
+  const selectedPages = getIndustryDefaultPageChoices(canonicalIndustry);
 
   return {
-    industry: bestRule.industry,
+    industry: canonicalIndustry,
     systemId: bestRule.systemId,
     businessName,
     primaryGoal,

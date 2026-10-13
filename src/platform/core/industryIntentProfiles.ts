@@ -113,6 +113,30 @@ const FOOTER_NEWSLETTER: SlotCoord = {
 // ============================================================================
 
 export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
+  saas: profileFromMap('saas', {
+    'nav.goto': { level: 'required' },
+    'contact.submit': {
+      level: 'required',
+      synthesize: [
+        { pageRole: 'contact', section: 'contact', slot: 'form-submit', ifPageExists: true,
+          label: 'Contact Sales', intent: 'form.open', targetRef: 'contact_form', uiAction: 'state' },
+      ],
+    },
+    'lead.capture': {
+      level: 'required',
+      synthesize: [
+        { pageRole: 'home', section: 'hero', slot: 'primary-cta', label: 'Request a Demo',
+          intent: 'form.open', targetRef: 'demo_request_form', uiAction: 'overlay' },
+      ],
+    },
+    'newsletter.subscribe': { level: 'secondary', synthesize: [FOOTER_NEWSLETTER] },
+    'booking.create': { level: 'optional' },
+    'cart.add': { level: 'optional' },
+    'cart.checkout': { level: 'optional' },
+    'quote.request': { level: 'optional' },
+    'donation.start': { level: 'forbidden' },
+  }),
+
   // ─────────────── Salon ───────────────
   salon: profileFromMap('salon', {
     'nav.goto': { level: 'required' },
@@ -147,8 +171,8 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
     'coupon.claim':       { level: 'optional' },
     'pay.checkout':       { level: 'optional' },
     'quote.request':      { level: 'forbidden' },
-    'cart.add':           { level: 'forbidden' },
-    'cart.checkout':      { level: 'forbidden' },
+    'cart.add':           { level: 'optional' },
+    'cart.checkout':      { level: 'optional' },
     'donation.start':     { level: 'forbidden' },
   }),
 
@@ -193,8 +217,8 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
     'location.directions':{ level: 'secondary', synthesize: [FOOTER_DIRECTIONS] },
     'newsletter.subscribe':{ level: 'optional', synthesize: [FOOTER_NEWSLETTER] },
     'booking.create':     { level: 'optional' },
-    'cart.add':           { level: 'forbidden' },
-    'cart.checkout':      { level: 'forbidden' },
+    'cart.add':           { level: 'optional' },
+    'cart.checkout':      { level: 'optional' },
     'donation.start':     { level: 'forbidden' },
   }),
 
@@ -226,7 +250,7 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
     'location.directions':{ level: 'secondary', synthesize: [FOOTER_DIRECTIONS] },
     'newsletter.subscribe':{ level: 'optional', synthesize: [FOOTER_NEWSLETTER] },
     'booking.create':     { level: 'optional' },
-    'cart.add':           { level: 'forbidden' },
+    'cart.add':           { level: 'optional' },
     'cart.checkout':      { level: 'forbidden' },
     'donation.start':     { level: 'forbidden' },
   }),
@@ -264,7 +288,8 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
     'content.download':   { level: 'secondary' },
     'newsletter.subscribe':{ level: 'secondary', synthesize: [FOOTER_NEWSLETTER] },
     'contact.email':      { level: 'optional', synthesize: [FOOTER_CONTACT_EMAIL] },
-    'cart.add':           { level: 'forbidden' },
+    'cart.add':           { level: 'optional' },
+    'cart.checkout':      { level: 'optional' },
     'quote.request':      { level: 'forbidden' },
     'donation.start':     { level: 'forbidden' },
   }),
@@ -306,6 +331,7 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
     'pay.checkout':       { level: 'optional' },
     'quote.request':      { level: 'forbidden' },
     'cart.add':           { level: 'optional' },
+    'cart.checkout':      { level: 'optional' },
     'donation.start':     { level: 'forbidden' },
   }),
 
@@ -355,7 +381,7 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
     ] },
     'auth.register':      { level: 'optional' },
     'account.open':       { level: 'optional' },
-    'booking.create':     { level: 'forbidden' },
+    'booking.create':     { level: 'optional' },
     'quote.request':      { level: 'forbidden' },
     'donation.start':     { level: 'forbidden' },
   }),
@@ -392,8 +418,8 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
     'demo.request':       { level: 'optional' },
     'proposal.request':   { level: 'optional' },
     'contact.email':      { level: 'optional', synthesize: [FOOTER_CONTACT_EMAIL] },
-    'cart.add':           { level: 'forbidden' },
-    'cart.checkout':      { level: 'forbidden' },
+    'cart.add':           { level: 'optional' },
+    'cart.checkout':      { level: 'optional' },
     'donation.start':     { level: 'forbidden' },
   }),
 
@@ -427,8 +453,9 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
     'newsletter.subscribe':{ level: 'secondary', synthesize: [FOOTER_NEWSLETTER] },
     'contact.call':       { level: 'secondary', synthesize: [FOOTER_CONTACT_CALL] },
     'pay.checkout':       { level: 'optional' },
-    'cart.add':           { level: 'forbidden' },
-    'booking.create':     { level: 'forbidden' },
+    'cart.add':           { level: 'optional' },
+    'cart.checkout':      { level: 'optional' },
+    'booking.create':     { level: 'optional' },
     'quote.request':      { level: 'forbidden' },
   }),
 
@@ -452,8 +479,8 @@ export const INDUSTRY_INTENT_PROFILES: Record<string, IndustryIntentProfile> = {
     'contact.email':      { level: 'secondary', synthesize: [FOOTER_CONTACT_EMAIL] },
     'booking.create':     { level: 'optional' },
     'share.open':         { level: 'optional' },
-    'cart.add':           { level: 'forbidden' },
-    'cart.checkout':      { level: 'forbidden' },
+    'cart.add':           { level: 'optional' },
+    'cart.checkout':      { level: 'optional' },
     'quote.request':      { level: 'forbidden' },
     'donation.start':     { level: 'forbidden' },
   }),

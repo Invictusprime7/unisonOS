@@ -100,7 +100,7 @@ import {
   LAUNCHER_PRESELECTS,
   SYSTEM_TO_BUSINESS_MODEL,
   SYSTEM_TO_INDUSTRY_OVERLAY,
-  TEMPLATE_INDUSTRY_TO_CATEGORY,
+  resolveTemplateIndustryCategory,
   uniqueValues,
   type CustomerNeed,
   type PageChoice,
@@ -192,7 +192,7 @@ function resolveGenerationCategory(
   system: (typeof businessSystems)[number],
   template: TemplateCardData,
 ): LayoutCategory {
-  return (TEMPLATE_INDUSTRY_TO_CATEGORY[template.industry] ||
+  return (resolveTemplateIndustryCategory(template.industry) ||
     system.templateCategories[0]) as LayoutCategory;
 }
 
@@ -261,7 +261,8 @@ export async function runLaunchPipeline(
     const compositionMeta = getCompositionMeta(generationCategory);
     const launchCapabilities = resolveLaunchCapabilities(
       industryProfile?.defaultCapabilities ?? [],
-      input.primaryGoal === 'sell_offers' || input.customerNeeds.includes('buy_offer'),
+      industryProfile?.industry || input.template.industry,
+      { primaryGoal: input.primaryGoal, customerNeeds: input.customerNeeds },
     );
     const canonicalIntents = uniqueValues<string>([
       ...(industryProfile

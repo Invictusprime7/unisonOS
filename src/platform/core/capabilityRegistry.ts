@@ -14,6 +14,7 @@
 
 import type { CoreIntent, ActionIntent } from './coreIntents';
 import type { CapabilityPack } from './playground';
+import { normalizeIndustryKey } from './industryMatrix';
 
 // ============================================================================
 // Capability Definition
@@ -198,7 +199,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, CapabilityDefinition> = {
       },
     ],
     requiredOverlays: ['booking-form', 'booking-confirmation'],
-    supportedIndustries: ['salon', 'restaurant', 'coaching', 'local-service', 'real-estate'],
+    supportedIndustries: ['saas', 'salon', 'restaurant', 'local-service', 'coaching', 'real-estate', 'ecommerce', 'portfolio', 'nonprofit', 'agency'],
     crmEntryStage: 'New Booking',
     requiresAuth: false,
     minPlan: 'starter',
@@ -261,7 +262,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, CapabilityDefinition> = {
     ],
     requiredOverlays: ['contact-form'],
     supportedIndustries: [
-      'salon', 'restaurant', 'local-service', 'coaching',
+      'saas', 'salon', 'restaurant', 'local-service', 'coaching',
       'real-estate', 'portfolio', 'nonprofit', 'ecommerce', 'agency',
     ],
     crmEntryStage: 'New Inquiry',
@@ -295,7 +296,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, CapabilityDefinition> = {
     ],
     requiredOverlays: [],
     supportedIndustries: [
-      'salon', 'restaurant', 'local-service', 'coaching',
+      'saas', 'salon', 'restaurant', 'local-service', 'coaching',
       'real-estate', 'portfolio', 'nonprofit', 'ecommerce', 'agency',
     ],
     requiresAuth: false,
@@ -343,7 +344,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, CapabilityDefinition> = {
       },
     ],
     requiredOverlays: ['cart-overlay', 'checkout-form'],
-    supportedIndustries: ['ecommerce', 'restaurant'],
+    supportedIndustries: ['saas', 'salon', 'restaurant', 'local-service', 'coaching', 'portfolio', 'nonprofit', 'ecommerce', 'agency'],
     crmEntryStage: 'New Customer',
     requiresAuth: false,
     minPlan: 'starter',
@@ -405,7 +406,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, CapabilityDefinition> = {
       },
     ],
     requiredOverlays: ['lead-form'],
-    supportedIndustries: ['agency', 'coaching', 'real-estate', 'local-service'],
+    supportedIndustries: ['saas', 'salon', 'restaurant', 'local-service', 'coaching', 'real-estate', 'portfolio', 'nonprofit', 'ecommerce', 'agency'],
     crmEntryStage: 'New Lead',
     requiresAuth: false,
     minPlan: 'starter',
@@ -452,8 +453,17 @@ export function getCapability(id: CapabilityId): CapabilityDefinition {
 }
 
 export function getCapabilitiesForIndustry(industry: string): CapabilityDefinition[] {
+  const canonicalIndustry = normalizeIndustryKey(industry);
   return Object.values(CAPABILITY_REGISTRY)
-    .filter(cap => cap.supportedIndustries.includes(industry));
+    .filter(cap => cap.supportedIndustries.some(
+      supportedIndustry => normalizeIndustryKey(supportedIndustry) === canonicalIndustry,
+    ));
+}
+
+export function isCapabilitySupportedForIndustry(capability: CapabilityId, industry: string): boolean {
+  return getCapability(capability).supportedIndustries.some(
+    supportedIndustry => normalizeIndustryKey(supportedIndustry) === normalizeIndustryKey(industry),
+  );
 }
 
 export function getCapabilitiesForIntent(intent: string): CapabilityDefinition[] {

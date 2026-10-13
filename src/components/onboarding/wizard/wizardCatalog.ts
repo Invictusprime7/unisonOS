@@ -183,6 +183,12 @@ export const TEMPLATE_INDUSTRY_TO_CATEGORY: Partial<Record<string, LayoutCategor
   nonprofit: "nonprofit",
 };
 
+export function resolveTemplateIndustryCategory(industry: string): LayoutCategory | undefined {
+  const canonicalIndustry = normalizeIndustryKey(industry);
+  return TEMPLATE_INDUSTRY_TO_CATEGORY[canonicalIndustry]
+    ?? getIndustryProfile(canonicalIndustry)?.layoutCategories[0];
+}
+
 export const INDUSTRY_CARDS: {
   systemId: BusinessSystemType;
   icon: string;
@@ -335,7 +341,7 @@ export function getDefaultTemplateCardForIndustry(industry: string | null | unde
   if (!profile) return null;
   const cards = buildCompositionCards(profile.systemType);
   const normalized = normalizeIndustryKey(industry);
-  const defaultId = getDefaultTemplateIdForIndustry(normalized);
+  const defaultId = getDefaultTemplateIdForIndustry(industry);
   return (defaultId ? cards.find((card) => card.id === defaultId) : undefined)
     || cards.find((card) => normalizeIndustryKey(card.industry) === normalized)
     || null;

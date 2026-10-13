@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AIMessage } from "@/components/ai/AIAssistantCore";
-import { deriveChatLaunchPlan } from "@/services/launch/chatLaunchPlan";
+import { buildSyncedVisionBrief, deriveChatLaunchPlan } from "@/services/launch/chatLaunchPlan";
+import { resolveLaunchCapabilities } from "@/services/launch/launchCapabilities";
+import { buildIndustryAuthoringContext } from "@/services/app-builder/appBuilderGenerationContext";
 import {
   buildConfirmedSiteBrief,
   describeAssistantFailure,
@@ -72,5 +74,25 @@ describe("homepage assistant failures", () => {
     expect(plan.primaryGoal).toBe("sell_offers");
     expect(plan.customerNeeds).toContain("buy_offer");
     expect(plan.selectedPages).toEqual(expect.arrayContaining(["checkout", "shop"]));
+
+    const capabilities = resolveLaunchCapabilities(['booking', 'contact', 'newsletter'], plan.industry!, {
+      primaryGoal: plan.primaryGoal,
+      customerNeeds: plan.customerNeeds,
+    });
+    const syncedBrief = buildSyncedVisionBrief(plan, {
+      businessName: 'Table & Hearth',
+      industry: plan.industry,
+      primaryGoal: plan.primaryGoal,
+      selectedPages: ['home', 'services', 'checkout', 'shop'],
+      themePresetId: plan.themePresetId,
+    });
+    const authoringContext = buildIndustryAuthoringContext(plan.industry!, capabilities);
+
+    expect(syncedBrief).toContain('industry restaurant; goal sell_offers');
+    expect(syncedBrief).toContain('pages home, services, checkout, shop');
+    expect(capabilities).toEqual(['booking', 'contact', 'newsletter', 'commerce']);
+    expect(authoringContext).toContain('Industry catalog targets: menu');
+    expect(authoringContext).toContain('Launch capabilities: booking, contact, newsletter, commerce');
+    expect(authoringContext).toContain('commerce');
   });
 });

@@ -65,6 +65,8 @@ export const INDUSTRY_DEFAULT_TEMPLATE_REGISTRY: Record<CanonicalIndustryKey, In
 
 export function getIndustryDefaultRegistration(industry: string | null | undefined): IndustryDefaultTemplateRegistration | undefined {
   if (!industry) return undefined;
+  const explicit = INDUSTRY_DEFAULT_TEMPLATE_REGISTRY[industry.trim().toLowerCase() as CanonicalIndustryKey];
+  if (explicit) return explicit;
   const normalized = normalizeIndustryKey(industry) as CanonicalIndustryKey;
   return INDUSTRY_DEFAULT_TEMPLATE_REGISTRY[normalized];
 }

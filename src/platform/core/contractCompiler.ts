@@ -30,6 +30,7 @@ import type { BusinessBlueprint, BlueprintPage } from './blueprintSchema';
 import {
   CAPABILITY_REGISTRY,
   getAllowedIntents,
+  isCapabilitySupportedForIndustry,
   getRequiredTables,
   getRequiredWorkflows,
   type CapabilityId,
@@ -203,7 +204,7 @@ export function compileContract(
     }
 
     const cap = CAPABILITY_REGISTRY[capId];
-    if (cap && !cap.supportedIndustries.includes(blueprint.identity.industry)) {
+    if (cap && !isCapabilitySupportedForIndustry(capId, blueprint.identity.industry)) {
       issues.push({
         code: 'UNSUPPORTED_CAPABILITY',
         severity: 'warning',

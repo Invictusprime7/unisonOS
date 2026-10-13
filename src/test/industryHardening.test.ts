@@ -4,7 +4,11 @@ import {
   getIndustryIntentProfile,
   synthesizeIndustryBindings,
 } from '@/platform/core/industryIntentProfiles';
-import { getIndustryProfile, normalizeIndustryKey } from '@/platform/core/industryMatrix';
+import { getAllIndustries, getIndustryProfile, normalizeIndustryKey } from '@/platform/core/industryMatrix';
+import { getCapability } from '@/platform/core/capabilityRegistry';
+import { resolveTemplateIndustryCategory } from '@/components/onboarding/wizard/wizardCatalog';
+import { classifyPromptForWizard } from '@/components/onboarding/wizard/wizardPromptClassifier';
+import { getDefaultTemplateIdForIndustry } from '@/sections/templates/industryDefaultRegistry';
 import {
   buildUIIntentContract,
   getUIIntentProfile,
@@ -28,6 +32,23 @@ const HARDENED_INDUSTRIES = [
 ] as const;
 
 describe('Industry hardening — intent profiles', () => {
+  it('covers every matrix industry and every supported focused commerce/booking intent', () => {
+    const levelHas = (profile: ReturnType<typeof getIndustryIntentProfile>, intent: string) =>
+      !!profile && [profile.required, profile.primary, profile.secondary, profile.optional].some((items) => items.includes(intent as never));
+
+    for (const industry of getAllIndustries()) {
+      expect(getIndustryIntentProfile(industry.industry)?.industry, industry.industry).toBe(industry.industry);
+    }
+    for (const industry of getCapability('commerce').supportedIndustries) {
+      const profile = getIndustryIntentProfile(industry);
+      expect(levelHas(profile, 'cart.add'), `${industry}.cart.add`).toBe(true);
+      expect(levelHas(profile, 'cart.checkout'), `${industry}.cart.checkout`).toBe(true);
+    }
+    for (const industry of getCapability('booking').supportedIndustries) {
+      expect(levelHas(getIndustryIntentProfile(industry), 'booking.create'), `${industry}.booking.create`).toBe(true);
+    }
+  });
+
   it.each(['cafe', 'caf\u00e9', 'bakery', 'bistro', 'food truck', 'restaurant-hospitality'])(
     'resolves %s to the canonical restaurant profile',
     (alias) => {
@@ -36,6 +57,31 @@ describe('Industry hardening — intent profiles', () => {
       expect(getIndustryIntentProfile(alias)?.industry).toBe('restaurant');
     },
   );
+
+  it.each([
+    ['software company', 'saas', 'saas'],
+    ['hair salon', 'salon', 'salon'],
+    ['food truck', 'restaurant', 'restaurant'],
+    ['plumber', 'local-service', 'contractor'],
+    ['consulting business', 'coaching', 'coaching'],
+    ['realtor', 'real-estate', 'realestate'],
+    ['online store', 'ecommerce', 'store'],
+    ['photography studio', 'portfolio', 'portfolio'],
+    ['non-profit organization', 'nonprofit', 'nonprofit'],
+    ['marketing agency', 'agency', 'agency'],
+  ])('keeps %s attached to canonical %s routing', (phrase, industry, category) => {
+    const analysis = classifyPromptForWizard(`${phrase} website with a pricing page`);
+    expect(analysis?.industry).toBe(industry);
+    expect(normalizeIndustryKey(phrase)).toBe(industry);
+    expect(resolveTemplateIndustryCategory(phrase)).toBe(category);
+  });
+
+  it('preserves contractor starter composition while sharing local-service data identity', () => {
+    expect(normalizeIndustryKey('contractor')).toBe('local-service');
+    expect(getIndustryProfile('contractor')?.industry).toBe('local-service');
+    expect(getDefaultTemplateIdForIndustry('contractor')).toBe('contractor-premium');
+    expect(getDefaultTemplateIdForIndustry('plumber')).toBe('local-service-premium');
+  });
 
   it.each(HARDENED_INDUSTRIES)('%s ships a unified intent map (profileFromMap)', (industry) => {
     const profile = INDUSTRY_INTENT_PROFILES[industry];
@@ -113,8 +159,8 @@ describe('Industry hardening — UI intent profiles', () => {
 });
 
 describe('Industry hardening — forbidden intents are stripped', () => {
-  it('keeps cart actions forbidden for salon', () => {
-    expect(getIndustryIntentProfile('salon')?.forbidden).toContain('cart.add');
+  it('keeps salon cart actions optional until commerce is selected', () => {
+    expect(getIndustryIntentProfile('salon')?.optional).toContain('cart.add');
   });
 
   it('keeps restaurant cart actions available as an explicit optional intent', () => {
@@ -131,7 +177,7 @@ describe('Industry hardening — forbidden intents are stripped', () => {
     expect(result.kept).toHaveLength(1);
   });
 
-  it('ecommerce strips booking.create bindings', () => {
+  it('keeps e-commerce booking available as an optional focused intent', () => {
     const profile = INDUSTRY_INTENT_PROFILES.ecommerce;
     const result = synthesizeIndustryBindings(
       profile,
@@ -141,11 +187,11 @@ describe('Industry hardening — forbidden intents are stripped', () => {
       }],
       { availablePageRoles: new Set(['home', 'shop']) },
     );
-    expect(result.strippedForbidden).toHaveLength(1);
-    expect(result.kept.find((b) => b.coreIntent === 'booking.create')).toBeUndefined();
+    expect(result.strippedForbidden).toHaveLength(0);
+    expect(result.kept.find((b) => b.coreIntent === 'booking.create')).toBeDefined();
   });
 
-  it('nonprofit strips cart.add bindings', () => {
+  it('keeps nonprofit merchandise checkout optional beside required donations', () => {
     const profile = INDUSTRY_INTENT_PROFILES.nonprofit;
     const result = synthesizeIndustryBindings(
       profile,
@@ -155,7 +201,9 @@ describe('Industry hardening — forbidden intents are stripped', () => {
       }],
       { availablePageRoles: new Set(['home']) },
     );
-    expect(result.strippedForbidden).toHaveLength(1);
+    expect(result.strippedForbidden).toHaveLength(0);
+    expect(result.kept.find((b) => b.coreIntent === 'cart.add')).toBeDefined();
+    expect(profile.required).toContain('donation.start');
   });
 
   it('salon strips quote.request bindings', () => {

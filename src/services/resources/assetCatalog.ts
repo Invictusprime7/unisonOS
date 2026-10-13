@@ -28,6 +28,7 @@ const HIDDEN_SURFACES = new Set(['availability']);
 
 /** Data-only industry relevance. Keys are surface ids / content slugs. */
 const INDUSTRY_RANK: Record<string, string[]> = {
+  saas: ['pricing', 'testimonials', 'articles', 'case-studies', 'portfolio'],
   salon: ['services', 'pricing', 'testimonials', 'team', 'gallery', 'offers'],
   restaurant: ['menu', 'offers', 'testimonials', 'gallery', 'faq'],
   ecommerce: ['products', 'offers', 'testimonials', 'faq'],
@@ -36,6 +37,7 @@ const INDUSTRY_RANK: Record<string, string[]> = {
   coaching: ['services', 'pricing', 'testimonials', 'faq', 'case-studies', 'articles'],
   fitness: ['pricing', 'services', 'team', 'testimonials', 'gallery'],
   photography: ['portfolio', 'gallery', 'pricing', 'testimonials'],
+  portfolio: ['portfolio', 'gallery', 'testimonials', 'pricing', 'articles'],
   'real-estate': ['portfolio', 'team', 'testimonials', 'faq'],
   nonprofit: ['case-studies', 'team', 'testimonials', 'faq', 'gallery'],
 };
