@@ -48,6 +48,8 @@ import {
   X,
   MessageSquare,
   CircleDot,
+  Layers,
+  Palette,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AIConversationMessage } from './ai-chat/AIConversationMessage';
@@ -530,6 +532,10 @@ interface AIBuilderPanelProps {
   iframeErrors?: IframeError[];
   onClearErrors?: () => void;
   onClose?: () => void;
+  /** Mount points for existing WebBuilder-owned panels; no duplicate mutations. */
+  onToolsHostChange?: (host: HTMLDivElement | null) => void;
+  onCustomizerHostChange?: (host: HTMLDivElement | null) => void;
+  customizerAvailable?: boolean;
   className?: string;
   /** User's design profile for personalised AI generation */
   userDesignProfile?: {
@@ -649,6 +655,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   iframeErrors = [],
   onClearErrors,
   onClose,
+  onToolsHostChange,
+  onCustomizerHostChange,
+  customizerAvailable = false,
   className,
   userDesignProfile,
   pageStructureContext,
@@ -693,7 +702,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     return () => setAiGenerationActive(false);
   }, [isLoading]);
   const [isFixing, setIsFixing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'code' | 'debug' | 'backend'>('code');
+  const [activeTab, setActiveTab] = useState<'code' | 'tools' | 'customize' | 'debug' | 'backend'>('code');
+  useEffect(() => {
+    if (!customizerAvailable && activeTab === 'customize') setActiveTab('code');
+  }, [activeTab, customizerAvailable]);
   const [aiPermissions, setAIPermissions] = useState<AIEditPermissions>(() => loadAIEditPermissions());
   const [pendingPermissionAction, setPendingPermissionAction] = useState<PendingPermissionAction | null>(null);
   const [isApplyingPermissionAction, setIsApplyingPermissionAction] = useState(false);
@@ -3344,8 +3356,8 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       </div>
 
       {/* Tab bar */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'code' | 'debug' | 'backend')} className="flex-1 flex flex-col min-h-0">
-        <TabsList className="w-full grid grid-cols-3 rounded-none h-9 bg-transparent border-b border-border px-1">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col min-h-0">
+        <TabsList className={cn('w-full grid rounded-none h-9 bg-transparent border-b border-border px-1', customizerAvailable ? 'grid-cols-5' : 'grid-cols-4')}>
           <TabsTrigger
             value="code"
             className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
@@ -3353,6 +3365,22 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             <MessageSquare className="w-3.5 h-3.5" />
             Chat
           </TabsTrigger>
+          <TabsTrigger
+            value="tools"
+            className="text-[10px] gap-1 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Tools
+          </TabsTrigger>
+          {customizerAvailable && (
+            <TabsTrigger
+              value="customize"
+              className="text-[10px] gap-1 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
+            >
+              <Palette className="h-3.5 w-3.5" />
+              Style
+            </TabsTrigger>
+          )}
           <TabsTrigger
             value="debug"
             className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
@@ -3373,6 +3401,15 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             Backend
           </TabsTrigger>
         </TabsList>
+
+        <div role="tabpanel" aria-hidden={activeTab !== 'tools'} hidden={activeTab !== 'tools'} className="min-h-0 flex-1 overflow-hidden">
+          <div ref={onToolsHostChange} className="h-full min-h-0 overflow-hidden" />
+        </div>
+        {onCustomizerHostChange && customizerAvailable && (
+          <div role="tabpanel" aria-hidden={activeTab !== 'customize'} hidden={activeTab !== 'customize'} className="min-h-0 flex-1 overflow-hidden">
+            <div ref={onCustomizerHostChange} className="h-full min-h-0 overflow-hidden" />
+          </div>
+        )}
 
         {/* Chat Tab */}
         <TabsContent value="code" className="flex-1 flex flex-col m-0 min-h-0 data-[state=inactive]:hidden">

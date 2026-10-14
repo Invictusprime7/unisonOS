@@ -18,6 +18,7 @@ export function catalogSurfaceToResource(s: CatalogSurface): ResourceDefinition 
   return {
     key: s.surfaceId,
     kind: 'catalog',
+    catalogKind: s.catalogKind,
     cardinality: 'collection',
     label: s.friendlyName,
     schema: s.editableFields.map((f) => ({
@@ -25,8 +26,9 @@ export function catalogSurfaceToResource(s: CatalogSurface): ResourceDefinition 
     })),
     storage: { adapter: 'catalog', table: s.sourceTable },
     capabilities: {
-      commerce: kind === 'product' || kind === 'menu_item',
+      commerce: kind === 'product' || kind === 'menu_item' || kind === 'pricing_plan' || kind === 'offer',
       booking: kind === 'service' || kind === 'availability_slot',
+      ordering: kind === 'product' || kind === 'menu_item',
       featured: Boolean(s.fields.featured),
     },
     rendererFamilies: [s.componentType],

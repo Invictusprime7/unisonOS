@@ -4,6 +4,7 @@
  * This is an orchestration layer, not a data authority (§21).
  */
 import type { ResourceEntityRef } from '@/services/resources/resourceTypes';
+import type { CatalogKind } from '@/platform/core/catalogSurfaceRegistry';
 import type { AssetRef } from '@/services/assets/assetRef';
 
 export interface EditorTarget {
@@ -22,6 +23,7 @@ export interface EditorTarget {
   objectId?: string | null;
   ownerKind?: 'resource' | 'source' | 'unbound' | null;
   resourceKey?: string | null;
+  catalogKind?: CatalogKind | null;
   recordId?: string | null;
   field?: string | null;
   /** Position among sibling repeats of the same template (0-based). */

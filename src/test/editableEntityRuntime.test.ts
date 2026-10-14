@@ -23,6 +23,9 @@ describe('canonical editable entity runtime', () => {
       graph,
       selectedElement: { sourceTable: 'products', rowId: 'product-1', field: 'price', componentPath: '/src/pages/Home.tsx' },
     });
+    expect(entity.resource).toMatchObject({
+      resourceKey: 'products', kind: 'catalog', catalogKind: 'product', recordId: 'product-1', field: 'price',
+    });
     expect(entity.owners.price).toMatchObject({ kind: 'catalog-row', table: 'products', rowId: 'product-1' });
     expect(entity.owners.source).toBeUndefined();
     expect(entity.kind).toBe('catalog');

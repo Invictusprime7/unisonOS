@@ -12,6 +12,15 @@ describe('EditableObjectDescriptor (M1)', () => {
     const reordered = [cards[2], cards[0], cards[1]].map((c, i) => ({ ...c, instanceIndex: i }));
     expect(reacquireSelection(picked, reordered)?.descriptor.recordId).toBe('b2');
   });
+  it('preserves the catalog subtype for product and service inline targets', () => {
+    const product = describeSelection({ pagePath: '/', resourceMark: 'products#p1.price' });
+    const service = describeSelection({ pagePath: '/', resourceMark: 'services#s1.duration_minutes' });
+
+    expect(product.catalogKind).toBe('product');
+    expect(descriptorToTarget(product).catalogKind).toBe('product');
+    expect(service.catalogKind).toBe('service');
+    expect(descriptorToTarget(service).catalogKind).toBe('service');
+  });
   it('identifies static repeats by source locator + instance index', () => {
     const items = [0, 1, 2].map((i) => ({ pagePath: '/', sourceLocator: '/src/pages/Home.tsx:60:4', instanceIndex: i }));
     const picked = describeSelection(items[1]);

@@ -8,6 +8,7 @@ import { captureIntentBaseline, deriveIntentChecks, verifyCommittedChange } from
 import { buildPreviewRouteTabs, extractRenderedRoutes, ROUTE_TAB_PREFIX, resolveRouteSourceFile } from '@/components/creatives/web-builder/previewRouteTabs';
 import "./web-builder/obsidian-theme.css";
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense, Component, type ReactNode, type ErrorInfo } from "react";
+import { createPortal } from 'react-dom';
 import TemplateFeedback from "./TemplateFeedback";
 import type { Canvas as FabricCanvas } from "fabric";
 import { Button } from "@/components/ui/button";
@@ -655,6 +656,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const [playgroundCalendars, setPlaygroundCalendars] = useState<Record<string, import('@/types/playground').PlaygroundCalendar>>({});
   const [playgroundPopups, setPlaygroundPopups] = useState<Record<string, import('@/types/playground').PlaygroundPopup>>({});
   const [aiPanelOpen, setAiPanelOpen] = useState(true); // AI panel open by default for easy access; force-closed on mount if mobile (see useEffect below)
+  const [aiBuilderToolsHost, setAIBuilderToolsHost] = useState<HTMLDivElement | null>(null);
+  const [aiBuilderCustomizerHost, setAIBuilderCustomizerHost] = useState<HTMLDivElement | null>(null);
   const [iframeErrors, setIframeErrors] = useState<IframeError[]>([]);
   const dragDropServiceRef = useRef<CanvasDragDropService>(CanvasDragDropService.getInstance());
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -3790,6 +3793,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     business: {
       id: string | null;
       name: string | null;
+      industry: string | null;
       notificationEmail: string | null;
       timezone: string | null;
       brandColor: string | null;
@@ -3809,6 +3813,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     business: {
       id: businessId || null,
       name: null,
+      industry: null,
       notificationEmail: null,
       timezone: 'UTC',
       brandColor: null,
@@ -3842,9 +3847,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         // Type cast to handle dynamic table that may not be in generated types yet
         const { data: bizData } = await supabase
           .from('businesses' as any)
-          .select('id, name, notification_email, timezone, brand_color, settings')
+          .select('id, name, industry, notification_email, timezone, brand_color, settings')
           .eq('id', businessId)
-          .maybeSingle() as { data: { id: string; name: string; notification_email: string | null; timezone: string | null; brand_color: string | null; settings: any } | null };
+          .maybeSingle() as { data: { id: string; name: string; industry: string | null; notification_email: string | null; timezone: string | null; brand_color: string | null; settings: any } | null };
         
         // Load project settings if we have a projectId
         let projectData: { id: string; name: string; slug: string | null; publish_status: string | null; custom_domain: string | null; settings: any } | null = null;
@@ -3893,6 +3898,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             business: {
               id: bizData?.id || businessId || null,
               name: bizData?.name || null,
+              industry: bizData?.industry || null,
               notificationEmail: bizData?.notification_email || null,
               timezone: bizData?.timezone || 'UTC',
               brandColor: bizData?.brand_color || null,
@@ -7275,6 +7281,141 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     if (await applyCheckpoint(next, 'Redo')) setCheckpointRedo((stack) => stack.slice(0, -1));
   };
 
+  const builderIndustry = cloudState.business.industry
+    || effectiveRouteState?.siteBundleSnapshot?.industry
+    || undefined;
+
+  const builderToolsPanel = (
+    <div className="bg-[#0d0d18] border-r-2 border-cyan-500/40 flex flex-col overflow-hidden shadow-[0_0_20px_rgba(0,255,255,0.15)] transition-all duration-300 w-full h-full">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-cyan-500/30 bg-[#0a0a14]">
+        <div className="flex items-center gap-2">
+          <div className="p-1 rounded-md bg-cyan-500/20"><Layers className="w-3.5 h-3.5 text-cyan-400" /></div>
+          <span className="text-xs font-bold text-cyan-400">Builder Tools</span>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            if (aiPanelOpen) {
+              setAiPanelOpen(false);
+              setLeftPanelCollapsed(false);
+            } else setLeftPanelCollapsed(true);
+          }}
+          className="h-6 w-6 text-cyan-400/50 hover:text-cyan-400 rounded transition-all duration-200"
+          title={aiPanelOpen ? 'Open standalone Builder Tools' : 'Close Builder Tools Panel'}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+      </div>
+      <Tabs defaultValue="business" className="flex-1 flex flex-col min-h-0">
+        <TabsList className="w-full flex-wrap justify-start rounded-none border-b-2 border-cyan-500/30 bg-[#0a0a14] px-1.5 py-1.5 min-h-[44px] h-auto shrink-0 gap-1">
+          <TabsTrigger value="business" className="text-[10px] px-2 py-1 rounded-md text-cyan-400/70 hover:text-cyan-300 data-[state=active]:bg-orange-500 data-[state=active]:text-black data-[state=active]:font-bold transition-all duration-200">Business</TabsTrigger>
+          <TabsTrigger value="functional" className="text-[10px] px-2 py-1 rounded-md text-cyan-400/70 hover:text-cyan-300 data-[state=active]:bg-fuchsia-500 data-[state=active]:text-black data-[state=active]:font-bold transition-all duration-200">Logic</TabsTrigger>
+          <TabsTrigger value="seo" className="text-[10px] px-2 py-1 rounded-md text-cyan-400/70 hover:text-cyan-300 data-[state=active]:bg-yellow-400 data-[state=active]:text-black data-[state=active]:font-bold transition-all duration-200">SEO</TabsTrigger>
+          <TabsTrigger value="ai-plugins" className="text-[10px] px-2 py-1 rounded-md text-cyan-400/70 hover:text-cyan-300 data-[state=active]:bg-lime-400 data-[state=active]:text-black data-[state=active]:font-bold transition-all duration-200">AI</TabsTrigger>
+        </TabsList>
+        <TabsContent value="functional" className="flex-1 m-0 min-h-0 overflow-hidden">
+          <FunctionalBlocksPanel onInsertBlock={(html) => {
+            const currentFiles = virtualFS.getSandpackFiles();
+            const patchFiles = elementToVFSPatch(currentFiles, html, 'FunctionalBlock', launchEntryPoint);
+            void commitBuilderFiles(patchFiles, {
+              source: 'preview-toolbar', summary: 'Functional block insert', failureMessage: 'Could not add this block to your site',
+            }).then((committed) => {
+              if (!committed) return;
+              const newAppCode = committed[launchEntryPoint] || '';
+              if (newAppCode) { setEditorCode(newAppCode); setPreviewCode(newAppCode); }
+              toast.success('Functional block added');
+            });
+          }} />
+        </TabsContent>
+        <TabsContent value="seo" className="flex-1 m-0 min-h-0 overflow-hidden">
+          <SEOSettingsPanel
+            siteSEO={pageSEO.siteSEO}
+            pageSEOMap={pageSEO.pageSEOMap}
+            isSaving={pageSEO.isSaving}
+            activePageKey={activePagePath === launchEntryPoint
+              ? 'home'
+              : activePagePath.replace(/^\/src\/pages\//, '').replace(/^\//, '').replace(/\.(tsx|jsx|html)$/, '')}
+            pageKeys={vfsPageKeys}
+            onUpdateSiteSEO={pageSEO.updateSiteSEO}
+            onUpdatePageSEO={pageSEO.updatePageSEO}
+          />
+        </TabsContent>
+        <TabsContent value="ai-plugins" className="flex-1 m-0 min-h-0 overflow-hidden">
+          <AIPluginsPanel businessId={businessId} pluginInstanceId={cloudState.installedPacks?.[0]} />
+        </TabsContent>
+        <TabsContent value="business" className="flex-1 m-0 min-h-0 overflow-hidden">
+          <Tabs defaultValue="intents" className="flex flex-col h-full">
+            <TabsList className="w-full flex-nowrap justify-start overflow-x-auto rounded-none bg-[#0a0a12] px-2 h-8 shrink-0 gap-1 border-b border-cyan-500/10">
+              <TabsTrigger value="intents" className="text-[9px] px-1.5 py-0.5 data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400"><Zap className="h-3 w-3 mr-1" />Intents</TabsTrigger>
+              <TabsTrigger value="automations" className="text-[9px] px-1.5 py-0.5 data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400"><Sparkles className="h-3 w-3 mr-1" />Recipes</TabsTrigger>
+              <TabsTrigger value="workflows" className="text-[9px] px-1.5 py-0.5 data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-400"><GitBranch className="h-3 w-3 mr-1" />Workflows</TabsTrigger>
+              <TabsTrigger value="health" className="text-[9px] px-1.5 py-0.5 data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400"><Shield className="h-3 w-3 mr-1" />Health</TabsTrigger>
+              <TabsTrigger value="theme" className="text-[9px] px-1.5 py-0.5 data-[state=active]:bg-fuchsia-500/20 data-[state=active]:text-fuchsia-400"><Palette className="h-3 w-3 mr-1" />Theme</TabsTrigger>
+            </TabsList>
+            <TabsContent value="theme" className="flex-1 m-0 min-h-0 overflow-hidden">
+              <ThemeTokenEditorPanel vfsFiles={virtualFS.getSandpackFiles()} onCommitTokens={commitThemeTokenOps} />
+            </TabsContent>
+            <TabsContent value="intents" className="flex-1 m-0 min-h-0 overflow-hidden">
+              <IntentDirectoryPanel
+                businessId={businessId} projectId={projectId || undefined} currentPagePath={activePagePath}
+                detectedIntents={[]}
+                onRefreshIntents={() => console.log('[WebBuilder] Refreshing intents for:', activePagePath)}
+                onTestIntent={(intent, payload) => handleIntent(intent, { ...payload, businessId, projectId })}
+              />
+            </TabsContent>
+            <TabsContent value="automations" className="flex-1 m-0 min-h-0 overflow-hidden">
+              <AutomationStatsPanel
+                businessId={businessId} projectId={projectId || undefined}
+                industry={builderIndustry}
+                onNavigateToSettings={() => toast.info('Opening business settings...')}
+              />
+            </TabsContent>
+            <TabsContent value="workflows" className="flex-1 m-0 min-h-0 overflow-hidden">
+              <WorkflowListPanel
+                businessId={businessId} projectId={projectId || undefined}
+                industry={builderIndustry}
+              />
+            </TabsContent>
+            <TabsContent value="health" className="flex-1 m-0 min-h-0 overflow-auto p-2 space-y-2">
+              <GateVerdictStrip contract={compiledContract} />
+              <ReadinessCenterPanel contract={compiledContract} vfsFiles={virtualFS.getSandpackFiles()} />
+              <SystemHealthPanel contract={compiledContract} onPublishCheck={() => toast.info('Running publish checks...')} />
+              <CompositionUpgradePanel
+                projectKey={`${resolvedProjectId || currentDraftId}:${businessId}`}
+                getInput={() => {
+                  if (!currentUserId || !businessId || !currentDraftId) return null;
+                  const files = virtualFSRef.current.getSandpackFiles();
+                  const snapshot = resolveSnapshot(files, effectiveRouteState as any).snapshot ?? effectiveRouteState?.siteBundleSnapshot ?? null;
+                  return {
+                    identity: buildCommitIdentity({ userId: currentUserId, businessId, projectId: resolvedProjectId, draftId: currentDraftId, revisionId: currentRevisionIdRef.current })!,
+                    current: buildCanonicalCommitCurrent(files, snapshot),
+                    options: { industry: snapshot?.industry, themePresetId: snapshot?.meta?.themePresetId, themeTokens: snapshot?.themeTokens },
+                  };
+                }}
+                onCommitted={(commit) => {
+                  importBuilderFiles(commit.vfsFiles, { replace: true, preferredPath: activePagePath, entryPoint: launchEntryPoint, adoption: commitAdoptionRecord(commit) });
+                  if (commit.persistedRevisionId) setCurrentRevisionId(commit.persistedRevisionId);
+                  toast.success('Template composition saved');
+                }}
+              />
+              <RevisionLedgerStatus
+                projectId={projectId ?? null} vfsFiles={virtualFS.getSandpackFiles()}
+                identity={currentUserId && businessId && currentDraftId
+                  ? buildCommitIdentity({ userId: currentUserId, businessId, projectId: resolvedProjectId, draftId: currentDraftId, revisionId: currentRevisionId })!
+                  : null}
+                onRestored={(revId) => {
+                  setCurrentRevisionId(revId);
+                  toast.success('Reloading restored revision…');
+                  void templateFiles.loadTemplate(currentDraftId);
+                }}
+              />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 
   return (
     <BuilderSessionProvider
@@ -7523,18 +7664,28 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+            onClick={() => {
+              if (aiPanelOpen) {
+                setAiPanelOpen(false);
+                setLeftPanelCollapsed(false);
+              } else setLeftPanelCollapsed(!leftPanelCollapsed);
+            }}
             className={cn("h-8 w-8 rounded-md", !leftPanelCollapsed ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/[0.06] hover:text-white")}
-            title={leftPanelCollapsed ? "Show tools" : "Hide tools"}
+            title={aiPanelOpen ? "Open standalone Builder Tools" : leftPanelCollapsed ? "Show tools" : "Hide tools"}
           >
             <Layers className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
+            onClick={() => {
+              if (aiPanelOpen) {
+                setAiPanelOpen(false);
+                setRightPanelCollapsed(false);
+              } else setRightPanelCollapsed(!rightPanelCollapsed);
+            }}
             className={cn("h-8 w-8 rounded-md", !rightPanelCollapsed ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/[0.06] hover:text-white")}
-            title={rightPanelCollapsed ? "Show Properties Panel" : "Hide Properties Panel"}
+            title={aiPanelOpen ? "Open standalone Customizer" : rightPanelCollapsed ? "Show Properties Panel" : "Hide Properties Panel"}
           >
             <Settings className="h-4 w-4" />
           </Button>
@@ -7719,6 +7870,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           <>
             <ResizablePanel defaultSize={22} minSize={18} maxSize={35}>
               <AIBuilderPanel
+                onToolsHostChange={setAIBuilderToolsHost}
+                onCustomizerHostChange={setAIBuilderCustomizerHost}
+                customizerAvailable={Boolean(previewCode && !selectedObject)}
                 onThemeEdit={requestThemeEdit}
                 currentCode={previewCode}
                 systemType={activeSystemType}
@@ -8070,225 +8224,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         <ResizablePanel defaultSize={isMobile ? 100 : (aiPanelOpen ? 78 : 100)} minSize={50}>
           {/* Main Content */}
           <div className="h-full flex overflow-hidden relative">
-        {/* Left Panel - Elements Sidebar */}
-        {!leftPanelCollapsed && (
-          <div className={cn(
-            "bg-[#0d0d18] border-r-2 border-cyan-500/40 flex flex-col overflow-hidden shadow-[0_0_20px_rgba(0,255,255,0.15)] transition-all duration-300",
-            isMobile
-              ? "absolute left-2 top-2 bottom-2 w-[calc(100vw-1rem)] max-w-md z-30 rounded-lg border-2"
-              : "w-64 flex-shrink-0"
-          )}>
-            {/* Left Panel Header with Close Button */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-cyan-500/30 bg-[#0a0a14]">
-              <div className="flex items-center gap-2">
-                <div className="p-1 rounded-md bg-cyan-500/20">
-                  <Layers className="w-3.5 h-3.5 text-cyan-400" />
-                </div>
-                <span className="text-xs font-bold text-cyan-400">Builder Tools</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setLeftPanelCollapsed(true)}
-                className="h-6 w-6 text-cyan-400/50 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition-all duration-200"
-                title="Close Builder Tools Panel"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-            </div>
-            <Tabs defaultValue="business" className="flex-1 flex flex-col min-h-0">
-              <TabsList className="w-full flex-wrap justify-start rounded-none border-b-2 border-cyan-500/30 bg-[#0a0a14] px-1.5 py-1.5 min-h-[44px] h-auto shrink-0 gap-1">
-                <TabsTrigger value="business" className="text-[10px] px-2 py-1 rounded-md text-cyan-400/70 hover:text-cyan-300 hover:bg-cyan-500/10 data-[state=active]:bg-orange-500 data-[state=active]:text-black data-[state=active]:font-bold data-[state=active]:shadow-[0_0_15px_rgba(255,165,0,0.5)] transition-all duration-200">Business</TabsTrigger>
-                <TabsTrigger value="functional" className="text-[10px] px-2 py-1 rounded-md text-cyan-400/70 hover:text-cyan-300 hover:bg-cyan-500/10 data-[state=active]:bg-fuchsia-500 data-[state=active]:text-black data-[state=active]:font-bold data-[state=active]:shadow-[0_0_15px_rgba(255,0,255,0.5)] transition-all duration-200">Logic</TabsTrigger>
-                <TabsTrigger value="seo" className="text-[10px] px-2 py-1 rounded-md text-cyan-400/70 hover:text-cyan-300 hover:bg-cyan-500/10 data-[state=active]:bg-yellow-400 data-[state=active]:text-black data-[state=active]:font-bold data-[state=active]:shadow-[0_0_15px_rgba(255,255,0,0.5)] transition-all duration-200">SEO</TabsTrigger>
-                <TabsTrigger value="ai-plugins" className="text-[10px] px-2 py-1 rounded-md text-cyan-400/70 hover:text-cyan-300 hover:bg-cyan-500/10 data-[state=active]:bg-lime-400 data-[state=active]:text-black data-[state=active]:font-bold data-[state=active]:shadow-[0_0_15px_rgba(0,255,0,0.5)] transition-all duration-200">⚡ AI</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="functional" className="flex-1 m-0 min-h-0 overflow-hidden">
-                <FunctionalBlocksPanel 
-                  onInsertBlock={(html) => {
-                    // Get current VFS files and patch with new element
-                    const currentFiles = virtualFS.getSandpackFiles();
-                    const patchFiles = elementToVFSPatch(currentFiles, html, 'FunctionalBlock', launchEntryPoint);
-                    void commitBuilderFiles(patchFiles, {
-                      source: 'preview-toolbar',
-                      summary: 'Functional block insert',
-                      failureMessage: 'Could not add this block to your site',
-                    }).then((committed) => {
-                      if (!committed) return;
-                      const newAppCode = committed[launchEntryPoint] || '';
-                      if (newAppCode) {
-                        setEditorCode(newAppCode);
-                        setPreviewCode(newAppCode);
-                      }
-                      toast.success('Functional block added');
-                    });
-                  }}
-                />
-              </TabsContent>
-              <TabsContent value="seo" className="flex-1 m-0 min-h-0 overflow-hidden">
-                <SEOSettingsPanel
-                  siteSEO={pageSEO.siteSEO}
-                  pageSEOMap={pageSEO.pageSEOMap}
-                  isSaving={pageSEO.isSaving}
-                  activePageKey={
-                    activePagePath === launchEntryPoint
-                      ? 'home'
-                      : activePagePath
-                        .replace(/^\/src\/pages\//, '')
-                        .replace(/^\//, '')
-                        .replace(/\.(tsx|jsx|html)$/, '')
-                  }
-                  pageKeys={vfsPageKeys}
-                  onUpdateSiteSEO={pageSEO.updateSiteSEO}
-                  onUpdatePageSEO={pageSEO.updatePageSEO}
-                />
-              </TabsContent>
-              <TabsContent value="ai-plugins" className="flex-1 m-0 min-h-0 overflow-hidden">
-                <AIPluginsPanel 
-                  businessId={businessId}
-                  pluginInstanceId={cloudState.installedPacks?.[0]}
-                />
-              </TabsContent>
-              <TabsContent value="business" className="flex-1 m-0 min-h-0 overflow-hidden">
-                <Tabs defaultValue="intents" className="flex flex-col h-full">
-                  <TabsList className="w-full justify-start rounded-none bg-[#0a0a12] px-2 h-8 shrink-0 gap-1 border-b border-cyan-500/10">
-                    <TabsTrigger value="intents" className="text-[9px] px-1.5 py-0.5 data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400">
-                      <Zap className="h-3 w-3 mr-1" />
-                      Intents
-                    </TabsTrigger>
-                    <TabsTrigger value="automations" className="text-[9px] px-1.5 py-0.5 data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400">
-                      <Sparkles className="h-3 w-3 mr-1" />
-                      Recipes
-                    </TabsTrigger>
-                    <TabsTrigger value="workflows" className="text-[9px] px-1.5 py-0.5 data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-400">
-                      <GitBranch className="h-3 w-3 mr-1" />
-                      Workflows
-                    </TabsTrigger>
-                    <TabsTrigger value="health" className="text-[9px] px-1.5 py-0.5 data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
-                      <Shield className="h-3 w-3 mr-1" />
-                      Health
-                    </TabsTrigger>
-                    <TabsTrigger value="theme" className="text-[9px] px-1.5 py-0.5 data-[state=active]:bg-fuchsia-500/20 data-[state=active]:text-fuchsia-400">
-                      <Palette className="h-3 w-3 mr-1" />
-                      Theme
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="theme" className="flex-1 m-0 min-h-0 overflow-hidden">
-                    <ThemeTokenEditorPanel
-                      vfsFiles={virtualFS.getSandpackFiles()}
-                      onCommitTokens={commitThemeTokenOps}
-                    />
-                  </TabsContent>
-                  <TabsContent value="intents" className="flex-1 m-0 min-h-0 overflow-hidden">
-                    <IntentDirectoryPanel
-                      businessId={businessId}
-                      projectId={projectId || undefined}
-                      currentPagePath={activePagePath}
-                      detectedIntents={[]} // TODO: Wire to intent detection
-                      onRefreshIntents={() => {
-                        // Trigger re-analysis of current page
-                        console.log('[WebBuilder] Refreshing intents for:', activePagePath);
-                      }}
-                      onTestIntent={(intent, payload) => {
-                        // Fire test intent
-                        handleIntent(intent, { ...payload, businessId, projectId });
-                      }}
-                    />
-                  </TabsContent>
-                  <TabsContent value="automations" className="flex-1 m-0 min-h-0 overflow-hidden">
-                    <AutomationStatsPanel
-                      businessId={businessId}
-                      projectId={projectId || undefined}
-                      industry={cloudState.business?.name?.toLowerCase().includes('salon') ? 'salon' : 
-                               cloudState.business?.name?.toLowerCase().includes('restaurant') ? 'restaurant' : 
-                               cloudState.business?.name?.toLowerCase().includes('contractor') ? 'contractor' : undefined}
-                      onNavigateToSettings={() => {
-                        // Navigate to settings
-                        toast.info('Opening business settings...');
-                      }}
-                    />
-                  </TabsContent>
-                  <TabsContent value="workflows" className="flex-1 m-0 min-h-0 overflow-hidden">
-                    <WorkflowListPanel
-                      businessId={businessId}
-                      projectId={projectId || undefined}
-                      industry={cloudState.business?.name?.toLowerCase().includes('salon') ? 'salon' : 
-                               cloudState.business?.name?.toLowerCase().includes('restaurant') ? 'restaurant' : 
-                               cloudState.business?.name?.toLowerCase().includes('contractor') ? 'contractor' : undefined}
-                    />
-                  </TabsContent>
-                  <TabsContent value="health" className="flex-1 m-0 min-h-0 overflow-auto p-2 space-y-2">
-                    <GateVerdictStrip contract={compiledContract} />
-                    <ReadinessCenterPanel
-                      contract={compiledContract}
-                      vfsFiles={virtualFS.getSandpackFiles()}
-                    />
-                    <SystemHealthPanel
-                      contract={compiledContract}
-                      onPublishCheck={() => {
-                        toast.info('Running publish checks...');
-                      }}
-                    />
-                    <CompositionUpgradePanel
-                      projectKey={`${resolvedProjectId || currentDraftId}:${businessId}`}
-                      getInput={() => {
-                        if (!currentUserId || !businessId || !currentDraftId) return null;
-                        const files = virtualFSRef.current.getSandpackFiles();
-                        const snapshot = resolveSnapshot(files, effectiveRouteState as any).snapshot
-                          ?? effectiveRouteState?.siteBundleSnapshot ?? null;
-                        return {
-                          identity: buildCommitIdentity({
-                            userId: currentUserId,
-                            businessId,
-                            projectId: resolvedProjectId,
-                            draftId: currentDraftId,
-                            revisionId: currentRevisionIdRef.current,
-                          })!,
-                          current: buildCanonicalCommitCurrent(files, snapshot),
-                          options: { industry: snapshot?.industry, themePresetId: snapshot?.meta?.themePresetId, themeTokens: snapshot?.themeTokens },
-                        };
-                      }}
-                      onCommitted={commit => {
-                        // canonical-vfs-exempt: adoption of an accepted commitMutation result
-                        importBuilderFiles(commit.vfsFiles, {
-                          replace: true, preferredPath: activePagePath, entryPoint: launchEntryPoint,
-                          adoption: commitAdoptionRecord(commit),
-                        });
-                        if (commit.persistedRevisionId) setCurrentRevisionId(commit.persistedRevisionId);
-                        toast.success('Template composition saved');
-                      }}
-                    />
-                    <RevisionLedgerStatus
-                      projectId={projectId ?? null}
-                      vfsFiles={virtualFS.getSandpackFiles()}
-                      identity={
-                        currentUserId && businessId && currentDraftId
-                          ? buildCommitIdentity({
-                              userId: currentUserId,
-                              businessId,
-                              projectId: resolvedProjectId,
-                              draftId: currentDraftId,
-                              revisionId: currentRevisionId,
-                            })!
-                          : null
-                      }
-                      onRestored={(revId) => {
-                        setCurrentRevisionId(revId);
-                        toast.success('Reloading restored revision…');
-                        // Hydrate from the new revision row.
-                        void templateFiles.loadTemplate(currentDraftId);
-                      }}
-                    />
-                  </TabsContent>
-                </Tabs>
-              </TabsContent>
-            </Tabs>
-          </div>
-        )}
+        {aiPanelOpen && aiBuilderToolsHost && createPortal(builderToolsPanel, aiBuilderToolsHost)}
+        {!aiPanelOpen && !leftPanelCollapsed && builderToolsPanel}
         
         {/* Left Panel Toggle — hidden on mobile (panels accessed via bottom nav) */}
-        <div className="relative hidden lg:block">
+        {!aiPanelOpen && <div className="relative hidden lg:block">
           <Button
             variant="ghost"
             size="icon"
@@ -8298,12 +8238,15 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           >
             {leftPanelCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
           </Button>
-        </div>
+        </div>}
 
         {/* Mobile AI Panel overlay — full-width canvas-height overlay on small screens */}
         {isMobile && aiPanelOpen && (
           <div className="absolute inset-0 z-40 bg-[#0d0d18] flex flex-col">
             <AIBuilderPanel
+              onToolsHostChange={setAIBuilderToolsHost}
+              onCustomizerHostChange={setAIBuilderCustomizerHost}
+              customizerAvailable={Boolean(previewCode && !selectedObject)}
                 onThemeEdit={requestThemeEdit}
               currentCode={previewCode}
               systemType={activeSystemType}
@@ -8741,16 +8684,34 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
+            onClick={() => {
+              if (aiPanelOpen) {
+                setAiPanelOpen(false);
+                setRightPanelCollapsed(false);
+              } else setRightPanelCollapsed(!rightPanelCollapsed);
+            }}
             className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-12 w-5 rounded-l-lg rounded-r-none backdrop-blur-md bg-fuchsia-500/10 border-r-0 border border-fuchsia-500/30 text-fuchsia-400/60 hover:text-fuchsia-400 hover:bg-fuchsia-500/20 hover:shadow-[0_0_10px_rgba(255,0,255,0.3)] transition-all duration-200"
-            title={rightPanelCollapsed ? "Show right panel" : "Hide right panel"}
+            title={aiPanelOpen ? "Open standalone Customizer" : rightPanelCollapsed ? "Show right panel" : "Hide right panel"}
           >
             {rightPanelCollapsed ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </Button>
         </div>
 
-        {/* Right Panel: Customizer OR Properties */}
-        {!rightPanelCollapsed && (
+        {aiPanelOpen && aiBuilderCustomizerHost && previewCode && !selectedObject && createPortal(
+          <TemplateCustomizerPanel
+            customizer={templateCustomizer}
+            onApply={() => void applyCustomizerOverrides()}
+            onCancel={cancelCustomizer}
+            saving={customizerSaving}
+            previewing={customizerPreviewing || (templateCustomizer.isDirty && customizerDraft?.key !== templateCustomizer.draftKey)}
+            error={customizerError}
+            onVariantCommit={handleSwapSection}
+          />,
+          aiBuilderCustomizerHost,
+        )}
+
+        {/* Right Panel: Customizer fallback or Properties */}
+        {!rightPanelCollapsed && (!aiPanelOpen || Boolean(selectedObject)) && (
           <div className={cn(
             "bg-[#0d0d18] border-l-2 border-fuchsia-500/40 flex flex-col overflow-hidden shadow-[0_0_20px_rgba(255,0,255,0.15)] transition-all duration-300",
             isMobile
@@ -9031,13 +8992,15 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         {/* Tools */}
         <button
           onClick={() => {
-            const next = leftPanelCollapsed;
-            setLeftPanelCollapsed(!next);
-            if (!next === false) { /* closing — no-op */ } else { setAiPanelOpen(false); setRightPanelCollapsed(true); }
+            if (aiPanelOpen || leftPanelCollapsed) {
+              setAiPanelOpen(false);
+              setLeftPanelCollapsed(false);
+              setRightPanelCollapsed(true);
+            } else setLeftPanelCollapsed(true);
           }}
           className={cn(
             "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40 transition-colors",
-            !leftPanelCollapsed ? "text-white after:absolute after:bottom-0 after:h-px after:w-5 after:bg-indigo-400" : "hover:text-white/70"
+            !leftPanelCollapsed && !aiPanelOpen ? "text-white after:absolute after:bottom-0 after:h-px after:w-5 after:bg-indigo-400" : "hover:text-white/70"
           )}
         >
           <Layers className="h-4 w-4" />

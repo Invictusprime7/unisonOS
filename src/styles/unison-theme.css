@@ -17,4 +17,31 @@
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--primary);
+  --ut-hover-illumination-mix: 82%;
+}
+
+/* Existing Tailwind hover utilities must not turn UI controls into glowing cards. */
+@media (hover: hover) {
+  [class*="hover:"]:hover,
+  [class*="cursor-pointer"]:hover,
+  button:not(:disabled):hover,
+  a[href]:hover,
+  [role="button"]:hover,
+  [role="tab"]:hover,
+  [role="menuitem"]:hover {
+    color: color-mix(in srgb, currentColor var(--ut-hover-illumination-mix), white) !important;
+    border-color: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .group:hover [class*="group-hover:"],
+  .peer:hover [class*="peer-hover:"] {
+    color: color-mix(in srgb, currentColor var(--ut-hover-illumination-mix), white) !important;
+    border-color: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
 }

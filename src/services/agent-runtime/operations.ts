@@ -22,7 +22,7 @@ import {
 import { resolveEditableEntity, type EditableSelection } from './editableOwnershipResolver';
 import { listResources, getResource } from '@/services/resources/resourceRegistry';
 import { getResourceRecord, applyResourceOp, parseResourceProvenance } from '@/services/resources/resourceRuntime';
-import type { ResourceRecord } from '@/services/resources/resourceTypes';
+import type { ResourceDefinition, ResourceRecord } from '@/services/resources/resourceTypes';
 import { removeSection, moveSection, restyleSection, swapVariant, type SectionActionResult } from './sectionActions';
 import { isCoreIntent } from '@/platform/core/coreIntents';
 import type { BindingOp } from '@/types/patchPlan';
@@ -236,8 +236,27 @@ export const agentOperations = {
     return { change: Object.keys(files).length ? { files, summary } : null, summary, item: after };
   },
   /** Every editable record type (catalog, content, business details) and its editable fields. */
-  list_resources(): Array<{ key: string; label: string; kind: string; fields: string[] }> {
-    return listResources().map((d) => ({ key: d.key, label: d.label, kind: d.kind, fields: d.schema.filter((f) => f.editable).map((f) => f.key) }));
+  list_resources(): Array<{
+    key: string;
+    label: string;
+    kind: string;
+    catalogKind?: ResourceDefinition['catalogKind'];
+    fields: string[];
+    fieldDefinitions: Array<{ key: string; label: string; type: string; required: boolean }>;
+    capabilities?: ResourceDefinition['capabilities'];
+  }> {
+    return listResources().map((d) => {
+      const fields = d.schema.filter((field) => field.editable);
+      return {
+        key: d.key,
+        label: d.label,
+        kind: d.kind,
+        catalogKind: d.catalogKind,
+        fields: fields.map((field) => field.key),
+        fieldDefinitions: fields.map(({ key, label, type, required }) => ({ key, label, type, required: required === true })),
+        capabilities: d.capabilities,
+      };
+    });
   },
   /** Read the record behind a `data-ut-resource` mark (builder mode: drafts visible). */
   async read_resource(ctx: AgentContext, provenance: string): Promise<ResourceRecord | null> {

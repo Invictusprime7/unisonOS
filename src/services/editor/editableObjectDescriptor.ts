@@ -9,6 +9,7 @@
  *   3. otherwise unbound → caller must offer "Choose binding" / read-only
  */
 import { parseResourceProvenance } from '@/services/resources/resourceRuntime';
+import type { CatalogKind } from '@/platform/core/catalogSurfaceRegistry';
 import type { EditorTarget } from './editorCommandTypes';
 
 export const OBJECT_ID_VERSION = 'v1';
@@ -33,6 +34,7 @@ export interface EditableObjectDescriptor {
   pagePath: string;
   sectionId: string | null;
   resourceKey: string | null;
+  catalogKind: CatalogKind | null;
   recordId: string | null;
   field: string | null;
   sourceLocator: string | null;
@@ -48,7 +50,8 @@ export function describeSelection(s: SelectionSnapshot): EditableObjectDescripto
     return {
       ...base,
       objectId: `${OBJECT_ID_VERSION}:res:${ref.resourceKey}#${ref.recordId}${ref.field ? `.${ref.field}` : ''}`,
-      ownerKind: 'resource', resourceKey: ref.resourceKey, recordId: ref.recordId, field: ref.field ?? null,
+      ownerKind: 'resource', resourceKey: ref.resourceKey, catalogKind: ref.catalogKind ?? null,
+      recordId: ref.recordId, field: ref.field ?? null,
       sourceLocator: s.sourceLocator ?? null, instanceId: s.instanceIndex ?? null,
     };
   }
@@ -57,14 +60,14 @@ export function describeSelection(s: SelectionSnapshot): EditableObjectDescripto
     return {
       ...base,
       objectId: `${OBJECT_ID_VERSION}:src:${s.pagePath}|${s.sourceLocator}|${i}`,
-      ownerKind: 'source', resourceKey: null, recordId: null, field: null,
+      ownerKind: 'source', resourceKey: null, catalogKind: null, recordId: null, field: null,
       sourceLocator: s.sourceLocator, instanceId: i,
     };
   }
   return {
     ...base,
     objectId: `${OBJECT_ID_VERSION}:unbound:${s.pagePath}|${s.sectionId ?? ''}`,
-    ownerKind: 'unbound', resourceKey: null, recordId: null, field: null,
+    ownerKind: 'unbound', resourceKey: null, catalogKind: null, recordId: null, field: null,
     sourceLocator: null, instanceId: null,
     reason: 'No saved-record mark or source location — choose a binding before editing.',
   };
@@ -90,7 +93,7 @@ export function descriptorToTarget(d: EditableObjectDescriptor, extra: Partial<E
     ...extra,
     pagePath: d.pagePath, sectionId: d.sectionId,
     objectId: d.objectId, ownerKind: d.ownerKind,
-    resourceKey: d.resourceKey, recordId: d.recordId, field: d.field,
+    resourceKey: d.resourceKey, catalogKind: d.catalogKind, recordId: d.recordId, field: d.field,
     instanceId: d.instanceId, sourceLocator: d.sourceLocator,
     resourceMark: d.resourceKey && d.recordId
       ? `${d.resourceKey}#${d.recordId}${d.field ? `.${d.field}` : ''}`

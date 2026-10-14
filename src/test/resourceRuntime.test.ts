@@ -25,8 +25,36 @@ describe('Resource Runtime', () => {
     const kinds = new Set(listResources().map((r) => r.kind));
     expect(kinds).toEqual(new Set(['catalog', 'content', 'business-profile']));
     expect(getResource('products')?.storage.adapter).toBe('catalog');
+    expect(getResource('products')?.catalogKind).toBe('product');
+    expect(getResource('services')?.catalogKind).toBe('service');
+    expect(getResource('menu')?.catalogKind).toBe('menu_item');
+    expect(getResource('pricing')?.capabilities?.commerce).toBe(true);
+    expect(getResource('offers')?.capabilities?.commerce).toBe(true);
+    expect(getResource('products')?.capabilities?.ordering).toBe(true);
+    expect(getResource('products')?.schema.map((field) => field.key)).toContain('inventory_count');
+    expect(getResource('products')?.schema.map((field) => field.key)).not.toContain('duration_minutes');
+    expect(getResource('services')?.schema.map((field) => field.key)).toContain('duration_minutes');
+    expect(getResource('services')?.schema.map((field) => field.key)).not.toContain('inventory_count');
     expect(getResource('content:faq')?.lifecycle?.publicStatus).toBe('published');
     expect(getResource('business-profile')?.cardinality).toBe('single-record');
+  });
+
+  it('rejects an inline resource ref whose declared catalog kind disagrees with its resource key', () => {
+    expect(validateResourceOp({
+      op: 'update',
+      ref: { resourceKey: 'products', kind: 'catalog', catalogKind: 'service', recordId: 'p1' },
+      values: { price: 10 },
+    })).toMatchObject({ ok: false, reason: expect.stringContaining('is product, not service') });
+    expect(validateResourceOp({
+      op: 'update',
+      ref: { resourceKey: 'services', kind: 'catalog', catalogKind: 'service', recordId: 's1' },
+      values: { inventory_count: 3 },
+    }).ok).toBe(false);
+    expect(validateResourceOp({
+      op: 'update',
+      ref: { resourceKey: 'products', kind: 'catalog', catalogKind: 'product', recordId: 'p1' },
+      values: { duration_minutes: 30 },
+    }).ok).toBe(false);
   });
 
   it('catalog reads go through the catalog adapter', async () => {

@@ -69,6 +69,12 @@ export function validateResourceOp(op: ResourceDataOp): { ok: true; def: Resourc
   const key = op.op === 'create' ? op.resourceKey : op.ref.resourceKey;
   const def = getResource(key);
   if (!def) return { ok: false, reason: `Unknown resource "${key}".` };
+  if (op.op !== 'create' && op.ref.kind !== def.kind) {
+    return { ok: false, reason: `Resource "${key}" is ${def.kind}, not ${op.ref.kind}.` };
+  }
+  if (op.op !== 'create' && op.ref.catalogKind && op.ref.catalogKind !== def.catalogKind) {
+    return { ok: false, reason: `Resource "${key}" is ${def.catalogKind}, not ${op.ref.catalogKind}.` };
+  }
   if (op.op === 'delete') {
     if (def.cardinality === 'single-record') return { ok: false, reason: `${def.label} can't be deleted.` };
     if (!RESOURCE_ADAPTERS[def.storage.adapter].delete) return { ok: false, reason: `${def.label} entries are archived, not deleted.` };
@@ -121,7 +127,7 @@ export function parseResourceProvenance(attr: string | null | undefined): Resour
   if (!m) return null;
   const def = getResource(m[1]);
   if (!def) return null;
-  return { resourceKey: def.key, kind: def.kind, recordId: m[2], field: m[3] };
+  return { resourceKey: def.key, kind: def.kind, catalogKind: def.catalogKind, recordId: m[2], field: m[3] };
 }
 
 export function formatResourceProvenance(ref: ResourceEntityRef): string {

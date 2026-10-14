@@ -375,11 +375,6 @@ All colors MUST be HSL.
   transition: all 0.3s ease;
 }
 
-.arcade-card:hover {
-  border-color: rgba(0, 255, 255, 0.4);
-  box-shadow: 0 0 30px rgba(0, 255, 255, 0.15);
-}
-
 /* Arcade Glow Classes */
 .arcade-glow-cyan {
   box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
@@ -434,15 +429,9 @@ All colors MUST be HSL.
   border-radius: 3px;
 }
 
-.arcade-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 255, 255, 0.5);
-}
-/* Sleek invisible scrollbar — hidden until hover, token-tinted */
+/* Sleek scrollbar stays subtly visible; hover is reserved for text illumination. */
 .sleek-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-.sleek-scrollbar:hover {
   scrollbar-color: hsl(var(--foreground) / 0.18) transparent;
 }
 .sleek-scrollbar::-webkit-scrollbar {
@@ -453,12 +442,6 @@ All colors MUST be HSL.
   background: transparent;
 }
 .sleek-scrollbar::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 9999px;
-}
-.sleek-scrollbar:hover::-webkit-scrollbar-thumb {
   background: hsl(var(--foreground) / 0.18);
-}
-.sleek-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--foreground) / 0.32);
+  border-radius: 9999px;
 }

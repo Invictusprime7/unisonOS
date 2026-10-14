@@ -105,8 +105,17 @@ export function resolveEditableEntity(input: ResolveEditableEntityInput): Editab
   }
 
   if (sourceTable && selected.rowId) {
+    if (catalogSurface) {
+      entity.resource = {
+        resourceKey: catalogSurface.surfaceId,
+        kind: 'catalog',
+        catalogKind: catalogSurface.catalogKind,
+        recordId: selected.rowId,
+        field: selected.field ?? undefined,
+      };
+    }
     const owner: EditablePropertyOwner = {
-      kind: 'catalog-row', table: sourceTable, rowId: selected.rowId,
+      kind: 'catalog-row', table: sourceTable, rowId: selected.rowId, resource: entity.resource,
       field: selected.field ?? undefined, bindingId: selected.bindingId ?? undefined,
     };
     entity.owners[selected.field ?? 'value'] = owner;

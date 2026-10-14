@@ -106,17 +106,6 @@
   color: var(--wb-text) !important;
 }
 
-.wb-obsidian .hover\:bg-cyan-500\/20:hover,
-.wb-obsidian .hover\:bg-cyan-500\/30:hover,
-.wb-obsidian .hover\:bg-fuchsia-500\/20:hover,
-.wb-obsidian .hover\:bg-yellow-500\/20:hover,
-.wb-obsidian .hover\:bg-lime-500\/30:hover,
-.wb-obsidian .hover\:bg-lime-500\/10:hover {
-  background-color: rgba(99, 102, 241, 0.16) !important;
-}
-
-.wb-obsidian .hover\:bg-red-500\/20:hover { background-color: rgba(239, 68, 68, 0.14) !important; }
-
 /* ---- Generic surface harmonization ------------------------------------ */
 .wb-obsidian [class*="bg-zinc-"],
 .wb-obsidian [class*="bg-neutral-"] { /* leave as-is */ }
@@ -130,7 +119,6 @@
   border: 2px solid transparent;
   background-clip: padding-box;
 }
-.wb-obsidian *::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.4); background-clip: padding-box; }
 
 /* Selection */
 .wb-obsidian ::selection { background: rgba(99, 102, 241, 0.3); }
@@ -149,9 +137,7 @@
   background-image: none !important;
 }
 .wb-obsidian .bg-purple-600,
-.wb-obsidian .bg-purple-500,
-.wb-obsidian .hover\:bg-purple-500:hover,
-.wb-obsidian .hover\:bg-purple-600:hover {
+.wb-obsidian .bg-purple-500 {
   background-color: var(--wb-accent) !important;
   color: #fafafa !important;
 }
@@ -162,10 +148,8 @@
 .wb-obsidian .bg-purple-500\/5,
 .wb-obsidian .bg-\[\#1a1625\],
 .wb-obsidian .bg-\[\#211b2e\],
-.wb-obsidian .hover\:bg-\[\#1a1625\]:hover,
-.wb-obsidian .hover\:bg-\[\#211b2e\]:hover,
-.wb-obsidian .hover\:bg-purple-500\/10:hover,
-.wb-obsidian .hover\:bg-purple-500\/5:hover {
+.wb-obsidian .bg-purple-500\/10,
+.wb-obsidian .bg-purple-500\/5 {
   background-color: var(--wb-sub) !important;
 }
 .wb-obsidian [class*="border-purple-"] { border-color: var(--wb-hairline) !important; }

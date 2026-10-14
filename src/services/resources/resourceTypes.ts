@@ -1,3 +1,5 @@
+import type { CatalogKind } from '@/platform/core/catalogSurfaceRegistry';
+
 /**
  * Unified Resource Runtime — type contracts (milestone 2026-10-08, Phase 1).
  *
@@ -43,6 +45,8 @@ export interface ResourceStorageDefinition {
 export interface ResourceDefinition {
   key: string;
   kind: ResourceKind;
+  /** Catalog subtype from the canonical catalog surface registry. */
+  catalogKind?: CatalogKind;
   cardinality: ResourceCardinality;
   label: string;
   schema: ResourceFieldDefinition[];
@@ -59,6 +63,8 @@ export type ResourceRecord = Record<string, unknown> & { id: string };
 export interface ResourceEntityRef {
   resourceKey: string;
   kind: ResourceKind;
+  /** Precise catalog object type; absent only on legacy serialized refs. */
+  catalogKind?: CatalogKind;
   recordId: string;
   field?: string;
 }
