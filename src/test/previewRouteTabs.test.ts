@@ -25,7 +25,7 @@ describe('preview route tabs', () => {
   });
 });
 
-import { resolveRouteSourceFile, resolveLocalImports } from '@/components/creatives/web-builder/previewRouteTabs';
+import { resolveExplicitPageTarget, resolveRouteSourceFile, resolveLocalImports } from '@/components/creatives/web-builder/previewRouteTabs';
 describe('resolveRouteSourceFile (click-to-edit page identity)', () => {
   const files = {
     '/src/App.tsx': `import Home from './pages/Home.tsx';\nimport About from './pages/About.tsx';\n<Route path="/" element={<Home />} />\n<Route path="/about" element={<About />} />`,
@@ -41,5 +41,26 @@ describe('resolveRouteSourceFile (click-to-edit page identity)', () => {
   });
   it('lists project components but never shared design sources', () => {
     expect(resolveLocalImports(files, '/src/pages/About.tsx')).toEqual(['/src/project-components/site/SiteNav.tsx']);
+  });
+});
+
+describe('resolveExplicitPageTarget', () => {
+  const targets = [
+    { title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', isHome: true },
+    { title: 'Our Services', route: '/services', filePath: '/src/pages/Services.tsx' },
+  ];
+
+  it('resolves home page requests to the component rendered at the root route', () => {
+    expect(resolveExplicitPageTarget('Update the home page hero.', targets)).toEqual(targets[0]);
+    expect(resolveExplicitPageTarget('Refresh the homepage design.', targets)).toEqual(targets[0]);
+  });
+
+  it('resolves a named non-home page by its title or route', () => {
+    expect(resolveExplicitPageTarget('Update the Our Services page.', targets)).toEqual(targets[1]);
+    expect(resolveExplicitPageTarget('Change the /services page.', targets)).toEqual(targets[1]);
+  });
+
+  it('does not treat a section mention as a page request', () => {
+    expect(resolveExplicitPageTarget('Update the services section on the home page.', targets)).toEqual(targets[0]);
   });
 });

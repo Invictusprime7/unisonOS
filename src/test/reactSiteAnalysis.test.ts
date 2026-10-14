@@ -66,4 +66,25 @@ describe('resolveEditTarget', () => {
       confidence: 'high',
     });
   });
+
+  it('does not fall back to a matching component on a different explicitly unrequested page', () => {
+    const analysis = {
+      components: [
+        component('Home', '/src/pages/Home.tsx', null),
+        component('ContactHero', '/src/pages/Contact.tsx', 'Hero'),
+      ],
+      entryFile: '/src/App.tsx',
+      sectionMap: '',
+    };
+    const files = {
+      '/src/pages/Home.tsx': 'export default function Home(){return <main/>}',
+      '/src/pages/Contact.tsx': 'export default function ContactHero(){return <section/>}',
+    };
+
+    expect(resolveEditTarget('Change the hero on the Home page.', analysis, {
+      preferredFile: '/src/pages/Home.tsx',
+      files,
+      restrictToPreferredFile: true,
+    })).toMatchObject({ file: '/src/pages/Home.tsx', component: 'Home' });
+  });
 });

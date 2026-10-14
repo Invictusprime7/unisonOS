@@ -5,7 +5,7 @@ import { shouldPauseAutosave, runExclusive, recordCommit, getLastCommit } from '
 import type { TerminalFileOp, TerminalRouteOp } from '@/services/terminalCommands';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { captureIntentBaseline, deriveIntentChecks, verifyCommittedChange } from '@/services/agent-runtime/browserVerification';
-import { buildPreviewRouteTabs, ROUTE_TAB_PREFIX, resolveRouteSourceFile } from '@/components/creatives/web-builder/previewRouteTabs';
+import { buildPreviewRouteTabs, extractRenderedRoutes, ROUTE_TAB_PREFIX, resolveRouteSourceFile } from '@/components/creatives/web-builder/previewRouteTabs';
 import "./web-builder/obsidian-theme.css";
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense, Component, type ReactNode, type ErrorInfo } from "react";
 import TemplateFeedback from "./TemplateFeedback";
@@ -2307,6 +2307,25 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       virtualFS.getSandpackFiles()['/src/App.tsx'],
     )
   ), [creatorPlayground.pageRegistry, virtualFS.nodes]);
+
+  const aiPageTargets = useMemo(() => {
+    const files = virtualFS.getSandpackFiles();
+    const registryPages = Object.values(creatorPlayground.pageRegistry.pages);
+    return extractRenderedRoutes(files['/src/App.tsx']).flatMap((route) => {
+      const page = registryPages.find((candidate) => (
+        (candidate.isHome ? '/' : candidate.path.replace(/\/+$/, '').toLowerCase()) === route
+      ));
+      const filePath = resolveRouteSourceFile(files, route) ?? page?.filePath ?? null;
+      if (!filePath) return [];
+      const routeName = route === '/' ? 'Home' : route.split('/').filter(Boolean).pop()?.replace(/[-_]+/g, ' ') ?? 'Page';
+      return [{ title: page?.title || routeName, route, filePath, isHome: route === '/' }];
+    });
+  }, [creatorPlayground.pageRegistry, virtualFS.nodes]);
+
+  const activeAIPagePath = resolveRouteSourceFile(
+    virtualFS.getSandpackFiles(),
+    activePreviewRoute,
+  ) ?? activePagePath;
 
   const activePageTabId = useMemo(() => {
     const routeTab = `${ROUTE_TAB_PREFIX}${activePreviewRoute}`;
@@ -7704,7 +7723,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 currentCode={previewCode}
                 systemType={activeSystemType}
                 templateName={currentTemplateName}
-                defaultTargetFile={launchEntryPoint}
+                defaultTargetFile={activeAIPagePath}
+                pageTargets={aiPageTargets}
                 iframeErrors={iframeErrors}
                 onClearErrors={() => setIframeErrors([])}
                 onClose={() => setAiPanelOpen(false)}
@@ -8288,7 +8308,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               currentCode={previewCode}
               systemType={activeSystemType}
               templateName={currentTemplateName}
-              defaultTargetFile={launchEntryPoint}
+              defaultTargetFile={activeAIPagePath}
+              pageTargets={aiPageTargets}
               iframeErrors={iframeErrors}
               onClearErrors={() => setIframeErrors([])}
               onClose={() => setAiPanelOpen(false)}

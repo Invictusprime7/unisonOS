@@ -74,7 +74,7 @@ import type { BusinessSystemType } from '@/data/templates/types';
 import type { SystemsBuildContext } from '@/types/systemsBuildContext';
 import { generateCanonicalDesignPrompt } from '@/sections/promptContext/canonicalDesignPrompt';
 import { analyzeReactSite, resolveEditTarget } from '@/utils/reactSiteAnalysis';
-import { resolveRouteSourceFile, resolveLocalImports } from './previewRouteTabs';
+import { resolveExplicitPageTarget, resolveRouteSourceFile, resolveLocalImports, type PageSourceTarget } from './previewRouteTabs';
 import { buildComponentBehaviorMap, formatBehaviorMapForPrompt } from '@/services/aiVFSOrchestrator';
 import { htmlDocToReactComponent as htmlDocToReactComponentFn } from '@/utils/htmlToJsx';
 import { AIGatewayOptions, type GatewayConfig } from './AIGatewayOptions';
@@ -519,6 +519,7 @@ interface AIBuilderPanelProps {
   systemType?: BusinessSystemType | null;
   templateName?: string | null;
   defaultTargetFile?: string | null;
+  pageTargets?: PageSourceTarget[];
   /** @deprecated Ignored. AI output must go through onApplyToVFS. */
   onCodeGenerated?: (code: string) => void;
   /** @deprecated Ignored. AI output must go through onApplyToVFS. */
@@ -642,6 +643,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   systemType,
   templateName,
   defaultTargetFile,
+  pageTargets = [],
   onViewEdits,
   onOpenFile,
   iframeErrors = [],
@@ -1550,6 +1552,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       let editTargetContext = '';
       let resolvedTargetFile: string | null = null;
       let selectionPinnedFile: string | null = null;
+      const requestedPageTarget = resolveExplicitPageTarget(rawInput, pageTargets);
       let isReactProject = false;
       if (vfsFiles && Object.keys(vfsFiles).length > 0) {
         // Detect if the VFS project is React-based (has .tsx/.jsx component files)
@@ -1578,10 +1581,11 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             siteAnalysisContext = analysis.sectionMap;
           }
           // For surgical edits, resolve which component/file the user is targeting
-          if (isSurgicalEdit || selectedSourceFile) {
+          if (isSurgicalEdit || selectedSourceFile || requestedPageTarget) {
             const analysedTarget = selectedSourceFile ? null : resolveEditTarget(rawInput, analysis, {
-              preferredFile: defaultTargetFile,
+              preferredFile: requestedPageTarget?.filePath ?? defaultTargetFile,
               files: vfsFiles,
+              restrictToPreferredFile: Boolean(requestedPageTarget),
             });
             const target = selectedSourceFile
               ? { file: selectedSourceFile, component: selectedSourceFile.split('/').pop()?.replace(/\.\w+$/, '') ?? selectedSourceFile, section: selectedTarget?.section, confidence: 'high' as const }
@@ -1605,6 +1609,8 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 contentSnippet,
                 contentSnippet ? '```' : '',
               ].filter(Boolean).join('\n');
+            } else if (requestedPageTarget) {
+              resolvedTargetFile = requestedPageTarget.filePath;
             }
           }
         } catch { /* analysis is best-effort */ }

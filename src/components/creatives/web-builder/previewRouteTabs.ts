@@ -14,6 +14,13 @@ export interface RegistryPageLike {
   navOrder?: number;
 }
 
+export interface PageSourceTarget {
+  title: string;
+  route: string;
+  filePath: string;
+  isHome?: boolean;
+}
+
 /** Prefix for tabs that map to a rendered route with no registry page. */
 export const ROUTE_TAB_PREFIX = 'route:';
 
@@ -22,6 +29,42 @@ const normalizeRoute = (route: string) => {
   if (!trimmed || trimmed === '/') return '/';
   return ('/' + trimmed.replace(/^\/+/, '')).replace(/\/+$/, '').toLowerCase();
 };
+
+const normalizeWords = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** Resolve an explicitly named page without mistaking section names for routes. */
+export function resolveExplicitPageTarget(
+  prompt: string,
+  targets: PageSourceTarget[],
+): PageSourceTarget | null {
+  const normalizedPrompt = normalizeWords(prompt);
+  const compactPrompt = normalizedPrompt.replace(/\s+/g, '');
+  const matches = targets.flatMap((target) => {
+    const aliases = [
+      target.title,
+      normalizeRoute(target.route).split('/').filter(Boolean).join(' '),
+      target.filePath.split('/').pop()?.replace(/\.[^.]+$/, '').replace(/Page$/, '') ?? '',
+    ].map(normalizeWords).filter(Boolean);
+    let score = 0;
+    for (const alias of new Set(aliases)) {
+      if (normalizedPrompt.includes(`${alias} page`) || normalizedPrompt.includes(`page ${alias}`)) {
+        score = Math.max(score, 3);
+      }
+      if (target.route !== '/' && prompt.toLowerCase().includes(target.route.toLowerCase())) {
+        score = Math.max(score, 2);
+      }
+    }
+    if (target.isHome || normalizeRoute(target.route) === '/') {
+      if (/\b(homepage|home page|landing page|root page)\b/.test(normalizedPrompt)) score = Math.max(score, 4);
+      if (compactPrompt.includes('homepage')) score = Math.max(score, 4);
+    }
+    return score > 0 ? [{ target, score }] : [];
+  });
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => b.score - a.score);
+  if (matches[1]?.score === matches[0].score) return null;
+  return matches[0].target;
+}
 
 /** Ordered, de-duplicated route paths rendered by App.tsx (excludes `*`). */
 export function extractRenderedRoutes(appSource: string | undefined): string[] {

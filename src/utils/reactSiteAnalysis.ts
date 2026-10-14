@@ -63,6 +63,8 @@ interface ResolveEditTargetOptions {
   /** Active page source used to prefer components actually rendered by that page. */
   preferredFile?: string | null;
   files?: Readonly<Record<string, string>>;
+  /** Keep explicit page requests inside that page's import graph. */
+  restrictToPreferredFile?: boolean;
 }
 
 function normalizeImportPath(path: string): string {
@@ -345,6 +347,9 @@ export function resolveEditTarget(
   const reachable = options.preferredFile && options.files
     ? collectReachableFiles(options.preferredFile, options.files)
     : null;
+  const candidates = options.restrictToPreferredFile && reachable
+    ? analysis.components.filter((component) => reachable.has(component.file))
+    : analysis.components;
   const prioritizeRendered = (components: ComponentInfo[]): ComponentInfo[] => [...components].sort((a, b) => {
     const aRendered = reachable?.has(a.file) ? 0 : 1;
     const bRendered = reachable?.has(b.file) ? 0 : 1;
@@ -359,14 +364,14 @@ export function resolveEditTarget(
   };
   
   // Section label match (hero, footer, etc.)
-  for (const c of prioritizeRendered(analysis.components)) {
+  for (const c of prioritizeRendered(candidates)) {
     if (sectionRequested(c.sectionLabel)) {
       return { file: c.file, component: c.name, section: c.sectionLabel, confidence: 'high' };
     }
   }
 
   // Direct component name match
-  for (const c of prioritizeRendered(analysis.components).filter((candidate) => (
+  for (const c of prioritizeRendered(candidates).filter((candidate) => (
     candidate.name.toLowerCase() !== candidate.sectionLabel?.toLowerCase()
   ))) {
     if (lower.includes(c.name.toLowerCase())) {
@@ -375,7 +380,7 @@ export function resolveEditTarget(
   }
 
   // Content-based match — check headings
-  for (const c of prioritizeRendered(analysis.components)) {
+  for (const c of prioritizeRendered(candidates)) {
     for (const heading of c.headings) {
       if (lower.includes(heading.toLowerCase().slice(0, 30))) {
         return { file: c.file, component: c.name, section: c.sectionLabel, confidence: 'medium' };
@@ -393,7 +398,7 @@ export function resolveEditTarget(
 
   for (const { keywords, check } of elementTargets) {
     if (keywords.test(lower)) {
-      const match = prioritizeRendered(analysis.components.filter(check))[0];
+      const match = prioritizeRendered(candidates.filter(check))[0];
       if (match) {
         return { file: match.file, component: match.name, section: match.sectionLabel, confidence: 'low' };
       }
