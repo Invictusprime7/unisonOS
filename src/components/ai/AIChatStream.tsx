@@ -205,7 +205,7 @@ export function AIChatStream() {
           {messages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-2">
               <Bot className="h-10 w-10 opacity-40" />
-              <p className="text-sm">Ask anything to get started</p>
+              <p className="text-sm">Tell me about your business!</p>
             </div>
           )}
 
