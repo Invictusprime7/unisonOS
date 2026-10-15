@@ -81,12 +81,15 @@ export function checkpointLabel(source: string, summary: string | null | undefin
   }
 }
 
-export async function listCheckpoints(draftId: string, limit = 30): Promise<Checkpoint[]> {
-  const { data, error } = await supabase
+/** Newest first. Pass `before` (a createdAt) to page back through older checkpoints — history is never truncated. */
+export async function listCheckpoints(draftId: string, limit = 30, before?: string): Promise<Checkpoint[]> {
+  let query = supabase
     .from('site_revisions')
     .select(COLUMNS)
     .eq('draft_id', draftId)
-    .eq('status', 'committed')
+    .eq('status', 'committed');
+  if (before) query = query.lt('created_at', before);
+  const { data, error } = await query
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error || !data) return [];
