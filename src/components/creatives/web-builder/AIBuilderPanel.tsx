@@ -1,4 +1,3 @@
-import { emitAgentEvent } from '@/services/agent-runtime/agentEvents';
 import { generateSiteImage, locateImageSource, isImageGenerationRequest, IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 /**
  * AIBuilderPanel - Enhanced AI interface for Web Builder
