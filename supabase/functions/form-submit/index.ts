@@ -261,24 +261,7 @@ Deno.serve(async (req) => {
       if (existingContact) {
         contactId = existingContact.id;
         
-        // Update contact with new data
-        const updates: any = { updated_at: new Date().toISOString() };
-
-        const fullName = getStr("name");
-        const firstName = getStr("firstName") || getStr("first_name") || nameFromFull(fullName).first;
-        const lastName = getStr("lastName") || getStr("last_name") || nameFromFull(fullName).last;
-        const phone = getStr("phone") || getStr("Phone");
-        const company = getStr("company") || getStr("Company");
-
-        if (firstName) updates.first_name = firstName.slice(0, 120);
-        if (lastName) updates.last_name = lastName.slice(0, 120);
-        if (phone) updates.phone = phone.slice(0, 40);
-        if (company) updates.company = company.slice(0, 120);
-
-        await supabase
-          .from("crm_contacts")
-          .update(updates)
-          .eq("id", contactId);
+        // Public submissions never overwrite an existing contact's details.
       } else {
         // Create new contact
         const { data: newContact, error: contactError } = await supabase

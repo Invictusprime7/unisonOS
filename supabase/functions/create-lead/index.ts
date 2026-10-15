@@ -180,16 +180,7 @@ serve(async (req) => {
 
       let contactId: string | null = existingContact?.id ?? null;
       if (contactId) {
-        await supabase
-          .from("crm_contacts")
-          .update({
-            first_name: first,
-            last_name: last,
-            phone: phone || null,
-            source: source || "web_form",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", contactId);
+        // Public submissions never overwrite an existing contact's details.
       } else {
         const { data: createdContact } = await supabase
           .from("crm_contacts")
