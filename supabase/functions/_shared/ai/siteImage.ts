@@ -8,7 +8,24 @@ import { decodeBase64 } from "jsr:@std/encoding@1/base64";
 import { createImageGeneration, isImageGenerationConfigured } from "./providerClient.ts";
 
 export class SiteImageError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(
+    public status: number,
+    message: string,
+    /** Whole seconds the service asked us to wait, when it said so. */
+    public retryAfterSeconds?: number,
+  ) {
+    super(message);
+  }
+}
+
+/** Whole seconds to wait before retrying a refused request, from Retry-After. */
+export function rateLimitSeconds(headers: Headers): number | undefined {
+  const retryAfter = headers.get("retry-after");
+  if (!retryAfter) return undefined;
+  const seconds = Number(retryAfter);
+  const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - Date.now();
+  if (!Number.isFinite(delay) || delay <= 0) return 1;
+  return Math.min(600, Math.ceil(delay / 1000));
 }
 
 /** Store a generated image and return a long-lived link, so site source never carries base64. */
@@ -48,7 +65,16 @@ export async function generateAndStoreSiteImage(
     console.error("[site-image] provider error:", response.status, text.slice(0, 400));
     let detail = "";
     try { const j = JSON.parse(text); detail = j?.error?.message ?? j?.message ?? ""; } catch { /* plain text */ }
-    if (response.status === 429) throw new SiteImageError(429, "Too many image requests right now. Please try again in a minute.");
+    if (response.status === 429) {
+      const seconds = rateLimitSeconds(response.headers);
+      throw new SiteImageError(
+        429,
+        seconds
+          ? `The picture maker is busy — try again in ${seconds} second${seconds === 1 ? "" : "s"}.`
+          : "The picture maker is busy right now. Please try again in a minute.",
+        seconds,
+      );
+    }
     if (response.status === 402) throw new SiteImageError(402, detail || "AI credits are used up. Add credits to keep generating images.");
     if (response.status === 403) throw new SiteImageError(403, detail || "Image generation is not allowed for this workspace.");
     if (response.status === 401) throw new SiteImageError(401, "AI service authentication failed.");
