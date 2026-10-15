@@ -603,7 +603,7 @@ const COMMERCE_CHECKOUT_PACK: CapabilityPack = {
     ],
   },
   backend: {
-    functions: ['create-checkout', 'intent-router', 'automation-event'],
+    functions: ['create-order-checkout', 'intent-router', 'automation-event'],
     events: ['order.created', 'checkout.completed'],
     permissions: ['visitor.order.create', 'business.orders.manage'],
   },
@@ -622,7 +622,7 @@ const COMMERCE_CHECKOUT_PACK: CapabilityPack = {
       { id: 'orders-table-exists', kind: 'table-exists', target: 'orders', description: 'Orders have somewhere to land.', blocking: true },
       { id: 'orders-public-insert', kind: 'policy-exists', target: 'orders_insert_public_valid', description: 'Visitors can place an order without signing in.', blocking: true },
       { id: 'orders-owner-scoped', kind: 'rls-enabled', target: 'orders', description: 'Only the business and the buyer can read an order.', blocking: true },
-      { id: 'checkout-handler-installed', kind: 'handler-installed', target: 'create-checkout', description: 'Checkout is wired to the backend.', blocking: true },
+      { id: 'checkout-handler-installed', kind: 'handler-installed', target: 'create-order-checkout', description: 'Checkout is wired to the backend.', blocking: true },
       { id: 'checkout-notification-target', kind: 'setting-present', target: 'business.notificationEmail', description: 'New orders notify a real inbox.', blocking: true },
     ],
     fixtures: ['product', 'cart-session', 'customer'],

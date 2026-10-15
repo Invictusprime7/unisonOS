@@ -322,7 +322,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, CapabilityDefinition> = {
     ],
     requiredTables: ['products', 'cart_items', 'orders'],
     database: { migrations: ['products', 'cart_items', 'orders'], requiredTables: ['products', 'cart_items', 'orders'], requiredColumns: ['products.price_cents', 'orders.customer_id'], rlsPolicies: ['products_read_public', 'orders_customer_access', 'orders_business_access'] },
-    backend: { functions: ['create-checkout', 'intent-exec', 'automation-event'], events: ['order.created', 'cart.abandoned'], permissions: ['business.orders.manage', 'visitor.checkout.create'] },
+    backend: { functions: ['create-order-checkout', 'intent-exec', 'automation-event'], events: ['order.created', 'cart.abandoned'], permissions: ['business.orders.manage', 'visitor.checkout.create'] },
     frontend: { components: ['ProductGrid', 'CartButton', 'CheckoutForm'], dataSources: ['catalog.products', 'commerce.cart'], supportedSlots: ['product-card.primary-action', 'navbar.cart-action'] },
     intents: { provided: ['cart.add', 'cart.checkout', 'pay.checkout'], required: ['contact.submit'] },
     settings: { accountFields: ['business.notificationEmail'], projectFields: ['commerce.currency', 'commerce.paymentProvider'] },

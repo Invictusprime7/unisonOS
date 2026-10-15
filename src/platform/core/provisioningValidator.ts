@@ -83,6 +83,7 @@ const AVAILABLE_EDGE_FUNCTIONS: Set<string> = new Set([
   'intent-exec',
   'create-lead',
   'create-checkout',
+  'create-order-checkout',
   'automation-event',
   'intent-router',
   'systems-build',
