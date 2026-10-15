@@ -1,0 +1,1 @@
+ALTER PUBLICATION supabase_realtime ADD TABLE public.products, public.services, public.menu_items, public.pricing_plans, public.featured_offers, public.testimonials, public.portfolio_projects, public.content_entries;
