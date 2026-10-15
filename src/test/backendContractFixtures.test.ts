@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   callProjectBackend: vi.fn(),
   listCmsRecords: vi.fn(),
+  createCmsRecord: vi.fn(),
+  updateCmsRecord: vi.fn(),
+  removeCmsRecord: vi.fn(),
 }));
 
 vi.mock('@/services/project-backend/projectBackendResolver', () => ({
@@ -19,9 +22,9 @@ vi.mock('@/services/project-backend/projectBackendClient', () => ({
 }));
 vi.mock('@/services/cmsRecordService', () => ({
   listCmsRecords: mocks.listCmsRecords,
-  createCmsRecord: vi.fn(),
-  removeCmsRecord: vi.fn(),
-  updateCmsRecord: vi.fn(),
+  createCmsRecord: mocks.createCmsRecord,
+  removeCmsRecord: mocks.removeCmsRecord,
+  updateCmsRecord: mocks.updateCmsRecord,
   listContentRecords: vi.fn(async () => []),
   getContentRecord: vi.fn(),
   createContentRecord: vi.fn(),
@@ -53,6 +56,8 @@ const records: Record<string, ResourceRecord[]> = {
   [fixtures.salon.resourceKey]: [fixtures.salon.row],
   [fixtures.restaurant.resourceKey]: [fixtures.restaurant.row],
 };
+const sharedRecords = new Map<string, ResourceRecord[]>();
+let nextSharedId = 1;
 
 function fakeCatalogRecords(resourceKey: string): ResourceRecord[] {
   const existing = records[resourceKey];
@@ -90,6 +95,8 @@ async function fakeSourceCommit(command: EditorCommand): Promise<EditorCommandRe
 describe('backend contract fixtures', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sharedRecords.clear();
+    nextSharedId = 1;
     mocks.resolve.mockImplementation(async (projectId: string) => ({
       bindingId: `binding-${projectId}`,
       projectId,
@@ -98,7 +105,23 @@ describe('backend contract fixtures', () => {
       provider: 'supabase',
       status: 'ready',
     }));
-    mocks.listCmsRecords.mockImplementation(async ({ resource }: { resource: string }) => fakeCatalogRecords(resource));
+    mocks.listCmsRecords.mockImplementation(async ({ resource }: { resource: string }) =>
+      sharedRecords.get(resource) ?? fakeCatalogRecords(resource));
+    mocks.createCmsRecord.mockImplementation(async ({ resource, values }: { resource: string; values: Record<string, unknown> }) => {
+      const created = { id: `shared-created-${nextSharedId++}`, ...values };
+      sharedRecords.set(resource, [...(sharedRecords.get(resource) ?? fakeCatalogRecords(resource)), created]);
+      return created;
+    });
+    mocks.updateCmsRecord.mockImplementation(async ({ resource, recordId, values }: { resource: string; recordId: string; values: Record<string, unknown> }) => {
+      const rows = sharedRecords.get(resource) ?? fakeCatalogRecords(resource);
+      const updated = rows.map((row) => row.id === recordId ? { ...row, ...values } : row);
+      sharedRecords.set(resource, updated);
+      return updated.find((row) => row.id === recordId) ?? null;
+    });
+    mocks.removeCmsRecord.mockImplementation(async ({ resource, recordId }: { resource: string; recordId: string }) => {
+      const rows = sharedRecords.get(resource) ?? fakeCatalogRecords(resource);
+      sharedRecords.set(resource, rows.filter((row) => row.id !== recordId));
+    });
   });
 
   it.each([
@@ -374,6 +397,53 @@ describe('backend contract fixtures', () => {
       }
 
       expect(mocks.listCmsRecords).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(getAllIndustries().map((industry) => [industry.industry, industry] as const))(
+    '%s shared catalog surfaces preserve list/get/create/update/delete contracts',
+    async (industryName) => {
+      const surfaces = [...new Set(getIndustrySeedDataTargets(industryName)
+        .map(({ target }) => target.catalogSurface)
+        .filter((surface): surface is string => Boolean(surface)))];
+      const context = contextForIndustry(industryName);
+
+      for (const resourceKey of surfaces) {
+        const definition = getResource(resourceKey)!;
+        const editableFields = definition.schema.filter((field) => field.editable);
+        const titleField = editableFields.find((field) => field.required) ?? editableFields[0];
+        expect(titleField, `${industryName}.${resourceKey} editable field`).toBeTruthy();
+
+        const listed = await executeBackendCommandV2(context, { kind: 'resource.list', resourceKey });
+        expect(listed.ok, `${industryName}.${resourceKey} shared list`).toBe(true);
+        const createValues = { [titleField!.key]: `Created ${industryName} fixture` };
+        const created = await executeBackendCommandV2(context, {
+          kind: 'resource.mutate', resourceKey, action: 'create', values: createValues,
+        });
+        expect(created).toMatchObject({ ok: true, data: { id: expect.stringMatching(/^shared-created-/), ...createValues } });
+        if (!created.ok || !created.data || typeof created.data !== 'object' || !('id' in created.data)) continue;
+        const recordId = String(created.data.id);
+
+        expect(await executeBackendCommandV2(context, {
+          kind: 'resource.get', resourceKey, recordId,
+        })).toMatchObject({ ok: true, data: { id: recordId, ...createValues } });
+
+        const updateField = editableFields.find((field) => field.key !== titleField!.key) ?? titleField!;
+        const updateValues = { [updateField.key]: `Updated ${industryName} fixture` };
+        expect(await executeBackendCommandV2(context, {
+          kind: 'resource.mutate', resourceKey, action: 'update', recordId, values: updateValues,
+        })).toMatchObject({ ok: true, data: { id: recordId, ...createValues, ...updateValues } });
+
+        expect(await executeBackendCommandV2(context, {
+          kind: 'resource.mutate', resourceKey, action: 'delete', recordId,
+        })).toMatchObject({ ok: true, data: null });
+        expect(await executeBackendCommandV2(context, {
+          kind: 'resource.get', resourceKey, recordId,
+        })).toMatchObject({ ok: true, data: null });
+      }
+
+      expect(mocks.listCmsRecords).toHaveBeenCalledTimes(surfaces.length * 3);
+      expect(mocks.callProjectBackend).not.toHaveBeenCalled();
     },
   );
 
