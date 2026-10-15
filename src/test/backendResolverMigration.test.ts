@@ -9,6 +9,10 @@ const migration = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20261015232037_add_project_backend_resolver_rpcs.sql'),
   'utf8',
 );
+const disconnectedFix = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20261015233034_fail_closed_disconnected_backend_bindings.sql'),
+  'utf8',
+);
 const userId = '11111111-1111-4111-8111-111111111111';
 const otherUserId = '22222222-2222-4222-8222-222222222222';
 const businessId = '33333333-3333-4333-8333-333333333333';
@@ -90,6 +94,7 @@ beforeEach(async () => {
     );
   `);
   await db.exec(migration);
+  await db.exec(disconnectedFix);
   await seedProject({ id: projectId, siteId, memberId: userId });
   await seedProject({ id: dedicatedProjectId, siteId: dedicatedSiteId, memberId: userId });
   await seedProject({
@@ -108,6 +113,9 @@ afterEach(async () => {
 describe('project backend resolver RPC migration', () => {
   it('passes the repository SQL safety lint', () => {
     expect(lintMigrationSql(migration).ok).toBe(true);
+    expect(lintMigrationSql(disconnectedFix).ok).toBe(true);
+    expect(disconnectedFix).not.toContain("AND b.provisioning_status <> 'disconnected'");
+    expect(disconnectedFix).toContain("IN ('failed', 'disconnected')");
   });
 
   it('returns a shared descriptor only to an authenticated project member', async () => {
@@ -165,6 +173,31 @@ describe('project backend resolver RPC migration', () => {
 
     await expect(db.query('SELECT public.resolve_project_backend($1)', [dedicatedProjectId]))
       .rejects.toThrow('Backend binding does not match project identity');
+  });
+
+  it('never maps a disconnected dedicated binding back to shared mode', async () => {
+    await db.query(
+      `INSERT INTO public.connected_supabase_projects
+        (id,business_id,unison_project_id,project_url,schema_version,provisioning_status)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      ['eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', businessId, projectId,
+        'https://disconnected.test', 1, 'disconnected'],
+    );
+    await setAuthUser(userId);
+
+    const runtime = await db.query<{ descriptor: Record<string, unknown> }>(
+      'SELECT public.resolve_project_backend($1) AS descriptor', [projectId],
+    );
+    expect(runtime.rows[0].descriptor).toMatchObject({
+      projectId,
+      mode: 'dedicated',
+      status: 'failed',
+      projectUrl: null,
+    });
+
+    await db.query('UPDATE public.projects SET publish_status = $2 WHERE id = $1', [projectId, 'published']);
+    await expect(db.query('SELECT public.resolve_published_site_backend($1)', [projectId]))
+      .rejects.toThrow('Dedicated site backend is disconnected');
   });
 
   it('returns only published shared-site identities and fails closed for dedicated public reads', async () => {

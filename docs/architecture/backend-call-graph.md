@@ -1,6 +1,6 @@
 # Backend Call Graph
 
-**Evidence captured:** 2026-10-15. This call graph combines repository source review with Supabase CLI audit of linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`. The project has no branch named staging. After the initial read-only audit, the explicitly requested `user-files` policy migration and `project-backend` function v22 were applied/deployed; no resource records or stored file objects were modified.
+**Evidence captured:** 2026-10-15. This call graph combines repository source review with Supabase CLI audit of linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`. The project has no branch named staging. After the initial read-only audit, the `user-files` policy migration, both resolver RPC migrations, and `project-backend` function v22 were applied/deployed; no resource records or stored file objects were modified.
 
 ## Project and generated-site call families
 
@@ -61,7 +61,7 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 - `connected_supabase_projects` has RLS enabled, no `anon`/`authenticated` table grants, and zero rows. There are currently no connected/dedicated backend bindings in this project.
 - Its live columns are `connection_id`, `business_id`, `unison_project_id`, `project_ref`, `project_url`, encrypted publishable/secret keys, `schema_version`, `provisioning_status`, `backend_manifest`, and `health_status`. The live table has no `site_id`, `mode`, `provider`, or `provider_project_ref` columns.
 - The initial local `project-backend` source selected `site_id` from `connected_supabase_projects`, but the live table has no such column. The local source now resolves `site_id` through `projects`/`sites` and checks the binding's `business_id` and `unison_project_id`; Supabase CLI deployed it as active function version 22 with `verify_jwt=false` preserved. Dedicated CRUD is still not end-to-end verified because there are zero live bindings.
-- Neither `resolve_project_backend` nor `resolve_published_site_backend` exists in any live database schema, and neither function name appears in repository migrations. The client resolver and published backend helper call these RPCs, so backend resolution currently has no matching deployed database function.
+- Initially neither resolver RPC existed. Migrations `20261015232037` and `20261015233034` have now created/corrected both functions with pinned `search_path`, explicit grants, membership and identity checks, and browser-safe results. The first deployed version filtered disconnected bindings as if no binding existed; the follow-up now returns dedicated/failed for the editor resolver and an explicit error for published dedicated reads. Post-deploy catalog queries confirmed both function bodies contain disconnected handling and do not filter disconnected rows away.
 
 ### Edge Functions and Storage
 
@@ -74,8 +74,8 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 ### Phase 0 disposition
 
 - The linked-project audit is complete for migration history, resource columns/FKs, RLS flags/policies, table grants, aggregate project ownership, binding-table schema/count, selected deployed function metadata, and Storage bucket/policy metadata.
-- The `user-files` public CRUD exposure is remediated on linked `UNISON/main`; the remaining metadata-table anonymous insert policy and missing backend resolver RPCs require separate reviewed migrations.
-- Dedicated backend behavior remains unverified and has no live bindings. The gateway code is deployed, but the actual connected-database behavior still needs staging verification before creating any binding.
+- The `user-files` public CRUD exposure is remediated on linked `UNISON/main`; the remaining metadata-table anonymous insert policy requires a separate reviewed migration.
+- Resolver RPCs and the corrected dedicated gateway are deployed, but dedicated backend behavior remains unverified because there are no live bindings. Exercise the connected-database path on staging before creating a production binding.
 - This audit covers the linked `UNISON/main` project, not a separate staging project. Repeat against a designated staging project before any later migration or policy remediation.
 
 ## Phase 1 implementation status
@@ -84,9 +84,9 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 - Resource keys resolve through `resourceRegistry`; arbitrary table names are rejected. Required project/site/business context is validated, and dedicated failures never route to the shared adapter.
 - Errors are returned in a structured envelope. `asset.link`, `intent.execute`, filtered list queries, and optimistic record-version checks explicitly return `UNSUPPORTED` until their existing domain owners are wired.
 - `operationId` is returned as correlation only. Existing storage paths do not persist operation receipts, so the v2 wrapper does not claim idempotent writes. Server auth/membership remains authoritative; caller-supplied `actorKind` is not trusted for authorization.
-- Focused validation after the change: 10 backend/runtime/industry/storage contract test files passed (253 tests), `npm run type-check` passed, targeted ESLint passed, and Deno check passed for `project-backend`.
+- Focused validation after the change: 10 backend/runtime/industry/storage contract test files passed (254 tests), `npm run type-check` passed, targeted ESLint passed, and Deno check passed for `project-backend`.
 - V2 now maps the missing `resolve_project_backend` / `resolve_published_site_backend` RPC schema-cache error to a non-retryable `BACKEND_UNAVAILABLE`; it does not fall back to shared storage.
-- Added local migration candidate `20261015232037_add_project_backend_resolver_rpcs.sql` with PGlite tests for member authorization, shared/dedicated mapping, project/business mismatch, published-site gating, public-safe output, and function grants. CLI dry-run confirms this is the sole pending migration; it is intentionally unapplied because linked `UNISON/main` has no staging branch.
+- Added migrations `20261015232037_add_project_backend_resolver_rpcs.sql` and `20261015233034_fail_closed_disconnected_backend_bindings.sql`, both applied to linked `UNISON/main`. Seven PGlite tests cover member authorization, shared/dedicated mapping, project/business mismatch, published-site gating, disconnected fail-closed behavior, public-safe output, and function grants.
 - Added fake-backed backend-to-UI contracts across all ten canonical industries. Source-owned titles make zero business-data calls; derived catalog seed targets go through `ResourceRuntime` and project into the canonical `CatalogCardViewModel`; each primary intent is registered, capability-owned, and backed by local Edge Function files. Shared and dedicated list/get/create/update/delete operations are exercised for every derived industry surface; each mode stays on its selected adapter. Portfolio/SaaS static fixtures and salon/menu resource fixtures remain explicit. The SaaS fixture rejects an unregistered generic tenant table rather than asserting a nonexistent SaaS adapter.
 - Dedicated catalog evidence is limited to the client facade with fake resolver/backend adapters. The live project has zero connected bindings, and the deployed `project-backend` Edge Function has not been source-hash or end-to-end parity verified.
 - Aligned commerce capability declarations and provisioning readiness with the published runtime's existing `create-order-checkout` controller instead of the authenticated account-subscription `create-checkout` endpoint.
@@ -96,6 +96,6 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 
 1. Repeat the read-only audit against a designated staging project before remediation; the current audit covers linked `UNISON/main`, whose environment label is not staging.
 2. Plan a staged ownership/backfill migration for the 104 existing null-project rows and revise delete semantics before relying on project scope.
-3. Review the remaining anonymous `public.files` metadata insert policy and add the missing project resolver RPCs through an approved migration/deployment plan; the Storage object-policy fix is applied, but was not validated on a separate staging project.
+3. Review the remaining anonymous `public.files` metadata insert policy through an approved migration/deployment plan; Storage and resolver fixes are applied to `UNISON/main`, but were not tested on a separate staging project.
 4. Extend the SaaS fixture only after an explicit tenant schema and membership contract has a canonical owner; the current fixture proves no generic table is inferred.
 5. Dedicated public reads, forms, checkout, and per-intent operation support need explicit parity evidence before describing the two backend modes as equivalent.
