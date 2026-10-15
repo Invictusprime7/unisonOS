@@ -835,7 +835,8 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       if (t?.imageKind && (t.imageSelector || t.selector) && (t.forceImage || isImageGenerationRequest(prompt))) {
         const ctx = imageContextRef.current;
         const runId = `img-${Date.now().toString(36)}`;
-        const where = t.descriptor?.instanceId != null ? `item ${Number(t.descriptor.instanceId) + 1}` : undefined;
+        const idx = Number(t.descriptor?.instanceId);
+        const where = Number.isFinite(idx) && t.descriptor?.instanceId != null ? `item ${idx + 1}` : undefined;
         const located = locateImageSource(ctx.vfsFiles, t.imageSrc, t.imageAlt);
         emitAgentEvent({ kind: 'understanding', runId, status: 'running', message: `Reading the site context for the ${t.section ? `${t.section} ` : ''}image` });
         if (located.pagePath) emitAgentEvent({ kind: 'discovery', runId, status: 'ok', path: located.pagePath, message: `Found the image in ${located.pagePath}` });
