@@ -1,6 +1,6 @@
 # Backend Call Graph
 
-**Evidence captured:** 2026-10-15. This call graph combines repository source review with a read-only Supabase CLI audit of linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`. The project has no branch named staging. No SQL writes, migrations, deployments, or data mutations were performed.
+**Evidence captured:** 2026-10-15. This call graph combines repository source review with Supabase CLI audit of linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`. The project has no branch named staging. After the initial read-only audit, the explicitly requested `user-files` policy migration and `project-backend` function v22 were applied/deployed; no resource records or stored file objects were modified.
 
 ## Project and generated-site call families
 
@@ -46,7 +46,7 @@
 
 ## Linked Supabase CLI Audit
 
-Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; database `postgres`, inspection role `postgres`. `supabase migration list --linked` showed no local/remote migration timestamp mismatches, and the project-scope migration `20261015133516` is applied remotely. No database writes or function deployments were performed.
+Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; database `postgres`, inspection role `postgres`. `supabase migration list --linked` showed no local/remote migration timestamp mismatches before the Storage fix; the project-scope migration `20261015133516` and approved Storage policy migration `20261015223554` are now applied. `project-backend` function v22 was deployed with Vault updates skipped. No resource records or Storage objects were modified.
 
 ### Resource schema and ownership
 
@@ -60,7 +60,7 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 
 - `connected_supabase_projects` has RLS enabled, no `anon`/`authenticated` table grants, and zero rows. There are currently no connected/dedicated backend bindings in this project.
 - Its live columns are `connection_id`, `business_id`, `unison_project_id`, `project_ref`, `project_url`, encrypted publishable/secret keys, `schema_version`, `provisioning_status`, `backend_manifest`, and `health_status`. The live table has no `site_id`, `mode`, `provider`, or `provider_project_ref` columns.
-- The initial local `project-backend` source selected `site_id` from `connected_supabase_projects`, but the live table has no such column. The local source now resolves `site_id` through `projects`/`sites` and checks the binding's `business_id` and `unison_project_id`. The deployed Edge Function remains at version 20 and has not been redeployed, so dedicated CRUD is still not operationally verified; there are zero live bindings.
+- The initial local `project-backend` source selected `site_id` from `connected_supabase_projects`, but the live table has no such column. The local source now resolves `site_id` through `projects`/`sites` and checks the binding's `business_id` and `unison_project_id`; Supabase CLI deployed it as active function version 22 with `verify_jwt=false` preserved. Dedicated CRUD is still not end-to-end verified because there are zero live bindings.
 - Neither `resolve_project_backend` nor `resolve_published_site_backend` exists in any live database schema, and neither function name appears in repository migrations. The client resolver and published backend helper call these RPCs, so backend resolution currently has no matching deployed database function.
 
 ### Edge Functions and Storage
@@ -75,7 +75,7 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 
 - The linked-project audit is complete for migration history, resource columns/FKs, RLS flags/policies, table grants, aggregate project ownership, binding-table schema/count, selected deployed function metadata, and Storage bucket/policy metadata.
 - The `user-files` public CRUD exposure is remediated on linked `UNISON/main`; the remaining metadata-table anonymous insert policy and missing backend resolver RPCs require separate reviewed migrations.
-- Dedicated backend behavior remains unverified and has no live bindings. The local gateway now matches the observed binding-table shape, but the deployed function and actual connected-database behavior still need staged verification.
+- Dedicated backend behavior remains unverified and has no live bindings. The gateway code is deployed, but the actual connected-database behavior still needs staging verification before creating any binding.
 - This audit covers the linked `UNISON/main` project, not a separate staging project. Repeat against a designated staging project before any later migration or policy remediation.
 
 ## Phase 1 implementation status
