@@ -175,6 +175,7 @@ serve(async (req) => {
         .from("crm_contacts")
         .select("id")
         .eq("email", normalizedEmail)
+        .eq("business_id", businessId)
         .limit(1)
         .maybeSingle();
 
@@ -185,6 +186,7 @@ serve(async (req) => {
         const { data: createdContact } = await supabase
           .from("crm_contacts")
           .insert({
+            business_id: businessId,
             email: normalizedEmail,
             first_name: first,
             last_name: last,
