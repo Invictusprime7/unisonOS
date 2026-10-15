@@ -1506,6 +1506,17 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   }, [routeBusinessId, projectId, recoveredBusinessId]);
   const businessId = routeBusinessId || recoveredBusinessId || undefined;
 
+  // Saved catalog/content changes from any surface refresh the preview live.
+  useEffect(() => {
+    if (!businessId) return;
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    void import('@/services/catalogLiveSync').then(({ startCatalogLiveSync }) => {
+      if (!cancelled) stop = startCatalogLiveSync({ businessId, projectId: projectId ?? null });
+    });
+    return () => { cancelled = true; stop?.(); };
+  }, [businessId, projectId]);
+
   // Local editable project name. Seeded from route state, kept in sync if the
   // user (or another tab) renames the project via CloudProjects.
   const [projectDisplayName, setProjectDisplayName] = useState<string>(projectNameFromState || '');
