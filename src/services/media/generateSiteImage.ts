@@ -82,4 +82,6 @@ export function isImageGenerationRequest(prompt: string): boolean {
 }
 
 export const IMAGE_GENERATED_EVENT = 'unison:image-generated' as const;
-export interface ImageGeneratedDetail { selector: string; src: string; kind: 'img' | 'background'; currentSrc?: string; alt?: string; pagePath?: string }
+/** `placement` is set when the element had no picture: add a cover background or an image inside it. */
+export type PicturePlacement = 'background' | 'inside';
+export interface ImageGeneratedDetail { selector: string; src: string; kind: 'img' | 'background'; currentSrc?: string; alt?: string; pagePath?: string; placement?: PicturePlacement; scrim?: boolean; text?: string }
