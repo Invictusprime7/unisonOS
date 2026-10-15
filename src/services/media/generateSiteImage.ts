@@ -82,4 +82,4 @@ export function isImageGenerationRequest(prompt: string): boolean {
 }
 
 export const IMAGE_GENERATED_EVENT = 'unison:image-generated' as const;
-export interface ImageGeneratedDetail { selector: string; src: string; kind: 'img' | 'background' }
+export interface ImageGeneratedDetail { selector: string; src: string; kind: 'img' | 'background'; currentSrc?: string; alt?: string; pagePath?: string }

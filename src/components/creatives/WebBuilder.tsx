@@ -272,6 +272,7 @@ import {
   safeFindElement,
   findJSXClosingTag,
   findUniqueSourceMutation,
+  type SourceMatchHints,
 } from "./web-builder/jsxSourceUtils";
 
 
@@ -863,12 +864,15 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   // and avoids the misleading "dynamic className" toast.
   /** Working set before the latest optimistic toolbar edit, restored if the save is refused. */
   const toolbarPreEditRef = useRef<Record<string, string> | null>(null);
+  const selectedElementRef = useRef<typeof selectedHTMLElement>(null);
+  selectedElementRef.current = selectedHTMLElement;
   const toolbarMutationGuardRef = useRef<Map<string, number>>(new Map());
   const applyMutatorAcrossVFS = useCallback((
     selector: string,
     mutate: (code: string) => string | null,
     onActivePageSuccess: (next: string) => void,
     snapshotLabel: string,
+    extraHints?: SourceMatchHints,
   ): { ok: boolean; reason?: 'no-match' | 'no-change' | 'ambiguous' } => {
     // 1. Active page first
     const next = mutate(previewCode);
@@ -894,7 +898,26 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const activePath = ctx.activePagePath;
     try {
       const allFiles = virtualFS.getSandpackFiles();
-      const match = findUniqueSourceMutation(allFiles, activePath, mutate);
+      // Identity evidence from the clicked element: its current image link, alt,
+      // text and owner file, plus the page that rendered it. Narrows a loose
+      // selector match to the one file that really shows this element.
+      const sel = selectedElementRef.current;
+      const same = sel?.selector === selector || sel?.imageTarget?.selector === selector;
+      const attrs = (same ? sel?.attributes : undefined) ?? {};
+      const bg = same ? String(sel?.styles?.backgroundImage ?? '').match(/url\(["']?([^"')]+)["']?\)/)?.[1] : undefined;
+      const locator = same ? sel?.descriptor?.sourceLocator ?? null : null;
+      const text = same ? String(sel?.textContent ?? '').trim() : '';
+      const hints: SourceMatchHints = {
+        pagePath: extraHints?.pagePath ?? activePath,
+        ownerPath: extraHints?.ownerPath ?? (locator && locator.startsWith('/') ? locator.split(':')[0] : null),
+        evidence: [
+          ...(extraHints?.evidence ?? []),
+          same ? sel?.imageTarget?.src : undefined, attrs.src, bg,
+          attrs.alt ? `alt="${attrs.alt}"` : undefined,
+          text && text.length < 160 ? text : undefined,
+        ],
+      };
+      const match = findUniqueSourceMutation(allFiles, activePath, mutate, hints);
       if (match.kind === 'ambiguous') {
         toast.error('Could not safely edit this element because its source matches multiple files.', {
           description: match.paths.slice(0, 3).join(', '),
@@ -934,7 +957,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   // See mem://features/web-builder/preview-floating-toolbar.
   const commitToolbarMutationRef = useRef<((nextCode: string, summary: string, path?: string) => void) | null>(null);
 
-  const handleFloatingStyleUpdate = useCallback((selector: string, styles: Record<string, string>) => {
+  const handleFloatingStyleUpdate = useCallback((selector: string, styles: Record<string, string>, hints?: SourceMatchHints) => {
     console.log('[WebBuilder] handleFloatingStyleUpdate called:', selector, styles);
     const res = applyMutatorAcrossVFS(
       selector,
@@ -951,6 +974,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         commitToolbarMutationRef.current?.(next, `style ${Object.keys(styles).join(',').slice(0, 40)}`);
       },
       `Manual · style ${Object.keys(styles).join(', ').slice(0, 40)}`,
+      hints,
     );
     if (!res.ok) {
       if (res.reason === 'ambiguous') return;
@@ -980,7 +1004,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     }
   }, [applyMutatorAcrossVFS, selectedHTMLElement, setSelectedHTMLElement]);
 
-  const handleFloatingImageReplace = useCallback((selector: string, src: string) => {
+  const handleFloatingImageReplace = useCallback((selector: string, src: string, hints?: SourceMatchHints) => {
     console.log('[WebBuilder] handleFloatingImageReplace called:', selector, src.substring(0, 50));
     const res = applyMutatorAcrossVFS(
       selector,
@@ -997,6 +1021,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         commitToolbarMutationRef.current?.(next, 'replace image');
       },
       'Manual · replace image',
+      hints,
     );
     if (!res.ok) {
       if (res.reason === 'ambiguous') return;
@@ -1205,8 +1230,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const onGenerated = (event: Event) => {
       const d = (event as CustomEvent<ImageGeneratedDetail>).detail;
       if (!d?.selector || !d.src) return;
-      if (d.kind === 'img') handleFloatingImageReplace(d.selector, d.src);
-      else handleFloatingStyleUpdate(d.selector, { backgroundImage: `url("${d.src.replace(/"/g, '%22')}")` });
+      const hints: SourceMatchHints = { evidence: [d.currentSrc, d.alt ? `alt="${d.alt}"` : undefined], pagePath: d.pagePath ?? undefined };
+      if (d.kind === 'img') handleFloatingImageReplace(d.selector, d.src, hints);
+      else handleFloatingStyleUpdate(d.selector, { backgroundImage: `url("${d.src.replace(/"/g, '%22')}")` }, hints);
     };
     window.addEventListener(IMAGE_GENERATED_EVENT, onGenerated);
     return () => window.removeEventListener(IMAGE_GENERATED_EVENT, onGenerated);
