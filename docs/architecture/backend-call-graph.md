@@ -60,7 +60,7 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 
 - `connected_supabase_projects` has RLS enabled, no `anon`/`authenticated` table grants, and zero rows. There are currently no connected/dedicated backend bindings in this project.
 - Its live columns are `connection_id`, `business_id`, `unison_project_id`, `project_ref`, `project_url`, encrypted publishable/secret keys, `schema_version`, `provisioning_status`, `backend_manifest`, and `health_status`. The live table has no `site_id`, `mode`, `provider`, or `provider_project_ref` columns.
-- The local `project-backend` Edge Function source selects `site_id` from `connected_supabase_projects`; validate the deployed function source against this live table before treating dedicated CRUD as operational. The zero binding count currently limits observed impact.
+- The initial local `project-backend` source selected `site_id` from `connected_supabase_projects`, but the live table has no such column. The local source now resolves `site_id` through `projects`/`sites` and checks the binding's `business_id` and `unison_project_id`. The deployed Edge Function remains at version 20 and has not been redeployed, so dedicated CRUD is still not operationally verified; there are zero live bindings.
 - Neither `resolve_project_backend` nor `resolve_published_site_backend` exists in any live database schema, and neither function name appears in repository migrations. The client resolver and published backend helper call these RPCs, so backend resolution currently has no matching deployed database function.
 
 ### Edge Functions and Storage
@@ -75,7 +75,7 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 
 - The linked-project audit is complete for migration history, resource columns/FKs, RLS flags/policies, table grants, aggregate project ownership, binding-table schema/count, selected deployed function metadata, and Storage bucket/policy metadata.
 - The `user-files` public CRUD exposure is remediated on linked `UNISON/main`; the remaining metadata-table anonymous insert policy and missing backend resolver RPCs require separate reviewed migrations.
-- Dedicated backend behavior remains unverified and has no live bindings. Local `project-backend` source/live binding-table shape also needs parity before creating any binding.
+- Dedicated backend behavior remains unverified and has no live bindings. The local gateway now matches the observed binding-table shape, but the deployed function and actual connected-database behavior still need staged verification.
 - This audit covers the linked `UNISON/main` project, not a separate staging project. Repeat against a designated staging project before any later migration or policy remediation.
 
 ## Phase 1 implementation status
@@ -84,7 +84,7 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 - Resource keys resolve through `resourceRegistry`; arbitrary table names are rejected. Required project/site/business context is validated, and dedicated failures never route to the shared adapter.
 - Errors are returned in a structured envelope. `asset.link`, `intent.execute`, filtered list queries, and optimistic record-version checks explicitly return `UNSUPPORTED` until their existing domain owners are wired.
 - `operationId` is returned as correlation only. Existing storage paths do not persist operation receipts, so the v2 wrapper does not claim idempotent writes. Server auth/membership remains authoritative; caller-supplied `actorKind` is not trusted for authorization.
-- Focused validation after the change: 7 backend/runtime/industry/storage contract test files passed (225 tests), `npm run type-check` passed, and targeted ESLint passed.
+- Focused validation after the change: 9 backend/runtime/industry/storage contract test files passed (247 tests), `npm run type-check` passed, targeted ESLint passed, and Deno check passed for `project-backend`.
 - V2 now maps the missing `resolve_project_backend` / `resolve_published_site_backend` RPC schema-cache error to a non-retryable `BACKEND_UNAVAILABLE`; it does not fall back to shared storage.
 - Added fake-backed backend-to-UI contracts across all ten canonical industries. Source-owned titles make zero business-data calls; derived catalog seed targets go through `ResourceRuntime` and project into the canonical `CatalogCardViewModel`; each primary intent is registered, capability-owned, and backed by local Edge Function files. Shared and dedicated list/get/create/update/delete operations are exercised for every derived industry surface; each mode stays on its selected adapter. Portfolio/SaaS static fixtures and salon/menu resource fixtures remain explicit. The SaaS fixture rejects an unregistered generic tenant table rather than asserting a nonexistent SaaS adapter.
 - Dedicated catalog evidence is limited to the client facade with fake resolver/backend adapters. The live project has zero connected bindings, and the deployed `project-backend` Edge Function has not been source-hash or end-to-end parity verified.

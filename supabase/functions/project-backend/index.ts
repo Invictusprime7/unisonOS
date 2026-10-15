@@ -50,10 +50,29 @@ serve(async (req) => {
   const { data: member } = await admin.rpc("is_project_member", { _user_id: auth.user.id, _project_id: projectId });
   if (!member) return json({ success: false, error: "You don't have access to this site." }, 403);
 
+  const { data: project, error: projectError } = await admin.from("projects")
+    .select("id,business_id,site_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (projectError || !project?.site_id) {
+    return json({ success: false, error: "This site's project identity is unavailable." }, 404);
+  }
+
+  const { data: siteRecord, error: siteError } = await admin.from("sites")
+    .select("id,business_id")
+    .eq("id", project.site_id)
+    .maybeSingle();
+  if (siteError || !siteRecord || siteRecord.business_id !== project.business_id) {
+    return json({ success: false, error: "This site's project identity is invalid." }, 409);
+  }
+
   const { data: binding } = await admin.from("connected_supabase_projects")
-    .select("id, business_id, site_id, project_url, secret_key_ciphertext, provisioning_status")
+    .select("id, business_id, unison_project_id, project_url, secret_key_ciphertext, provisioning_status")
     .eq("unison_project_id", projectId).neq("provisioning_status", "disconnected").maybeSingle();
   if (!binding) return json({ success: false, mode: "shared-legacy", error: "This site uses the shared database; use cms-records." }, 409);
+  if (binding.business_id !== project.business_id || binding.unison_project_id !== project.id) {
+    return json({ success: false, error: "This site's backend binding does not match its project." }, 409);
+  }
   if (binding.provisioning_status !== "ready") return json({ success: false, error: "This site's database isn't ready yet." }, 503);
 
   const encKey = Deno.env.get("CONNECTED_PROJECT_TOKEN_ENCRYPTION_KEY");
@@ -68,7 +87,7 @@ serve(async (req) => {
 
   // §9 — refuse to touch a database that belongs to a different site.
   const { data: identity } = await site.from("unison_runtime_identity").select("project_id, site_id").maybeSingle();
-  if (!identity || identity.project_id !== projectId || (binding.site_id && identity.site_id !== binding.site_id)) {
+  if (!identity || identity.project_id !== project.id || identity.site_id !== siteRecord.id) {
     return json({ success: false, error: "This site's database belongs to a different site." }, 409);
   }
 

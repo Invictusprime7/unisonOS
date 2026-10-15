@@ -15,6 +15,7 @@ import { verifyRuntimeIdentity } from '@/services/project-backend/projectBackend
 
 const cms = readFileSync('supabase/functions/cms-records/index.ts', 'utf8');
 const runtimeRead = readFileSync('supabase/functions/site-runtime-read/index.ts', 'utf8');
+const projectBackend = readFileSync('supabase/functions/project-backend/index.ts', 'utf8');
 
 describe('Phase 0 — project scope on saved items', () => {
   it('cms-records writes project_id and deletes only within the site', () => {
@@ -23,6 +24,15 @@ describe('Phase 0 — project scope on saved items', () => {
   });
   it('site-runtime-read filters catalog by project', () => {
     expect(runtimeRead).toContain('project_id.eq.${context.projectId}');
+  });
+
+  it('resolves dedicated site identity from the project row, not a missing binding column', () => {
+    expect(projectBackend).not.toContain('select("id, business_id, site_id, project_url');
+    expect(projectBackend).toContain('.select("id, business_id, unison_project_id, project_url');
+    expect(projectBackend).toContain('.from("projects")');
+    expect(projectBackend).toContain('.select("id,business_id,site_id")');
+    expect(projectBackend).toContain('binding.business_id !== project.business_id');
+    expect(projectBackend).toContain('identity.site_id !== siteRecord.id');
   });
 });
 
