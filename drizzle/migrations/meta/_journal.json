@@ -134,6 +134,13 @@
       "when": 1792079626107,
       "tag": "0018_catalog_realtime",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792079790616,
+      "tag": "0019_site_live_broadcast",
+      "breakpoints": true
     }
   ]
 }
