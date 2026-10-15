@@ -20,6 +20,7 @@ interface CheckpointsPopoverProps {
   disabled?: boolean;
 }
 
+const PAGE = 30;
 const KIND_ICON = { ai: Sparkles, restore: Undo2, launch: Rocket, manual: PencilLine, other: History } as const;
 
 function timeAgo(iso: string): string {
@@ -35,12 +36,28 @@ export default function CheckpointsPopover({ draftId, currentRevisionId, refresh
   const [items, setItems] = useState<Checkpoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
 
   const load = useCallback(async () => {
     if (!draftId) return;
     setLoading(true);
-    try { setItems(await listCheckpoints(draftId)); } finally { setLoading(false); }
+    try {
+      const page = await listCheckpoints(draftId, PAGE);
+      setItems(page);
+      setHasMore(page.length === PAGE);
+    } finally { setLoading(false); }
   }, [draftId]);
+
+  const loadOlder = useCallback(async () => {
+    const last = items[items.length - 1];
+    if (!draftId || !last) return;
+    setLoading(true);
+    try {
+      const page = await listCheckpoints(draftId, PAGE, last.createdAt);
+      setItems((prev) => [...prev, ...page.filter((p) => !prev.some((x) => x.id === p.id))]);
+      setHasMore(page.length === PAGE);
+    } finally { setLoading(false); }
+  }, [draftId, items]);
 
   useEffect(() => { if (open) void load(); }, [open, load, refreshKey]);
 
@@ -102,6 +119,13 @@ export default function CheckpointsPopover({ draftId, currentRevisionId, refresh
               );
             })}
           </ul>
+          {hasMore && (
+            <div className="border-t border-border p-2">
+              <Button variant="ghost" size="sm" className="w-full text-xs" disabled={loading} onClick={() => void loadOlder()}>
+                Show older checkpoints
+              </Button>
+            </div>
+          )}
         </ScrollArea>
       </PopoverContent>
     </Popover>
