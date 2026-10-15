@@ -143,9 +143,6 @@ Deno.serve(async (req) => {
       const { data: role } = await admin.rpc('user_business_role', { _user_id: userId, _business_id: body.business_id });
       if (!role) return new Response(JSON.stringify({ error: 'Not a member of this business' }), { status: 403, headers: jsonHeaders });
     }
-    if (!body.project_id && !body.business_id) {
-      return new Response(JSON.stringify({ error: 'A proposal needs a project or business target' }), { status: 400, headers: jsonHeaders });
-    }
 
     const { data: inserted, error: insertErr } = await admin
       .from('ai_builder_proposals')
