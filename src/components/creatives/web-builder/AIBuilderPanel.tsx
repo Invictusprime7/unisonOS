@@ -829,7 +829,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       const detail = (event as CustomEvent<{ prompt?: string; target?: typeof agentTarget }>).detail;
       const prompt = detail?.prompt?.trim();
       if (!prompt) return;
-      const t = detail?.target as (typeof agentTarget & { imageKind?: 'img' | 'background'; imageSelector?: string; imageSrc?: string; imageAlt?: string; width?: number; height?: number; forceImage?: boolean; placement?: 'background' | 'inside'; scrim?: boolean; scope?: 'one' | 'group' }) | undefined;
+      const t = detail?.target as (typeof agentTarget & { imageKind?: 'img' | 'background'; imageSelector?: string; imageSrc?: string; imageAlt?: string; width?: number; height?: number; forceImage?: boolean; placement?: 'background' | 'inside'; scrim?: boolean; scope?: 'one' | 'group'; evidence?: string[]; ownerPath?: string; pagePath?: string }) | undefined;
       // Image extension: a picture request on an image runs through the AI Builder's
       // site-aware image step, then saves via the canonical image-replace path.
       if (t?.imageKind && (t.imageSelector || t.selector) && (t.forceImage || isImageGenerationRequest(prompt))) {
@@ -849,7 +849,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           nearbyText: t.text, section: t.section, repeatLabel: where, width: t.width, height: t.height,
         }, { projectId: ctx.projectId ?? undefined, businessId: ctx.businessId ?? undefined, industry: ctx.industry ?? undefined, ...located })
           .then(({ url, prompt: used }) => {
-            window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: { selector: (t.imageSelector || t.selector)!, src: url, kind: t.imageKind!, currentSrc: t.imageSrc, alt: t.imageAlt, pagePath: located.pagePath, placement: t.placement, scrim: t.scrim, text: t.text } }));
+            window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: { selector: (t.imageSelector || t.selector)!, src: url, kind: t.imageKind!, currentSrc: t.imageSrc, alt: t.imageAlt, pagePath: located.pagePath ?? t.pagePath, placement: t.placement, scrim: t.scrim, text: t.text, evidence: t.evidence, ownerPath: t.ownerPath } }));
             emitAgentEvent({ kind: 'commit', runId, status: 'ok', message: 'Image generated — saving to your site' });
             setMessages((prev) => [...prev, { id: generateId(), role: 'assistant', content: `Made a new ${t.section ? `${t.section} ` : ''}image for you and saved it to the site.\n\nArt direction: ${used}`, timestamp: new Date() }]);
             toast.success('Image generated — saving to your site', { id });

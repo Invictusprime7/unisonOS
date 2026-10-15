@@ -43,6 +43,7 @@ import { useToolbarCommands } from './toolbarCommandAdapter';
 import { uploadForPlacement } from '@/services/assets/uploadPlacement';
 import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 import { coverBackgroundStyles } from './pictureInsertion';
+import { selectionEvidence } from './jsxSourceUtils';
 import type { EditorTarget } from '@/services/editor/editorCommandTypes';
 import { descriptorToTarget, type EditableObjectDescriptor } from '@/services/editor/editableObjectDescriptor';
 import { resolveSlotSectionType } from '@/services/builder/propertyInspectorModel';
@@ -479,7 +480,7 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
     if (needsPlacement && placement === 'inside') {
       // Same save path as AI-generated pictures.
       window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: {
-        selector, src: nextSrc, kind: 'img', placement: 'inside', text: String(element.textContent ?? '').trim().slice(0, 200), pagePath: target.pagePath ?? undefined,
+        selector, src: nextSrc, kind: 'img', placement: 'inside', text: String(element.textContent ?? '').trim().slice(0, 200), evidence: selectionEvidence(element), pagePath: target.pagePath ?? undefined,
       } }));
       return;
     }
@@ -542,6 +543,9 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
         placement: needsPlacement ? placement : undefined,
         scrim: needsPlacement && placement === 'background' && hasText,
         scope: isRepeat ? groupScope : undefined,
+        evidence: selectionEvidence(element),
+        ownerPath: element.descriptor?.sourceLocator?.startsWith('/') ? element.descriptor.sourceLocator.split(':')[0] : undefined,
+        pagePath: target.pagePath ?? undefined,
         descriptor: element.descriptor,
       },
     } }));

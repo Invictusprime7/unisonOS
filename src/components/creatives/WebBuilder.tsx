@@ -276,6 +276,7 @@ import {
   countImageLiteral,
   replaceImageLiteral,
   type SourceMatchHints,
+  selectionEvidence,
 } from "./web-builder/jsxSourceUtils";
 
 
@@ -918,6 +919,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           same ? sel?.imageTarget?.src : undefined, attrs.src, bg,
           attrs.alt ? `alt="${attrs.alt}"` : undefined,
           text && text.length < 160 ? text : undefined,
+          ...(same ? selectionEvidence(sel) : []),
         ],
       };
       const match = findUniqueSourceMutation(allFiles, activePath, mutate, hints);
@@ -1288,7 +1290,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       const d = (event as CustomEvent<ImageGeneratedDetail>).detail;
       if (!d?.selector || !d.src) return;
       const textEvidence = d.text && d.text.length > 3 ? d.text.slice(0, 60) : undefined;
-      const hints: SourceMatchHints = { evidence: [d.currentSrc, d.alt ? `alt="${d.alt}"` : undefined, d.placement ? textEvidence : undefined], pagePath: d.pagePath ?? undefined };
+      const hints: SourceMatchHints = { evidence: [d.currentSrc, d.alt ? `alt="${d.alt}"` : undefined, d.placement ? textEvidence : undefined, ...(d.evidence ?? [])], pagePath: d.pagePath ?? undefined, ownerPath: d.ownerPath ?? undefined };
       if (d.placement === 'inside') handleFloatingInsertImage(d.selector, d.src, d.alt || (d.text ?? '').slice(0, 80), hints);
       else if (d.placement === 'background') handleFloatingStyleUpdate(d.selector, coverBackgroundStyles(d.src, !!d.scrim), hints);
       else if (d.kind === 'img') handleFloatingImageReplace(d.selector, d.src, hints);

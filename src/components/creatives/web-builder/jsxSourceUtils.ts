@@ -124,6 +124,28 @@ export interface SourceMatchHints {
   ownerPath?: string | null;
 }
 
+/**
+ * Identity clues captured from a clicked element at click time: its own class
+ * list, link/alt attributes and the separate text runs inside its markup
+ * (source splits text across tags, so the joined textContent rarely matches).
+ */
+export function selectionEvidence(el: { html?: string; textContent?: string; attributes?: Record<string, string> } | null | undefined): string[] {
+  if (!el) return [];
+  const out: string[] = [];
+  const a = el.attributes ?? {};
+  const cls = a.className || a.class;
+  if (cls && cls.length > 8) out.push(cls);
+  for (const k of ['href', 'src', 'id', 'data-ut-path', 'aria-label']) if (a[k] && a[k].length > 3) out.push(a[k]);
+  if (a.alt) out.push(`alt="${a.alt}"`);
+  const runs = (el.html ?? '').replace(/<[^>]*>/g, '\n').split('\n')
+    .map((t) => t.replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').trim())
+    .filter((t) => t.length >= 6 && t.length <= 120);
+  out.push(...[...new Set(runs)].sort((x, y) => y.length - x.length).slice(0, 6));
+  const text = String(el.textContent ?? '').trim();
+  if (!runs.length && text.length >= 6 && text.length <= 120) out.push(text);
+  return out;
+}
+
 function resolveImport(from: string, spec: string, files: Record<string, string>): string | null {
   let base: string;
   if (spec.startsWith('@/')) base = `/src/${spec.slice(2)}`;
@@ -205,9 +227,15 @@ export function findUniqueSourceMutation(
       try { const u = new URL(e); const file = u.pathname.split('/').pop() ?? ''; return [e, e.split('?')[0], u.pathname, file].filter((x) => x.length > 4); } catch { return [e]; }
     });
   if (evidence.length) {
-    const withEvidence = pool.filter((m) => evidence.some((e) => m.before.includes(e)));
-    if (withEvidence.length === 1) return withEvidence[0];
-    if (withEvidence.length > 1) pool = withEvidence;
+    // Score by how many distinct clues each file contains; a unique best wins.
+    const unique = [...new Set(evidence)];
+    const scored = pool.map((m) => ({ m, score: unique.filter((e) => m.before.includes(e)).length }));
+    const best = Math.max(...scored.map((s) => s.score));
+    if (best > 0) {
+      const top = scored.filter((s) => s.score === best).map((s) => s.m);
+      if (top.length === 1) return top[0];
+      pool = top;
+    }
   }
   if (hints.pagePath) {
     const reachable = collectReachableSources(files, hints.pagePath);
