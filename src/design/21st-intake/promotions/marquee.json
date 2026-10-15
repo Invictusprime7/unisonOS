@@ -6,7 +6,7 @@
   "description": "Two continuously scrolling rows of proof cards with edge fades",
   "componentName": "TestimonialsMarquee",
   "componentPath": "./testimonials/TestimonialsMarquee",
-  "jsxFn": "testimonialsMarqueeJSX",
+  "jsxFn": "portableRecipeOnly",
   "thumbnail": "/variants/testimonials-marquee.svg",
   "tags": [
     "testimonials",

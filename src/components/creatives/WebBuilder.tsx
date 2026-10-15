@@ -166,10 +166,15 @@ import { ElementIntentInspector } from "./web-builder/ElementIntentInspector";
 import { PropertyInspectorPanel } from "./web-builder/PropertyInspectorPanel";
 import { planInspectorExecution } from "@/services/builder/inspectorPatchExecution";
 import { toCompositionRole } from "@/services/builder/semanticPresentationOps";
-import type { InspectorPatchPlan } from "@/services/builder/propertyInspectorModel";
+import {
+  resolveInspectorCanonicalSections,
+  type InspectorPatchPlan,
+} from "@/services/builder/propertyInspectorModel";
+import { collectResolvedCompositions } from "@/platform/core/resolvedComposition";
 
 import { CatalogInspectorPanel } from "@/components/business-center/CatalogInspectorPanel";
 import { buildSectionTypeMap } from "@/services/autoEmitSectionBindings";
+import { readWizardDesignIntervention } from "@/services/wizardDesignIntervention";
 import { SEOSettingsPanel } from "./web-builder/SEOSettingsPanel";
 import { usePageSEO } from "@/hooks/usePageSEO";
 import { generateUUID } from "@/utils/uuid";
@@ -705,6 +710,16 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     if (!elementKey) return null;
     return Object.values(playgroundBindings).find((binding) => binding.elementKey === elementKey) || null;
   }, [selectedHTMLElement, playgroundBindings]);
+
+  const selectedElementAttributes = (selectedHTMLElement?.attributes ?? {}) as Record<string, string>;
+  const selectedElementAncestors = selectedHTMLElement?.scopeAncestors;
+  const selectedElementKey = selectedElementAttributes['data-ut-binding-key']
+    || selectedElementAttributes['data-element-key']
+    || selectedElementAttributes['data-ut-element-id']
+    || selectedElementAncestors?.bindingKey
+    || selectedElementAncestors?.elementId
+    || selectedHTMLElement?.selector
+    || `el:${selectedHTMLElement?.tagName ?? 'element'}`;
 
   const clearLivePreviewSelection = useCallback(() => {
     livePreviewRef.current?.clearSelectedElement?.();
@@ -1651,20 +1666,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       setRenamingProject(false);
     }
   }, [projectId, projectDisplayName]);
-
-  // ── Catalog wiring (Track B end-to-end) ──
-  // Derive sectionId → requirementKey map from the launcher snapshot so
-  // CatalogInspectorPanel + CatalogReadinessGate know each bound section's
-  // minRows requirement without a round-trip.
-  const catalogSectionTypeMap = useMemo(() => {
-    const snapshot = effectiveRouteState?.siteBundleSnapshot;
-    if (!snapshot) return {} as Record<string, string>;
-    try {
-      return buildSectionTypeMap(snapshot);
-    } catch {
-      return {};
-    }
-  }, [effectiveRouteState?.siteBundleSnapshot]);
 
   // Re-emit site_data_bindings whenever the canonical pipeline commits a new
   // snapshot (AI Builder edit, Playground recompile, republish). The wizard
@@ -2653,6 +2654,43 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const virtualFSRef = useRef(virtualFS);
   virtualFSRef.current = virtualFS;
 
+  const currentSiteSnapshot = useMemo(() => (
+    resolveSnapshot(getSandpackFiles(), effectiveRouteState as any).snapshot
+      ?? effectiveRouteState?.siteBundleSnapshot
+      ?? null
+  ), [getSandpackFiles, vfsNodes, activePagePath, effectiveRouteState?.siteBundleSnapshot]);
+
+  const currentResolvedSections = useMemo(() => {
+    if (!currentSiteSnapshot) return [];
+    const liveFiles = getSandpackFiles();
+    const pageComposition = activePagePath
+      ? collectResolvedCompositions(currentSiteSnapshot.vfsFiles)[activePagePath]
+      : undefined;
+    const pageSections = pageComposition?.sections.map((section) => ({
+      sectionId: section.sectionId,
+      sectionType: section.semanticType,
+      variantId: section.variantId,
+    }));
+    const activeVariants = currentSiteSnapshot.meta.designIntervention?.activeVariants
+      ?? readWizardDesignIntervention(liveFiles)?.activeVariants
+      ?? readWizardDesignIntervention(currentSiteSnapshot.vfsFiles)?.activeVariants;
+    return resolveInspectorCanonicalSections(
+      pageComposition ? pageSections : undefined,
+      activeVariants,
+    );
+  }, [activePagePath, currentSiteSnapshot, getSandpackFiles]);
+
+  // Catalog readiness and the inspector must reflect the live VFS snapshot,
+  // including commits made after the project was opened.
+  const catalogSectionTypeMap = useMemo(() => {
+    if (!currentSiteSnapshot) return {} as Record<string, string>;
+    try {
+      return buildSectionTypeMap(currentSiteSnapshot);
+    } catch {
+      return {};
+    }
+  }, [currentSiteSnapshot]);
+
   const selectEditableEntryPath = useCallback((
     files: Record<string, string>,
     preferredPath?: string | null,
@@ -3259,7 +3297,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const commitPresentationOps = useCallback(async (
     requestedOps: import('@/types/patchPlan').PresentationOp[],
   ): Promise<boolean> => {
-    if (!businessId || !currentDraftId || requestedOps.length === 0) return false;
+    if (requestedOps.length === 0) return true;
+    if (!businessId || !currentDraftId) {
+      toast.error('Open or save a project before changing its layout.');
+      return false;
+    }
 
     const beforeFiles = virtualFSRef.current.getSandpackFiles();
     const snapshot = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot
@@ -3267,7 +3309,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       ?? null;
     // No SiteBundleSnapshot = no canonical surface to mutate. The customizer
     // keeps its local reflection; nothing enters the ledger.
-    if (!snapshot) return false;
+    if (!snapshot) {
+      toast.error('The current site snapshot is unavailable, so the layout was not changed.');
+      return false;
+    }
 
     const presentationOps = filterRedundantPresentationOps(snapshot, requestedOps);
     if (presentationOps.length === 0) return true;
@@ -3285,7 +3330,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         draftId: currentDraftId,
         revisionId: currentRevisionIdRef.current,
       });
-      if (!commitIdentity) return false;
+      if (!commitIdentity) {
+        toast.error('Could not resolve the project revision for this layout change.');
+        return false;
+      }
       const patch = emptyPatchPlan(`Presentation · ${presentationOps.length} variant update(s)`);
       patch.presentationOps.push(...presentationOps);
       const commit = await commitMutation({
@@ -3298,14 +3346,18 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       if (commit.status !== 'committed') {
         throw new CommitRejectedError('presentation mutation was rejected', commit);
       }
+      if (commit.persistedRevisionId) setCurrentRevisionId(commit.persistedRevisionId);
       // canonical-vfs-exempt: adoption of an accepted commitMutation result
-      importBuilderFiles(commit.vfsFiles, {
+      const imported = importBuilderFiles(commit.vfsFiles, {
         replace: true,
         preferredPath: activePagePath,
         entryPoint: launchEntryPoint,
         adoption: commitAdoptionRecord(commit),
       });
-      if (commit.persistedRevisionId) setCurrentRevisionId(commit.persistedRevisionId);
+      if (!imported) {
+        toast.error('The layout was saved, but Preview could not reload it. Refresh the project to load the saved revision.');
+        return false;
+      }
       return true;
     } catch (err) {
       console.warn('[WebBuilder] presentation commit failed:', err);
@@ -8978,11 +9030,13 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               <div className="fixed right-3 top-28 z-50">
                 <ElementIntentInspector
                   selection={{
-                    elementKey: selectedHTMLElement.selector || `el:${selectedHTMLElement.tagName}`,
+                    elementKey: selectedElementKey,
                     elementLabel: (selectedHTMLElement.textContent || '').slice(0, 40) || selectedHTMLElement.tagName || 'Element',
                     selector: selectedHTMLElement.selector,
                     tagName: selectedHTMLElement.tagName,
-                    intent: (selectedHTMLElement.attributes as Record<string, string> | undefined)?.['data-ut-intent'],
+                    intent: selectedElementAttributes['data-ut-intent']
+                      || selectedElementAncestors?.primaryIntent
+                      || selectedElementAncestors?.intents?.[0],
                   }}
                   businessId={businessId || undefined}
                   projectId={projectId || undefined}
@@ -9022,25 +9076,26 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                     attributes: selectedHTMLElement.attributes as Record<string, string> | undefined,
                     scopeAncestors: {
                       ...(selectedHTMLElement.scopeAncestors ?? {}),
-                      pagePath:
-                        (selectedHTMLElement.scopeAncestors as { pagePath?: string | null } | undefined)?.pagePath
-                        ?? activePagePath,
+                      pagePath: activePagePath
+                        ?? (selectedHTMLElement.scopeAncestors as { pagePath?: string | null } | undefined)?.pagePath,
                     },
                     imageTarget: selectedHTMLElement.imageTarget,
+                    canonicalSections: currentResolvedSections,
                   }}
                   onClose={() => setPropertyPanelOpen(false)}
-                  onApplyPatchPlan={(plan) => {
+                  onApplyPatchPlan={async (plan) => {
                     // Already-validated canonical plans execute directly on the
                     // canonical rails (presentation / theme / source) through
                     // VFSCommitService — no AI round-trip, no DOM-only writes.
                     const attrs = (selectedHTMLElement.attributes ?? {}) as Record<string, string>;
-                    void applyInspectorPatchPlan({
+                    const applied = await applyInspectorPatchPlan({
                       ...plan,
                       resourceMark: attrs['data-ut-resource']
                         || (selectedHTMLElement.scopeAncestors as { resource?: string | null } | undefined)?.resource
                         || null,
                     });
-                    setPropertyPanelOpen(false);
+                    if (applied) setPropertyPanelOpen(false);
+                    return applied;
                   }}
                   onContextualAIRequest={(prompt) => {
                     dispatchBuilderPrompt(prompt);
@@ -9074,7 +9129,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 <CatalogInspectorPanel
                   projectId={projectId}
                   sectionTypeMap={catalogSectionTypeMap}
-                  snapshot={effectiveRouteState?.siteBundleSnapshot ?? null}
+                  snapshot={currentSiteSnapshot}
                   onClose={() => setCatalogPanelOpen(false)}
                 />
 

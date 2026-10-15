@@ -54,7 +54,7 @@ export function validateRegistrySpec(text, spec) {
     for (const [key, value] of Object.entries({ sectionType: spec.sectionType, slug: spec.slug, generationStatus: spec.generationStatus ?? 'preferred', thumbnail: spec.thumbnail })) {
       if (literal(property(entry, key)) !== value) issues.push('registry ' + key + ' differs from promotion spec');
     }
-    for (const [key, name, source] of [['component', spec.componentName, spec.componentPath], ['renderJSX', spec.jsxFn, './jsxTemplates']]) {
+    for (const [key, name, source] of [['component', spec.componentName, spec.componentPath], ['renderJSX', spec.jsxFn, spec.jsxFn === 'portableRecipeOnly' ? './portableRecipeOnly' : './jsxTemplates']]) {
       const expression = property(entry, key);
       if (!expression || !ts.isIdentifier(expression) || expression.text !== name) issues.push('registry ' + key + ' differs from promotion spec');
       const binding = imports.get(name);
@@ -119,7 +119,8 @@ function entrySource(spec) {
 function registerInRegistry(spec, text) {
   let out = text;
 
-  // 1. jsxTemplates emitter import
+  // 1. Renderer import (canonical portable recipes or legacy JSX).
+  if (spec.jsxFn === 'portableRecipeOnly' && !/import \{ portableRecipeOnly \} from '\.\/portableRecipeOnly'/.test(out)) out = `import { portableRecipeOnly } from './portableRecipeOnly';\n` + out;
   if (!new RegExp(`\\b${spec.jsxFn}\\b`).test(out)) {
     out = out.replace(
       /\n\} from '\.\/jsxTemplates';/,
@@ -260,7 +261,7 @@ function main() {
     if (record.implementationId && record.implementationId !== spec.id) issues.push(spec.id + ': intake record belongs to another implementation');
     if (spec.id !== spec.sectionType + ':' + spec.slug || !/^[a-z0-9-]+:[a-z0-9-]+$/.test(spec.id)) issues.push(spec.id + ': invalid implementation identity');
     if (!/^\.\/[a-z0-9-]+\/[A-Za-z0-9]+$/.test(spec.componentPath ?? '') || !fs.existsSync(path.join(ROOT, 'src/sections/variants', spec.componentPath + '.tsx'))) issues.push(spec.id + ': canonical component missing or invalid');
-    const recipes = fs.readFileSync(path.join(ROOT, 'src/sections/variants/jsxTemplates.ts'), 'utf8');
+    const recipes = fs.readFileSync(path.join(ROOT, spec.jsxFn === 'portableRecipeOnly' ? 'src/sections/variants/portableRecipeOnly.ts' : 'src/sections/variants/jsxTemplates.ts'), 'utf8');
     if (!/^[A-Za-z][A-Za-z0-9]*$/.test(spec.jsxFn ?? '') || !recipes.includes('function ' + spec.jsxFn + '(')) issues.push(spec.id + ': portable recipe missing');
     if (!/^\/variants\/[a-z0-9-]+\.svg$/.test(spec.thumbnail ?? '')) issues.push(spec.id + ': invalid thumbnail path');
   }

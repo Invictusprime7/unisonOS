@@ -21,8 +21,12 @@ const message = (
 describe("homepage site confirmation", () => {
   it("recognizes clear affirmative confirmations but not change requests", () => {
     expect(isSiteConfirmation("Yes, please!")).toBe(true);
+    expect(isSiteConfirmation("ya")).toBe(true);
+    expect(isSiteConfirmation("Yes, that's accurate")).toBe(true);
+    expect(isSiteConfirmation("Sounds good!")).toBe(true);
     expect(isSiteConfirmation("Looks good")).toBe(true);
     expect(isSiteConfirmation("Yes, but change the colors")).toBe(false);
+    expect(isSiteConfirmation("ya, but make the site blue")).toBe(false);
     expect(isSiteConfirmation("maybe")).toBe(false);
   });
 
@@ -31,7 +35,20 @@ describe("homepage site confirmation", () => {
       "assistant",
       `Does this direction look right?\n${SITE_CONFIRMATION_MARKER}`,
     ))).toBe(true);
+    expect(hasSiteConfirmationRequest(message(
+      "assistant",
+      "Great! Is that a complete and accurate summary of the website you want to build?",
+    ))).toBe(true);
+    expect(hasSiteConfirmationRequest(message(
+      "assistant",
+      "Does that sound like the right direction for your website?",
+    ))).toBe(true);
+    expect(hasSiteConfirmationRequest(message(
+      "assistant",
+      "Excellent! We have a clear direction. You're all set to build your portfolio. Unison is ready to help you configure this!",
+    ))).toBe(true);
     expect(hasSiteConfirmationRequest(message("assistant", "What pages do you need?"))).toBe(false);
+    expect(hasSiteConfirmationRequest(message("assistant", "What kind of visual style do you envision?"))).toBe(false);
     expect(hasSiteConfirmationRequest(message("user", SITE_CONFIRMATION_MARKER))).toBe(false);
   });
 
@@ -46,6 +63,19 @@ describe("homepage site confirmation", () => {
     expect(brief).toContain("I run a bakery and need online orders.");
     expect(brief).not.toContain(SITE_CONFIRMATION_MARKER);
     expect(brief).not.toContain("Yes, please.");
+  });
+
+  it("builds the brief from the AI summary and filters short affirmative replies", () => {
+    const brief = buildConfirmedSiteBrief([
+      message("user", "I need a UI/UX designer portfolio with case studies and booking."),
+      message("assistant", "A UI/UX designer portfolio with case studies and meeting booking. Does that sound like the right direction for your website?"),
+      message("user", "ya"),
+    ]);
+
+    expect(brief).toContain("portfolio with case studies and meeting booking");
+    expect(brief).toContain("UI/UX designer portfolio");
+    expect(brief).not.toContain("Does that sound like");
+    expect(brief).not.toContain("\nya");
   });
 
   it("strips only the internal confirmation marker from the visible reply", () => {

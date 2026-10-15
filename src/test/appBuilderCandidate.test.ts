@@ -73,6 +73,40 @@ describe('App Builder candidate closure', () => {
     ]));
   });
 
+  it('blocks a candidate that omits a wizard-selected binding marker', async () => {
+    const withBindingGuide = contract();
+    withBindingGuide.business.bindingGuide = [
+      '--- INTERACTION WIRING CONTRACT ---',
+      '- Page Home (/), slot hero.primary-cta: label "Book now", marker data-ut-cta="cta.hero-book", intent booking.create, target booking-form',
+    ].join('\n');
+    const files = {
+      ...initialFiles,
+      '/src/pages/Home.tsx': 'export default function Home(){return <main><button>Book now</button></main>}',
+      '/src/pages/Contact.tsx': 'export default function Contact(){return <main>Contact</main>}',
+    };
+
+    const report = await validateAppBuildCandidate({ contract: withBindingGuide, files, initialFiles });
+
+    expect(report.ok).toBe(false);
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'wizard-binding-marker-missing', path: '/src/pages/Home.tsx' }),
+    ]));
+  });
+
+  it('accepts a candidate that carries the requested binding marker', async () => {
+    const withBindingGuide = contract();
+    withBindingGuide.business.bindingGuide = '- Page Home (/), slot hero.primary-cta: label "Book now", marker data-ut-cta="cta.hero-book", intent booking.create, target booking-form';
+    const files = {
+      ...initialFiles,
+      '/src/pages/Home.tsx': 'export default function Home(){return <main><button data-ut-cta="cta.hero-book">Book now</button></main>}',
+      '/src/pages/Contact.tsx': 'export default function Contact(){return <main>Contact</main>}',
+    };
+
+    const report = await validateAppBuildCandidate({ contract: withBindingGuide, files, initialFiles });
+
+    expect(report.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
+  });
+
   it('blocks pages that reach into recipe internals', async () => {
     const files = {
       ...initialFiles,

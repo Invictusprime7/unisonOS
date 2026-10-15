@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { AIAssistantCore, type QuickAction } from "@/components/ai/AIAssistantCore";
+import { siteDiscoveryMessagesKey } from "@/components/ai/siteDiscoveryPersistence";
 import { LauncherWizard } from "@/components/onboarding/wizard/LauncherWizard";
 
 
@@ -35,7 +36,7 @@ const HOME_QUICK_ACTIONS: QuickAction[] = [
   },
 ];
 
-export function HeroSection({ user, onAuthRequired, launcherOpen, launchBrief, onLauncherOpenChange }: HeroSectionProps) {
+export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange }: HeroSectionProps) {
   const [discoveryActive, setDiscoveryActive] = useState(false);
 
   return (
@@ -154,11 +155,14 @@ export function HeroSection({ user, onAuthRequired, launcherOpen, launchBrief, o
               <span>What would you like to build?</span>
             </div>
             <AIAssistantCore
+              key={user ? `site-discovery:${user.id}` : "site-discovery:anonymous"}
               appearance="unison"
               className={cn("transition-[height] duration-500 motion-reduce:transition-none", launcherOpen || discoveryActive ? "h-[min(740px,85dvh)]" : "h-[250px] sm:h-[270px]")}
               placeholder="Tell Unison about your idea..."
               quickActions={HOME_QUICK_ACTIONS}
               aiMode="site-discovery"
+              persistenceKey={user ? siteDiscoveryMessagesKey(user.id) : undefined}
+              onContinueToWizard={onSiteConfirmed}
               onDiscoveryStarted={() => setDiscoveryActive(true)}
               discoverySelections={(turn, answer) => <LauncherWizard
                 open

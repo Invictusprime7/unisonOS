@@ -3,12 +3,14 @@ import {
   resolveInspectorModel,
   buildInspectorPatchPlan,
   buildContextualAIPrompt,
+  resolveInspectorCanonicalSections,
   resolveSlotSectionType,
   sectionSelector,
   slotSelector,
   type InspectorSelection,
 } from '@/services/builder/propertyInspectorModel';
 import { getGenerationVariantsForSection } from '@/sections/variants/registry';
+import { buildWizardDesignIntervention, readWizardDesignIntervention } from '@/services/wizardDesignIntervention';
 
 function heroSelection(overrides: Partial<InspectorSelection> = {}): InspectorSelection {
   const variantId = getGenerationVariantsForSection('hero')[0]?.id;
@@ -44,6 +46,75 @@ describe('property inspector model (M9)', () => {
     expect(model.contract).not.toBeNull();
     expect(model.activeSlot?.id).toBe('hero.headline');
     expect(model.targetSelector).toBe(slotSelector('hero-1', 'hero.headline'));
+  });
+
+  it('recovers a missing DOM section ID from one matching canonical composition entry', () => {
+    const model = resolveInspectorModel({
+      attributes: { 'data-ut-variant': 'hero:full-bleed' },
+      scopeAncestors: { sectionType: 'hero' },
+      canonicalSections: [{ sectionId: 'hero-canonical', sectionType: 'hero', variantId: 'hero:full-bleed' }],
+    });
+
+    expect(model.sectionId).toBe('hero-canonical');
+    const fullBleed = model.variants.find((variant) => variant.id === 'hero:full-bleed');
+    expect(fullBleed?.current).toBe(true);
+    const nextVariant = model.variants.find((variant) => variant.id !== 'hero:full-bleed')!;
+    const plan = buildInspectorPatchPlan(model, { kind: 'variant', variantId: nextVariant.id });
+    expect(plan).toMatchObject({ ok: true, op: { type: 'set-variant', sectionId: 'hero-canonical' } });
+  });
+
+  it('recovers section identity from active variants when a legacy page has no composition descriptor', () => {
+    const canonicalSections = resolveInspectorCanonicalSections(undefined, {
+      'home-hero': 'hero:launch-showcase',
+    });
+    const model = resolveInspectorModel({
+      attributes: { 'data-ut-variant': 'hero:launch-showcase' },
+      scopeAncestors: { sectionType: 'hero' },
+      canonicalSections,
+    });
+
+    expect(model.sectionId).toBe('home-hero');
+    expect(model.warnings).not.toContain('This element has no canonical section identity, so edits cannot be scoped.');
+    const plan = buildInspectorPatchPlan(model, { kind: 'variant', variantId: 'hero:image-fan' as never });
+    expect(plan).toMatchObject({ ok: true, op: { type: 'set-variant', sectionId: 'home-hero' } });
+  });
+
+  it('resolves the same active variants stored in the canonical VFS mirror', () => {
+    const intervention = buildWizardDesignIntervention({
+      businessName: 'Preview Studio',
+      businessModel: 'appointment_service',
+      industryOverlay: 'salon',
+      templateId: 'salon-premium',
+      themePresetId: 'organic',
+      wizardSeedId: 'inspector-mirror-test',
+    });
+    intervention.activeVariants['home-hero'] = 'hero:launch-showcase';
+    const canonicalIntervention = readWizardDesignIntervention({
+      '/.unison/design-intervention.json': JSON.stringify(intervention),
+    });
+    const canonicalSections = resolveInspectorCanonicalSections(undefined, canonicalIntervention?.activeVariants);
+    const model = resolveInspectorModel({
+      attributes: { 'data-ut-variant': 'hero:launch-showcase' },
+      scopeAncestors: { sectionType: 'hero' },
+      canonicalSections,
+    });
+
+    expect(model.sectionId).toBe('home-hero');
+  });
+
+  it('keeps variant mutations disabled when canonical section identity is ambiguous', () => {
+    const model = resolveInspectorModel({
+      attributes: { 'data-ut-variant': 'hero:full-bleed' },
+      scopeAncestors: { sectionType: 'hero' },
+      canonicalSections: [
+        { sectionId: 'hero-one', sectionType: 'hero', variantId: 'hero:full-bleed' },
+        { sectionId: 'hero-two', sectionType: 'hero', variantId: 'hero:full-bleed' },
+      ],
+    });
+
+    expect(model.sectionId).toBeNull();
+    expect(model.warnings[0]).toContain('multiple canonical sections');
+    expect(buildInspectorPatchPlan(model, { kind: 'variant', variantId: 'hero:centered' as never })).toMatchObject({ ok: false });
   });
 
   it('offers only generation-eligible variants and marks the current one', () => {

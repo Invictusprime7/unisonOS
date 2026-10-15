@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { planInspectorExecution } from '@/services/builder/inspectorPatchExecution';
-import type { InspectorPatchPlan } from '@/services/builder/propertyInspectorModel';
+import {
+  buildInspectorPatchPlan,
+  resolveInspectorCanonicalSections,
+  resolveInspectorModel,
+  type InspectorPatchPlan,
+} from '@/services/builder/propertyInspectorModel';
 
 const PAGE = `export default function Home() {
   return (
@@ -20,6 +25,25 @@ function plan(op: Extract<InspectorPatchPlan, { ok: true }>['op']): Extract<Insp
 }
 
 describe('inspector patch execution', () => {
+  it('routes a confirmed legacy-preview variant through the canonical presentation executor', () => {
+    const canonicalSections = resolveInspectorCanonicalSections(undefined, {
+      'home-hero': 'hero:launch-showcase',
+    });
+    const model = resolveInspectorModel({
+      attributes: { 'data-ut-variant': 'hero:launch-showcase' },
+      scopeAncestors: { sectionType: 'hero', pagePath: '/src/pages/Home.tsx' },
+      canonicalSections,
+    });
+    const patchPlan = buildInspectorPatchPlan(model, { kind: 'variant', variantId: 'hero:image-fan' as never });
+    expect(patchPlan.ok).toBe(true);
+    if (patchPlan.ok === false) return;
+
+    expect(planInspectorExecution(patchPlan, { files })).toMatchObject({
+      kind: 'presentation',
+      ops: [{ type: 'setVariant', sectionId: 'home-hero', variantId: 'hero:image-fan' }],
+    });
+  });
+
   it('routes a variant change to a snapshot presentation op', () => {
     const result = planInspectorExecution(
       plan({ type: 'set-variant', sectionId: 'hero-1', selector: '', variantId: 'hero:centered' as never }),

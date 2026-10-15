@@ -6,7 +6,7 @@
   "description": "Retail product grid with contained art, price and add-to-bag intent",
   "componentName": "ServicesProductCards",
   "componentPath": "./services/ServicesProductCards",
-  "jsxFn": "servicesProductCardsJSX",
+  "jsxFn": "portableRecipeOnly",
   "thumbnail": "/variants/services-product-cards.svg",
   "tags": [
     "commerce",

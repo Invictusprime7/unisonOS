@@ -25,6 +25,7 @@ function fixture() {
   write('src/design/21st-intake/promotions/metric-cards.json', spec);
   write(recordPath, record);
   write('src/sections/variants/stats/StatsMetricCards.tsx', 'export const StatsMetricCards = () => null;');
+  write('src/sections/variants/portableRecipeOnly.ts', 'export function portableRecipeOnly() { throw new Error("Use canonical compilation"); }');
   write('src/sections/variants/jsxTemplates.ts', 'export function statsMetricCardsJSX() { return "<section />"; }');
   write('src/sections/variants/registry.ts', "import {\n} from './jsxTemplates';\nconst registry = {\n  stats: [\n  ],\n};\nconst VARIANT_LAYOUT_ALIASES: Partial<Record<VariantId, readonly string[]>> = {\n};\n");
   return { root, write, spec, record, recordPath };
@@ -69,7 +70,7 @@ describe('promotion manifest and registry agreement', () => {
   it.each([
     ["sourceId: '21st:1195'", "sourceId: '21st:wrong'"],
     ['component: StatsMetricCards', 'component: WrongComponent'],
-    ['renderJSX: statsMetricCardsJSX', 'renderJSX: missingRecipe'],
+    ['renderJSX: portableRecipeOnly', 'renderJSX: missingRecipe'],
     ["certification: 'approved'", "certification: 'pending'"],
     ["'metric-cards', 'cards'", "'unrelated'"],
     ["from './stats/StatsMetricCards'", "from './stats/WrongComponent'"],

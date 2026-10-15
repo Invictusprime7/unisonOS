@@ -6,7 +6,7 @@
   "description": "Bracketed banner card with a sweeping accent line and uppercase CTAs",
   "componentName": "CTASignalBanner",
   "componentPath": "./cta/CTASignalBanner",
-  "jsxFn": "ctaSignalBannerJSX",
+  "jsxFn": "portableRecipeOnly",
   "thumbnail": "/variants/cta-signal-banner.svg",
   "tags": [
     "cta",

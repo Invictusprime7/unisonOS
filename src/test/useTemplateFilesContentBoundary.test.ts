@@ -101,6 +101,17 @@ describe('useTemplateFiles content boundary', () => {
     expect(insertCalls).toEqual([]);
     expect(commitMutation).not.toHaveBeenCalled();
   });
+  it('uses the live metadata title when the denormalized draft name is still Untitled', () => {
+    const template = draftRowToTemplate({
+      id: 'draft-1',
+      name: 'Untitled Project',
+      metadata: { projectName: 'Crysalis Design. Site' },
+      created_at: '2026-10-11T12:00:00.000Z',
+      updated_at: '2026-10-11T12:00:00.000Z',
+    });
+
+    expect(template.name).toBe('Crysalis Design. Site');
+  });
   it.each(['create', 'update'] as const)('returns failure without announcing a saved revision after %s commit rejection', async (mode) => {
     if (mode === 'update') {
       responseQueue.push({ data: { metadata: {}, last_revision_id: 'parent' }, error: null });

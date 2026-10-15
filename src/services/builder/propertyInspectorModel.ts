@@ -56,6 +56,19 @@ export interface InspectorSelection {
   attributes?: Record<string, string>;
   scopeAncestors?: InspectorScopeAncestors | null;
   imageTarget?: { kind: 'img' | 'background'; selector: string; src?: string } | null;
+  /** Canonical section identities from the selected page's resolved composition. */
+  canonicalSections?: readonly { sectionId: string; sectionType: string; variantId?: string }[];
+}
+
+export function resolveInspectorCanonicalSections(
+  pageSections: readonly { sectionId: string; sectionType: string; variantId?: string }[] | undefined,
+  activeVariants?: Record<string, string> | null,
+): readonly { sectionId: string; sectionType: string; variantId?: string }[] {
+  if (pageSections) return pageSections;
+  return Object.entries(activeVariants ?? {}).flatMap(([sectionId, variantId]) => {
+    const variant = getVariantById(variantId as VariantId);
+    return variant ? [{ sectionId, sectionType: variant.sectionType, variantId }] : [];
+  });
 }
 
 export type InspectorScope = 'section' | 'slot' | 'element';
@@ -144,10 +157,15 @@ function isCertified(variantId: VariantId): boolean {
 export function resolveInspectorModel(selection: InspectorSelection | null | undefined): InspectorModel {
   const warnings: string[] = [];
   const ancestors = selection?.scopeAncestors ?? {};
-  const sectionId = ancestors.sectionId ?? null;
-  const slotIdRaw = ancestors.slotId ?? selection?.attributes?.['data-ut-slot'] ?? null;
-  const sectionType = (ancestors.sectionType as SectionType | undefined) ?? null;
   const variantId = readVariantId(selection ?? {});
+  const sectionType = (ancestors.sectionType as SectionType | undefined) ?? null;
+  const canonicalMatches = (selection?.canonicalSections ?? []).filter((section) =>
+    (!sectionType || section.sectionType === sectionType)
+      && (!variantId || section.variantId === variantId),
+  );
+  const sectionId = ancestors.sectionId
+    ?? (canonicalMatches.length === 1 ? canonicalMatches[0].sectionId : null);
+  const slotIdRaw = ancestors.slotId ?? selection?.attributes?.['data-ut-slot'] ?? null;
 
   const contract = variantId
     ? resolveImplementationContract(variantId)
@@ -159,7 +177,9 @@ export function resolveInspectorModel(selection: InspectorSelection | null | und
     warnings.push(`Variant "${variantId}" is not in the certified registry — variant controls are disabled.`);
   }
   if (!sectionId) {
-    warnings.push('This element has no canonical section identity, so edits cannot be scoped.');
+    warnings.push(canonicalMatches.length > 1
+      ? 'This element matches multiple canonical sections, so edits cannot be scoped safely.'
+      : 'This element has no canonical section identity, so edits cannot be scoped.');
   }
 
   const resolvedSectionType = (contract?.sectionType ?? sectionType) as SectionType | null;

@@ -38,6 +38,7 @@ import {
   Zap, 
   Play, 
   Link2,
+  Check,
   Workflow,
   X,
   Settings2,
@@ -96,6 +97,7 @@ export function ElementIntentInspector({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bindingId, setBindingId] = useState<string | null>(null);
+  const [pendingUnwire, setPendingUnwire] = useState(false);
   const [executionLog, setExecutionLog] = useState<Array<{ id: string; intent: string; result_status: string; created_at: string; error_message: string | null; execution_time_ms: number | null }>>([]);
   const [ghlEvents, setGhlEvents] = useState<Array<{ id: string; event_type: string; created_at: string; contact_id: string | null }>>([]);
 
@@ -123,6 +125,7 @@ export function ElementIntentInspector({
   // Load existing binding for this element
   useEffect(() => {
     async function loadBinding() {
+      setPendingUnwire(false);
       if (!selection || !projectId) return;
       
       setLoading(true);
@@ -486,33 +489,71 @@ export function ElementIntentInspector({
         </TooltipProvider>
 
         {bindingId && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-            onClick={async () => {
-              if (!bindingId) return;
-              const { error } = await supabase
-                .from("site_intent_bindings")
-                .delete()
-                .eq("id", bindingId);
-              if (error) { toast.error("Failed to unwire"); return; }
-              setBindingId(null);
-              setSelectedWorkflowId(null);
-              toast.success("Unwired");
-            }}
-          >
-            Unwire
-          </Button>
+          pendingUnwire ? (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Cancel unwire"
+                title="Cancel unwire"
+                disabled={saving}
+                onClick={() => setPendingUnwire(false)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Confirm unwire"
+                title="Confirm unwire"
+                className="border-red-500/30 text-red-300 hover:bg-red-500/10"
+                disabled={saving}
+                onClick={async () => {
+                  if (!bindingId || saving) return;
+                  setSaving(true);
+                  try {
+                    const { error } = await supabase
+                      .from("site_intent_bindings")
+                      .delete()
+                      .eq("id", bindingId);
+                    if (error) throw error;
+                    setBindingId(null);
+                    setSelectedWorkflowId(null);
+                    setPendingUnwire(false);
+                    toast.success("Unwired");
+                  } catch {
+                    toast.error("Failed to unwire");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                <Check className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+              disabled={saving}
+              onClick={() => setPendingUnwire(true)}
+            >
+              <Link2 className="mr-1 h-3 w-3" />
+              Unwire
+            </Button>
+          )
         )}
 
         <Button
-          size="sm"
-          className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-black"
+          size="icon"
+          aria-label="Confirm intent changes"
+          title="Save intent changes"
+          className="bg-cyan-500 hover:bg-cyan-600 text-black"
           onClick={saveBinding}
           disabled={saving || !businessId}
         >
-          {saving ? "Saving..." : "Save Binding"}
+          <Check className="h-4 w-4" />
         </Button>
       </div>
     </div>

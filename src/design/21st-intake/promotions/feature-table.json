@@ -6,7 +6,7 @@
   "description": "Plan columns over a shared feature checklist with a lifted popular tier",
   "componentName": "PricingFeatureTable",
   "componentPath": "./pricing/PricingFeatureTable",
-  "jsxFn": "pricingFeatureTableJSX",
+  "jsxFn": "portableRecipeOnly",
   "thumbnail": "/variants/pricing-feature-table.svg",
   "tags": [
     "pricing",

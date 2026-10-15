@@ -6,7 +6,7 @@
   "description": "Full-bleed cinematic hero with oversized display headline, gradient scrim and side copy",
   "componentName": "HeroPrismaCinematic",
   "componentPath": "./hero/HeroPrismaCinematic",
-  "jsxFn": "heroPrismaCinematicJSX",
+  "jsxFn": "portableRecipeOnly",
   "thumbnail": "/variants/hero-prisma-cinematic.svg",
   "tags": [
     "hero",

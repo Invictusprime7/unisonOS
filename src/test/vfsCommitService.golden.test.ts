@@ -1462,21 +1462,21 @@ describe('VFS commit Stage 4b handoff', () => {
 });
 
 describe('Snapshot-owned presentation mutations', () => {
-  it('projects a selected variant into canonical metadata and VFS mirrors before recompilation', async () => {
+  it('projects the legacy launch-showcase selection into canonical metadata and VFS mirrors', async () => {
     const files = { '/src/App.tsx': 'export default function App(){ return null; }' };
     mockPipeline(files);
     mockPreflight(files);
     mockIntents();
-    const patch = emptyPatchPlan('Select split hero');
+    const patch = emptyPatchPlan('Select image fan hero');
     patch.presentationOps.push({
       type: 'setVariant',
       sectionId: 'home-hero',
-      variantId: 'hero:split-image',
+      variantId: 'hero:image-fan',
     });
     const snapshot = {
       meta: {
         designIntervention: {
-          activeVariants: { 'home-hero': 'hero:centered' },
+          activeVariants: { 'home-hero': 'hero:launch-showcase' },
         },
       },
     } as never;
@@ -1489,8 +1489,8 @@ describe('Snapshot-owned presentation mutations', () => {
     });
 
     const canonicalInput = (commitToPipeline as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(canonicalInput.existingVfsFiles['/.unison/design-intervention.json']).toContain('hero:split-image');
-    expect(canonicalInput.existingVfsFiles['/.unison/site-bundle-snapshot.json']).toContain('hero:split-image');
+    expect(canonicalInput.existingVfsFiles['/.unison/design-intervention.json']).toContain('hero:image-fan');
+    expect(canonicalInput.existingVfsFiles['/.unison/site-bundle-snapshot.json']).toContain('hero:image-fan');
     expect(canonicalInput.themeTokens).toBeUndefined();
   });
 

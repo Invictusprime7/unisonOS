@@ -4,7 +4,7 @@ export const SITE_CONFIRMATION_MARKER = "<UNISON_SITE_CONFIRMATION>";
 
 export function isSiteConfirmation(value: string): boolean {
   const normalized = value.trim().toLowerCase().replace(/[.!?]+$/, "").replace(/\s+/g, " ");
-  return /^(?:yes(?:,? please)?|yep|yeah|correct|confirmed|confirm|looks good|that(?:'s| is) right|go ahead|let's do it|sure|absolutely|proceed)$/.test(normalized);
+  return /^(?:(?:yes|yeah|yep|yup|ya|yea)(?:,? (?:please|thanks|thank you|that(?:'s| is) (?:right|correct|accurate)|this (?:is|looks|sounds) (?:right|correct|accurate|good)))?|correct|confirmed|confirm|looks good|sounds good|that(?:'s| is) (?:right|correct|accurate)|this (?:is|looks|sounds) (?:right|correct|accurate|good)|go ahead|let's do it|sure|absolutely|proceed|perfect|exactly)$/.test(normalized);
 }
 
 export function stripSiteConfirmationMarker(value: string): string {
@@ -12,12 +12,18 @@ export function stripSiteConfirmationMarker(value: string): string {
     .replace(/<UNISON_WIZARD_STEP:[a-z]+>/g, "").trim();
 }
 
+function stripConfirmationQuestion(value: string): string {
+  return value
+    .replace(/\s+(?:is|does|do|are|would|can)\s+(?:that|this|these|you)\b[^?]{0,220}\?\s*$/i, "")
+    .trim();
+}
+
 export function buildConfirmedSiteBrief(messages: AIMessage[]): string {
   const lastAssistantMessage = [...messages]
     .reverse()
     .find((message) => message.role === "assistant");
   const summary = lastAssistantMessage
-    ? stripSiteConfirmationMarker(lastAssistantMessage.content)
+    ? stripConfirmationQuestion(stripSiteConfirmationMarker(lastAssistantMessage.content))
     : "";
   const userRequests = messages
     .filter((message) => message.role === "user")
@@ -33,8 +39,12 @@ export function buildConfirmedSiteBrief(messages: AIMessage[]): string {
 }
 
 export function hasSiteConfirmationRequest(message: AIMessage | undefined): boolean {
-  return message?.role === "assistant"
-    && message.content.includes(SITE_CONFIRMATION_MARKER);
+  if (message?.role !== "assistant") return false;
+  if (message.content.includes(SITE_CONFIRMATION_MARKER)) return true;
+  return /\b(?:is|does|do|are|would|can)\b[^?]{0,220}\b(?:right|correct|accurate|complete|direction|summary|plan|brief|look good|sound good)\b[^?]*\?/i
+    .test(message.content)
+    || /\b(?:clear direction|all set to (?:build|configure|set up)|ready to help you configure)\b/i
+      .test(message.content);
 }
 
 export function describeAssistantFailure(error: unknown): string {

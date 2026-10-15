@@ -127,6 +127,34 @@ function isAllowedGenerationPath(path: string): boolean {
   return APP_BUILDER_GENERATION_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
+interface BindingGuideRequirement {
+  route: string;
+  intent: string;
+  markers: string[];
+}
+
+/**
+ * The canonical binder owns conversion from `data-ut-cta` to `data-ut-intent`.
+ * App Builder must still put every selected action on its requested source
+ * surface. Read the deterministic binding guide rather than duplicating the
+ * binding planner in the authoring lane.
+ */
+function bindingGuideRequirements(guide: string): BindingGuideRequirement[] {
+  const requirements: BindingGuideRequirement[] = [];
+  for (const line of guide.split(/\r?\n/)) {
+    const page = /^-\s+Page\s+.+?\s+\((\/[^)]*)\),\s+slot\s+.*?:\s+label\s+.*?,\s+marker\s+(.+?),\s+intent\s+([\w.-]+)/.exec(line);
+    if (!page) continue;
+    const markers = [...page[2].matchAll(/data-ut-cta="([^"]+)"/g)].map((match) => match[1]);
+    if (markers.length) requirements.push({ route: page[1] || '/', markers, intent: page[3] });
+  }
+  return requirements;
+}
+
+function hasCtaMarker(source: string, marker: string): boolean {
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`data-ut-cta\\s*=\\s*(?:["']${escaped}["']|\\{\\s*["']${escaped}["']\\s*\\})`).test(source);
+}
+
 const APP_BUILDER_SOURCE_PATH = /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/;
 const NAV_DESCRIPTOR_KEYS = ['dataUiPath', 'href', 'intent', 'text'];
 
@@ -314,6 +342,19 @@ export async function validateAppBuildCandidate(input: {
         code: 'page-body-missing',
         path: page.filePath,
         message: `${page.title} has no authored candidate source at ${page.filePath}.`,
+      });
+    }
+  }
+
+  for (const requirement of bindingGuideRequirements(input.contract.business.bindingGuide)) {
+    const page = pages.find((candidate) => candidate.route === requirement.route);
+    const source = page ? files[page.filePath] : undefined;
+    if (!page || !source || !requirement.markers.some((marker) => hasCtaMarker(source, marker))) {
+      issues.push({
+        severity: 'blocker',
+        code: 'wizard-binding-marker-missing',
+        path: page?.filePath,
+        message: `Wizard-selected intent ${requirement.intent} needs one of ${requirement.markers.map((marker) => `data-ut-cta="${marker}"`).join(', ')} on ${requirement.route}. The canonical binder will stamp its data-ut-intent after this candidate closes.`,
       });
     }
   }

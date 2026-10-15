@@ -81,18 +81,9 @@ import {
   logoCloudGridJSX, logoCloudMarqueeJSX, logoCloudBrandLockupJSX,
   blogPreviewEditorialJSX, blogPreviewFeaturedGridJSX, blogPreviewHorizontalRailJSX,
   beforeAfterSliderJSX, beforeAfterGridJSX, beforeAfterCaseStudyJSX,
-  footerBrandSocialJSX,
-  pricingFeatureTableJSX,
   pricingBillingToggleJSX,
-  navbarFloatingPillJSX,
-  testimonialsMarqueeJSX,
-  statsMetricCardsJSX,
-  servicesProductCardsJSX,
-  ctaSignalBannerJSX,
-  heroPrismaCinematicJSX,
   heroTunnelImmersiveJSX,
   heroSpatialDepthJSX,
-  heroImageStreamJSX,
 } from './jsxTemplates';
 
 // 21st.dev certified variant: hero:image-stream
@@ -258,7 +249,7 @@ const VARIANT_REGISTRY: VariantRegistry = {
       thumbnail: '/variants/testimonials-marquee.svg',
       tags: ['testimonials', 'marquee', 'social-proof', 'motion'],
       pageRoles: ['home', 'about', 'services'],
-      renderJSX: testimonialsMarqueeJSX,
+      renderJSX: portableRecipeOnly,
     },
     {
       id: 'testimonials:editorial',
@@ -398,7 +389,7 @@ const VARIANT_REGISTRY: VariantRegistry = {
       thumbnail: '/variants/pricing-feature-table.svg',
       tags: ['pricing', 'table', 'plans', 'commerce'],
       pageRoles: ['home', 'pricing', 'services'],
-      renderJSX: pricingFeatureTableJSX,
+      renderJSX: portableRecipeOnly,
     },
     {
       id: 'pricing:billing-toggle',
@@ -676,7 +667,7 @@ const VARIANT_REGISTRY: VariantRegistry = {
       thumbnail: '/variants/hero-image-stream.svg',
       tags: ['hero', 'image-stream', 'perspective', 'motion', 'gallery'],
       pageRoles: ['home'],
-      renderJSX: heroImageStreamJSX,
+      renderJSX: portableRecipeOnly,
     },
     { id: 'hero:launch-showcase', sectionType: 'hero', slug: 'launch-showcase', name: 'Centered headline and actions above a framed media showcase', description: 'Centered headline and actions above a framed media showcase', component: HeroLaunchShowcase, vfs: { mode: 'portable-recipe', certification: 'approved' }, source: {"origin":"21st","sourceId":"21st:1526","sourceUrl":"https://21st.dev/@mikolajdobrucki/components/hero-section","author":"mikolajdobrucki","derivation":"source-adaptation","license":"MIT","adaptationVersion":"2"}, generationStatus: 'preferred', thumbnail: '/variants/hero-launch-showcase.svg', pageRoles: ['home', 'services', 'pricing'], renderJSX: portableRecipeOnly },
     {
@@ -701,7 +692,7 @@ const VARIANT_REGISTRY: VariantRegistry = {
       thumbnail: '/variants/hero-prisma-cinematic.svg',
       tags: ['hero', 'cinematic', 'editorial', 'full-bleed', 'media'],
       pageRoles: ['home'],
-      renderJSX: heroPrismaCinematicJSX,
+      renderJSX: portableRecipeOnly,
     },
     {
       id: 'hero:tunnel-immersive',
@@ -1069,7 +1060,7 @@ const VARIANT_REGISTRY: VariantRegistry = {
       thumbnail: '/variants/cta-signal-banner.svg',
       tags: ['cta', 'banner', 'bold', 'conversion'],
       pageRoles: ['home', 'shop', 'services', 'contact'],
-      renderJSX: ctaSignalBannerJSX,
+      renderJSX: portableRecipeOnly,
     },
     {
       id: 'cta:editorial',
@@ -1160,7 +1151,7 @@ const VARIANT_REGISTRY: VariantRegistry = {
       tags: ['navbar', 'sticky', 'pill', 'modern'],
       pageRoles: ['home', 'shop', 'services', 'contact', 'about'],
       radixPrimitives: ['dialog'],
-      renderJSX: navbarFloatingPillJSX,
+      renderJSX: portableRecipeOnly,
     },
     {
       id: 'navbar:standard',
@@ -1445,7 +1436,7 @@ const VARIANT_REGISTRY: VariantRegistry = {
       thumbnail: '/variants/services-product-cards.svg',
       tags: ['commerce', 'products', 'grid', 'shop'],
       pageRoles: ['home', 'shop', 'services'],
-      renderJSX: servicesProductCardsJSX,
+      renderJSX: portableRecipeOnly,
     },
     {
       id: 'services:card-grid',
@@ -1653,7 +1644,7 @@ const VARIANT_REGISTRY: VariantRegistry = {
       
       pageRoles: ['home', 'shop', 'services', 'contact', 'about'],
       
-      renderJSX: footerBrandSocialJSX,
+      renderJSX: portableRecipeOnly,
     },
     {
       id: 'footer:multi-column',
@@ -1932,7 +1923,7 @@ const VARIANT_REGISTRY: VariantRegistry = {
       thumbnail: '/variants/stats-metric-cards.svg',
       tags: ['stats', 'metrics', 'cards', 'proof'],
       pageRoles: ['home', 'about', 'services'],
-      renderJSX: statsMetricCardsJSX,
+      renderJSX: portableRecipeOnly,
     },
     {
       id: 'stats:bold',

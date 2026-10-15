@@ -62,5 +62,21 @@
       "responsive and reduced-motion review"
     ],
     "reviewedAt": "2026-09-18T05:37:18.980Z"
+  },
+  "mergeVerification": {
+    "componentSha256": "4ee5ee033d989fb40623080c9231cfb095ef688469cb77a9ff9d3c90f3ec6373",
+    "verifiedAt": "2026-09-27T02:08:57.845Z",
+    "source": "unison-x-loveable-design-main.zip",
+    "method": "node scripts/unison.mjs certify --all --consumer",
+    "checks": [
+      "render",
+      "slots",
+      "intents",
+      "accessibility",
+      "responsive",
+      "reduced-motion",
+      "dependencies"
+    ],
+    "limitations": "Automated SSR and source checks; original visual and license review evidence retained separately."
   }
 }

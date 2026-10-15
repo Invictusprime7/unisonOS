@@ -9,7 +9,9 @@
  */
 import { createCatalogItem, deleteCatalogItem, updateCatalogItemRow } from '@/services/agent-runtime/catalogOps';
 import { useCallback, useEffect, useState } from 'react';
+import { Check, Plus, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import { useBusinessProfile } from '@/contexts/useBusinessProfile';
 
@@ -66,9 +68,14 @@ interface DraftState {
   rows: RowRec[];
   loadedRows: boolean;
   rowDrafts: Record<string, RowDraft>;
+  newRow: RowDraft | null;
+  pendingDeleteId: string | null;
   presentation: CatalogBindingPresentation | null;
   actions: CatalogBindingActions | null;
   presentationSaving: boolean;
+  bindingDirty: boolean;
+  presentationDirty: boolean;
+  actionsDirty: boolean;
 }
 
 function draftFromBinding(b: SectionDataBindingDTO): DraftState {
@@ -83,9 +90,14 @@ function draftFromBinding(b: SectionDataBindingDTO): DraftState {
     rows: [],
     loadedRows: false,
     rowDrafts: {},
+    newRow: null,
+    pendingDeleteId: null,
     presentation: catalogCardBindingFor(b)?.presentation ?? null,
     actions: catalogCardBindingFor(b)?.actions ?? null,
     presentationSaving: false,
+    bindingDirty: false,
+    presentationDirty: false,
+    actionsDirty: false,
   };
 }
 
@@ -204,6 +216,30 @@ export function CatalogInspectorPanel({
     setDrafts((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
   };
 
+  const updateBindingDraft = (id: string, patch: Partial<DraftState>) => {
+    updateDraft(id, { ...patch, bindingDirty: true });
+  };
+
+  const stageNewRow = (binding: SectionDataBindingDTO) => {
+    updateDraft(binding.id, {
+      newRow: toRowDraft({ name: 'New item', description: '', price: 0, image_url: '' }),
+    });
+  };
+
+  const updateNewRowDraft = (bindingId: string, patch: Partial<RowDraft>) => {
+    setDrafts((prev) => {
+      const draft = prev[bindingId];
+      if (!draft?.newRow) return prev;
+      return {
+        ...prev,
+        [bindingId]: {
+          ...draft,
+          newRow: { ...draft.newRow, ...patch, dirty: true },
+        },
+      };
+    });
+  };
+
   const updateRowDraft = (
     bindingId: string,
     rowId: string,
@@ -239,6 +275,7 @@ export function CatalogInspectorPanel({
         [bindingId]: {
           ...draft,
           presentation: { ...draft.presentation, ...patch },
+          presentationDirty: true,
         },
       };
     });
@@ -256,6 +293,7 @@ export function CatalogInspectorPanel({
         [bindingId]: {
           ...draft,
           actions: { ...draft.actions, ...patch },
+          actionsDirty: true,
         },
       };
     });
@@ -283,36 +321,43 @@ export function CatalogInspectorPanel({
     if (ok) {
       await loadRows(binding);
       bumpPreview();
+    } else {
+      toast.error('Could not save catalog item changes.');
     }
   };
 
   const createRow = async (binding: SectionDataBindingDTO) => {
+    const row = drafts[binding.id]?.newRow;
+    if (!row || !row.name.trim()) return;
     updateDraft(binding.id, { saving: true });
-    const created = await createCatalogItem(binding.businessId, binding.sourceTable, {
-      name: 'New item',
-      description: '',
-      price: 0,
-      image_url: '',
-    }).catch(() => null);
-    updateDraft(binding.id, { saving: false });
-    if (created) {
+    const priceNum = row.price.trim() === '' ? 0 : Number(row.price);
+    try {
+      const created = await createCatalogItem(binding.businessId, binding.sourceTable, {
+        name: row.name.trim(),
+        description: row.description,
+        price: Number.isFinite(priceNum) ? priceNum : 0,
+        image_url: row.image_url,
+      });
+      if (!created) throw new Error('The catalog item was not created.');
+      updateDraft(binding.id, { saving: false, newRow: null });
       await loadRows(binding);
       bumpPreview();
+    } catch (error) {
+      updateDraft(binding.id, { saving: false });
+      toast.error(error instanceof Error ? error.message : 'Could not create the catalog item.');
     }
   };
 
   const removeRow = async (binding: SectionDataBindingDTO, rowId: string) => {
-    if (typeof window !== 'undefined') {
-      const ok = window.confirm('Delete this row? This cannot be undone.');
-      if (!ok) return;
-    }
     updateRowDraft(binding.id, rowId, { saving: true });
     const ok = await deleteCatalogItem(binding.businessId, binding.sourceTable, rowId).then(() => true, () => false);
     if (ok) {
+      updateDraft(binding.id, { pendingDeleteId: null });
       await loadRows(binding);
       bumpPreview();
     } else {
       updateRowDraft(binding.id, rowId, { saving: false });
+      toast.error('Could not delete the catalog item.');
     }
   };
 
@@ -320,7 +365,8 @@ export function CatalogInspectorPanel({
     const d = drafts[binding.id];
     if (!d) return;
     updateDraft(binding.id, { saving: true });
-    await upsertBinding({
+    try {
+      await upsertBinding({
       businessId: binding.businessId,
       projectId: binding.projectId,
       snapshotId: binding.snapshotId,
@@ -336,22 +382,32 @@ export function CatalogInspectorPanel({
       limitCount: d.limitCount,
       displayMapping: binding.displayMapping,
       fallbackMode: binding.fallbackMode,
-    });
-    updateDraft(binding.id, { saving: false });
-    await loadRows(binding);
-    setReloadKey((k) => k + 1);
-    bumpPreview();
+      });
+      updateDraft(binding.id, { saving: false, bindingDirty: false });
+      setReloadKey((k) => k + 1);
+      bumpPreview();
+    } catch (error) {
+      updateDraft(binding.id, { saving: false });
+      toast.error(error instanceof Error ? error.message : 'Could not save the data binding.');
+    }
   };
 
   const savePresentation = async (binding: SectionDataBindingDTO) => {
     const draft = drafts[binding.id];
     if (!draft?.presentation) return;
     updateDraft(binding.id, { presentationSaving: true });
-    const saved = await updateCatalogCardPresentation(binding.id, draft.presentation);
-    updateDraft(binding.id, { presentationSaving: false });
-    if (saved) {
-      setReloadKey((key) => key + 1);
-      bumpPreview();
+    try {
+      const saved = await updateCatalogCardPresentation(binding.id, draft.presentation);
+      updateDraft(binding.id, { presentationSaving: false, presentationDirty: !saved });
+      if (saved) {
+        setReloadKey((key) => key + 1);
+        bumpPreview();
+      } else {
+        toast.error('Could not save card presentation.');
+      }
+    } catch (error) {
+      updateDraft(binding.id, { presentationSaving: false, presentationDirty: true });
+      toast.error(error instanceof Error ? error.message : 'Could not save card presentation.');
     }
   };
 
@@ -359,11 +415,18 @@ export function CatalogInspectorPanel({
     const draft = drafts[binding.id];
     if (!draft?.actions) return;
     updateDraft(binding.id, { presentationSaving: true });
-    const saved = await updateCatalogCardBinding(binding.id, { actions: draft.actions });
-    updateDraft(binding.id, { presentationSaving: false });
-    if (saved) {
-      setReloadKey((key) => key + 1);
-      bumpPreview();
+    try {
+      const saved = await updateCatalogCardBinding(binding.id, { actions: draft.actions });
+      updateDraft(binding.id, { presentationSaving: false, actionsDirty: !saved });
+      if (saved) {
+        setReloadKey((key) => key + 1);
+        bumpPreview();
+      } else {
+        toast.error('Could not save card actions.');
+      }
+    } catch (error) {
+      updateDraft(binding.id, { presentationSaving: false, actionsDirty: true });
+      toast.error(error instanceof Error ? error.message : 'Could not save card actions.');
     }
   };
 
@@ -591,19 +654,23 @@ export function CatalogInspectorPanel({
                       <div className="flex justify-end">
                         <button
                           type="button"
-                          disabled={draft.presentationSaving}
+                          aria-label="Confirm card presentation changes"
+                          title="Apply presentation changes"
+                          disabled={draft.presentationSaving || !draft.presentationDirty}
                           onClick={() => savePresentation(binding)}
-                          className="text-xs px-2.5 py-1 rounded bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-500/40 disabled:opacity-50"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-35"
                         >
-                          {draft.presentationSaving ? 'Saving…' : 'Save presentation'}
+                          <Check className="h-3.5 w-3.5" />
                         </button>
                         <button
                           type="button"
-                          disabled={draft.presentationSaving}
+                          aria-label="Confirm card action changes"
+                          title="Apply action changes"
+                          disabled={draft.presentationSaving || !draft.actionsDirty}
                           onClick={() => saveCardActions(binding)}
-                          className="ml-2 text-xs px-2.5 py-1 rounded bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-500/40 disabled:opacity-50"
+                          className="ml-2 inline-flex h-7 w-7 items-center justify-center rounded border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-35"
                         >
-                          {draft.presentationSaving ? 'Saving…' : 'Save actions'}
+                          <Check className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </div>
@@ -615,7 +682,7 @@ export function CatalogInspectorPanel({
                   <select
                     value={draft.collectionId ?? ''}
                     onChange={(e) =>
-                      updateDraft(binding.id, {
+                      updateBindingDraft(binding.id, {
                         collectionId: e.target.value || null,
                       })
                     }
@@ -639,7 +706,7 @@ export function CatalogInspectorPanel({
                         min={0}
                         value={draft.limitCount ?? ''}
                         onChange={(e) =>
-                          updateDraft(binding.id, {
+                          updateBindingDraft(binding.id, {
                             limitCount: e.target.value ? Number(e.target.value) : null,
                           })
                         }
@@ -654,7 +721,7 @@ export function CatalogInspectorPanel({
                       <select
                         value={draft.sortDirection}
                         onChange={(e) =>
-                          updateDraft(binding.id, {
+                          updateBindingDraft(binding.id, {
                             sortDirection: e.target.value as 'asc' | 'desc',
                           })
                         }
@@ -674,7 +741,7 @@ export function CatalogInspectorPanel({
                       type="text"
                       value={draft.sortField}
                       onChange={(e) =>
-                        updateDraft(binding.id, { sortField: e.target.value })
+                        updateBindingDraft(binding.id, { sortField: e.target.value })
                       }
                       placeholder="e.g. sort_order, created_at"
                       className="w-full text-xs bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-zinc-200"
@@ -684,11 +751,13 @@ export function CatalogInspectorPanel({
                   <div className="flex items-center justify-end gap-2 pt-1">
                     <button
                       type="button"
-                      disabled={draft.saving}
+                      aria-label="Confirm data binding changes"
+                      title="Apply data binding changes"
+                      disabled={draft.saving || !draft.bindingDirty}
                       onClick={() => saveBinding(binding)}
-                      className="text-xs px-2.5 py-1 rounded bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-500/40 disabled:opacity-50"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-35"
                     >
-                      {draft.saving ? 'Saving…' : 'Save binding'}
+                      <Check className="h-3.5 w-3.5" />
                     </button>
                   </div>
 
@@ -700,10 +769,13 @@ export function CatalogInspectorPanel({
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => createRow(binding)}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 border border-indigo-500/30"
+                          aria-label={`Stage a new item in ${binding.sectionId}`}
+                          title="Add item"
+                          disabled={Boolean(draft.newRow) || draft.saving}
+                          onClick={() => stageNewRow(binding)}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded border border-indigo-500/30 text-indigo-200 hover:bg-indigo-500/15 disabled:opacity-35"
                         >
-                          + Add row
+                          <Plus className="h-3.5 w-3.5" />
                         </button>
                         <button
                           type="button"
@@ -720,6 +792,64 @@ export function CatalogInspectorPanel({
                     {draft.loadedRows && draft.rows.length === 0 && (
                       <div className="text-[11px] text-zinc-500">
                         No rows yet. Add items in the {binding.sourceTable} table.
+                      </div>
+                    )}
+                    {draft.newRow && (
+                      <div className="rounded border border-emerald-500/30 bg-emerald-500/[0.04] p-2 space-y-1">
+                        <div className="text-[10px] font-medium uppercase tracking-wider text-emerald-200">New item draft</div>
+                        <input
+                          type="text"
+                          value={draft.newRow.name}
+                          onChange={(e) => updateNewRowDraft(binding.id, { name: e.target.value })}
+                          placeholder="Name"
+                          className="w-full text-xs bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-zinc-100"
+                        />
+                        <textarea
+                          value={draft.newRow.description}
+                          onChange={(e) => updateNewRowDraft(binding.id, { description: e.target.value })}
+                          placeholder="Description"
+                          rows={2}
+                          className="w-full text-[11px] bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-zinc-300 resize-none"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={draft.newRow.price}
+                            onChange={(e) => updateNewRowDraft(binding.id, { price: e.target.value })}
+                            placeholder="Price"
+                            className="w-full text-[11px] bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-zinc-200"
+                          />
+                          <input
+                            type="text"
+                            value={draft.newRow.image_url}
+                            onChange={(e) => updateNewRowDraft(binding.id, { image_url: e.target.value })}
+                            placeholder="Image URL"
+                            className="w-full text-[11px] bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-zinc-200"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            aria-label="Cancel new item"
+                            title="Discard new item"
+                            disabled={draft.saving}
+                            onClick={() => updateDraft(binding.id, { newRow: null })}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-white/5"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Confirm new item"
+                            title="Create item"
+                            disabled={draft.saving || !draft.newRow.name.trim()}
+                            onClick={() => createRow(binding)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded border border-emerald-500/30 text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-35"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     )}
                     <div className="space-y-2">
@@ -778,21 +908,50 @@ export function CatalogInspectorPanel({
                               />
                             </div>
                             <div className="flex items-center justify-end gap-2">
+                              {draft.pendingDeleteId === rowId ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    aria-label={`Cancel deleting ${rd.name}`}
+                                    title="Cancel delete"
+                                    disabled={rd.saving}
+                                    onClick={() => updateDraft(binding.id, { pendingDeleteId: null })}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-white/5"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={`Confirm deleting ${rd.name}`}
+                                    title="Delete item"
+                                    disabled={rd.saving}
+                                    onClick={() => removeRow(binding, rowId)}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded border border-red-500/30 text-red-200 hover:bg-red-500/10 disabled:opacity-40"
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  aria-label={`Stage deleting ${rd.name}`}
+                                  title="Delete item"
+                                  disabled={rd.saving}
+                                  onClick={() => updateDraft(binding.id, { pendingDeleteId: rowId })}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded text-red-300 hover:bg-red-500/10 disabled:opacity-40"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                               <button
                                 type="button"
-                                disabled={rd.saving}
-                                onClick={() => removeRow(binding, rowId)}
-                                className="text-[11px] px-2 py-0.5 rounded bg-red-500/10 hover:bg-red-500/20 text-red-200 border border-red-500/30 disabled:opacity-40"
-                              >
-                                Delete
-                              </button>
-                              <button
-                                type="button"
+                                aria-label={`Confirm changes to ${rd.name}`}
+                                title="Save item changes"
                                 disabled={rd.saving || !rd.dirty}
                                 onClick={() => saveRow(binding, rowId)}
-                                className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border border-emerald-500/30 disabled:opacity-40"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded border border-emerald-500/30 text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-35"
                               >
-                                {rd.saving ? 'Saving…' : rd.dirty ? 'Save row' : 'Saved'}
+                                <Check className="h-3.5 w-3.5" />
                               </button>
                             </div>
                           </div>

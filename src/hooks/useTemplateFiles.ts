@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
 import { syncCanonicalComponentGraph } from "@/services/componentGraphPersistence";
 import { findBuilderDraftIdForProject } from "@/services/builderDraftBridge";
+import { resolveWorkspaceDraftName } from '@/services/cloudProjectDrafts';
 import { resolveLegacyDraftContent } from "@/services/legacyDraftHydration";
 import { commitMutation } from "@/services/vfsCommitService";
 import { legacyFilesToPatchPlan } from "@/types/patchPlan";
@@ -240,7 +241,7 @@ export const draftRowToTemplate = (row: any): SavedTemplate => {
   const vfsFiles = Object.keys(savedContent.files).length ? savedContent.files : undefined;
   return {
     id: row.id,
-    name: meta.name || "Untitled Project",
+    name: resolveWorkspaceDraftName(row),
     description: meta.description ?? null,
     is_public: false,
     created_at: row.created_at,

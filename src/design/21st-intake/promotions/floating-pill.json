@@ -6,7 +6,7 @@
   "description": "Sticky blurred pill bar that detaches from the top edge on scroll",
   "componentName": "NavbarFloatingPill",
   "componentPath": "./navbar/NavbarFloatingPill",
-  "jsxFn": "navbarFloatingPillJSX",
+  "jsxFn": "portableRecipeOnly",
   "thumbnail": "/variants/navbar-floating-pill.svg",
   "tags": [
     "navbar",

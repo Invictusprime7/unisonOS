@@ -6,7 +6,7 @@
   "description": "Bordered metric tiles with accent rules and optional glyphs",
   "componentName": "StatsMetricCards",
   "componentPath": "./stats/StatsMetricCards",
-  "jsxFn": "statsMetricCardsJSX",
+  "jsxFn": "portableRecipeOnly",
   "thumbnail": "/variants/stats-metric-cards.svg",
   "tags": [
     "stats",

@@ -6,7 +6,7 @@
   "description": "A perspective corridor of industry imagery framing centered headline and actions",
   "componentName": "HeroImageStream",
   "componentPath": "./hero/HeroImageStream",
-  "jsxFn": "heroImageStreamJSX",
+  "jsxFn": "portableRecipeOnly",
   "thumbnail": "/variants/hero-image-stream.svg",
   "tags": ["hero", "image-stream", "perspective", "motion", "gallery"],
   "pageRoles": ["home"],

@@ -45,6 +45,10 @@ import {
   isSiteConfirmation,
   stripSiteConfirmationMarker,
 } from "./siteConfirmation";
+import {
+  readSiteDiscoveryMessages,
+  writeSiteDiscoveryMessages,
+} from "./siteDiscoveryPersistence";
 
 export interface AIMessage {
   role: "user" | "assistant";
@@ -79,6 +83,8 @@ export interface AIAssistantCoreProps {
   aiMode?: string;
   /** Called instead of another AI turn after explicit site confirmation */
   onSiteConfirmed?: (siteBrief: string) => void;
+  /** Manual fallback for continuing in a guided Wizard when AI misses the handoff. */
+  onContinueToWizard?: (siteBrief: string) => void;
   /** Current context code for the AI */
   contextCode?: string;
   /** System type for context */
@@ -87,6 +93,8 @@ export interface AIAssistantCoreProps {
   businessName?: string;
   /** Initial messages to display */
   initialMessages?: AIMessage[];
+  /** Persist this conversation in local storage, scoped by the caller-provided key. */
+  persistenceKey?: string;
   /** Whether to show file drop zone */
   showFileUpload?: boolean;
   /** Whether to allow clearing history */
@@ -119,10 +127,12 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   onBeforeSend,
   aiMode,
   onSiteConfirmed,
+  onContinueToWizard,
   contextCode,
   systemType,
   businessName,
   initialMessages = [],
+  persistenceKey,
   showFileUpload = true,
   allowClearHistory = true,
   compact = false,
@@ -135,7 +145,15 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   onDiscoveryStarted,
   customSendHandler,
 }) => {
-  const [messages, setMessages] = useState<AIMessage[]>(initialMessages);
+  const [messages, setMessages] = useState<AIMessage[]>(() => {
+    if (!persistenceKey || typeof window === "undefined") return initialMessages;
+    try {
+      return readSiteDiscoveryMessages(persistenceKey) ?? initialMessages;
+    } catch (error) {
+      console.error("[AIAssistantCore] Could not restore site-discovery conversation.", error);
+      return initialMessages;
+    }
+  });
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
@@ -145,6 +163,15 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { analyzing, analyzeAndGenerate } = useAIFileAnalysis();
+
+  useEffect(() => {
+    if (!persistenceKey || typeof window === "undefined") return;
+    try {
+      writeSiteDiscoveryMessages(persistenceKey, messages);
+    } catch (error) {
+      console.error("[AIAssistantCore] Could not persist site-discovery conversation.", error);
+    }
+  }, [messages, persistenceKey]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -175,6 +202,19 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   const handleClearHistory = () => {
     setMessages([]);
     toast({ title: "Conversation cleared" });
+  };
+
+  const handleContinueToWizard = () => {
+    if (!onContinueToWizard || !messages.some((message) => message.role === "user")) return;
+    onContinueToWizard(buildConfirmedSiteBrief(messages));
+    setMessages((previous) => [
+      ...previous,
+      {
+        role: "assistant",
+        content: "Let's continue with the guided setup. Your conversation is included as context.",
+        timestamp: new Date(),
+      },
+    ]);
   };
 
   // Send message
@@ -619,6 +659,22 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
           <p className={cn("text-xs mt-1.5", appearance === "unison" ? "text-white/40" : "text-muted-foreground")}>
             📎 Paste images or drop files • Powered by AI
           </p>
+        )}
+        {onContinueToWizard && !selectionActive && messages.some((message) => message.role === "user") && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleContinueToWizard}
+            disabled={isLoading}
+            className={cn(
+              "mt-2 h-8 w-full justify-center text-xs",
+              appearance === "unison"
+                ? "text-cyan-100/75 hover:bg-cyan-300/10 hover:text-white"
+                : "text-muted-foreground"
+            )}
+          >
+            Continue with guided setup
+          </Button>
         )}
       </div>}
     </div>

@@ -6,6 +6,11 @@ import { mergeWorkspaceProjects } from "@/services/cloudProjectDrafts";
 import { AlertCircle, Zap } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
+import {
+  clearSiteDiscoveryHandoff,
+  readSiteDiscoveryHandoff,
+  writeSiteDiscoveryHandoff,
+} from "@/components/ai/siteDiscoveryPersistence";
 import { 
   NavigationBar,
   HeroSection, 
@@ -81,6 +86,26 @@ const Index = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    setLauncherOpen(false);
+    setLaunchBrief(null);
+    if (!user) return;
+    try {
+      const savedBrief = readSiteDiscoveryHandoff(user.id);
+      if (savedBrief) {
+        setLaunchBrief(savedBrief);
+        setLauncherOpen(true);
+      }
+    } catch (error) {
+      console.error("[Home] Could not restore confirmed site brief.", error);
+      toast({
+        title: "Couldn't restore your site plan",
+        description: "Your saved homepage conversation is still available. Please confirm the brief again to reopen the Wizard.",
+        variant: "destructive",
+      });
+    }
+  }, [user?.id]);
+
   // Use the same merged project + draft projection as Cloud. A project's row
   // and its linked draft can be updated independently, so drafts alone do not
   // reliably represent the authenticated profile's newest work.
@@ -114,24 +139,25 @@ const Index = () => {
         const rows = ((draftResult.data || []) as any[]).filter((row): row is Record<string, any> =>
           Boolean(row && typeof row === 'object'),
         );
-        const workspaceProjects = mergeWorkspaceProjects(
-          projectResult.error ? [] : projectResult.data || [],
-          rows as any,
-        ).slice(0, 9);
-        const draftsById = new Map(rows.map((row) => [row.id, row]));
-        const revisionIds = workspaceProjects.map((project) => project.revision_id).filter(Boolean);
+        const allRevisionIds = rows.map((row) => row.last_revision_id).filter(Boolean);
         const revisionTimes = new Map<string, string>();
-        if (revisionIds.length) {
+        if (allRevisionIds.length) {
           const { data: revisions } = await supabase
             .from('site_revisions')
             .select('id, created_at')
-            .in('id', revisionIds);
+            .in('id', allRevisionIds);
           for (const revision of (revisions || []) as any[]) {
             if (revision?.id && revision?.created_at) {
               revisionTimes.set(revision.id, revision.created_at);
             }
           }
         }
+        const workspaceProjects = mergeWorkspaceProjects(
+          projectResult.error ? [] : projectResult.data || [],
+          rows as any,
+          revisionTimes,
+        ).slice(0, 9);
+        const draftsById = new Map(rows.map((row) => [row.id, row]));
 
         const projects: RecentProject[] = workspaceProjects.map((project) => {
           const draft = project.draft_id ? draftsById.get(project.draft_id) : null;
@@ -233,6 +259,11 @@ const Index = () => {
       navigate('/auth');
       return;
     }
+    try {
+      clearSiteDiscoveryHandoff(user.id);
+    } catch (error) {
+      console.error("[Home] Could not clear the previous Wizard handoff.", error);
+    }
     setLaunchBrief(null);
     setLauncherOpen(true);
     document.getElementById('home-ai-chat')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -243,6 +274,20 @@ const Index = () => {
   };
 
   const handleConfirmedSite = (siteBrief: string) => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+    try {
+      writeSiteDiscoveryHandoff(user.id, siteBrief);
+    } catch (error) {
+      console.error("[Home] Could not persist confirmed site brief.", error);
+      toast({
+        title: "Wizard opened, but couldn't save your progress",
+        description: "Keep this page open to continue. Your AI conversation is saved on this device.",
+        variant: "destructive",
+      });
+    }
     setLaunchBrief(siteBrief);
     setLauncherOpen(true);
   };
@@ -382,7 +427,16 @@ const Index = () => {
         launchBrief={launchBrief}
         onLauncherOpenChange={(open) => {
           setLauncherOpen(open);
-          if (!open) setLaunchBrief(null);
+          if (!open) {
+            setLaunchBrief(null);
+            if (user) {
+              try {
+                clearSiteDiscoveryHandoff(user.id);
+              } catch (error) {
+                console.error("[Home] Could not clear the completed Wizard handoff.", error);
+              }
+            }
+          }
         }}
       />
 

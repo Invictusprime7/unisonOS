@@ -46,4 +46,55 @@ describe('mergeWorkspaceProjects', () => {
 
     expect(result.map((project) => project.id)).toEqual(['project-1']);
   });
+
+  it('replaces a historical Untitled placeholder with the live draft name', () => {
+    const result = mergeWorkspaceProjects(
+      [{ id: 'project-1', name: 'Untitled project', created_at: '2026-10-01' }],
+      [{
+        id: 'draft-1', project_id: 'project-1', name: 'Untitled Project',
+        metadata: { projectName: 'Horizon Estates Site' }, updated_at: '2026-10-11',
+      }],
+    );
+
+    expect(result[0].name).toBe('Horizon Estates Site');
+  });
+
+  it('uses a meaningful project name when every draft title is a placeholder', () => {
+    const result = mergeWorkspaceProjects(
+      [{ id: 'project-1', name: 'SPARK Site', created_at: '2026-10-01' }],
+      [{ id: 'draft-1', project_id: 'project-1', name: 'Untitled project', updated_at: '2026-10-11' }],
+    );
+
+    expect(result[0].name).toBe('SPARK Site');
+  });
+
+  it('does not substitute a business content label for a missing project title', () => {
+    const result = mergeWorkspaceProjects(
+      [{ id: 'project-1', name: 'Untitled project', created_at: '2026-10-01' }],
+      [{
+        id: 'draft-1', project_id: 'project-1', name: 'Untitled project',
+        metadata: { projectName: 'Untitled project', sitePlan: { businessName: 'FLIX. By Ariann' } },
+        updated_at: '2026-10-11',
+      }],
+    );
+
+    expect(result[0].name).toBe('Untitled project');
+  });
+
+  it('does not let an uncommitted recovery shell outrank canonical activity', () => {
+    const result = mergeWorkspaceProjects(
+      [{ id: 'project-1', name: 'Live Site', created_at: '2026-10-01', updated_at: '2026-10-05' }],
+      [
+        { id: 'canonical', project_id: 'project-1', last_revision_id: 'revision-1', created_at: '2026-10-01', updated_at: '2026-10-05' },
+        { id: 'recovery-shell', project_id: 'project-1', created_at: '2026-10-12', updated_at: '2026-10-12' },
+      ],
+      new Map([['revision-1', '2026-10-05']]),
+    );
+
+    expect(result[0]).toMatchObject({
+      draft_id: 'canonical',
+      revision_id: 'revision-1',
+      updated_at: '2026-10-05',
+    });
+  });
 });
