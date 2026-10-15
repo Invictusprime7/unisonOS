@@ -127,6 +127,13 @@
       "when": 1792070150109,
       "tag": "0017_lock_orders_writes",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792079626107,
+      "tag": "0018_catalog_realtime",
+      "breakpoints": true
     }
   ]
 }
