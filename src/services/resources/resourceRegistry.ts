@@ -69,7 +69,7 @@ export interface ContentTypeRow {
   field_schema?: unknown;
 }
 
-const CONTENT_FIELD_TYPES = new Set<ResourceFieldType>(['text', 'textarea', 'richtext', 'number', 'image', 'boolean', 'url', 'email', 'json']);
+const CONTENT_FIELD_TYPES = new Set<ResourceFieldType>(['text', 'textarea', 'richtext', 'number', 'image', 'boolean', 'url', 'email', 'json', 'tags']);
 
 export function contentTypeToResource(row: ContentTypeRow): ResourceDefinition | null {
   const slug = String(row.api_key ?? row.slug ?? row.key ?? '').trim();

@@ -14,7 +14,7 @@ vi.mock('@/services/businessProfileService', () => ({
 }));
 
 import { getResource, listResources, registerContentTypes } from '@/services/resources/resourceRegistry';
-import { applyResourceOp, onResourceInvalidated, parseResourceProvenance, queryResource, validateResourceOp } from '@/services/resources/resourceRuntime';
+import { applyResourceOp, buildDuplicateResourceValues, onResourceInvalidated, parseResourceProvenance, queryResource, validateResourceOp } from '@/services/resources/resourceRuntime';
 
 const ctx = { businessId: 'b1', mode: 'builder' as const };
 
@@ -28,6 +28,7 @@ describe('Resource Runtime', () => {
     expect(getResource('products')?.catalogKind).toBe('product');
     expect(getResource('services')?.catalogKind).toBe('service');
     expect(getResource('menu')?.catalogKind).toBe('menu_item');
+    expect(getResource('menu')?.schema.find((field) => field.key === 'dietary_tags')?.type).toBe('tags');
     expect(getResource('pricing')?.capabilities?.commerce).toBe(true);
     expect(getResource('offers')?.capabilities?.commerce).toBe(true);
     expect(getResource('products')?.capabilities?.ordering).toBe(true);
@@ -74,6 +75,32 @@ describe('Resource Runtime', () => {
     expect(validateResourceOp({ op: 'update', ref: { resourceKey: 'business-profile', kind: 'business-profile', recordId: 'b1' }, values: { ownerId: 'x' } }).ok).toBe(false);
     expect(validateResourceOp({ op: 'create', resourceKey: 'business-profile', values: {} }).ok).toBe(false);
     expect(validateResourceOp({ op: 'delete', ref: { resourceKey: 'content:faq', kind: 'content', recordId: 'e1' } }).ok).toBe(false);
+  });
+
+  it('builds safe duplicate values from editable schema fields and keeps content unpublished', () => {
+    const baseDefinition = getResource('content:faq')!;
+    const definition = {
+      ...baseDefinition,
+      schema: [
+        ...baseDefinition.schema,
+        { key: 'slug', label: 'Slug', type: 'text' as const, editable: true },
+        { key: 'status', label: 'Status', type: 'text' as const, editable: true },
+      ],
+    };
+    const values = buildDuplicateResourceValues(definition, {
+      id: 'faq-1',
+      question: 'Do you ship?',
+      answer: 'Yes',
+      slug: 'shipping',
+      status: 'published',
+      internal_id: 'do-not-copy',
+    });
+
+    expect(values.question).toBe('Do you ship? (copy)');
+    expect(values.status).toBe('draft');
+    expect(values.slug).toMatch(/^shipping-copy-/);
+    expect(values).not.toHaveProperty('id');
+    expect(values).not.toHaveProperty('internal_id');
   });
 
   it('a write emits RESOURCE_INVALIDATED for the record', async () => {

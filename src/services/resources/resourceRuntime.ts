@@ -64,6 +64,24 @@ export async function getResourceRecord(key: string, ctx: ResourceContext, id: s
   });
 }
 
+export function buildDuplicateResourceValues(def: ResourceDefinition, record: ResourceRecord): Record<string, unknown> {
+  const values = Object.fromEntries(def.schema
+    .filter((field) => field.editable && Object.prototype.hasOwnProperty.call(record, field.key))
+    .map((field) => [field.key, record[field.key]]));
+  const titleField = def.schema.find((field) =>
+    field.editable && ["name", "title", "question", "client_name", "author_name"].includes(field.key)
+    && typeof record[field.key] === "string");
+
+  if (titleField) values[titleField.key] = `${String(record[titleField.key])} (copy)`;
+  const slugField = def.schema.find((field) => field.editable && field.key === "slug");
+  if (slugField && typeof record[slugField.key] === "string") {
+    values[slugField.key] = `${String(record[slugField.key])}-copy-${Date.now().toString(36)}`;
+  }
+  const statusField = def.schema.find((field) => field.key === "status" && field.editable);
+  if (def.kind === "content" && statusField && def.lifecycle?.statuses.includes("draft")) values.status = "draft";
+  return values;
+}
+
 /** Validate an op against the schema without touching storage. */
 export function validateResourceOp(op: ResourceDataOp): { ok: true; def: ResourceDefinition } | { ok: false; reason: string } {
   const key = op.op === 'create' ? op.resourceKey : op.ref.resourceKey;

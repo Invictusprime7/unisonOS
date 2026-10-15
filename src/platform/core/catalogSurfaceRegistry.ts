@@ -59,6 +59,7 @@ export interface CatalogCardViewModel {
   priceCents?: number;
   priceLabel?: string;
   category?: string;
+  dietaryTags?: string[];
   featured?: boolean;
   active?: boolean;
   ctaIntent?: string;
@@ -74,6 +75,7 @@ export type CatalogFieldType =
   | 'money'         // stored as numeric dollars      (products.price)
   | 'money-cents'   // stored as integer cents        (services.price_cents, pricing_plans.price_cents, menu_items.price_cents)
   | 'image'
+  | 'tags'
   | 'boolean'
   | 'rating';
 
@@ -123,6 +125,7 @@ export interface CatalogSurface {
     title: string;
     description?: string;
     image?: string;
+    dietaryTags?: string;
     priceCents?: string;   // integer-cents column
     price?: string;        // numeric-dollars column
     category?: string;
@@ -265,6 +268,7 @@ export const CATALOG_SURFACES: Record<string, CatalogSurface> = {
       image: 'image_url',
       priceCents: 'price_cents',
       category: 'category',
+      dietaryTags: 'dietary_tags',
       featured: 'featured',
       active: 'available',
     },
@@ -276,6 +280,7 @@ export const CATALOG_SURFACES: Record<string, CatalogSurface> = {
       { key: 'sort_order', label: 'Order', type: 'number', span: 'half' },
       { key: 'image_url', label: 'Image URL', type: 'image', span: 'full' },
       { key: 'description', label: 'Description', type: 'textarea', span: 'full' },
+      { key: 'dietary_tags', label: 'Dietary tags', type: 'tags', span: 'full' },
       { key: 'available', label: 'Available', type: 'boolean', span: 'half' },
       { key: 'featured', label: 'Featured', type: 'boolean', span: 'half' },
     ],
@@ -284,6 +289,7 @@ export const CATALOG_SURFACES: Record<string, CatalogSurface> = {
       currency: 'usd',
       price_cents: 0,
       sort_order: 0,
+      dietary_tags: [],
       available: true,
       featured: false,
     },

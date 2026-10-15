@@ -17,14 +17,18 @@ const SEED_CONTENT_TYPES: Record<string, { displayName: string; fields: { key: s
     { key: 'question', label: 'Question', type: 'text' },
     { key: 'answer', label: 'Answer', type: 'textarea' },
     { key: 'category', label: 'Category', type: 'text' },
+    { key: 'sort_order', label: 'Order', type: 'number' },
   ] },
   team: { displayName: 'Team', fields: [
     { key: 'role', label: 'Role', type: 'text' },
     { key: 'bio', label: 'Bio', type: 'textarea' },
+    { key: 'sort_order', label: 'Order', type: 'number' },
   ] },
   gallery: { displayName: 'Gallery', fields: [
     { key: 'caption', label: 'Caption', type: 'text' },
     { key: 'category', label: 'Category', type: 'text' },
+    { key: 'asset_id', label: 'Asset ID', type: 'text' },
+    { key: 'sort_order', label: 'Order', type: 'number' },
   ] },
   articles: { displayName: 'Articles', fields: [
     { key: 'slug', label: 'Link name', type: 'text' },
@@ -166,31 +170,32 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
     })),
     ...Object.values(data.gallery ?? {}).filter((g) => g.caption?.trim() || g.assetId).map((g) => ({
       type: 'gallery', title: g.caption?.trim() || 'Gallery item',
-      data: { caption: g.caption, category: g.category, sort_order: g.sortOrder },
+      data: { caption: g.caption, category: g.category, asset_id: g.assetId, sort_order: g.sortOrder },
     })),
     ...longform(data, 'articles', 'articles'),
     ...longform(data, 'caseStudies', 'case-studies'),
   ];
   if (contentPlans.length) {
-    const types = await listContentTypes({ businessId: input.businessId, projectId: input.projectId }).catch(() => [] as Array<Record<string, unknown>>);
+    const types = await listContentTypes({ businessId: input.businessId, projectId: input.projectId });
     const typeIdByKey = new Map<string, string>();
     for (const t of types) {
       const key = String(t.api_key ?? '').trim();
-      if (key && t.id) typeIdByKey.set(key, String(t.id));
+      if (key && t.id) typeIdByKey.set(key.replace(/_/g, '-'), String(t.id));
     }
     for (const [key, def] of Object.entries(SEED_CONTENT_TYPES)) {
       if (typeIdByKey.has(key) || !contentPlans.some((p) => p.type === key)) continue;
       const created = await mutateContentRecord({
         action: 'content-type-create', businessId: input.businessId, projectId: input.projectId,
-        values: { apiKey: key, displayName: def.displayName, fieldSchema: { fields: def.fields } },
-      }).catch(() => null);
+        values: { apiKey: key.replace(/-/g, '_'), displayName: def.displayName, fieldSchema: { fields: def.fields } },
+      });
       const id = created?.record?.id;
-      if (id) typeIdByKey.set(key, String(id));
+      if (!id) throw new Error(`CMS content-type-create ${key}: the CMS returned no content type id.`);
+      typeIdByKey.set(key, String(id));
     }
     for (const plan of contentPlans) {
       const typeId = typeIdByKey.get(plan.type);
       if (!typeId) continue;
-      const existingEntries = await listContentRecords({ businessId: input.businessId, projectId: input.projectId, contentTypeId: typeId }).catch(() => [] as Array<Record<string, unknown>>);
+      const existingEntries = await listContentRecords({ businessId: input.businessId, projectId: input.projectId, contentTypeId: typeId });
       const titles = new Set(existingEntries.map((e) => String(e.title ?? '').trim().toLowerCase()));
       if (titles.has(plan.title.toLowerCase())) continue;
       await createContentRecord({

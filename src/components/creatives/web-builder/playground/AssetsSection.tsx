@@ -9,6 +9,7 @@ import { ArrowUpRight, ChevronDown, ChevronRight, Eye, FileBox, Grid3X3, List, M
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { RecordFieldsEditor } from "../RecordFieldsEditor";
 import { listContentTypes, transitionContentRecord } from "@/services/cmsRecordService";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,8 +19,10 @@ import type { ResourceRecord } from "@/services/resources/resourceTypes";
 import {
   buildRenderedResourceIndex, isRelevantAsset, listAssetTypes, listSiteImages, type AssetType,
 } from "@/services/resources/assetCatalog";
+import { persistScannedCatalogItem, type ScannedCatalogItem } from "@/services/resources/previewAssetScan";
 import { adoptLongformFromSite, seedLaunchAssets } from "@/services/resources/seedLaunchAssets";
 import { listCatalog } from "@/services/agent-runtime/catalogOps";
+import { uploadForPlacement } from "@/services/assets/uploadPlacement";
 import type { CreatorData } from "@/types/creatorData";
 import { cn } from "@/lib/utils";
 import { usePlaygroundApi, type PlaygroundResourceUsage } from "@/hooks/usePlaygroundApi";
@@ -46,9 +49,9 @@ function recordTitle(r: ResourceRecord): string {
   return String(r.name ?? r.title ?? r.question ?? r.author_name ?? r.client_name ?? r.id);
 }
 
-interface ScannedItem { meta?: { date?: string | null; readTime?: string | null; author?: string | null } | null; kind: string; section: string; name: string; description: string; price: string | null; image: string | null; html: string }
-const SCAN_GROUP: Record<string, "catalog" | "content"> = { products: "catalog", services: "catalog", testimonials: "content", articles: "content", faqs: "content", team: "content", gallery: "content" };
-const SCAN_LABEL: Record<string, string> = { products: "Products & menu", services: "Services", testimonials: "Testimonials", articles: "Articles", faqs: "FAQs", team: "Team", gallery: "Gallery & portfolio" };
+interface ScannedItem extends ScannedCatalogItem { meta?: { date?: string | null; readTime?: string | null; author?: string | null } | null; kind: string; section: string; resourceMark?: string | null; html: string }
+const SCAN_GROUP: Record<string, "catalog" | "content"> = { menu: "catalog", products: "catalog", services: "catalog", testimonials: "content", articles: "content", faqs: "content", team: "content", gallery: "content" };
+const SCAN_LABEL: Record<string, string> = { menu: "Menu", products: "Products", services: "Services", testimonials: "Testimonials", articles: "Articles", faqs: "FAQs", team: "Team", gallery: "Gallery & portfolio" };
 
 /** Read-only Live Preview scan: lists items actually rendered on the current
  *  page, whether or not they are saved. Saving goes through seedLaunchAssets. */
@@ -72,21 +75,27 @@ function SiteScanList({ group, businessId, projectId, onSaved }: { group: "catal
   }, [tick]);
   const items = (scan?.items ?? []).map((it, i) => ({ it, i })).filter(({ it }) => SCAN_GROUP[it.kind] === group);
   const save = async (it: ScannedItem, i: number) => {
-    const price = it.price ? Number(it.price.replace(/[^0-9.]/g, "")) || null : null;
-    const one = { x: { name: it.name, description: it.description, price } };
-    const data: Record<string, unknown> = {};
-    if (it.kind === "products" || it.kind === "services") data[it.kind] = one;
-    else if (it.kind === "testimonials") data.testimonials = { x: { author: it.name, content: it.description } };
-    else if (it.kind === "articles") data.articles = { x: { title: it.name, excerpt: it.description, date: it.meta?.date ?? undefined, readTime: it.meta?.readTime ?? undefined, author: it.meta?.author ?? undefined, image: it.image ?? undefined } };
-    else if (it.kind === "faqs") data.faqs = { x: { question: it.name, answer: it.description } };
-    else if (it.kind === "team") data.team = { x: { name: it.name, bio: it.description } };
-    else data.gallery = { x: { caption: it.name } };
     try {
-      await seedLaunchAssets({ businessId, projectId, creatorData: data as unknown as CreatorData });
+      const surfaceId = it.kind === "menu" ? "menu" : it.kind === "products" ? "products" : it.kind === "services" ? "services" : null;
+      if (surfaceId) {
+        await persistScannedCatalogItem({ kind: surfaceId, item: it, index: i, businessId, projectId });
+      } else {
+        const price = it.price ? Number(it.price.replace(/[^0-9.]/g, "")) || null : null;
+        const one = { x: { name: it.name, description: it.description, price } };
+        const data: Record<string, unknown> = {};
+        if (it.kind === "testimonials") data.testimonials = { x: { author: it.name, content: it.description } };
+        else if (it.kind === "articles") data.articles = { x: { title: it.name, excerpt: it.description, date: it.meta?.date ?? undefined, readTime: it.meta?.readTime ?? undefined, author: it.meta?.author ?? undefined, image: it.image ?? undefined } };
+        else if (it.kind === "faqs") data.faqs = { x: { question: it.name, answer: it.description } };
+        else if (it.kind === "team") data.team = { x: { name: it.name, bio: it.description } };
+        else data.gallery = { x: { caption: it.name, image: it.image ?? undefined } };
+        await seedLaunchAssets({ businessId, projectId, creatorData: data as unknown as CreatorData });
+      }
       setSaved((s) => new Set(s).add(i));
       onSaved();
       toast.success(`Saved "${it.name}"`);
-    } catch { toast.error("Couldn't save this item"); }
+    } catch (error) {
+      toast.error("Couldn't save this item", { description: error instanceof Error ? error.message : String(error) });
+    }
   };
   return (
     <section className="space-y-2">
@@ -197,9 +206,10 @@ function MediaIframePreview({ url, label }: { url: string; label: string }) {
   return <iframe title={`Live media asset ${label}`} sandbox="" loading="lazy" className="pointer-events-none aspect-[4/3] w-full border-0 bg-[#070c10]" srcDoc={html} />;
 }
 
-function AssetList({ type, businessId, projectId, liveIndex, onPublishLongform, search, liveOnly, view, selectedMark, onSelect }: { type: AssetType; businessId: string; projectId?: string | null; liveIndex: Map<string, string[]>; onPublishLongform?: Props['onPublishLongform']; search: string; liveOnly: boolean; view: "grid" | "list"; selectedMark?: string | null; onSelect: (asset: SelectedAsset) => void }) {
+function AssetList({ type, businessId, projectId, liveIndex, onPublishLongform, onReveal, onPlace, search, liveOnly, view, selectedMark, onSelect }: { type: AssetType; businessId: string; projectId?: string | null; liveIndex: Map<string, string[]>; onPublishLongform?: Props['onPublishLongform']; onReveal?: Props["onReveal"]; onPlace?: Props["onPlace"]; search: string; liveOnly: boolean; view: "grid" | "list"; selectedMark?: string | null; onSelect: (asset: SelectedAsset) => void }) {
   const [rows, setRows] = useState<ResourceRecord[] | null>(null);
   const [tick, setTick] = useState(0);
+  const api = usePlaygroundApi();
   const ctx = useMemo(() => ({ businessId, projectId, mode: "builder" as const }), [businessId, projectId]);
 
   useEffect(() => {
@@ -214,6 +224,16 @@ function AssetList({ type, businessId, projectId, liveIndex, onPublishLongform, 
     try {
       await applyResourceOp({ op: "create", resourceKey: type.key, values: first ? { [first.key]: `New ${type.label}` } : {} }, ctx);
     } catch (e) { toast.error(`Couldn't add to ${type.label}`, { description: e instanceof Error ? e.message : String(e) }); }
+  };
+  const duplicate = async (record: ResourceRecord) => {
+    try {
+      const copy = await api.duplicateResource(`${type.key}#${record.id}`);
+      if (!copy) throw new Error("The duplicate wasn't returned by the resource runtime.");
+      onSelect({ type, record: copy });
+      toast.success(`${recordTitle(record)} duplicated`);
+    } catch (error) {
+      toast.error("Couldn't duplicate this asset", { description: error instanceof Error ? error.message : String(error) });
+    }
   };
   const visibleRows = (rows ?? []).filter((record) => {
     const mark = `${type.key}#${record.id}`;
@@ -254,17 +274,35 @@ function AssetList({ type, businessId, projectId, liveIndex, onPublishLongform, 
           const active = selectedMark === mark;
           return (
             <li key={r.id}>
-              <button type="button" onClick={() => onSelect({ type, record: r })} className={cn("group w-full overflow-hidden rounded-xl border text-left transition-all duration-200", active ? "border-emerald-400/80 bg-[#111b20] shadow-[0_0_0_2px_rgba(52,211,153,0.08),0_10px_30px_rgba(0,0,0,0.3)]" : "border-white/[0.08] bg-[#10171d] hover:-translate-y-0.5 hover:border-white/20 hover:bg-[#131c23]", view === "list" && "flex min-h-[104px]")}>
+              <div className={cn("group relative overflow-hidden rounded-xl border transition-all duration-200", active ? "border-emerald-400/80 bg-[#111b20] shadow-[0_0_0_2px_rgba(52,211,153,0.08),0_10px_30px_rgba(0,0,0,0.3)]" : "border-white/[0.08] bg-[#10171d] hover:-translate-y-0.5 hover:border-white/20 hover:bg-[#131c23]", view === "list" && "flex min-h-[104px]")}>
+                <button type="button" onClick={() => onSelect({ type, record: r })} className={cn("w-full min-w-0 text-left", view === "list" && "flex min-h-[104px] pr-10")}>
                 <div className={cn("relative overflow-hidden bg-[radial-gradient(circle_at_70%_20%,rgba(45,212,191,0.18),transparent_42%),linear-gradient(145deg,#111b22,#080d12)]", view === "grid" ? "aspect-[16/9]" : "w-40 shrink-0")}>
                   <ResourceCardPreview type={type} record={r} />
                   <span className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full border border-emerald-400/15 bg-[#07110e]/85 px-2 py-1 text-[9px] font-medium text-emerald-300 backdrop-blur"><span className={cn("h-1.5 w-1.5 rounded-full", live ? "bg-emerald-400" : "bg-slate-500")} />{live ? "Live" : "Saved"}</span>
                 </div>
-                <div className="min-w-0 flex-1 p-3.5">
-                  <div className="flex items-start justify-between gap-2"><h5 className="truncate text-sm font-semibold text-slate-100">{recordTitle(r)}</h5><MoreVertical className="h-4 w-4 shrink-0 text-slate-600" /></div>
+                <div className="min-w-0 flex-1 p-3.5 pr-10">
+                  <div className="flex items-start justify-between gap-2"><h5 className="truncate text-sm font-semibold text-slate-100">{recordTitle(r)}</h5></div>
                   {description && <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-slate-400">{description}</p>}
                   <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500"><span className="rounded-full bg-white/5 px-2 py-1">{String(r.category ?? type.label)}</span>{typeof r.status === "string" && <span className="capitalize">{r.status}</span>}</div>
                 </div>
-              </button>
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" aria-label={`Actions for ${recordTitle(r)}`} className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-[#080d12]/85 text-slate-400 opacity-70 transition hover:bg-white/10 hover:text-white focus-visible:opacity-100 group-hover:opacity-100">
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onSelect={() => onSelect({ type, record: r })}>Edit details</DropdownMenuItem>
+                    {live && onReveal && <DropdownMenuItem onSelect={() => onReveal(mark, liveIndex.get(mark) ?? [])}>Edit in Preview</DropdownMenuItem>}
+                    {!live && onPlace && <DropdownMenuItem onSelect={() => onPlace(`Add the saved ${type.label.toLowerCase()} "${recordTitle(r)}" (resource ${mark}) to the most relevant page of the site, rendering it with its saved fields. Keep all existing content and button destinations unchanged.`)}>Place on page</DropdownMenuItem>}
+                    {type.def?.cardinality === "collection" && <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => void duplicate(r)}>Duplicate</DropdownMenuItem>
+                    </>}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </li>
           );
         })}
@@ -273,43 +311,7 @@ function AssetList({ type, businessId, projectId, liveIndex, onPublishLongform, 
   );
 }
 
-function ApiResourceEditor({ asset, onUpdated }: { asset: SelectedAsset; onUpdated: (record: ResourceRecord) => void }) {
-  const api = usePlaygroundApi();
-  const definition = getResource(asset.type.key);
-  const fields = definition?.schema.filter((field) => field.editable && field.type !== "json") ?? [];
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<string | null>(null);
-
-  useEffect(() => {
-    setDraft(Object.fromEntries(fields.map((field) => [field.key, asset.record[field.key] == null ? "" : String(asset.record[field.key])])));
-  }, [asset.record.id, asset.type.key]);
-
-  const save = async (key: string, nextDraft?: string) => {
-    const field = fields.find((candidate) => candidate.key === key);
-    const raw = nextDraft ?? draft[key] ?? "";
-    if (!field || raw === String(asset.record[key] ?? "")) return;
-    let value: unknown = raw;
-    if (["number", "money", "money-cents", "rating"].includes(field.type)) value = raw.trim() ? Number(raw) : null;
-    if (field.type === "boolean") value = raw === "true";
-    setSaving(key);
-    try {
-      const record = field.type === "image" ? await api.replaceAsset(`${asset.type.key}#${asset.record.id}`, raw) : await api.updateResource(`${asset.type.key}#${asset.record.id}`, { [key]: value });
-      if (record) onUpdated(record);
-    } catch (error) {
-      toast.error(`Couldn't update ${field.label.toLowerCase()}`, { description: error instanceof Error ? error.message : String(error) });
-    } finally {
-      setSaving(null);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      {fields.map((field) => <label key={field.key} className="block"><span className="mb-2 flex items-center justify-between text-[11px] font-medium text-slate-300">{field.label}{saving === field.key ? <span className="text-[9px] text-emerald-300">Saving…</span> : null}</span>{field.type === "textarea" || field.type === "richtext" ? <textarea rows={4} value={draft[field.key] ?? ""} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} onBlur={() => void save(field.key)} className="w-full resize-none rounded-xl border border-white/10 bg-[#0d141b] px-3 py-2.5 text-xs text-white outline-none focus:border-emerald-400/40" /> : field.type === "boolean" ? <button type="button" onClick={() => { const next = draft[field.key] === "true" ? "false" : "true"; setDraft((current) => ({ ...current, [field.key]: next })); void save(field.key, next); }} className={cn("flex h-8 w-14 items-center rounded-full p-1 transition", draft[field.key] === "true" ? "justify-end bg-emerald-400" : "justify-start bg-white/10")}><span className="h-6 w-6 rounded-full bg-white shadow" /></button> : <input type={["number", "money", "money-cents", "rating"].includes(field.type) ? "number" : field.type === "email" ? "email" : field.type === "image" || field.type === "url" ? "url" : "text"} value={draft[field.key] ?? ""} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} onBlur={() => void save(field.key)} className="h-10 w-full rounded-xl border border-white/10 bg-[#0d141b] px-3 text-xs text-white outline-none focus:border-emerald-400/40" />}</label>)}
-    </div>
-  );
-}
-
-function AssetInspector({ asset, onReveal, onPlace, onRemove, onAssetChange }: { asset: SelectedAsset | null; onReveal?: Props["onReveal"]; onPlace?: Props["onPlace"]; onRemove: (asset: SelectedAsset) => Promise<void>; onAssetChange: (asset: SelectedAsset) => void }) {
+function AssetInspector({ asset, businessId, projectId, onReveal, onPlace, onRemove, onAssetChange }: { asset: SelectedAsset | null; businessId: string; projectId?: string | null; onReveal?: Props["onReveal"]; onPlace?: Props["onPlace"]; onRemove: (asset: SelectedAsset) => Promise<void>; onAssetChange: (asset: SelectedAsset) => void }) {
   const api = usePlaygroundApi();
   const [usages, setUsages] = useState<PlaygroundResourceUsage[]>([]);
   useEffect(() => {
@@ -322,7 +324,7 @@ function AssetInspector({ asset, onReveal, onPlace, onRemove, onAssetChange }: {
         <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035]"><FileBox className="h-6 w-6 text-slate-600" /></div>
           <p className="mt-4 text-sm font-medium text-slate-300">Select an asset</p>
-          <p className="mt-1 max-w-[220px] text-[11px] leading-relaxed text-slate-600">Choose a card to edit its data, inspect its appearance, and see every place it is used.</p>
+          <p className="mt-1 max-w-[220px] text-[11px] leading-relaxed text-slate-600">Choose a card to inspect its appearance and see where it is used.</p>
         </div>
       </aside>
     );
@@ -354,7 +356,7 @@ function AssetInspector({ asset, onReveal, onPlace, onRemove, onAssetChange }: {
           {(["data", "appearance", "usage"] as const).map((tab) => <TabsTrigger key={tab} value={tab} className="h-11 rounded-none border-b-2 border-transparent text-[11px] capitalize text-slate-500 data-[state=active]:border-emerald-400 data-[state=active]:bg-emerald-400/[0.07] data-[state=active]:text-slate-100">{tab}</TabsTrigger>)}
         </TabsList>
         <TabsContent value="data" className="m-0 space-y-4 p-5">
-          <ApiResourceEditor asset={asset} onUpdated={(record) => onAssetChange({ ...asset, record })} />
+          <RecordFieldsEditor mark={mark} businessId={businessId} projectId={projectId} defaultOpen />
         </TabsContent>
         <TabsContent value="appearance" className="m-0 space-y-5 p-5">
           <div>
@@ -375,7 +377,7 @@ function AssetInspector({ asset, onReveal, onPlace, onRemove, onAssetChange }: {
 
       <div className="sticky bottom-0 mt-auto border-t border-white/[0.08] bg-[#0b1218]/95 p-4 backdrop-blur">
         <div className="flex gap-2">
-          {live && onReveal ? <Button size="sm" className="flex-1 border border-white/10 bg-white/[0.06] text-[11px] text-slate-100 hover:bg-white/10" onClick={() => onReveal(mark, files)}>View on site <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" /></Button> : null}
+          {live && onReveal ? <Button size="sm" className="flex-1 border border-white/10 bg-white/[0.06] text-[11px] text-slate-100 hover:bg-white/10" onClick={() => onReveal(mark, files)}>Edit in Preview <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" /></Button> : null}
           {!live && onPlace ? <Button size="sm" className="flex-1 bg-emerald-400 text-[11px] font-semibold text-emerald-950 hover:bg-emerald-300" onClick={() => onPlace(`Add the saved ${type.label.toLowerCase()} "${recordTitle(record)}" (resource ${mark}) to the most relevant page of the site, rendering it with its saved fields. Keep all existing content and button destinations unchanged.`)}>Place on page <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" /></Button> : null}
           {type.def && type.def.kind !== "content" ? <Button variant="outline" size="icon" className="border-white/10 bg-white/[0.04] text-slate-500 hover:bg-red-500/10 hover:text-red-300" aria-label="Delete asset" onClick={() => void onRemove(asset)}><Trash2 className="h-3.5 w-3.5" /></Button> : null}
         </div>
@@ -495,7 +497,7 @@ export function AssetsSection({ businessId, projectId, industry, vfsFiles = {}, 
           <summary className="cursor-pointer text-xs font-medium text-slate-400">Found on the current preview</summary>
           <div className="pt-4"><SiteScanList group={group} businessId={businessId} projectId={projectId} onSaved={() => setContentReady((n) => n + 1)} /></div>
         </details>
-        {relevant.map((t) => <AssetList key={t.key} type={t} businessId={businessId} projectId={projectId} liveIndex={liveIndex} onPublishLongform={onPublishLongform} search={search} liveOnly={liveOnly} view={view} selectedMark={selectedMark} onSelect={(asset) => void selectAsset(asset)} />)}
+        {relevant.map((t) => <AssetList key={t.key} type={t} businessId={businessId} projectId={projectId} liveIndex={liveIndex} onPublishLongform={onPublishLongform} onReveal={onReveal} onPlace={onPlace} search={search} liveOnly={liveOnly} view={view} selectedMark={selectedMark} onSelect={(asset) => void selectAsset(asset)} />)}
         {group === "content" && formsSlot}
         {relevant.length === 0 && group === "catalog" && <p className="text-sm text-muted-foreground">This site doesn't sell or list items yet.</p>}
         {rest.length > 0 && (
@@ -503,7 +505,7 @@ export function AssetsSection({ businessId, projectId, industry, vfsFiles = {}, 
             <Button variant="ghost" size="sm" onClick={() => setShowMore((v) => !v)}>
               {showMore ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />} Add more types ({rest.length})
             </Button>
-            {showMore && <div className="space-y-6 pt-3">{rest.map((t) => <AssetList key={t.key} type={t} businessId={businessId} projectId={projectId} liveIndex={liveIndex} onPublishLongform={onPublishLongform} search={search} liveOnly={liveOnly} view={view} selectedMark={selectedMark} onSelect={(asset) => void selectAsset(asset)} />)}</div>}
+            {showMore && <div className="space-y-6 pt-3">{rest.map((t) => <AssetList key={t.key} type={t} businessId={businessId} projectId={projectId} liveIndex={liveIndex} onPublishLongform={onPublishLongform} onReveal={onReveal} onPlace={onPlace} search={search} liveOnly={liveOnly} view={view} selectedMark={selectedMark} onSelect={(asset) => void selectAsset(asset)} />)}</div>}
           </div>
         )}
       </div>
@@ -537,7 +539,7 @@ export function AssetsSection({ businessId, projectId, industry, vfsFiles = {}, 
         <TabsContent value="business" className="-mx-7 mt-0 px-7 py-6">
           <div className="grid gap-4 xl:grid-cols-[minmax(280px,.8fr)_minmax(380px,1.2fr)]">
             <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#10171d]"><LiveResourcePreview appearance={{ ref: `${BUSINESS_PROFILE_RESOURCE_KEY}#${businessId}`, name: creatorData?.businessInfo.businessName || "Business profile" }} className="h-64" /><div className="border-t border-white/[0.07] px-4 py-3"><p className="text-xs font-medium text-slate-200">Live business identity</p><p className="mt-1 text-[10px] text-slate-500">Rendered from the current site runtime.</p></div></div>
-            <div className="rounded-xl border border-white/[0.08] bg-[#0d151b] p-5"><RecordFieldsEditor mark={`${BUSINESS_PROFILE_RESOURCE_KEY}#${businessId}`} businessId={businessId} projectId={projectId} /></div>
+            <div className="rounded-xl border border-white/[0.08] bg-[#0d151b] p-5"><RecordFieldsEditor defaultOpen mark={`${BUSINESS_PROFILE_RESOURCE_KEY}#${businessId}`} businessId={businessId} projectId={projectId} /></div>
           </div>
         </TabsContent>
         <TabsContent value="media" className="-mx-7 mt-0 px-7 py-6">
@@ -560,7 +562,7 @@ export function AssetsSection({ businessId, projectId, industry, vfsFiles = {}, 
           {selectedAsset && liveIndex.has(selectedMark ?? "") && onReveal ? <Button variant="outline" size="sm" className="ml-2 h-8 border-white/10 bg-white/[0.04] text-[10px] text-slate-200" onClick={() => onReveal(selectedMark ?? "", liveIndex.get(selectedMark ?? "") ?? [])}>Open Preview <ArrowUpRight className="ml-1.5 h-3 w-3" /></Button> : null}
         </div>
       </div>
-      <AssetInspector asset={selectedAsset} onReveal={onReveal} onPlace={onPlace} onRemove={removeSelected} onAssetChange={setSelectedAsset} />
+      <AssetInspector asset={selectedAsset} businessId={businessId} projectId={projectId} onReveal={onReveal} onPlace={onPlace} onRemove={removeSelected} onAssetChange={setSelectedAsset} />
     </div>
   );
 }

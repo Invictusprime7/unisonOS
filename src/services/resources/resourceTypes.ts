@@ -13,7 +13,7 @@ export type ResourceAdapterId = 'catalog' | 'content' | 'business-profile';
 
 export type ResourceFieldType =
   | 'text' | 'textarea' | 'richtext' | 'number' | 'money' | 'money-cents'
-  | 'image' | 'boolean' | 'rating' | 'email' | 'phone' | 'url' | 'json';
+  | 'image' | 'boolean' | 'rating' | 'email' | 'phone' | 'url' | 'json' | 'tags';
 
 export interface ResourceFieldDefinition {
   key: string;

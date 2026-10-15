@@ -7720,6 +7720,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       <Suspense fallback={null}>
       <CreatorPlaygroundModal
         open={playgroundModalOpen}
+        onEditPreview={() => {
+          setBuilderMode('select');
+          setIsInteractiveMode(false);
+        }}
         onOpenChange={(open) => {
           setPlaygroundModalOpen(open);
           if (!open) {

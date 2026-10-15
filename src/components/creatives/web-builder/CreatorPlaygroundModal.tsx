@@ -199,6 +199,7 @@ function PlaygroundLaunchReadinessCard({ fallbackReady, fallbackTotal, onNavigat
 interface CreatorPlaygroundModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onEditPreview?: () => void;
   playground: UseCreatorPlaygroundReturn;
   onPageSelect?: (pageId: string) => void;
   onPageAdd?: (pageId: string, title: string, path: string, pageType: BuilderPageType) => void;
@@ -253,6 +254,7 @@ function getPageTitle(registry: PageRegistry, pageId: string) {
 export function CreatorPlaygroundModal({
   open,
   onOpenChange,
+  onEditPreview,
   playground,
   onPageSelect,
   onPageAdd,
@@ -491,6 +493,7 @@ export function CreatorPlaygroundModal({
                     const names = files.map(slug);
                     const page = controlPlane.pages.find((pg) => names.includes((pg.path.replace(/^\//, "") || "home").toLowerCase()) || names.includes(pg.title.replace(/\s+/g, "").toLowerCase()));
                     if (page) onPageSelect?.(page.pageId);
+                    onEditPreview?.();
                     onOpenChange(false);
                     setTimeout(() => document.querySelectorAll("iframe").forEach((f) => f.contentWindow?.postMessage({ type: "REVEAL_RESOURCE", mark }, "*")), 400);
                   }} onPublishLongform={onPublishLongform} onPlace={(prompt) => {

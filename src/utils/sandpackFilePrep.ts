@@ -535,6 +535,8 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
       var reveal = function () {
         var el = document.querySelector('[data-ut-resource^="' + mark.replace(/"/g, '') + '"]');
         if (!el) { if (++tries < 20) setTimeout(reveal, 150); return; }
+        var selectPreviewElement = (window as any).__unisonPreviewSelectElement;
+        if (typeof selectPreviewElement === 'function') selectPreviewElement(el);
         var host = el.closest('article, li, section, [data-ut-section]') || el;
         host.scrollIntoView({ behavior: 'smooth', block: 'center' });
         var prev = host.style.outline;
@@ -643,7 +645,8 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
         ['faqs', /faq|frequently asked|questions/i],
         ['team', /team|our (people|staff|stylists|barbers|experts)|meet (the|our)/i],
         ['gallery', /gallery|portfolio|our work|work|projects|lookbook|case stud|selected/i],
-        ['products', /product|shop|menu|collection|store|featured/i],
+        ['menu', /menu|dishes|food|entrees|starters|mains|desserts/i],
+        ['products', /product|shop|collection|store|featured/i],
         ['services', /service|treatment|what we (do|offer)|pricing|packages/i]
       ];
       var txt = function (n) { return n ? (n.textContent || '').replace(/[ ]+/g, ' ').trim() : ''; };
@@ -683,16 +686,63 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
           var it = best[ii];
           var h = it.querySelector('h2,h3,h4,h5,h6,dt,summary,strong,figcaption');
           var paras = it.querySelectorAll('p, blockquote, dd');
-          var body = paras.length ? txt(paras[0]) : '';
+          var body = paras.length ? Array.prototype.map.call(paras, txt).filter(Boolean).join('\\n') : '';
           var all2 = txt(it);
           var price = all2.match(/[$£€][ ]?[0-9][0-9.,]*/);
           var img = it.querySelector('img');
+          var imageUrl = img ? (img.currentSrc || img.getAttribute('src') || img.getAttribute('data-src')) : null;
           var name = txt(it.querySelector('h1,h2,h3,h4')) || txt(h) || body.slice(0, 60);
           if (!name) continue;
           if (kind === 'testimonials') { var cite = it.querySelector('cite, figcaption, footer, strong'); name = txt(cite) || name; body = txt(it.querySelector('blockquote, p')) || body; }
+          var scanFields = {};
+          var resourceMark = null;
+          var scanNodes = [it].concat(Array.prototype.slice.call(it.querySelectorAll('*')));
+          var scanValue = function (node) {
+            if (node.tagName === 'IMG') return node.currentSrc || node.getAttribute('src') || node.getAttribute('data-src') || '';
+            if (node.tagName === 'INPUT' && node.type === 'checkbox') return String(node.checked);
+            if (node.hasAttribute && node.hasAttribute('value')) return node.getAttribute('value');
+            return txt(node);
+          };
+          for (var fi = 0; fi < scanNodes.length; fi++) {
+            var fieldNode = scanNodes[fi];
+            var markedResource = fieldNode.getAttribute && fieldNode.getAttribute('data-ut-resource');
+            if (markedResource) {
+              if (!resourceMark) resourceMark = markedResource;
+              var markedField = markedResource.match(/^[a-z0-9:_-]+#[^.#\\s]+\\.([A-Za-z0-9_]+)$/);
+              if (markedField) scanFields[markedField[1]] = scanValue(fieldNode);
+            }
+            var fieldKey = fieldNode.getAttribute && (fieldNode.getAttribute('data-ut-field') || fieldNode.getAttribute('data-field'));
+            if (fieldKey) scanFields[fieldKey] = scanValue(fieldNode);
+            if (fieldNode.attributes) {
+              for (var ai = 0; ai < fieldNode.attributes.length; ai++) {
+                var attribute = fieldNode.attributes[ai];
+                if (!/^data-(?!ut-resource$|ut-field$)/.test(attribute.name)) continue;
+                var dataKey = attribute.name.replace(/^data-(?:ut-)?/, '').replace(/-/g, '_');
+                if (dataKey) scanFields[dataKey] = attribute.value;
+              }
+            }
+          }
+          if (!Object.prototype.hasOwnProperty.call(scanFields, 'name')) scanFields.name = name;
+          if (body && !Object.prototype.hasOwnProperty.call(scanFields, 'description')) scanFields.description = body;
+          if (imageUrl && !Object.prototype.hasOwnProperty.call(scanFields, 'image_url')) scanFields.image_url = imageUrl;
+          if (price && !Object.prototype.hasOwnProperty.call(scanFields, 'price') && !Object.prototype.hasOwnProperty.call(scanFields, 'price_cents')) scanFields.price = price[0];
+          if (kind === 'menu') {
+            var badgeNodes = it.querySelectorAll('[data-dietary-tag], [data-ut-dietary-tag], [aria-label*="dietary" i], [class*="badge"], [class*="tag"], [class*="chip"], [class*="pill"]');
+            var dietaryTags = [];
+            var featuredBadge = false;
+            for (var bi = 0; bi < badgeNodes.length; bi++) {
+              var badge = badgeNodes[bi];
+              var badgeText = txt(badge);
+              var dietaryMatches = badgeText.match(/\\b(gluten[- ]free|dairy[- ]free|vegan|vegetarian|pescatarian|nut[- ]free|halal|kosher|keto)\\b/gi) || [];
+              dietaryMatches.forEach(function (tag) { if (!dietaryTags.includes(tag.toLowerCase())) dietaryTags.push(tag.toLowerCase()); });
+              if (/\\b(featured|house signature|signature|chef.?s special|popular)\\b/i.test(badgeText)) featuredBadge = true;
+            }
+            if (dietaryTags.length && !Object.prototype.hasOwnProperty.call(scanFields, 'dietary_tags')) scanFields.dietary_tags = dietaryTags;
+            if (featuredBadge && !Object.prototype.hasOwnProperty.call(scanFields, 'featured')) scanFields.featured = true;
+          }
           var meta = null;
           if (kind === 'articles') { var tm = it.querySelector('time'); var by = it.querySelector('[class*="author"], address'); meta = { date: tm ? (tm.getAttribute('datetime') || txt(tm)) : (all2.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* [0-9]{1,2},? [0-9]{4}/) || [null])[0], readTime: (all2.match(/[0-9]+ min read/i) || [null])[0], author: by ? txt(by).slice(0, 80) : null }; }
-          out.push({ meta: meta, kind: kind, section: txt(head), name: name.slice(0, 120), description: body.slice(0, 500), price: price ? price[0] : null, image: img ? img.getAttribute('src') : null, html: it.outerHTML.slice(0, 20000) });
+          out.push({ meta: meta, kind: kind, section: txt(head), name: name.slice(0, 120), description: body.slice(0, 2000), price: price ? price[0] : null, image: imageUrl, fields: scanFields, resourceMark: resourceMark, html: it.outerHTML.slice(0, 20000) });
         }
       }
       window.parent.postMessage({ type: 'ASSET_SCAN', requestId: event.data.requestId, items: out, css: css, route: window.location.hash }, '*');
@@ -1039,6 +1089,33 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     return out;
   }
 
+  function selectPreviewElement(el: Element) {
+    if (!el || isUiChrome(el)) return;
+    clearHover();
+    clearSelected();
+    selectedEl = el as HTMLElement;
+    selectedEl.classList.add('__ut-selected');
+    const selector = computeSelector(el);
+    const html = el.outerHTML.length > 4000 ? el.outerHTML.slice(0, 4000) : el.outerHTML;
+    const scopeAncestors = collectScopeAncestors(el);
+    window.parent.postMessage({
+      type: 'ELEMENT_SELECTED',
+      activationKey,
+      element: {
+        revisionId,
+        tagName: el.tagName.toLowerCase(),
+        textContent: (el.textContent || '').trim().slice(0, 500),
+        selector, html,
+        styles: snapshotStyles(el),
+        attributes: snapshotAttrs(el),
+        imageTarget: findImageTarget(el),
+        section: findSection(el),
+        scopeAncestors,
+      },
+    }, '*');
+  }
+  (bridgeWindow as any).__unisonPreviewSelectElement = selectPreviewElement;
+
   function isUiChrome(el: Element | null): boolean {
     if (!el) return true;
     const id = (el as HTMLElement).id || '';
@@ -1065,28 +1142,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     e.preventDefault();
     e.stopPropagation();
     if (typeof (e as any).stopImmediatePropagation === 'function') (e as any).stopImmediatePropagation();
-    clearHover();
-    clearSelected();
-    selectedEl = t;
-    t.classList.add('__ut-selected');
-    const selector = computeSelector(t);
-    const html = t.outerHTML.length > 4000 ? t.outerHTML.slice(0, 4000) : t.outerHTML;
-    const scopeAncestors = collectScopeAncestors(t);
-    window.parent.postMessage({
-      type: 'ELEMENT_SELECTED',
-      activationKey,
-      element: {
-        revisionId,
-        tagName: t.tagName.toLowerCase(),
-        textContent: (t.textContent || '').trim().slice(0, 500),
-        selector, html,
-        styles: snapshotStyles(t),
-        attributes: snapshotAttrs(t),
-        imageTarget: findImageTarget(t),
-        section: findSection(t),
-        scopeAncestors,
-      },
-    }, '*');
+    selectPreviewElement(t);
   }
 
   function activate() {

@@ -1,3 +1,4 @@
+import * as Babel from '@babel/standalone';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { findElementBoundsInJSX, findUniqueSourceMutation } from '@/components/creatives/web-builder/jsxSourceUtils';
@@ -20,6 +21,15 @@ describe('preview selection provenance bridge', () => {
     expect(bridge).toContain("revisionId = typeof data.revisionId === 'string' ? data.revisionId : null;");
   });
 
+  it('keeps newlines escaped inside the generated Preview asset scan script', () => {
+    const bridge = read('src/utils/sandpackFilePrep.ts');
+    expect(bridge).toContain(".filter(Boolean).join('\\\\n') : '';");
+    const bodyLine = bridge.split('\n').find((line) => line.includes('var body = paras.length'));
+    expect(bodyLine).toBeDefined();
+    const emittedBodyLine = bodyLine!.replace('\\\\n', '\\n');
+    expect(() => Babel.transform(emittedBodyLine, { configFile: false, babelrc: false })).not.toThrow();
+  });
+
   it('rejects a stale iframe selection before forwarding it to Builder AI', () => {
     const preview = read('src/components/VFSPreview.tsx');
     const builder = read('src/components/creatives/WebBuilder.tsx');
@@ -36,6 +46,18 @@ describe('preview selection provenance bridge', () => {
     expect(builder).toContain('const descriptor = describeSelection({');
     expect(builder).toMatch(/scopeAncestors: el\.scopeAncestors,\s+descriptor,/);
     expect(toolbar).toContain('descriptorToTarget(element.descriptor)');
+  });
+
+  it('routes Playground resource reveal through the validated Preview selection bridge', () => {
+    const bridge = read('src/utils/sandpackFilePrep.ts');
+    const playground = read('src/components/creatives/web-builder/CreatorPlaygroundModal.tsx');
+    const builder = read('src/components/creatives/WebBuilder.tsx');
+    expect(bridge).toContain('__unisonPreviewSelectElement');
+    expect(bridge).toContain('selectPreviewElement(el)');
+    expect(bridge).toContain("type: 'ELEMENT_SELECTED'");
+    expect(bridge).toContain('activationKey,');
+    expect(playground).toContain('onEditPreview?.()');
+    expect(builder).toContain("setBuilderMode('select')");
   });
 
   it('maps a CSS-escaped slot selector back to its source-owned JSX text', () => {

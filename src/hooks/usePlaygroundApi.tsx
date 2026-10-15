@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { buildRenderedResourceIndex, listAssetTypes, type AssetGroup, type AssetType } from "@/services/resources/assetCatalog";
-import { applyResourceOp, getResourceRecord, queryResource } from "@/services/resources/resourceRuntime";
+import { applyResourceOp, buildDuplicateResourceValues, getResourceRecord, queryResource } from "@/services/resources/resourceRuntime";
 import { getResource } from "@/services/resources/resourceRegistry";
 import type { ResourceRecord } from "@/services/resources/resourceTypes";
 import { deriveLaunchTasks, summarizeLaunchTasks, type LaunchTask } from "@/services/playground/launchReadiness";
@@ -50,6 +50,7 @@ export interface PlaygroundApi {
   focusAppearance(usageId: string): Promise<void>;
   updateResource(ref: string, values: Record<string, unknown>): Promise<ResourceRecord | null>;
   replaceAsset(ref: string, url: string): Promise<ResourceRecord | null>;
+  duplicateResource(ref: string): Promise<ResourceRecord | null>;
   deleteResource(ref: string): Promise<void>;
   getLaunchReadiness(): Promise<{ ready: number; total: number; percent: number }>;
   getLaunchTasks(): Promise<LaunchTask[]>;
@@ -140,6 +141,16 @@ export function PlaygroundApiProvider({ children, ...options }: PlaygroundApiOpt
     return updateResource(ref, { [imageField.key]: url });
   }, [updateResource]);
 
+  const duplicateResource = useCallback(async (ref: string) => {
+    if (!context) throw new Error("Save the site before duplicating resources.");
+    const { resourceKey, recordId } = splitRef(ref);
+    const def = getResource(resourceKey);
+    if (!def || def.cardinality !== "collection") throw new Error("This resource can't be duplicated.");
+    const record = await getResourceRecord(resourceKey, context, recordId);
+    if (!record) throw new Error("This saved resource could not be found.");
+    return applyResourceOp({ op: "create", resourceKey, values: buildDuplicateResourceValues(def, record) }, context);
+  }, [context]);
+
   const deleteResource = useCallback(async (ref: string) => {
     if (!context) throw new Error("Save the site before deleting resources.");
     const { resourceKey, recordId } = splitRef(ref);
@@ -156,7 +167,7 @@ export function PlaygroundApiProvider({ children, ...options }: PlaygroundApiOpt
 
   const getLaunchReadiness = useCallback(async () => summarizeLaunchTasks(await getLaunchTasks()), [getLaunchTasks]);
 
-  const api = useMemo<PlaygroundApi>(() => ({ listResources, inspect, getUsages, focusAppearance, updateResource, replaceAsset, deleteResource, getLaunchReadiness, getLaunchTasks }), [deleteResource, focusAppearance, getLaunchReadiness, getLaunchTasks, getUsages, inspect, listResources, replaceAsset, updateResource]);
+  const api = useMemo<PlaygroundApi>(() => ({ listResources, inspect, getUsages, focusAppearance, updateResource, replaceAsset, duplicateResource, deleteResource, getLaunchReadiness, getLaunchTasks }), [deleteResource, duplicateResource, focusAppearance, getLaunchReadiness, getLaunchTasks, getUsages, inspect, listResources, replaceAsset, updateResource]);
   return <PlaygroundApiContext.Provider value={api}>{children}</PlaygroundApiContext.Provider>;
 }
 

@@ -1,0 +1,84 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  createCatalogItem: vi.fn(),
+  listCatalog: vi.fn(),
+  loadBusinessProfile: vi.fn(),
+  saveBusinessProfile: vi.fn(),
+  createContentRecord: vi.fn(),
+  listContentRecords: vi.fn(),
+  listContentTypes: vi.fn(),
+  mutateContentRecord: vi.fn(),
+}));
+
+vi.mock('@/services/agent-runtime/catalogOps', () => ({
+  createCatalogItem: mocks.createCatalogItem,
+  listCatalog: mocks.listCatalog,
+}));
+vi.mock('@/services/businessProfileService', () => ({
+  loadBusinessProfile: mocks.loadBusinessProfile,
+  saveBusinessProfile: mocks.saveBusinessProfile,
+}));
+vi.mock('@/services/cmsRecordService', () => ({
+  createContentRecord: mocks.createContentRecord,
+  listContentRecords: mocks.listContentRecords,
+  listContentTypes: mocks.listContentTypes,
+  mutateContentRecord: mocks.mutateContentRecord,
+}));
+
+import { seedLaunchAssets } from '@/services/resources/seedLaunchAssets';
+import { createEmptyCreatorData } from '@/types/creatorData';
+
+describe('launch content seeding contract', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listCatalog.mockResolvedValue([]);
+    mocks.loadBusinessProfile.mockResolvedValue(null);
+    mocks.listContentTypes.mockResolvedValue([]);
+    mocks.listContentRecords.mockResolvedValue([]);
+    mocks.mutateContentRecord.mockImplementation(async (request: { values?: { apiKey?: string } }) => ({
+      record: { id: `type-${request.values?.apiKey ?? 'unknown'}` },
+    }));
+    mocks.createContentRecord.mockResolvedValue({ id: 'entry' });
+  });
+
+  it('creates API-safe types and only submits fields declared by each type', async () => {
+    const creatorData = createEmptyCreatorData('Launch');
+    creatorData.faqs.faq_1 = {
+      faqId: 'faq_1', question: 'When?', answer: 'Soon', category: 'General', sortOrder: 1,
+    };
+    creatorData.team.member_1 = {
+      memberId: 'member_1', name: 'Alex', role: 'Owner', bio: 'Founder', sortOrder: 2,
+    };
+    creatorData.gallery.gallery_1 = {
+      galleryItemId: 'gallery_1', assetId: 'asset_1', caption: 'Studio', category: 'Space', sortOrder: 3,
+    };
+    const extendedData = creatorData as typeof creatorData & {
+      articles: Record<string, { title: string; excerpt: string; body: string }>;
+      caseStudies: Record<string, { title: string; client: string; results: string }>;
+    };
+    extendedData.articles = { article_1: { title: 'News', excerpt: 'Summary', body: 'Details' } };
+    extendedData.caseStudies = { case_1: { title: 'Results', client: 'Client', results: 'Growth' } };
+
+    await seedLaunchAssets({ businessId: 'business-1', projectId: 'project-1', creatorData: extendedData });
+
+    const typeCalls = mocks.mutateContentRecord.mock.calls
+      .map(([request]) => request as { action: string; values?: { apiKey?: string; fieldSchema?: { fields?: Array<{ key: string }> } } })
+      .filter((request) => request.action === 'content-type-create');
+    const fieldsByTypeId = new Map<string, Set<string>>();
+    for (const request of typeCalls) {
+      const apiKey = request.values?.apiKey ?? '';
+      expect(apiKey).toMatch(/^[a-z][a-z0-9_]{1,62}$/);
+      fieldsByTypeId.set(`type-${apiKey}`, new Set(request.values?.fieldSchema?.fields?.map((field) => field.key) ?? []));
+    }
+
+    for (const [request] of mocks.createContentRecord.mock.calls) {
+      const entry = request as { contentTypeId: string; values: { data: Record<string, unknown> } };
+      const declaredFields = fieldsByTypeId.get(entry.contentTypeId);
+      expect(declaredFields).toBeDefined();
+      for (const [key, value] of Object.entries(entry.values.data)) {
+        if (value !== undefined) expect(declaredFields?.has(key), `${entry.contentTypeId}.${key}`).toBe(true);
+      }
+    }
+  });
+});

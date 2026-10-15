@@ -425,6 +425,7 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const selector = element.selector;
   const slotId = element.scopeAncestors?.slotId ?? null;
   const descriptorTarget = element.descriptor ? descriptorToTarget(element.descriptor) : {};
+  const resourceMark = element.attributes?.['data-ut-resource'] || (element.scopeAncestors as { resource?: string | null } | undefined)?.resource || null;
   const target: EditorTarget = {
     ...descriptorTarget,
     selector,
@@ -524,9 +525,11 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
       className
     )}>
       <RecordFieldsEditor
-        mark={element.attributes?.['data-ut-resource'] || (element.scopeAncestors as { resource?: string | null } | undefined)?.resource}
+        key={resourceMark ?? 'unmarked'}
+        mark={resourceMark}
         businessId={businessId}
         projectId={projectId}
+        defaultOpen={Boolean(resourceMark)}
       />
 
       {readiness && (

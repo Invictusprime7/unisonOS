@@ -31,6 +31,24 @@ interface CmsRecordResponse {
   error?: string;
 }
 
+async function throwInvokeError(error: unknown, operation: string): Promise<never> {
+  const invokeError = error as { message?: string; context?: unknown };
+  const context = invokeError.context as Response | undefined;
+  let detail: string | undefined;
+  try {
+    if (context && typeof context.json === 'function') {
+      const body = await context.json() as { error?: unknown; message?: unknown };
+      const message = body?.error ?? body?.message;
+      if (typeof message === 'string' && message.trim()) detail = message.trim();
+    }
+  } catch {
+    detail = undefined;
+  }
+  const status = context?.status;
+  const statusText = typeof status === 'number' && status > 0 ? ` (${status})` : '';
+  throw new Error(`${operation}${statusText}: ${detail || invokeError.message || 'CMS request failed'}`);
+}
+
 function resolveResource(resource: string): CatalogSurface {
   const surface = getCatalogSurface(resource);
   if (!surface || surface.editableFields.length === 0) {
@@ -50,7 +68,7 @@ export async function mutateCmsRecord(request: CmsRecordRequest): Promise<CmsRec
     },
   });
   const response = (data ?? {}) as CmsRecordResponse;
-  if (error) throw new Error(error.message || 'CMS request failed');
+  if (error) await throwInvokeError(error, `CMS ${request.action} ${request.resource}`);
   if (!response.success) throw new Error(response.error || 'CMS request failed');
   return response;
 }
@@ -133,7 +151,7 @@ export async function mutateContentRecord(request: ContentCmsRequest): Promise<C
     },
   });
   const response = (data ?? {}) as CmsRecordResponse;
-  if (error) throw new Error(error.message || 'Content CMS request failed');
+  if (error) await throwInvokeError(error, `Content CMS ${request.action}`);
   if (!response.success) throw new Error(response.error || 'Content CMS request failed');
   return response;
 }

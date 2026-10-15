@@ -104,6 +104,8 @@ function coerceInput(field: FieldSpec, raw: string | boolean): unknown {
       if (!Number.isFinite(n)) return null;
       return Math.min(5, Math.max(0, n));
     }
+    case 'tags':
+      return typeof raw === 'string' ? raw.split(',').map((tag) => tag.trim()).filter(Boolean) : [];
     case 'text':
     case 'textarea':
     case 'image':
@@ -115,6 +117,7 @@ function coerceInput(field: FieldSpec, raw: string | boolean): unknown {
 function displayValue(field: FieldSpec, row: Record<string, unknown>): string {
   const raw = row[field.key];
   if (raw === null || raw === undefined) return '';
+  if (field.type === 'tags' && Array.isArray(raw)) return raw.join(', ');
   if (field.type === 'money-cents') {
     const cents = Number(raw);
     if (!Number.isFinite(cents)) return '';

@@ -20,6 +20,39 @@ export interface RecipePack {
   color?: string;
 }
 
+export interface PersistedRecipePack {
+  pack_id: string;
+  name: string;
+  description?: string | null;
+  industry: string;
+  tier?: string | null;
+  recipes?: unknown;
+}
+
+const LEGACY_BUILT_IN_PACK_IDS: Record<string, string> = {
+  'salon-starter': 'salon_basic',
+  'contractor-starter': 'contractor_basic',
+  'restaurant-starter': 'restaurant_basic',
+};
+
+export function resolvePersistedRecipePack(
+  packId: string,
+  builtIn: RecipePack | undefined,
+  persistedPacks: PersistedRecipePack[],
+): PersistedRecipePack | null {
+  const exact = persistedPacks.find((pack) => pack.pack_id === packId);
+  if (exact) return exact;
+  if (!builtIn) return null;
+  const legacyId = LEGACY_BUILT_IN_PACK_IDS[builtIn.id];
+  const legacy = legacyId ? persistedPacks.find((pack) => pack.pack_id === legacyId) : undefined;
+  if (legacy) return legacy;
+
+  const industryMatches = persistedPacks.filter(
+    (pack) => pack.industry.trim().toLowerCase() === builtIn.industry.trim().toLowerCase(),
+  );
+  return industryMatches.length === 1 ? industryMatches[0] : null;
+}
+
 export interface Recipe {
   id: string;
   name: string;
@@ -286,6 +319,12 @@ export const BUILT_IN_RECIPE_PACKS: RecipePack[] = [
   },
 ];
 
+export function resolveBuiltInRecipePack(persistedPackId: string): RecipePack | null {
+  return BUILT_IN_RECIPE_PACKS.find(
+    (pack) => pack.id === persistedPackId || LEGACY_BUILT_IN_PACK_IDS[pack.id] === persistedPackId,
+  ) ?? null;
+}
+
 // ============ SERVICE FUNCTIONS ============
 
 /**
@@ -341,14 +380,19 @@ export async function getInstalledPacks(businessId: string): Promise<InstalledPa
       return [];
     }
 
-    // Enrich with pack info from built-in packs
+    const { data: persistedPacks } = await supabase
+      .from('automation_recipe_packs')
+      .select('pack_id, name, industry');
+    const persistedById = new Map((persistedPacks || []).map((pack) => [pack.pack_id, pack]));
+
     return (data || []).map(row => {
-      const builtIn = BUILT_IN_RECIPE_PACKS.find(p => p.id === row.pack_id);
+      const persisted = persistedById.get(row.pack_id);
+      const builtIn = resolveBuiltInRecipePack(row.pack_id) ?? undefined;
       return {
         id: row.id,
-        packId: row.pack_id,
-        packName: builtIn?.name || row.pack_id,
-        industry: builtIn?.industry || '',
+        packId: builtIn?.id ?? row.pack_id,
+        packName: builtIn?.name ?? persisted?.name ?? row.pack_id,
+        industry: builtIn?.industry ?? persisted?.industry ?? '',
         enabled: row.enabled,
         installedAt: new Date().toISOString(),
         customConfig: undefined,
@@ -369,20 +413,21 @@ export async function installRecipePack(
   options: { enableAll?: boolean } = {}
 ): Promise<{ success: boolean; installedId?: string; error?: string }> {
   try {
-    // First, check if pack exists (could be built-in or in DB)
     const builtIn = BUILT_IN_RECIPE_PACKS.find(p => p.id === packId);
-    
-    if (!builtIn) {
-      // Check database
-      const { data: dbPack } = await supabase
-        .from('automation_recipe_packs')
-        .select('id')
-        .eq('id', packId)
-        .single();
-      
-      if (!dbPack) {
-        return { success: false, error: 'Pack not found' };
-      }
+    const { data: persistedPacks, error: packsError } = await supabase
+      .from('automation_recipe_packs')
+      .select('pack_id, name, description, industry, tier, recipes')
+      .eq('is_published', true);
+
+    if (packsError) return { success: false, error: packsError.message };
+    const persistedPack = resolvePersistedRecipePack(packId, builtIn, (persistedPacks ?? []) as PersistedRecipePack[]);
+    if (!persistedPack) {
+      return {
+        success: false,
+        error: builtIn
+          ? `No unique published database pack is configured for ${builtIn.industry}.`
+          : 'Pack not found or not published.',
+      };
     }
 
     // Check if already installed
@@ -390,7 +435,7 @@ export async function installRecipePack(
       .from('installed_recipe_packs')
       .select('id')
       .eq('business_id', businessId)
-      .eq('pack_id', packId)
+      .eq('pack_id', persistedPack.pack_id)
       .single();
 
     if (existing) {
@@ -402,7 +447,7 @@ export async function installRecipePack(
       .from('installed_recipe_packs')
       .insert({
         business_id: businessId,
-        pack_id: packId,
+        pack_id: persistedPack.pack_id,
         enabled: true,
       })
       .select()
@@ -413,12 +458,15 @@ export async function installRecipePack(
     }
 
     // Create recipe toggles for each recipe
-    const pack = builtIn || BUILT_IN_RECIPE_PACKS.find(p => p.id === packId);
-    if (pack) {
-      const toggles = pack.recipes.map(recipe => ({
+    const persistedRecipes = Array.isArray(persistedPack.recipes)
+      ? persistedPack.recipes as Recipe[]
+      : [];
+    const recipes = persistedRecipes.length > 0 ? persistedRecipes : builtIn?.recipes ?? [];
+    if (recipes.length > 0) {
+      const toggles = recipes.filter((recipe) => typeof recipe.id === 'string').map(recipe => ({
         business_id: businessId,
         recipe_id: recipe.id,
-        enabled: options.enableAll ?? recipe.defaultEnabled,
+        enabled: options.enableAll ?? recipe.defaultEnabled ?? true,
       }));
 
       if (toggles.length > 0) {
