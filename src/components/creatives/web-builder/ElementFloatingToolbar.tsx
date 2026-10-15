@@ -445,7 +445,8 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const styles = element.styles || {};
   const isImage = element.tagName?.toLowerCase() === 'img';
   const backgroundImage = styles.backgroundImage || '';
-  const hasBackgroundImage = !!backgroundImage && backgroundImage !== 'none';
+  // Only a real picture counts — plain colors/gradients mean "add a picture".
+  const hasBackgroundImage = /url\(/i.test(backgroundImage);
   const imageTarget = element.imageTarget || (isImage ? { kind: 'img' as const, selector, src: element.attributes?.src } : null);
   const hasImageControls = !!imageTarget || hasBackgroundImage;
   const tagLower = (element.tagName || '').toLowerCase();
@@ -453,7 +454,8 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const canHostPicture = hasImageControls || ['section', 'div', 'article', 'header', 'footer', 'aside', 'main', 'li', 'figure', 'a', 'button'].includes(tagLower);
   const needsPlacement = !hasImageControls;
   const hasText = String(element.textContent ?? '').trim().length > 0;
-  const isRepeat = element.descriptor?.instanceId != null;
+  // Repeated only when the clicked element itself is one of several matching siblings (cards in a grid).
+  const isRepeat = /\[\]$/.test(String((element.scopeAncestors as { structuralPath?: string } | undefined)?.structuralPath ?? ''));
   const choicesReady = (!needsPlacement || !!placement) && (!isRepeat || !!groupScope);
   const isTextElement = ['h1','h2','h3','h4','h5','h6','p','span','a','button','li','label','td','th'].includes(
     (element.tagName || '').toLowerCase()
@@ -757,7 +759,7 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
                       <Button variant={groupScope === 'group' ? 'default' : 'outline'} size="sm" className="h-8 flex-1 text-xs" onClick={() => setGroupScope('group')}>Every card</Button>
                     </div>
                     {groupScope === 'one' && (
-                      <p className="text-[10px] text-muted-foreground">These cards share one design, so a picture added here appears on each of them. To give one card its own picture, link it to a saved item first.</p>
+                      <p className="text-xs text-muted-foreground">These cards share one design, so a picture added here appears on each of them. To give one card its own picture, link it to a saved item first.</p>
                     )}
                   </div>
                 )}
