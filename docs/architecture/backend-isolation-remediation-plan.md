@@ -110,6 +110,50 @@ Do not claim shared/dedicated parity until the staging binding schema matches se
 
 Stable identity and idempotent retry tests pass for shared mode and any supported dedicated mode; runtime manifest IDs match the accepted project/site revision; and an interrupted launch resumes without duplicate resources or silently changing backend mode.
 
+## Phase 5 Asset, Preview, and AI Contract Convergence
+
+- Keep assets separate from source and business records. The asset registry owns upload/metadata; source or presentation commands own where an image is placed; catalog/resource data owns business-controlled image fields.
+- Converge asset metadata and Storage paths on stable project asset IDs. Preserve existing URLs and the current `AssetRef` ownership checks while migration runs.
+- Do not treat the current local data-URL upload fallback as a durable successful upload. A saved/published asset link must refer to an accepted asset or return a typed failure; draft-only local previews must be explicitly marked as such.
+- Route inspector, AI, command menu, and terminal changes through their existing owner lanes: source/presentation/route through `commitMutation`, business fields through `ResourceRuntime`, asset references through asset ownership. Never create a second VFS writer or generic asset/resource mutation path.
+- Ensure preview and published UI read the same accepted asset reference and resource projection. A visual preview probe is not proof of durable asset persistence; test upload → link → save → preview → published URL resolution.
+- Restrict Storage policies by owner/project and share grants. Keep public delivery separate from object mutation; public reads must not imply public upload, replace, or delete.
+
+### Phase 5 exit gate
+
+Static logo/image presentation requires no catalog or booking capability; resource-backed prices remain authoritative; project A cannot link/read project B's private asset; upload and preview failures are visible and typed; and old asset URLs continue to resolve.
+
+## Phase 6 Intent Execution Contracts
+
+Keep specialized domain handlers under one logical contract. Do not replace them with a universal SQL executor or assume that all routes have the same auth, tenant, or retry semantics.
+
+| Action family | Current owner | Required next contract |
+|---|---|---|
+| Booking | `site-runtime` plus atomic private booking operation | Preserve stable operation key, verify site capability and exact component/slot binding, bind service/slot to the same project/business, and prove duplicate delivery returns the original booking without duplicate CRM effects. |
+| Public forms | `form-submit` | Verify project belongs to the exact site and business; retain approved form schema; make idempotency atomic through a deployed unique receipt constraint; scope follow-up CRM/workflow records to the same tenant. |
+| Generic contact/lead/quote/newsletter | `intent-exec` and legacy router family | Reconcile caller-supplied business/site IDs server-side; identify and migrate any deployed callers of `intent-router`/`intent-router-lite`; store durable operation receipts before declaring retries safe. |
+| Product cart/order checkout | `intent-router` and `create-order-checkout` | Resolve product, business, project, and site together; ignore untrusted client price/user identity; persist one order/checkout receipt per logical operation; verify webhook events and order ownership. |
+| Donation checkout | `donation.start` currently declares `stripe-checkout`, but the generated controller resolves to `create-order-checkout`; capability metadata points at account-subscription `create-checkout` | Keep production readiness blocked until a donation-specific amount/currency/campaign contract, durable donation record, payment handler, and webhook linkage exist. Do not reuse order checkout or subscription billing as a placeholder. |
+| Published backend outage | Existing typed specialized handlers | Return a typed unavailable result. Never route a dedicated outage, unsupported capability, or failed resolver into shared project data. |
+
+The currently deployed generic intent endpoints have `verify_jwt = false`; handlers must independently validate public action context and tenant scope. Caller-supplied `userId`, `businessId`, `siteId`, session IDs, and actor labels are hints only unless matched against server-verified identity or a persisted visitor/session contract.
+
+### Phase 6 exit gate
+
+Every published UI action maps to one canonical intent definition, one capability contract, and one active handler; identity/scope checks pass; retries return one durable outcome; and E2E tests cover success, denial, conflict, unsupported capability, outage, and duplicate delivery.
+
+## Phase 7 Publish, Export, and Cleanup
+
+- Keep `unison.runtime.json` versioned and browser-safe. Validate project/site identity, backend mode, protocol version, declared capabilities, and public descriptors before publish; never include secret or service-role material.
+- Preview, published runtime, and exported site must consume the same accepted SiteBundle/runtime manifest and resource IDs. Dedicated published reads are not considered implemented until a real caller and read-back test exist.
+- Deploy resolver/RPC or function changes behind a controlled rollout only after staging parity. Preserve v1 routes while old persisted manifests or deployed sites still call them.
+- Maintain an explicit rollback plan for manifest/function cutover and backend mode. A failed deployment or resolver health check must leave the previous accepted site/runtime active.
+- Remove endpoints, columns, policies, or adapters only after repository search, deployed caller evidence, zero-traffic observation, parity tests, and rollback verification. Absence of a direct `src/` import alone is not a removal gate for externally deployed sites.
+
+### Phase 7 exit gate
+
+Shared-managed and any declared dedicated modes pass the same contract fixtures across preview/publish/export; all secrets remain server-side; route/function cutover is reversible; and legacy cleanup has zero active callers plus verified rollback.
+
 ## Required Contract Tests
 
 - Cross-project read/write denial for every resource table and supported role.
