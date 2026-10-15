@@ -3485,9 +3485,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       if (!after) return;
       recordCommit('terminal', currentRevisionIdRef.current);
       const checks = deriveIntentChecks(before, after, ops.map((op) => op.path));
-      const outcome = await verifyCommittedChange(checks, baseline);
-      if (outcome.status === 'verified') toast.success(outcome.message);
-      else toast.warning(outcome.message);
+      // Verify after releasing the save queue (see toolbar bridge).
+      void verifyCommittedChange(checks, baseline)
+        .then((outcome) => { if (outcome.status === 'verified') toast.success(outcome.message); else toast.warning(outcome.message); })
+        .catch((err) => console.warn('[WebBuilder] terminal verification failed:', err));
     });
   }, [commitBuilderFiles, effectiveRouteState]);
 
