@@ -41,6 +41,8 @@ import { buildCatalogContext, renderCatalogContextForPrompt, type SelectedSectio
 import runBuilderTurn from '@/services/builderBrainClient';
 import { useToolbarCommands } from './toolbarCommandAdapter';
 import { uploadForPlacement } from '@/services/assets/uploadPlacement';
+import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
+import { coverBackgroundStyles } from './pictureInsertion';
 import type { EditorTarget } from '@/services/editor/editorCommandTypes';
 import { descriptorToTarget, type EditableObjectDescriptor } from '@/services/editor/editableObjectDescriptor';
 import { resolveSlotSectionType } from '@/services/builder/propertyInspectorModel';
@@ -395,6 +397,9 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const [imageUrlDraft, setImageUrlDraft] = useState('');
   const [imagePrompt, setImagePrompt] = useState('');
   const [imageGenerating, setImageGenerating] = useState(false);
+  // Asked each time: background vs image inside, and this card vs every card.
+  const [placement, setPlacement] = useState<'background' | 'inside' | null>(null);
+  const [groupScope, setGroupScope] = useState<'one' | 'group' | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -407,6 +412,8 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
       alt: element?.attributes?.alt || '',
     });
     setImageUrlDraft(element?.imageTarget?.src || element?.attributes?.src || extractCssUrl(element?.styles?.backgroundImage) || '');
+    setPlacement(null);
+    setGroupScope(null);
     setIsEditingText(false);
     setIsAIOpen(false);
     if (imageInputRef.current) imageInputRef.current.value = '';
@@ -440,6 +447,13 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const hasBackgroundImage = !!backgroundImage && backgroundImage !== 'none';
   const imageTarget = element.imageTarget || (isImage ? { kind: 'img' as const, selector, src: element.attributes?.src } : null);
   const hasImageControls = !!imageTarget || hasBackgroundImage;
+  const tagLower = (element.tagName || '').toLowerCase();
+  // Sections, cards and other containers can receive a picture even when they have none.
+  const canHostPicture = hasImageControls || ['section', 'div', 'article', 'header', 'footer', 'aside', 'main', 'li', 'figure', 'a', 'button'].includes(tagLower);
+  const needsPlacement = !hasImageControls;
+  const hasText = String(element.textContent ?? '').trim().length > 0;
+  const isRepeat = element.descriptor?.instanceId != null;
+  const choicesReady = (!needsPlacement || !!placement) && (!isRepeat || !!groupScope);
   const isTextElement = ['h1','h2','h3','h4','h5','h6','p','span','a','button','li','label','td','th'].includes(
     (element.tagName || '').toLowerCase()
   );
@@ -461,7 +475,18 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
 
   const replaceImage = (src: string) => {
     const nextSrc = src.trim();
-    if (!nextSrc) return;
+    if (!nextSrc || !choicesReady) return;
+    if (needsPlacement && placement === 'inside') {
+      // Same save path as AI-generated pictures.
+      window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: {
+        selector, src: nextSrc, kind: 'img', placement: 'inside', text: String(element.textContent ?? '').trim().slice(0, 200), pagePath: target.pagePath ?? undefined,
+      } }));
+      return;
+    }
+    if (needsPlacement) {
+      void runCommand({ type: 'set-style', target, styles: coverBackgroundStyles(nextSrc, hasText) });
+      return;
+    }
     if (imageTarget?.kind === 'img') {
       void runCommand({ type: 'replace-asset', target: { ...target, selector: imageTarget.selector || selector }, url: nextSrc });
       return;
@@ -496,7 +521,7 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   // same site context, same save path. No separate image call here.
   const handleImageGenerate = async () => {
     const p = imagePrompt.trim();
-    if (!p || imageGenerating) return;
+    if (!p || imageGenerating || !choicesReady) return;
     setImageGenerating(true);
     const section = (element as { section?: unknown }).section as { id?: string; label?: string } | string | undefined;
     const attrs = (element.attributes ?? {}) as Record<string, string>;
@@ -508,12 +533,15 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
         text: String(element.textContent ?? '').trim().slice(0, 400),
         selector,
         section: typeof section === 'string' ? section : section?.id ?? section?.label,
-        imageKind: imageTarget?.kind ?? 'background',
+        imageKind: needsPlacement ? (placement === 'inside' ? 'img' : 'background') : imageTarget?.kind ?? 'background',
         imageSelector: imageTarget?.selector || selector,
         imageSrc: imageTarget?.src || attrs.src || extractCssUrl(element.styles?.backgroundImage) || undefined,
         imageAlt: attrs.alt,
-        width: rect?.width, height: rect?.height,
+        width: rect?.width, height: placement === 'inside' && rect?.width ? Math.round(rect.width * 9 / 16) : rect?.height,
         forceImage: true,
+        placement: needsPlacement ? placement : undefined,
+        scrim: needsPlacement && placement === 'background' && hasText,
+        scope: isRepeat ? groupScope : undefined,
         descriptor: element.descriptor,
       },
     } }));
@@ -697,8 +725,8 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
           </>
         )}
 
-        {/* Image replace */}
-        {hasImageControls && (
+        {/* Image replace — or add a picture to a section/card that has none */}
+        {canHostPicture && (
           <>
             <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageFileChange} />
             <Popover>
@@ -708,20 +736,41 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-80 space-y-3 p-3" align="start">
+                {needsPlacement && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground block">Where should the picture go?</Label>
+                    <div className="flex gap-2">
+                      <Button variant={placement === 'background' ? 'default' : 'outline'} size="sm" className="h-8 flex-1 text-xs" onClick={() => setPlacement('background')}>As background</Button>
+                      <Button variant={placement === 'inside' ? 'default' : 'outline'} size="sm" className="h-8 flex-1 text-xs" onClick={() => setPlacement('inside')}>Image inside</Button>
+                    </div>
+                  </div>
+                )}
+                {isRepeat && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground block">This is one of several matching cards</Label>
+                    <div className="flex gap-2">
+                      <Button variant={groupScope === 'one' ? 'default' : 'outline'} size="sm" className="h-8 flex-1 text-xs" onClick={() => setGroupScope('one')}>This card only</Button>
+                      <Button variant={groupScope === 'group' ? 'default' : 'outline'} size="sm" className="h-8 flex-1 text-xs" onClick={() => setGroupScope('group')}>Every card</Button>
+                    </div>
+                    {groupScope === 'one' && (
+                      <p className="text-[10px] text-muted-foreground">These cards share one design, so a picture added here appears on each of them. To give one card its own picture, link it to a saved item first.</p>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground block">Swap image</Label>
+                  <Label className="text-xs text-muted-foreground block">{needsPlacement ? 'Add a picture' : 'Swap image'}</Label>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => imageInputRef.current?.click()}>
+                    <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => imageInputRef.current?.click()} disabled={!choicesReady}>
                       Upload
                     </Button>
                     <Input
                       value={imageUrlDraft}
                       onChange={(e) => setImageUrlDraft(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleImageUrlApply(); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && choicesReady) handleImageUrlApply(); }}
                       className="h-8 flex-1 text-xs"
                       placeholder="Paste image URL"
                     />
-                    <Button size="sm" className="h-8 text-xs" onClick={handleImageUrlApply} disabled={!imageUrlDraft.trim()}>
+                    <Button size="sm" className="h-8 text-xs" onClick={handleImageUrlApply} disabled={!imageUrlDraft.trim() || !choicesReady}>
                       Apply
                     </Button>
                   </div>
@@ -736,13 +785,13 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
                     placeholder="Describe the picture, e.g. warm studio interior at golden hour"
                     disabled={imageGenerating}
                   />
-                  <Button size="sm" className="h-8 w-full text-xs gap-1" onClick={() => void handleImageGenerate()} disabled={!imagePrompt.trim() || imageGenerating}>
+                  <Button size="sm" className="h-8 w-full text-xs gap-1" onClick={() => void handleImageGenerate()} disabled={!imagePrompt.trim() || imageGenerating || !choicesReady}>
                     {imageGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                    {imageGenerating ? 'Generating…' : 'Generate and use'}
+                    {imageGenerating ? 'Generating…' : choicesReady ? 'Generate and use' : 'Choose the options above first'}
                   </Button>
                 </div>
                 <div className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 text-[10px] text-muted-foreground">
-                  Target: {imageTarget?.kind === 'img' ? 'image source' : 'background image'}
+                  Target: {needsPlacement ? (placement === 'inside' ? 'new image inside this element' : placement === 'background' ? `background${hasText ? ' (with a shade so text stays readable)' : ''}` : 'not chosen yet') : imageTarget?.kind === 'img' ? 'image source' : 'background image'}
                 </div>
               </PopoverContent>
             </Popover>
