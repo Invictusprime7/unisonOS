@@ -81,7 +81,8 @@ export function CatalogPanel({ files, businessId, onApply }: Props) {
     setBusy(item.id);
     try {
       const { data: auth } = await supabase.auth.getUser();
-      const path = `${auth.user?.id ?? 'anon'}/catalog/${item.id}-${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`;
+      if (!auth.user) throw new Error('Sign in to upload catalog photos.');
+      const path = `${auth.user.id}/catalog/${item.id}-${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`;
       // Workspace blocks public buckets: store in the owner's private files
       // and use a long-lived signed link (10 years) for the site.
       const { error } = await supabase.storage.from('user-files').upload(path, file, { upsert: true });

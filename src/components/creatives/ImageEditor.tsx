@@ -86,12 +86,13 @@ export const ImageEditor = () => {
           user
         }
       } = await supabase.auth.getUser();
-      const userId = user?.id || null;
+      if (!user) throw new Error("Sign in to save generated images.");
+      const userId = user.id;
 
       // Convert base64 to blob
       const blob = base64ToBlob(imageUrl);
       const fileName = `ai-generated-${Date.now()}.png`;
-      const filePath = userId ? `${userId}/${fileName}` : `anonymous/${fileName}`;
+      const filePath = `${userId}/${fileName}`;
 
       // Upload to storage
       const {

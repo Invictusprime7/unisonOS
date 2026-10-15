@@ -66,14 +66,15 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 ### Edge Functions and Storage
 
 - The backend routes queried in the CLI are active: `project-backend` v20, `cms-records` v32, `site-runtime` v313, `site-runtime-read` v308, `intent-exec` v88, `intent-router` v93, `intent-router-lite` v92, `intent-action` v93, `form-submit` v105, `create-order-checkout` v87, `create-checkout` v305, and `stripe-webhook` v84. Their deployed `verify_jwt` values match the repository config for the inspected routes. This is deployment metadata, not a source-hash parity check.
-- Storage RLS is enabled on `storage.objects` and `storage.buckets`. The `user-files` bucket is marked private, but four policies granted to role `public` permit SELECT, INSERT, UPDATE, and DELETE for any object whose `bucket_id = 'user-files'`. This is a critical exposure: the private bucket flag does not override those object policies. Do not change them during this Phase 0 audit; remove the public write/read policies only through an approved, tested storage-policy migration.
+- Storage RLS is enabled on `storage.objects` and `storage.buckets`. The `user-files` bucket is marked private. The initial audit found public-role bucket-wide SELECT/INSERT/UPDATE/DELETE policies; migration `20261015223554_restrict_user_files_storage_policies.sql` was subsequently applied to linked `UNISON/main` at the user's request. The live policy set now has authenticated owner-folder CRUD, authenticated expiry-scoped recipient reads, and anon/authenticated expiry-scoped public-share reads; no public mutation policy remains.
+- The Storage migration did not delete or move objects: counts remain two objects, one UUID-owner prefix and one `anonymous/` prefix. The anonymous-prefix object has a null-owner metadata row and no active public share; review any legacy references separately. The migration did not change `public.files` metadata policies, which still permit anonymous `user_id IS NULL` metadata inserts and token-scoped reads.
 - `generated-images` is marked public with image-only MIME types and a 10 MiB limit. No object contents or paths were queried.
 - The CLI security advisor also reported public-executable `SECURITY DEFINER` helpers and mutable function search paths. Those warnings require per-function review; many business-membership/permission helpers are deliberately callable, so do not blanket-revoke them.
 
 ### Phase 0 disposition
 
 - The linked-project audit is complete for migration history, resource columns/FKs, RLS flags/policies, table grants, aggregate project ownership, binding-table schema/count, selected deployed function metadata, and Storage bucket/policy metadata.
-- The highest-priority follow-up is a reviewed remediation plan for the `user-files` public CRUD policies and the missing backend resolver RPCs. No fix was applied because this phase prohibits schema/policy/deployment changes.
+- The `user-files` public CRUD exposure is remediated on linked `UNISON/main`; the remaining metadata-table anonymous insert policy and missing backend resolver RPCs require separate reviewed migrations.
 - Dedicated backend behavior remains unverified and has no live bindings. Local `project-backend` source/live binding-table shape also needs parity before creating any binding.
 - This audit covers the linked `UNISON/main` project, not a separate staging project. Repeat against a designated staging project before any later migration or policy remediation.
 
@@ -83,7 +84,7 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 - Resource keys resolve through `resourceRegistry`; arbitrary table names are rejected. Required project/site/business context is validated, and dedicated failures never route to the shared adapter.
 - Errors are returned in a structured envelope. `asset.link`, `intent.execute`, filtered list queries, and optimistic record-version checks explicitly return `UNSUPPORTED` until their existing domain owners are wired.
 - `operationId` is returned as correlation only. Existing storage paths do not persist operation receipts, so the v2 wrapper does not claim idempotent writes. Server auth/membership remains authoritative; caller-supplied `actorKind` is not trusted for authorization.
-- Focused validation after the change: 6 backend/runtime/industry contract test files passed (189 tests), `npm run type-check` passed, and targeted ESLint passed.
+- Focused validation after the change: 7 backend/runtime/industry/storage contract test files passed (194 tests), `npm run type-check` passed, and targeted ESLint passed.
 - V2 now maps the missing `resolve_project_backend` / `resolve_published_site_backend` RPC schema-cache error to a non-retryable `BACKEND_UNAVAILABLE`; it does not fall back to shared storage.
 - Added fake-backed backend-to-UI contracts across all ten canonical industries. Source-owned titles make zero business-data calls; derived catalog seed targets go through `ResourceRuntime` and project into the canonical `CatalogCardViewModel`; each primary intent is registered, capability-owned, and backed by local Edge Function files. Portfolio/SaaS static fixtures and salon/menu resource fixtures remain explicit. The SaaS fixture rejects an unregistered generic tenant table rather than asserting a nonexistent SaaS adapter.
 - Aligned commerce capability declarations and provisioning readiness with the published runtime's existing `create-order-checkout` controller instead of the authenticated account-subscription `create-checkout` endpoint.
@@ -93,6 +94,6 @@ Target: linked project `UNISON` (`nfrdomdvyrbwuokathtw`), branch `main`; databas
 
 1. Repeat the read-only audit against a designated staging project before remediation; the current audit covers linked `UNISON/main`, whose environment label is not staging.
 2. Plan a staged ownership/backfill migration for the 104 existing null-project rows and revise delete semantics before relying on project scope.
-3. Review the public `user-files` object policies and add the missing project resolver RPCs through an approved migration/deployment plan; do not make those changes in this Phase 0/1 pass.
+3. Review the remaining anonymous `public.files` metadata insert policy and add the missing project resolver RPCs through an approved migration/deployment plan; the Storage object-policy fix is applied, but was not validated on a separate staging project.
 4. Extend the SaaS fixture only after an explicit tenant schema and membership contract has a canonical owner; the current fixture proves no generic table is inferred.
 5. Dedicated public reads, forms, checkout, and per-intent operation support need explicit parity evidence before describing the two backend modes as equivalent.

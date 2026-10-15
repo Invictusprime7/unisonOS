@@ -1,6 +1,6 @@
 # Backend Isolation and RLS Remediation Plan
 
-**Status:** Design only. Based on repository review and read-only Supabase CLI audit of linked `UNISON/main` on 2026-10-15. No migrations, policy changes, deployments, or record updates have been applied. The linked project has no branch identified as staging; do not execute this plan against `main`.
+**Status:** Resource isolation/backfill design only. Based on repository review and Supabase CLI audit of linked `UNISON/main` on 2026-10-15. The narrow `user-files` Storage policy migration was applied to `UNISON/main` at the user's request; all remaining resource backfill, RLS, resolver, and dedicated-backend steps remain unapplied. The linked project has no branch identified as staging; do not execute the remaining plan against `main`.
 
 ## Objective
 
@@ -13,8 +13,12 @@ Make shared-managed project resources tenant-safe without breaking intentional b
 - The linked database has 104 rows across those resource tables, and all have `project_id IS NULL`: 77 availability slots, 16 products, and 11 services. The other seven tables are empty. No connected backend bindings currently exist.
 - `cms-records` resolves business/project/site relationships and includes `project_id IS NULL` rows in project-bound reads. A null project ID is therefore currently ambiguous between legacy and business-shared data.
 - Deleting a project can set resource `project_id` values to NULL through the FK. That would erase the only current project marker and could make project data appear legacy/shared.
-- `user-files` is marked private, but `storage.objects` has public-role SELECT, INSERT, UPDATE, and DELETE policies scoped only by bucket ID. This is a separate critical storage access-control workstream.
+- `user-files` is marked private. The initial audit found public-role SELECT, INSERT, UPDATE, and DELETE policies scoped only by bucket ID; the corrective Storage migration has now replaced them with authenticated owner-folder CRUD and expiry-scoped recipient/public share reads. It did not change the separate anonymous insert policy on `public.files` metadata.
 - Neither `resolve_project_backend` nor `resolve_published_site_backend` exists in the linked database. The live `connected_supabase_projects` table has no `site_id` column, while the local `project-backend` Edge Function selects it. The binding table has zero rows today.
+- `supabase/migrations/20261015223554_restrict_user_files_storage_policies.sql` was applied to linked `UNISON/main` via `supabase db push --linked --skip-vault --yes`. The migration ledger records it; a post-deploy catalog query confirmed owner-folder CRUD, recipient/public share reads, no public mutation policies, and unchanged object counts.
+- `ImageEditor` and `CatalogPanel` now require an authenticated user before upload instead of generating `anonymous/` or `anon/` object paths. The local migration test covers public CRUD removal, owner-folder conditions, update `WITH CHECK`, and expiry-aware share reads.
+- Docker/Podman is unavailable, so local SQL lint could not run. The remote migration was applied only after CLI dry-run listed exactly this one migration; no other migration, Vault secret, function, or record was changed. A separate staging branch was not available.
+- The separate `public.files` metadata policies still allow an anonymous insert with `user_id IS NULL` and token-scoped anonymous reads. The live audit found one null-owner `files` row and no `shared_files` or `file_versions` rows. No current source caller for `file_access_tokens` was found. Treat metadata-table tightening as a separate compatibility gate; this Storage-only candidate does not change it.
 
 ## Non-Negotiable Rules
 
