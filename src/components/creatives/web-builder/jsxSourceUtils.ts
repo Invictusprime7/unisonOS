@@ -178,7 +178,13 @@ export function findUniqueSourceMutation(
     const owned = pool.filter((m) => m.path === hints.ownerPath);
     if (owned.length === 1) return owned[0];
   }
-  const evidence = (hints.evidence ?? []).filter((e): e is string => typeof e === 'string' && e.length > 3 && !e.startsWith('data:'));
+  const evidence = (hints.evidence ?? [])
+    .filter((e): e is string => typeof e === 'string' && e.length > 3 && !e.startsWith('data:'))
+    .flatMap((e) => {
+      // The preview reports resolved links; source may hold the path or file name only.
+      if (!/^https?:\/\//.test(e)) return [e];
+      try { const u = new URL(e); const file = u.pathname.split('/').pop() ?? ''; return [e, e.split('?')[0], u.pathname, file].filter((x) => x.length > 4); } catch { return [e]; }
+    });
   if (evidence.length) {
     const withEvidence = pool.filter((m) => evidence.some((e) => m.before.includes(e)));
     if (withEvidence.length === 1) return withEvidence[0];
