@@ -759,7 +759,7 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
                       <Button variant={groupScope === 'group' ? 'default' : 'outline'} size="sm" className="h-8 flex-1 text-xs" onClick={() => setGroupScope('group')}>Every card</Button>
                     </div>
                     {groupScope === 'one' && (
-                      <p className="text-[10px] text-muted-foreground">These cards share one design, so a picture added here appears on each of them. To give one card its own picture, link it to a saved item first.</p>
+                      <p className="text-xs text-muted-foreground">These cards share one design, so a picture added here appears on each of them. To give one card its own picture, link it to a saved item first.</p>
                     )}
                   </div>
                 )}
