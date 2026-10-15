@@ -847,7 +847,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           nearbyText: t.text, section: t.section, repeatLabel: where, width: t.width, height: t.height,
         }, { projectId: ctx.projectId ?? undefined, businessId: ctx.businessId ?? undefined, industry: ctx.industry ?? undefined, ...located })
           .then(({ url, prompt: used }) => {
-            window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: { selector: (t.imageSelector || t.selector)!, src: url, kind: t.imageKind! } }));
+            window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: { selector: (t.imageSelector || t.selector)!, src: url, kind: t.imageKind!, currentSrc: t.imageSrc, alt: t.imageAlt, pagePath: located.pagePath } }));
             emitAgentEvent({ kind: 'commit', runId, status: 'ok', message: 'Image generated — saving to your site' });
             setMessages((prev) => [...prev, { id: generateId(), role: 'assistant', content: `Made a new ${t.section ? `${t.section} ` : ''}image for you and saved it to the site.\n\nArt direction: ${used}`, timestamp: new Date() }]);
             toast.success('Image generated — saving to your site', { id });

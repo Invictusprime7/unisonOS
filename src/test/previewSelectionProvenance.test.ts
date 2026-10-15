@@ -1,7 +1,7 @@
 import * as Babel from '@babel/standalone';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { findElementBoundsInJSX, findUniqueSourceMutation } from '@/components/creatives/web-builder/jsxSourceUtils';
+import { findElementBoundsInJSX, findUniqueSourceMutation, countImageLiteral, replaceImageLiteral } from '@/components/creatives/web-builder/jsxSourceUtils';
 import { mutateJSXText } from '@/utils/jsxElementMutation';
 
 const read = (path: string) => readFileSync(path, 'utf8');
@@ -91,9 +91,38 @@ describe('preview selection provenance bridge', () => {
     expect(result).toMatchObject({ kind: 'match', path: '/src/components/Hero.tsx', before: expect.stringContaining('Imported'), after: expect.stringContaining('Changed') });
   });
 
+  it('narrows an ambiguous image match by the current image link, then by the page import graph', () => {
+    const img = (src: string) => `<section><img src="${src}" alt="x" /></section>`;
+    const mutate = (code: string) => code.includes('<img') ? code.replace(/src="[^"]+"/, 'src="https://new.png"') : null;
+    const files = {
+      '/src/pages/Home.tsx': "import Hero from '../components/Hero';\nexport default () => <Hero />;",
+      '/src/components/Hero.tsx': img('https://hero.png'),
+      '/src/pages/Shop.tsx': img('https://shop.png'),
+      '/src/components/Testimonials.tsx': img('https://shop.png'),
+    };
+    expect(findUniqueSourceMutation(files, '/src/pages/Home.tsx', mutate, { evidence: ['https://hero.png'] }))
+      .toMatchObject({ kind: 'match', path: '/src/components/Hero.tsx' });
+    expect(findUniqueSourceMutation(files, '/src/pages/Home.tsx', mutate, { pagePath: '/src/pages/Home.tsx' }))
+      .toMatchObject({ kind: 'match', path: '/src/components/Hero.tsx' });
+    expect(findUniqueSourceMutation(files, '/src/pages/Home.tsx', mutate, { evidence: ['https://shop.png'] }))
+      .toEqual({ kind: 'ambiguous', paths: ['/src/components/Testimonials.tsx', '/src/pages/Shop.tsx'] });
+  });
+
+  it('swaps an image by its exact link only when that link appears once in the site', () => {
+    const hero = 'https://cdn.example.com/hero-photo.png';
+    const files = {
+      '/src/pages/Home.tsx': `<img src="${hero}" alt="hero" />`,
+      '/src/pages/Shop.tsx': '<img src={product.image} alt={product.name} />',
+      '/src/components/TestimonialsCarousel.tsx': '<img src={current.avatar} />',
+    };
+    expect(countImageLiteral(files, hero)).toBe(1);
+    expect(replaceImageLiteral(files['/src/pages/Home.tsx'], hero, 'https://new.png')).toBe('<img src="https://new.png" alt="hero" />');
+    expect(countImageLiteral({ ...files, '/src/pages/About.tsx': `<img src="${hero}" />` }, hero)).toBe(2);
+  });
+
   it('uses unique-source resolution for the toolbar VFS fallback', () => {
     const builder = read('src/components/creatives/WebBuilder.tsx');
-    expect(builder).toContain('findUniqueSourceMutation(allFiles, activePath, mutate)');
+    expect(builder).toContain('findUniqueSourceMutation(allFiles, activePath, mutate,');
     expect(builder).toContain("match.kind === 'ambiguous'");
     expect(builder).not.toContain('for (const [path, code] of Object.entries(allFiles))');
   });
