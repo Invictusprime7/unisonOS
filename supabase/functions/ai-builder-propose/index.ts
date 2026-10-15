@@ -127,6 +127,26 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    // Targets must belong to the caller: project membership, business
+    // membership, and the project must actually sit in that business.
+    if (body.project_id) {
+      const { data: pm } = await admin.rpc('is_project_member', { _user_id: userId, _project_id: body.project_id });
+      if (!pm) return new Response(JSON.stringify({ error: 'Not a member of this project' }), { status: 403, headers: jsonHeaders });
+      if (body.business_id) {
+        const { data: project } = await admin.from('projects').select('business_id').eq('id', body.project_id).maybeSingle();
+        if (project?.business_id && project.business_id !== body.business_id) {
+          return new Response(JSON.stringify({ error: 'Project does not belong to this business' }), { status: 403, headers: jsonHeaders });
+        }
+      }
+    }
+    if (body.business_id) {
+      const { data: role } = await admin.rpc('user_business_role', { _user_id: userId, _business_id: body.business_id });
+      if (!role) return new Response(JSON.stringify({ error: 'Not a member of this business' }), { status: 403, headers: jsonHeaders });
+    }
+    if (!body.project_id && !body.business_id) {
+      return new Response(JSON.stringify({ error: 'A proposal needs a project or business target' }), { status: 400, headers: jsonHeaders });
+    }
+
     const { data: inserted, error: insertErr } = await admin
       .from('ai_builder_proposals')
       .insert({
