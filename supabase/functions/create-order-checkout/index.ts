@@ -150,25 +150,50 @@ serve(async (req) => {
       return errorResponse("items[] is required and must not be empty", 400, publicCorsHeaders);
     }
 
-    // ── Validate item structure ─────────────────────────────────────────
-    const sanitizedItems = items.map((item) => ({
-      productId: typeof item?.productId === "string" ? sanitizeString(item.productId, 100) : undefined,
-      name: typeof item?.name === "string" ? sanitizeString(item.name, 200) : "",
-      description: typeof item?.description === "string" ? sanitizeString(item.description, 500) : undefined,
-      price: typeof item?.price === "number" ? item.price : NaN,
+    // ── Validate item structure; prices come from the server only ───────
+    if (items.length > 50) {
+      return errorResponse("Too many items", 400, publicCorsHeaders);
+    }
+    const requested = items.map((item) => ({
+      productId: typeof item?.productId === "string" ? sanitizeString(item.productId, 100) : "",
       quantity: typeof item?.quantity === "number" ? item.quantity : NaN,
     }));
-
-    for (const item of sanitizedItems) {
-      if (!isNonEmptyString(item.name) || !Number.isFinite(item.price) || !Number.isInteger(item.quantity)) {
-        return errorResponse("Invalid item payload", 400, publicCorsHeaders);
+    for (const item of requested) {
+      if (!item.productId || !isValidUUID(item.productId)) {
+        return errorResponse("Every item needs a valid productId", 400, publicCorsHeaders);
       }
-      if (item.price <= 0) {
-        return errorResponse("Item price must be positive", 400, publicCorsHeaders);
-      }
-      if (item.quantity <= 0 || item.quantity > 100) {
+      if (!Number.isInteger(item.quantity) || item.quantity <= 0 || item.quantity > 100) {
         return errorResponse("Item quantity must be between 1 and 100", 400, publicCorsHeaders);
       }
+    }
+
+    const productIds = [...new Set(requested.map((i) => i.productId))];
+    const { data: products, error: productsError } = await supabase
+      .from("products")
+      .select("id, name, description, price, is_active, business_id")
+      .in("id", productIds)
+      .eq("business_id", normalizedBusinessId)
+      .eq("is_active", true);
+    if (productsError) {
+      console.error("Product lookup error:", productsError);
+      return errorResponse("Could not load products", 500, publicCorsHeaders);
+    }
+    const byId = new Map((products ?? []).map((p) => [p.id as string, p]));
+
+    const sanitizedItems: Array<{ productId: string; name: string; description?: string; price: number; quantity: number }> = [];
+    for (const item of requested) {
+      const product = byId.get(item.productId);
+      const price = product ? Number(product.price) : NaN;
+      if (!product || !Number.isFinite(price) || price <= 0) {
+        return errorResponse("One or more products are unavailable", 400, publicCorsHeaders);
+      }
+      sanitizedItems.push({
+        productId: item.productId,
+        name: sanitizeString(String(product.name ?? "Item"), 200),
+        description: product.description ? sanitizeString(String(product.description), 500) : undefined,
+        price,
+        quantity: item.quantity,
+      });
     }
 
     // ── Build Stripe line items ─────────────────────────────────────────

@@ -120,6 +120,13 @@
       "when": 1792069158244,
       "tag": "0016_tighten_rls_slots_bindings_site_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792070150109,
+      "tag": "0017_lock_orders_writes",
+      "breakpoints": true
     }
   ]
 }
