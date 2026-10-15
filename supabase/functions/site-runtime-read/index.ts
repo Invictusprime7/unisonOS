@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
   if (bodyError || !body || !isUuid(body.siteId)) {
     return errorResponse("Invalid site runtime request", 400, publicCorsHeaders);
   }
-  if (body.type !== "catalog" && body.type !== "profile") {
+  if (body.type !== "catalog" && body.type !== "profile" && body.type !== "watch") {
     return errorResponse("Unsupported site runtime request", 400, publicCorsHeaders);
   }
 
@@ -212,6 +212,33 @@ Deno.serve(async (req) => {
   const supabase: RuntimeClient = createClient(supabaseUrl, secretKey);
   const context = await loadRuntimeContext(supabase, body.siteId);
   if (!context) return errorResponse("Site runtime is unavailable", 404, publicCorsHeaders);
+
+  if (body.type === "watch") {
+    // Long-poll: resolve as soon as any saved catalog/content row for this
+    // site's business changes (private broadcast sent by a database trigger),
+    // or after ~25s with changed:false. Visitors receive only "something
+    // changed" — never row data or credentials — and then re-read normally.
+    const changed = await new Promise<{ changed: boolean; table?: string }>((resolve) => {
+      let settled = false;
+      const channel = supabase.channel(`site-live:${context.businessId}`, { config: { private: true } });
+      const finish = (value: { changed: boolean; table?: string }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        void supabase.removeChannel(channel);
+        resolve(value);
+      };
+      const timer = setTimeout(() => finish({ changed: false }), 25_000);
+      channel
+        .on("broadcast", { event: "changed" }, (msg: { payload?: { table?: unknown } }) => {
+          finish({ changed: true, table: typeof msg.payload?.table === "string" ? msg.payload.table : undefined });
+        })
+        .subscribe((status: string) => {
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") finish({ changed: false });
+        });
+    });
+    return secureJsonResponse({ success: true, ...changed }, 200, publicCorsHeaders, rateHeaders);
+  }
 
   if (body.type === "profile") {
     const { data: profile, error } = await supabase
