@@ -1,6 +1,6 @@
 import { describeSelection, type EditableObjectDescriptor } from '@/services/editor/editableObjectDescriptor';
 import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
-import { insertImageIntoElement, coverBackgroundStyles } from '@/components/creatives/web-builder/pictureInsertion';
+import { insertImageIntoElement, coverBackgroundStyles, anchoredFinder, textRunsFromHtml } from '@/components/creatives/web-builder/pictureInsertion';
 /* cache-bust: 20260309 */
 import { shouldPauseAutosave, runExclusive, recordCommit, getLastCommit } from '@/services/builder/builderMutationCoordinator';
 import type { TerminalFileOp, TerminalRouteOp } from '@/services/terminalCommands';
@@ -992,13 +992,20 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     return sel.imageTarget?.src || attrs.src || String(sel.styles?.backgroundImage ?? '').match(/url\(["']?([^"')]+)["']?\)/)?.[1];
   };
 
+  // The clicked element's tag + own text, so edits land on it rather than on whatever shares its position.
+  const selectionAnchor = (selector: string) => {
+    const sel = selectedElementRef.current;
+    if (!sel || sel.selector !== selector) return null;
+    return { tag: String(sel.tagName ?? '').toLowerCase(), runs: textRunsFromHtml(sel.html) };
+  };
+
   const handleFloatingStyleUpdate = useCallback((selector: string, styles: Record<string, string>, hints?: SourceMatchHints) => {
     console.log('[WebBuilder] handleFloatingStyleUpdate called:', selector, styles);
     const nextBg = Object.keys(styles).length === 1 ? styles.backgroundImage?.match(/url\(["']?([^"')]+)["']?\)/)?.[1] : undefined;
     if (nextBg && tryReplaceImageLiteral(currentImageSrcFor(selector, hints), nextBg, 'Manual · replace background image')) return;
     const res = applyMutatorAcrossVFS(
       selector,
-      (code) => mutateJSXStyles(code, selector, styles, findElementBoundsInJSX),
+      (code) => mutateJSXStyles(code, selector, styles, anchoredFinder(findElementBoundsInJSX, hints?.anchor ?? selectionAnchor(selector))),
       (next) => {
         setPreviewCode(next);
         setEditorCode(next);
@@ -1272,7 +1279,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const handleFloatingInsertImage = useCallback((selector: string, src: string, alt: string, hints?: SourceMatchHints) => {
     const res = applyMutatorAcrossVFS(
       selector,
-      (code) => insertImageIntoElement(code, selector, src, alt, findElementBoundsInJSX),
+      (code) => insertImageIntoElement(code, selector, src, alt, anchoredFinder(findElementBoundsInJSX, hints?.anchor ?? selectionAnchor(selector))),
       (next) => {
         setPreviewCode(next);
         setEditorCode(next);
@@ -1290,9 +1297,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       const d = (event as CustomEvent<ImageGeneratedDetail>).detail;
       if (!d?.selector || !d.src) return;
       const textEvidence = d.text && d.text.length > 3 ? d.text.slice(0, 60) : undefined;
-      const hints: SourceMatchHints = { evidence: [d.currentSrc, d.alt ? `alt="${d.alt}"` : undefined, d.placement ? textEvidence : undefined, ...(d.evidence ?? [])], pagePath: d.pagePath ?? undefined, ownerPath: d.ownerPath ?? undefined };
+      const hints: SourceMatchHints = { evidence: [d.currentSrc, d.alt ? `alt="${d.alt}"` : undefined, d.placement ? textEvidence : undefined, ...(d.evidence ?? [])], pagePath: d.pagePath ?? undefined, ownerPath: d.ownerPath ?? undefined, anchor: d.placement ? { tag: d.tagName, runs: d.runs } : undefined };
       if (d.placement === 'inside') handleFloatingInsertImage(d.selector, d.src, d.alt || (d.text ?? '').slice(0, 80), hints);
-      else if (d.placement === 'background') handleFloatingStyleUpdate(d.selector, coverBackgroundStyles(d.src, !!d.scrim), hints);
+      else if (d.placement === 'background') handleFloatingStyleUpdate(d.selector, coverBackgroundStyles(d.src, d.scrim), hints);
       else if (d.kind === 'img') handleFloatingImageReplace(d.selector, d.src, hints);
       else handleFloatingStyleUpdate(d.selector, { backgroundImage: `url("${d.src.replace(/"/g, '%22')}")` }, hints);
     };
