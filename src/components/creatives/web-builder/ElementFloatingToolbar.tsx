@@ -445,7 +445,8 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const styles = element.styles || {};
   const isImage = element.tagName?.toLowerCase() === 'img';
   const backgroundImage = styles.backgroundImage || '';
-  const hasBackgroundImage = !!backgroundImage && backgroundImage !== 'none';
+  // Only a real picture counts — plain colors/gradients mean "add a picture".
+  const hasBackgroundImage = /url\(/i.test(backgroundImage);
   const imageTarget = element.imageTarget || (isImage ? { kind: 'img' as const, selector, src: element.attributes?.src } : null);
   const hasImageControls = !!imageTarget || hasBackgroundImage;
   const tagLower = (element.tagName || '').toLowerCase();
