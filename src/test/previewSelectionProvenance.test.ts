@@ -91,9 +91,26 @@ describe('preview selection provenance bridge', () => {
     expect(result).toMatchObject({ kind: 'match', path: '/src/components/Hero.tsx', before: expect.stringContaining('Imported'), after: expect.stringContaining('Changed') });
   });
 
+  it('narrows an ambiguous image match by the current image link, then by the page import graph', () => {
+    const img = (src: string) => `<section><img src="${src}" alt="x" /></section>`;
+    const mutate = (code: string) => code.includes('<img') ? code.replace(/src="[^"]+"/, 'src="https://new.png"') : null;
+    const files = {
+      '/src/pages/Home.tsx': "import Hero from '../components/Hero';\nexport default () => <Hero />;",
+      '/src/components/Hero.tsx': img('https://hero.png'),
+      '/src/pages/Shop.tsx': img('https://shop.png'),
+      '/src/components/Testimonials.tsx': img('https://shop.png'),
+    };
+    expect(findUniqueSourceMutation(files, '/src/pages/Home.tsx', mutate, { evidence: ['https://hero.png'] }))
+      .toMatchObject({ kind: 'match', path: '/src/components/Hero.tsx' });
+    expect(findUniqueSourceMutation(files, '/src/pages/Home.tsx', mutate, { pagePath: '/src/pages/Home.tsx' }))
+      .toMatchObject({ kind: 'match', path: '/src/components/Hero.tsx' });
+    expect(findUniqueSourceMutation(files, '/src/pages/Home.tsx', mutate, { evidence: ['https://shop.png'] }))
+      .toEqual({ kind: 'ambiguous', paths: ['/src/components/Testimonials.tsx', '/src/pages/Shop.tsx'] });
+  });
+
   it('uses unique-source resolution for the toolbar VFS fallback', () => {
     const builder = read('src/components/creatives/WebBuilder.tsx');
-    expect(builder).toContain('findUniqueSourceMutation(allFiles, activePath, mutate)');
+    expect(builder).toContain('findUniqueSourceMutation(allFiles, activePath, mutate,');
     expect(builder).toContain("match.kind === 'ambiguous'");
     expect(builder).not.toContain('for (const [path, code] of Object.entries(allFiles))');
   });

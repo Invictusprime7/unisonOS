@@ -114,10 +114,54 @@ export type UniqueSourceMutation =
   | { kind: 'ambiguous'; paths: string[] }
   | { kind: 'none' };
 
+/** Evidence that narrows an ambiguous selector match to the file that actually rendered the element. */
+export interface SourceMatchHints {
+  /** Literal strings the owning source must contain (e.g. the current image link or alt text). */
+  evidence?: Array<string | null | undefined>;
+  /** Page whose import graph rendered the element; reachable files are preferred. */
+  pagePath?: string | null;
+  /** Explicit owner file from the selection descriptor, when known. */
+  ownerPath?: string | null;
+}
+
+function resolveImport(from: string, spec: string, files: Record<string, string>): string | null {
+  let base: string;
+  if (spec.startsWith('@/')) base = `/src/${spec.slice(2)}`;
+  else if (spec.startsWith('.')) {
+    const parts = from.split('/').slice(0, -1);
+    for (const seg of spec.split('/')) {
+      if (seg === '.' || seg === '') continue;
+      if (seg === '..') parts.pop(); else parts.push(seg);
+    }
+    base = parts.join('/') || '/';
+  } else return null;
+  for (const c of [base, `${base}.tsx`, `${base}.jsx`, `${base}.ts`, `${base}/index.tsx`, `${base}/index.jsx`]) if (c in files) return c;
+  return null;
+}
+
+/** Files rendered by a page: the page plus everything it imports, transitively. */
+export function collectReachableSources(files: Record<string, string>, entry: string | null | undefined): Set<string> {
+  const seen = new Set<string>();
+  if (!entry || !(entry in files)) return seen;
+  const stack = [entry];
+  while (stack.length) {
+    const path = stack.pop()!;
+    if (seen.has(path)) continue;
+    seen.add(path);
+    const src = files[path] ?? '';
+    for (const m of src.matchAll(/(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+      const next = resolveImport(path, m[1] ?? m[2], files);
+      if (next && !seen.has(next)) stack.push(next);
+    }
+  }
+  return seen;
+}
+
 export function findUniqueSourceMutation(
   files: Record<string, string>,
   excludedPath: string | null | undefined,
   mutate: (source: string) => string | null,
+  hints: SourceMatchHints = {},
 ): UniqueSourceMutation {
   const matches: Array<Extract<UniqueSourceMutation, { kind: 'match' }>> = [];
   for (const [path, before] of Object.entries(files)) {
@@ -126,8 +170,27 @@ export function findUniqueSourceMutation(
     if (after && after !== before) matches.push({ kind: 'match', path, before, after });
   }
   if (matches.length === 1) return matches[0];
-  if (matches.length > 1) return { kind: 'ambiguous', paths: matches.map(({ path }) => path).sort() };
-  return { kind: 'none' };
+  if (matches.length === 0) return { kind: 'none' };
+
+  // Narrow with real identity evidence, strongest first; never guess.
+  let pool = matches;
+  if (hints.ownerPath) {
+    const owned = pool.filter((m) => m.path === hints.ownerPath);
+    if (owned.length === 1) return owned[0];
+  }
+  const evidence = (hints.evidence ?? []).filter((e): e is string => typeof e === 'string' && e.length > 3 && !e.startsWith('data:'));
+  if (evidence.length) {
+    const withEvidence = pool.filter((m) => evidence.some((e) => m.before.includes(e)));
+    if (withEvidence.length === 1) return withEvidence[0];
+    if (withEvidence.length > 1) pool = withEvidence;
+  }
+  if (hints.pagePath) {
+    const reachable = collectReachableSources(files, hints.pagePath);
+    const onPage = pool.filter((m) => reachable.has(m.path));
+    if (onPage.length === 1) return onPage[0];
+    if (onPage.length > 1) pool = onPage;
+  }
+  return { kind: 'ambiguous', paths: pool.map(({ path }) => path).sort() };
 }
 
 export function findBoundsForSingleSelector(
