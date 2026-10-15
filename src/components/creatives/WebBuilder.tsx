@@ -3785,8 +3785,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         }
         toolbarPreEditRef.current = null;
         recordCommit('toolbar', currentRevisionIdRef.current);
-        const outcome = await verifyCommittedChange(deriveIntentChecks(before, after, [targetPath]), baseline);
-        if (outcome.status !== 'verified') toast.warning(outcome.message);
+        // Preview verification waits on the live preview; run it after the save
+        // queue is released so a slow preview can never hold up later saves.
+        void verifyCommittedChange(deriveIntentChecks(before, after, [targetPath]), baseline)
+          .then((outcome) => { if (outcome.status !== 'verified') toast.warning(outcome.message); })
+          .catch((err) => console.warn('[WebBuilder] toolbar verification failed:', err));
       });
     };
   }, [activePagePath, launchEntryPoint, commitBuilderFiles, importBuilderFiles]);

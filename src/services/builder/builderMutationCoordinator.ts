@@ -12,6 +12,11 @@ import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/e
 export type MutationSurface = 'ai-builder' | 'toolbar-ai' | 'toolbar' | 'terminal' | 'command-menu' | 'autosave' | 'catalog';
 
 let tail: Promise<unknown> = Promise.resolve();
+/** How long one save may hold the queue before later saves are released. */
+const STALL_BUDGET_MS: Record<MutationSurface, number> = {
+  'ai-builder': 300_000, 'toolbar-ai': 300_000, toolbar: 90_000, terminal: 90_000,
+  'command-menu': 90_000, autosave: 90_000, catalog: 60_000,
+};
 let activeAiEdits = 0;
 let lastCommit: { surface: MutationSurface; revisionId: string | null; at: number } | null = null;
 
@@ -32,7 +37,20 @@ export function runExclusive<T>(surface: MutationSurface, task: () => Promise<T>
       throw err;
     },
   );
-  tail = run.catch(() => undefined).finally(() => { if (isAi) activeAiEdits -= 1; });
+  const settled = run.catch(() => undefined).finally(() => { if (isAi) activeAiEdits -= 1; });
+  // A save that never settles must not block every later save (and with it
+  // every checkpoint). After the stall budget the queue moves on; the slow
+  // task keeps running and its own stale-revision checks still apply.
+  const budget = STALL_BUDGET_MS[surface];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stalled = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`[BuilderMutationCoordinator] ${surface} save still running after ${Math.round(budget / 1000)}s; letting later saves proceed`);
+      recordMutationEvent({ correlationId, at: Date.now(), kind: 'surface-run', surface, baseRevisionId: null, resultRevisionId: null, ok: false, error: 'stalled', durationMs: Date.now() - startedAt });
+      resolve();
+    }, budget);
+  });
+  tail = Promise.race([settled, stalled]).finally(() => { if (timer) clearTimeout(timer); });
   return run;
 }
 
