@@ -93,7 +93,7 @@ serve(async (req: Request) => {
     }
 
     if (!isImageGenerationConfigured()) {
-      return errorResponse("Image generation is not configured. Set OPENAI_API_KEY.", 503, corsHeaders);
+      return errorResponse("Image generation is not configured.", 503, corsHeaders);
     }
 
     const stylePrompts: Record<string, string> = {
@@ -131,7 +131,11 @@ serve(async (req: Request) => {
         return errorResponse("AI service authentication failed. Please check API configuration.", 401, corsHeaders);
       }
 
-      return errorResponse(`Failed to generate image: ${response.status}`, 503, corsHeaders);
+      let detail = "";
+      try { detail = JSON.parse(errorText)?.error?.message ?? JSON.parse(errorText)?.message ?? ""; } catch { /* plain text */ }
+      if (response.status === 402) return errorResponse(detail || "AI credits are used up. Add credits to keep generating images.", 402, corsHeaders);
+      if (response.status === 403) return errorResponse(detail || "Image generation is not allowed for this workspace.", 403, corsHeaders);
+      return errorResponse(detail || `Failed to generate image: ${response.status}`, response.status >= 500 ? 503 : response.status, corsHeaders);
     }
 
     const result = await response.json();
