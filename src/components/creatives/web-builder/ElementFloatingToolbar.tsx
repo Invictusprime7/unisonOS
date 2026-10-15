@@ -41,7 +41,7 @@ import { buildCatalogContext, renderCatalogContextForPrompt, type SelectedSectio
 import runBuilderTurn from '@/services/builderBrainClient';
 import { useToolbarCommands } from './toolbarCommandAdapter';
 import { uploadForPlacement } from '@/services/assets/uploadPlacement';
-import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
+import { IMAGE_GENERATED_EVENT, isImageBusy, subscribeImageBusy, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 import { coverBackgroundStyles, scrimToneForTextColor, textRunsFromHtml } from './pictureInsertion';
 import { selectionEvidence } from './jsxSourceUtils';
 import type { EditorTarget } from '@/services/editor/editorCommandTypes';
@@ -397,7 +397,13 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const [attributeDraft, setAttributeDraft] = useState<Record<string, string>>({});
   const [imageUrlDraft, setImageUrlDraft] = useState('');
   const [imagePrompt, setImagePrompt] = useState('');
-  const [imageGenerating, setImageGenerating] = useState(false);
+  // The lock follows the real request rather than a guessed delay: a picture
+  // takes 15-25 seconds, and the shared image slot stays busy for exactly that
+  // long, so a second click can never pile another request onto the queue.
+  const [imageBusy, setImageBusy] = useState(isImageBusy());
+  const [awaitingStart, setAwaitingStart] = useState(false);
+  useEffect(() => subscribeImageBusy(() => setImageBusy(isImageBusy())), []);
+  const imageGenerating = imageBusy || awaitingStart;
   // Asked each time: background vs image inside, and this card vs every card.
   const [placement, setPlacement] = useState<'background' | 'inside' | null>(null);
   const [groupScope, setGroupScope] = useState<'one' | 'group' | null>(null);
@@ -525,7 +531,7 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const handleImageGenerate = async () => {
     const p = imagePrompt.trim();
     if (!p || imageGenerating || !choicesReady) return;
-    setImageGenerating(true);
+    setAwaitingStart(true);
     const section = (element as { section?: unknown }).section as { id?: string; label?: string } | string | undefined;
     const attrs = (element.attributes ?? {}) as Record<string, string>;
     const rect = (element as { rect?: { width?: number; height?: number } }).rect;
@@ -553,7 +559,9 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
       },
     } }));
     setImagePrompt('');
-    window.setTimeout(() => setImageGenerating(false), 1500);
+    // The shared slot takes the lock over as soon as the builder starts the
+    // request. This only releases it when the request never began at all.
+    window.setTimeout(() => setAwaitingStart(false), 2_000);
   };
 
   const handleImageUrlApply = () => {
