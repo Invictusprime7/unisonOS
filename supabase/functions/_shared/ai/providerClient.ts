@@ -120,26 +120,59 @@ export function isImageGenerationConfigured(): boolean {
 
 const LOVABLE_IMAGE_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
 
+const IMAGE_GATEWAY_MODEL = "openai/gpt-image-2.5-sunburst";
+/**
+ * A rate-limited gateway is retried on that same healthy endpoint with a bounded
+ * wait. Piling a second provider onto an already exhausted budget turns one
+ * honest "busy" into two refusals, so the direct provider is kept only for a
+ * genuinely unavailable gateway.
+ */
+const IMAGE_RATE_LIMIT_ATTEMPTS = 2;
+const IMAGE_RATE_LIMIT_MAX_WAIT_MS = 20_000;
+const IMAGE_RATE_LIMIT_FALLBACK_WAIT_MS = 2_000;
+
+/** How long the gateway asked us to wait, or null when the wait is too long to honor. */
+function gatewayRetryWaitMs(headers: Headers): number | null {
+  const retryAfter = headers.get("retry-after");
+  if (!retryAfter) return IMAGE_RATE_LIMIT_FALLBACK_WAIT_MS;
+  const seconds = Number(retryAfter);
+  const delay = Number.isFinite(seconds)
+    ? Math.max(0, Math.round(seconds * 1000))
+    : Math.max(0, Date.parse(retryAfter) - Date.now());
+  return Number.isFinite(delay) && delay <= IMAGE_RATE_LIMIT_MAX_WAIT_MS ? delay : null;
+}
+
 export async function createImageGeneration(
   request: { prompt: string; size?: string; quality?: "low" | "medium" | "high" | "auto"; model?: string },
   signal?: AbortSignal,
 ): Promise<Response> {
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   if (lovableKey) {
-    const gw = await fetch(LOVABLE_IMAGE_URL, {
+    const body = JSON.stringify({
+      model: IMAGE_GATEWAY_MODEL,
+      prompt: request.prompt,
+      n: 1,
+      size: request.size ?? "1024x1024",
+      quality: request.quality ?? "medium",
+    });
+    const send = () => fetch(LOVABLE_IMAGE_URL, {
       method: "POST",
       headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "openai/gpt-image-2.5-sunburst",
-        prompt: request.prompt,
-        n: 1,
-        size: request.size ?? "1024x1024",
-        quality: request.quality ?? "medium",
-      }),
+      body,
       signal,
     });
-    // Account/credit/policy denials are terminal; only fall through on transient failures.
-    if (gw.ok || !Deno.env.get("OPENAI_API_KEY") || (gw.status >= 400 && gw.status < 500 && gw.status !== 429)) {
+    let gw = await send();
+    for (let attempt = 0; attempt < IMAGE_RATE_LIMIT_ATTEMPTS && gw.status === 429; attempt++) {
+      const waitMs = gatewayRetryWaitMs(gw.headers);
+      if (waitMs === null) break;
+      console.warn(`[image] gateway rate limited; waiting ${waitMs}ms then retrying`);
+      await waitForRetry(waitMs, signal);
+      gw = await send();
+    }
+    // Credit, policy and access denials are terminal and a rate limit is answered
+    // honestly with the real wait; only an unavailable gateway (5xx) justifies
+    // falling through to the directly configured provider.
+    if (gw.ok || !Deno.env.get("OPENAI_API_KEY") || (gw.status >= 400 && gw.status < 500)) {
       return withProviderHeader(gw, "lovable");
     }
     console.warn("[image] gateway transient failure", gw.status);

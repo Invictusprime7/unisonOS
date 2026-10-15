@@ -121,7 +121,14 @@ export async function handleImageGenerate(
     });
     return secureJsonResponse({ imageUrl: url, prompt, directed }, 200, corsHeaders);
   } catch (err) {
-    if (err instanceof SiteImageError) return errorResponse(err.message, err.status, corsHeaders);
+    if (err instanceof SiteImageError) {
+      return errorResponse(
+        err.message,
+        err.status,
+        corsHeaders,
+        err.retryAfterSeconds ? { retryAfterSeconds: err.retryAfterSeconds } : undefined,
+      );
+    }
     console.error("[image-extension] failed:", err);
     return errorResponse(err instanceof Error ? err.message : "Image generation failed", 500, corsHeaders);
   }
