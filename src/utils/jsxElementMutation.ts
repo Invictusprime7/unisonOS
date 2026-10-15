@@ -231,7 +231,7 @@ export function mutateJSXStyles(
     // Styles with numbers, variables, spreads or expressions can't be re-written
     // faithfully: keep them intact and layer the updates on top instead.
     const simple = parseStyleObject(raw);
-    const lossy = !simple || /\.\.\.|:\s*[^'"`\s]/.test(raw.replace(/^\{|\}$/g, ''));
+    const lossy = !simple || /\.\.\.|:\s*[^'"`\s]/.test(raw.replace(/^\{|\}$/g, '').replace(/'[^']*'|"[^"]*"|`[^`]*`/g, "''"));
     if (lossy) {
       const extra = Object.entries(styleUpdates).map(([k, v]) => `${camelCase(k)}: '${String(v).replace(/'/g, "\\'")}'`).join(', ');
       const base = raw.startsWith('{') ? raw : `{ ${raw} }`;
