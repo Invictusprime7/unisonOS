@@ -1,6 +1,6 @@
 # Backend Ownership Matrix
 
-**Repository evidence captured:** 2026-10-15. This matrix records source-level ownership; it does not certify the live Supabase project's schema, RLS, grants, Storage rules, or migration state.
+**Evidence captured:** 2026-10-15. This matrix records source-level ownership and a separate read-only CLI snapshot of linked `UNISON/main` (`nfrdomdvyrbwuokathtw`). The linked target was not labeled staging; do not treat this snapshot as staging certification.
 
 | Concern | Canonical owner | Persistence / transport | Business capability needed? | Scope and transition rule |
 |---|---|---|---|---|
@@ -38,3 +38,20 @@
 - Dedicated backend outages and unsupported domains must return typed failures. They must never fall through to shared storage.
 - `project_id IS NULL` currently participates in shared-legacy read behavior; it is not proof that every project may read a record. Historical ownership and policy behavior require staging inspection before backfill or policy changes.
 - Service-role Edge Functions must independently verify tenant ownership because RLS may be bypassed. Client-supplied actor and repeated identity fields remain untrusted hints.
+
+## Live Deployment Snapshot
+
+Read-only Supabase CLI inspection of linked `UNISON/main`; no SQL writes, migrations, policy changes, or deployments were performed.
+
+| Area | Observed state | Contract implication |
+|---|---|---|
+| Migration ledger | Local and remote migration timestamps match; `20261015133516_add_project_scope_to_resource_tables.sql` is applied. | The schema migration ran, but it did not backfill ownership or revise existing RLS policies. |
+| Resource ownership | Ten resource tables have nullable `project_id` FKs with `ON DELETE SET NULL`; 104 total rows are present and all have null `project_id` (77 availability slots, 16 products, 11 services; remaining seven tables empty). | Data exists only in business/shared scope today. Do not claim project isolation for existing records or mass-assign projects without ownership evidence. |
+| RLS | All ten resource tables have RLS enabled and `FORCE ROW LEVEL SECURITY` disabled. Public SELECT policies are business-wide/public-active; authenticated writes use business membership/permissions. | Project scope is not enforced by these table policies. Service-role Edge Functions remain responsible for explicit tenant checks. |
+| Resource grants | `anon` has broad table DML grants on several catalog tables, while current RLS policies expose public SELECT only. Content tables have no `anon`/`authenticated` table grants. | Keep grants and policies distinct during review; effective public writes were not attempted. |
+| Connected backends | `connected_supabase_projects` has RLS, no browser-role grants, and zero rows. Live columns include `connection_id`, `unison_project_id`, `project_ref`, encrypted keys, schema/status/manifest fields; no `site_id`, `mode`, `provider`, or `provider_project_ref`. | Dedicated parity is currently unused and the live schema differs from the local Edge Function's `site_id` select. Reconcile before provisioning a binding. |
+| Resolver RPCs | Neither `resolve_project_backend` nor `resolve_published_site_backend` exists in any live schema; neither appears in local migrations. | The client resolver calls have no matching deployed RPC. The v2 wrapper returns typed `BACKEND_UNAVAILABLE` and does not fall back. |
+| Storage | `user-files` is marked private, but four `storage.objects` policies for role `public` allow SELECT/INSERT/UPDATE/DELETE on that bucket. | Critical exposure. Do not rely on the bucket's `public=false` flag; remove these policies only in an approved, tested remediation migration. |
+| Functions | Project/backend, CMS, site runtime, intent/form, and checkout functions are active; selected deployed `verify_jwt` flags match repository config. | This is deployment metadata, not source-hash parity; active routes do not prove supported domain parity. |
+
+The linked project has only a `main` preview branch, not a separately identified staging branch. Repeat this audit against a designated staging target before any later schema or policy remediation.
