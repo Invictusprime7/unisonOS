@@ -122,6 +122,8 @@ export interface SourceMatchHints {
   pagePath?: string | null;
   /** Explicit owner file from the selection descriptor, when known. */
   ownerPath?: string | null;
+  /** Clicked element's tag and own text runs; anchors the edit to that element, not its position. */
+  anchor?: { tag?: string; runs?: string[] } | null;
 }
 
 /**

@@ -42,7 +42,7 @@ import runBuilderTurn from '@/services/builderBrainClient';
 import { useToolbarCommands } from './toolbarCommandAdapter';
 import { uploadForPlacement } from '@/services/assets/uploadPlacement';
 import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
-import { coverBackgroundStyles } from './pictureInsertion';
+import { coverBackgroundStyles, scrimToneForTextColor, textRunsFromHtml } from './pictureInsertion';
 import { selectionEvidence } from './jsxSourceUtils';
 import type { EditorTarget } from '@/services/editor/editorCommandTypes';
 import { descriptorToTarget, type EditableObjectDescriptor } from '@/services/editor/editableObjectDescriptor';
@@ -482,12 +482,12 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
     if (needsPlacement && placement === 'inside') {
       // Same save path as AI-generated pictures.
       window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: {
-        selector, src: nextSrc, kind: 'img', placement: 'inside', text: String(element.textContent ?? '').trim().slice(0, 200), evidence: selectionEvidence(element), pagePath: target.pagePath ?? undefined,
+        selector, src: nextSrc, kind: 'img', placement: 'inside', tagName: tagLower, runs: textRunsFromHtml(element.html), text: String(element.textContent ?? '').trim().slice(0, 200), evidence: selectionEvidence(element), pagePath: target.pagePath ?? undefined,
       } }));
       return;
     }
     if (needsPlacement) {
-      void runCommand({ type: 'set-style', target, styles: coverBackgroundStyles(nextSrc, hasText) });
+      void runCommand({ type: 'set-style', target, styles: coverBackgroundStyles(nextSrc, hasText ? scrimToneForTextColor(styles.color) : null) });
       return;
     }
     if (imageTarget?.kind === 'img') {
@@ -543,7 +543,8 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
         width: rect?.width, height: placement === 'inside' && rect?.width ? Math.round(rect.width * 9 / 16) : rect?.height,
         forceImage: true,
         placement: needsPlacement ? placement : undefined,
-        scrim: needsPlacement && placement === 'background' && hasText,
+        scrim: needsPlacement && placement === 'background' && hasText ? scrimToneForTextColor(styles.color) : undefined,
+        runs: textRunsFromHtml(element.html),
         scope: isRepeat ? groupScope : undefined,
         evidence: selectionEvidence(element),
         ownerPath: element.descriptor?.sourceLocator?.startsWith('/') ? element.descriptor.sourceLocator.split(':')[0] : undefined,
