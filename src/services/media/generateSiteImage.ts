@@ -11,7 +11,11 @@ export async function generateSiteImage(prompt: string, opts: { style?: SiteImag
   const { data, error } = await supabase.functions.invoke('generate-image', {
     body: { prompt, style: opts.style ?? 'photography', quality: 'high', width: opts.width ?? 1536, height: opts.height ?? 1024 },
   });
-  if (error) throw new Error(error.message || 'The image generator did not answer');
+  if (error) {
+    let detail = '';
+    try { const ctx = (error as { context?: Response }).context; const j = ctx ? await ctx.clone().json() : null; detail = j?.error ?? j?.message ?? ''; } catch { /* no body */ }
+    throw new Error(detail || error.message || 'The image generator did not answer');
+  }
   const url = (data as { imageUrl?: string; error?: string } | null)?.imageUrl;
   if (!url) throw new Error((data as { error?: string } | null)?.error || 'No image came back');
   return url;

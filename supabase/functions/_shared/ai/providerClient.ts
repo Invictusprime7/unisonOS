@@ -115,16 +115,38 @@ export function isTextGenerationConfigured(): boolean {
 }
 
 export function isImageGenerationConfigured(): boolean {
-  return Boolean(Deno.env.get("OPENAI_API_KEY"));
+  return Boolean(Deno.env.get("LOVABLE_API_KEY") || Deno.env.get("OPENAI_API_KEY"));
 }
+
+const LOVABLE_IMAGE_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
 
 export async function createImageGeneration(
   request: { prompt: string; size?: string; quality?: "low" | "medium" | "high" | "auto"; model?: string },
   signal?: AbortSignal,
 ): Promise<Response> {
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+  if (lovableKey) {
+    const gw = await fetch(LOVABLE_IMAGE_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "openai/gpt-image-2.5-sunburst",
+        prompt: request.prompt,
+        n: 1,
+        size: request.size ?? "1024x1024",
+        quality: request.quality ?? "medium",
+      }),
+      signal,
+    });
+    // Account/credit/policy denials are terminal; only fall through on transient failures.
+    if (gw.ok || !Deno.env.get("OPENAI_API_KEY") || (gw.status >= 400 && gw.status < 500 && gw.status !== 429)) {
+      return withProviderHeader(gw, "lovable");
+    }
+    console.warn("[image] gateway transient failure", gw.status);
+  }
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) {
-    throw new Error("No image provider is configured. Set OPENAI_API_KEY.");
+    throw new Error("No image provider is configured.");
   }
 
   const response = await fetch(OPENAI_IMAGE_URL, {
