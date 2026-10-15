@@ -829,17 +829,19 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       const detail = (event as CustomEvent<{ prompt?: string; target?: typeof agentTarget }>).detail;
       const prompt = detail?.prompt?.trim();
       if (!prompt) return;
-      const t = detail?.target as (typeof agentTarget & { imageKind?: 'img' | 'background'; imageSelector?: string; imageSrc?: string; imageAlt?: string; width?: number; height?: number; forceImage?: boolean }) | undefined;
+      const t = detail?.target as (typeof agentTarget & { imageKind?: 'img' | 'background'; imageSelector?: string; imageSrc?: string; imageAlt?: string; width?: number; height?: number; forceImage?: boolean; placement?: 'background' | 'inside'; scrim?: boolean; scope?: 'one' | 'group' }) | undefined;
       // Image extension: a picture request on an image runs through the AI Builder's
       // site-aware image step, then saves via the canonical image-replace path.
       if (t?.imageKind && (t.imageSelector || t.selector) && (t.forceImage || isImageGenerationRequest(prompt))) {
         const ctx = imageContextRef.current;
         const runId = `img-${Date.now().toString(36)}`;
         const idx = Number(t.descriptor?.instanceId);
-        const where = Number.isFinite(idx) && t.descriptor?.instanceId != null ? `item ${idx + 1}` : undefined;
-        const located = locateImageSource(ctx.vfsFiles, t.imageSrc, t.imageAlt);
-        emitAgentEvent({ kind: 'understanding', runId, status: 'running', message: `Reading the site context for the ${t.section ? `${t.section} ` : ''}image` });
-        if (located.pagePath) emitAgentEvent({ kind: 'discovery', runId, status: 'ok', path: located.pagePath, message: `Found the image in ${located.pagePath}` });
+        const where = t.scope === 'group' ? 'one picture shared by every card in this group'
+          : Number.isFinite(idx) && t.descriptor?.instanceId != null ? `item ${idx + 1}` : undefined;
+        // Elements without a picture: locate the owner by their text instead.
+        const located = locateImageSource(ctx.vfsFiles, t.imageSrc, t.imageAlt ?? (t.placement ? String(t.text ?? '').slice(0, 60) : undefined));
+        emitAgentEvent({ kind: 'understanding', runId, status: 'running', message: `Reading the site context for the ${t.section ? `${t.section} ` : ''}${t.placement === 'background' ? 'background' : 'image'}` });
+        if (located.pagePath) emitAgentEvent({ kind: 'discovery', runId, status: 'ok', path: located.pagePath, message: `Found the ${t.placement ? 'element' : 'image'} in ${located.pagePath}` });
         emitAgentEvent({ kind: 'tool_call', runId, status: 'running', message: 'Writing the art direction and generating the image' });
         const id = toast.loading('Generating image…');
         void generateSiteImage(prompt, {
@@ -847,7 +849,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           nearbyText: t.text, section: t.section, repeatLabel: where, width: t.width, height: t.height,
         }, { projectId: ctx.projectId ?? undefined, businessId: ctx.businessId ?? undefined, industry: ctx.industry ?? undefined, ...located })
           .then(({ url, prompt: used }) => {
-            window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: { selector: (t.imageSelector || t.selector)!, src: url, kind: t.imageKind!, currentSrc: t.imageSrc, alt: t.imageAlt, pagePath: located.pagePath } }));
+            window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: { selector: (t.imageSelector || t.selector)!, src: url, kind: t.imageKind!, currentSrc: t.imageSrc, alt: t.imageAlt, pagePath: located.pagePath, placement: t.placement, scrim: t.scrim, text: t.text } }));
             emitAgentEvent({ kind: 'commit', runId, status: 'ok', message: 'Image generated — saving to your site' });
             setMessages((prev) => [...prev, { id: generateId(), role: 'assistant', content: `Made a new ${t.section ? `${t.section} ` : ''}image for you and saved it to the site.\n\nArt direction: ${used}`, timestamp: new Date() }]);
             toast.success('Image generated — saving to your site', { id });

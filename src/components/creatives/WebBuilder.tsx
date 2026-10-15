@@ -1,5 +1,6 @@
 import { describeSelection, type EditableObjectDescriptor } from '@/services/editor/editableObjectDescriptor';
 import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
+import { insertImageIntoElement, coverBackgroundStyles } from '@/components/creatives/web-builder/pictureInsertion';
 /* cache-bust: 20260309 */
 import { shouldPauseAutosave, runExclusive, recordCommit, getLastCommit } from '@/services/builder/builderMutationCoordinator';
 import type { TerminalFileOp, TerminalRouteOp } from '@/services/terminalCommands';
@@ -1265,18 +1266,37 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     return () => window.clearTimeout(t);
   }, [aiPanelOpen]);
 
+  // Adds a picture to an element that had none, as a new <img> at its top.
+  const handleFloatingInsertImage = useCallback((selector: string, src: string, alt: string, hints?: SourceMatchHints) => {
+    const res = applyMutatorAcrossVFS(
+      selector,
+      (code) => insertImageIntoElement(code, selector, src, alt, findElementBoundsInJSX),
+      (next) => {
+        setPreviewCode(next);
+        setEditorCode(next);
+        commitToolbarMutationRef.current?.(next, 'add image');
+      },
+      'Manual · add image',
+      hints,
+    );
+    if (!res.ok && res.reason !== 'ambiguous') toast.error('Could not add the image here. Try selecting the card or section itself.');
+  }, [applyMutatorAcrossVFS]);
+
   // AI-generated images (toolbar or AI Builder) save through the same canonical image path.
   useEffect(() => {
     const onGenerated = (event: Event) => {
       const d = (event as CustomEvent<ImageGeneratedDetail>).detail;
       if (!d?.selector || !d.src) return;
-      const hints: SourceMatchHints = { evidence: [d.currentSrc, d.alt ? `alt="${d.alt}"` : undefined], pagePath: d.pagePath ?? undefined };
-      if (d.kind === 'img') handleFloatingImageReplace(d.selector, d.src, hints);
+      const textEvidence = d.text && d.text.length > 3 ? d.text.slice(0, 60) : undefined;
+      const hints: SourceMatchHints = { evidence: [d.currentSrc, d.alt ? `alt="${d.alt}"` : undefined, d.placement ? textEvidence : undefined], pagePath: d.pagePath ?? undefined };
+      if (d.placement === 'inside') handleFloatingInsertImage(d.selector, d.src, d.alt || (d.text ?? '').slice(0, 80), hints);
+      else if (d.placement === 'background') handleFloatingStyleUpdate(d.selector, coverBackgroundStyles(d.src, !!d.scrim), hints);
+      else if (d.kind === 'img') handleFloatingImageReplace(d.selector, d.src, hints);
       else handleFloatingStyleUpdate(d.selector, { backgroundImage: `url("${d.src.replace(/"/g, '%22')}")` }, hints);
     };
     window.addEventListener(IMAGE_GENERATED_EVENT, onGenerated);
     return () => window.removeEventListener(IMAGE_GENERATED_EVENT, onGenerated);
-  }, [handleFloatingImageReplace, handleFloatingStyleUpdate]);
+  }, [handleFloatingImageReplace, handleFloatingStyleUpdate, handleFloatingInsertImage]);
 
   // ── Layout-Intent Fast Path bridge for AIBuilderPanel ────────────────────
   // Bundles the deterministic layout-op handlers (selection-aware class edits,
