@@ -91,11 +91,19 @@ Deno.serve(async (req) => {
       });
       authorized = Boolean(isAdmin);
     } else if (projectId) {
-      const { data: isMember } = await admin.rpc('is_project_member', {
-        _user_id: userId,
-        _project_id: projectId,
-      });
-      authorized = Boolean(isMember);
+      // Installing capabilities runs privileged SQL: a plain project member is
+      // not enough. Require the owning business's admin, or the project owner
+      // when the project has no business yet.
+      const { data: project } = await admin
+        .from('projects').select('owner_id, business_id').eq('id', projectId).maybeSingle();
+      if (project?.business_id) {
+        const { data: isAdmin } = await admin.rpc('is_business_admin', {
+          _user_id: userId, _business_id: project.business_id,
+        });
+        authorized = Boolean(isAdmin);
+      } else {
+        authorized = Boolean(project && project.owner_id === userId);
+      }
     }
     if (!authorized) {
       return new Response(

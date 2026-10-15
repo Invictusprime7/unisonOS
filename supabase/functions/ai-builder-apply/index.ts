@@ -90,6 +90,33 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Not authorized for this proposal' }), { status: 403, headers: jsonHeaders });
     }
 
+    // Approving applies changes (business settings, migrations). Members may
+    // reject; only a business admin, or the project owner when there is no
+    // business, may approve or mark applied.
+    if (action !== 'reject') {
+      let canApprove = false;
+      let targetBusiness: string | null = proposal.business_id ?? null;
+      let projectOwner: string | null = null;
+      if (proposal.project_id) {
+        const { data: project } = await admin
+          .from('projects').select('owner_id, business_id').eq('id', proposal.project_id).maybeSingle();
+        projectOwner = project?.owner_id ?? null;
+        if (targetBusiness && project?.business_id && project.business_id !== targetBusiness) {
+          return new Response(JSON.stringify({ error: 'Proposal targets a business this project does not belong to.' }), { status: 403, headers: jsonHeaders });
+        }
+        targetBusiness = targetBusiness ?? project?.business_id ?? null;
+      }
+      if (targetBusiness) {
+        const { data: isAdmin } = await admin.rpc('is_business_admin', { _user_id: userId, _business_id: targetBusiness });
+        canApprove = Boolean(isAdmin);
+      } else {
+        canApprove = projectOwner === userId;
+      }
+      if (!canApprove) {
+        return new Response(JSON.stringify({ error: 'Only the business owner or an admin can approve this change.' }), { status: 403, headers: jsonHeaders });
+      }
+    }
+
     const now = new Date().toISOString();
     const applyResult: Record<string, unknown> = { reviewer_note: reviewer_note ?? null };
     let nextStatus: 'approved' | 'rejected' | 'applied' | 'failed' = 'approved';
