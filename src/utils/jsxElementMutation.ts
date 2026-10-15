@@ -227,6 +227,18 @@ export function mutateJSXStyles(
   const styleAttr = findAttribute(source, tag, 'style');
   let merged: Record<string, string> = {};
   if (styleAttr && styleAttr.delimiter === '{') {
+    const raw = source.substring(styleAttr.valueStart, styleAttr.valueEnd).trim();
+    // Styles with numbers, variables, spreads or expressions can't be re-written
+    // faithfully: keep them intact and layer the updates on top instead.
+    const simple = parseStyleObject(raw);
+    const lossy = !simple || /\.\.\.|:\s*[^'"`\s]/.test(raw.replace(/^\{|\}$/g, ''));
+    if (lossy) {
+      const extra = Object.entries(styleUpdates).map(([k, v]) => `${camelCase(k)}: '${String(v).replace(/'/g, "\\'")}'`).join(', ');
+      const base = raw.startsWith('{') ? raw : `{ ${raw} }`;
+      return setAttribute(source, tag, 'style', `{{ ...${raw.startsWith('{') ? base : `(${raw})`}, ${extra} }}`);
+    }
+  }
+  if (styleAttr && styleAttr.delimiter === '{') {
     // value is `{ ... }` — strip outer braces from {{ ... }} to get the inner object literal `{ ... }`
     const inner = source.substring(styleAttr.valueStart, styleAttr.valueEnd);
     const parsed = parseStyleObject(inner);
