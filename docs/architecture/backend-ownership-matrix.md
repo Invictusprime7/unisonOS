@@ -20,7 +20,7 @@
 
 | Resource or operation | Shared managed | Dedicated/connected | Current finding |
 |---|---|---|---|
-| Catalog list/get/create/update/delete | `cms-records` | `project-backend` catalog contract | Implemented through the existing facade; contract parity still needs explicit tests for project filtering and result/error semantics. |
+| Catalog list/get/create/update/delete | `cms-records` | `project-backend` catalog contract | Fake shared/dedicated facade tests now cover each catalog surface derived by all ten industries, with no dedicated-to-shared fallback. Live binding and deployed Edge Function parity remain unverified. |
 | Content type and content entry operations | `cms-records` | Unsupported by `project-backend` | Gap is explicit and fails closed; do not report parity or silently use shared storage. |
 | Business profile read/update | `businessProfileService` and shared runtime reads | Unsupported by `ResourceRuntime` dedicated adapter | Gap; account profile and site-local profile overrides are distinct concerns. |
 | Public catalog/profile reads | `site-runtime-read` shared database | Published helper exists but has no consumers in source | Dedicated published parity is unproven. |

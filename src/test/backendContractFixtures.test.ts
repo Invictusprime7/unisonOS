@@ -241,6 +241,38 @@ describe('backend contract fixtures', () => {
   );
 
   it.each(getAllIndustries().map((industry) => [industry.industry, industry] as const))(
+    '%s supported catalog seed targets use dedicated mode without shared fallback',
+    async (industryName) => {
+      const surfaces = [...new Set(getIndustrySeedDataTargets(industryName)
+        .map(({ target }) => target.catalogSurface)
+        .filter((surface): surface is string => Boolean(surface)))];
+      const context = contextForIndustry(industryName);
+      mocks.resolve.mockImplementation(async (projectId: string) => ({
+        bindingId: `binding-${projectId}`,
+        projectId,
+        siteId: `site-${industryName}`,
+        mode: 'dedicated',
+        provider: 'supabase',
+        status: 'ready',
+      }));
+      mocks.callProjectBackend.mockImplementation(async ({ resource }: { resource: string }) => fakeCatalogRecords(resource));
+
+      for (const resourceKey of surfaces) {
+        const result = await executeBackendCommandV2(context, { kind: 'resource.list', resourceKey });
+        expect(result.ok, `${industryName}.${resourceKey} dedicated read`).toBe(true);
+        expect(mocks.callProjectBackend).toHaveBeenCalledWith({
+          projectId: context.projectId,
+          action: 'list',
+          resource: resourceKey,
+        });
+      }
+
+      expect(mocks.callProjectBackend).toHaveBeenCalledTimes(surfaces.length);
+      expect(mocks.listCmsRecords).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(getAllIndustries().map((industry) => [industry.industry, industry] as const))(
     '%s primary intent has a UI contract and available backend functions',
     (industryName, industry) => {
       const intent = getIntentDef(industry.primaryIntent);
