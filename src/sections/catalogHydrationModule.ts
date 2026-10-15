@@ -31,6 +31,44 @@ const nextId = () => \`h_\${Date.now().toString(36)}_\${(++__seq).toString(36)}\
 // subscribing directly to Supabase tables or credentials.
 const PUBLISHED_CATALOG_REVALIDATE_MS = 60_000;
 
+// One shared long-poll per page: the gateway answers as soon as a saved
+// catalog/content row changes, and every live section re-reads.
+const __liveListeners = new Set<() => void>();
+let __liveRunning = false;
+function subscribePublishedLive(listener: () => void): () => void {
+  __liveListeners.add(listener);
+  if (!__liveRunning) {
+    __liveRunning = true;
+    void (async () => {
+      let failures = 0;
+      while (__liveListeners.size > 0) {
+        const runtime: any = PUBLISHED_RUNTIME_CONFIG;
+        if (!runtime.siteId || !runtime.endpoint) break;
+        if (typeof document !== 'undefined' && document.hidden) {
+          await new Promise((r) => setTimeout(r, 2000));
+          continue;
+        }
+        try {
+          const res = await fetch(runtime.endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'watch', runtimeVersion: runtime.runtimeVersion, siteId: runtime.siteId }),
+          });
+          const data: any = res.ok ? await res.json() : null;
+          if (!res.ok) throw new Error(String(res.status));
+          failures = 0;
+          if (data?.changed) __liveListeners.forEach((fn) => fn());
+        } catch {
+          failures += 1;
+          await new Promise((r) => setTimeout(r, Math.min(60_000, 2000 * 2 ** failures)));
+        }
+      }
+      __liveRunning = false;
+    })();
+  }
+  return () => { __liveListeners.delete(listener); };
+}
+
 /**
  * Request live catalog rows for a generated section. Falls back gracefully
  * when there is no parent (published/standalone) or when the host has no
@@ -122,8 +160,10 @@ export function useSectionData(
         if (!document.hidden) void refreshPublishedCatalog(false);
       };
       document.addEventListener('visibilitychange', onVisibilityChange);
+      const stopLive = subscribePublishedLive(() => { void refreshPublishedCatalog(false); });
 
       return () => {
+        stopLive();
         mounted.current = false;
         window.clearInterval(interval);
         document.removeEventListener('visibilitychange', onVisibilityChange);
