@@ -113,6 +113,13 @@
       "when": 1791679517323,
       "tag": "0015_published_site_backend_resolver",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792069158244,
+      "tag": "0016_tighten_rls_slots_bindings_site_assets",
+      "breakpoints": true
     }
   ]
 }
