@@ -276,6 +276,7 @@ import {
   countImageLiteral,
   replaceImageLiteral,
   type SourceMatchHints,
+  selectionEvidence,
 } from "./web-builder/jsxSourceUtils";
 
 
