@@ -959,55 +959,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   // See mem://features/web-builder/preview-floating-toolbar.
   const commitToolbarMutationRef = useRef<((nextCode: string, summary: string, path?: string) => void) | null>(null);
 
-  const handleFloatingStyleUpdate = useCallback((selector: string, styles: Record<string, string>, hints?: SourceMatchHints) => {
-    console.log('[WebBuilder] handleFloatingStyleUpdate called:', selector, styles);
-    const nextBg = Object.keys(styles).length === 1 ? styles.backgroundImage?.match(/url\(["']?([^"')]+)["']?\)/)?.[1] : undefined;
-    if (nextBg && tryReplaceImageLiteral(currentImageSrcFor(selector, hints), nextBg, 'Manual · replace background image')) return;
-    const res = applyMutatorAcrossVFS(
-      selector,
-      (code) => mutateJSXStyles(code, selector, styles, findElementBoundsInJSX),
-      (next) => {
-        setPreviewCode(next);
-        setEditorCode(next);
-        if (selectedHTMLElement?.selector === selector) {
-          setSelectedHTMLElement({
-            ...selectedHTMLElement,
-            styles: { ...(selectedHTMLElement.styles || {}), ...styles },
-          });
-        }
-        commitToolbarMutationRef.current?.(next, `style ${Object.keys(styles).join(',').slice(0, 40)}`);
-      },
-      `Manual · style ${Object.keys(styles).join(', ').slice(0, 40)}`,
-      hints,
-    );
-    if (!res.ok) {
-      if (res.reason === 'ambiguous') return;
-      console.warn('[WebBuilder] mutateJSXStyles failed for selector', selector);
-      toast.error('Could not update styles — element not found in source. Try the AI edit instead.');
-    }
-  }, [applyMutatorAcrossVFS, selectedHTMLElement, setSelectedHTMLElement]);
-
-  const handleFloatingTextUpdate = useCallback((selector: string, text: string) => {
-    console.log('[WebBuilder] handleFloatingTextUpdate called:', selector, text);
-    const res = applyMutatorAcrossVFS(
-      selector,
-      (code) => mutateJSXText(code, selector, text, findElementBoundsInJSX),
-      (next) => {
-        setPreviewCode(next);
-        setEditorCode(next);
-        if (selectedHTMLElement?.selector === selector) {
-          setSelectedHTMLElement({ ...selectedHTMLElement, textContent: text });
-        }
-        commitToolbarMutationRef.current?.(next, `text "${text.slice(0, 30)}"`);
-      },
-      `Manual · text "${text.slice(0, 30)}"`,
-    );
-    if (!res.ok) {
-      if (res.reason === 'ambiguous') return;
-      toast.error('Could not update text — element contains nested markup or was not found. Try the AI edit instead.');
-    }
-  }, [applyMutatorAcrossVFS, selectedHTMLElement, setSelectedHTMLElement]);
-
   /**
    * Strongest image identity: the current image link itself. When it appears
    * exactly once in the site's source, swap that literal — no selector guess.
@@ -1037,6 +988,55 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const attrs = (sel.attributes ?? {}) as Record<string, string>;
     return sel.imageTarget?.src || attrs.src || String(sel.styles?.backgroundImage ?? '').match(/url\(["']?([^"')]+)["']?\)/)?.[1];
   };
+
+  const handleFloatingStyleUpdate = useCallback((selector: string, styles: Record<string, string>, hints?: SourceMatchHints) => {
+    console.log('[WebBuilder] handleFloatingStyleUpdate called:', selector, styles);
+    const nextBg = Object.keys(styles).length === 1 ? styles.backgroundImage?.match(/url\(["']?([^"')]+)["']?\)/)?.[1] : undefined;
+    if (nextBg && tryReplaceImageLiteral(currentImageSrcFor(selector, hints), nextBg, 'Manual · replace background image')) return;
+    const res = applyMutatorAcrossVFS(
+      selector,
+      (code) => mutateJSXStyles(code, selector, styles, findElementBoundsInJSX),
+      (next) => {
+        setPreviewCode(next);
+        setEditorCode(next);
+        if (selectedHTMLElement?.selector === selector) {
+          setSelectedHTMLElement({
+            ...selectedHTMLElement,
+            styles: { ...(selectedHTMLElement.styles || {}), ...styles },
+          });
+        }
+        commitToolbarMutationRef.current?.(next, `style ${Object.keys(styles).join(',').slice(0, 40)}`);
+      },
+      `Manual · style ${Object.keys(styles).join(', ').slice(0, 40)}`,
+      hints,
+    );
+    if (!res.ok) {
+      if (res.reason === 'ambiguous') return;
+      console.warn('[WebBuilder] mutateJSXStyles failed for selector', selector);
+      toast.error('Could not update styles — element not found in source. Try the AI edit instead.');
+    }
+  }, [applyMutatorAcrossVFS, tryReplaceImageLiteral, selectedHTMLElement, setSelectedHTMLElement]);
+
+  const handleFloatingTextUpdate = useCallback((selector: string, text: string) => {
+    console.log('[WebBuilder] handleFloatingTextUpdate called:', selector, text);
+    const res = applyMutatorAcrossVFS(
+      selector,
+      (code) => mutateJSXText(code, selector, text, findElementBoundsInJSX),
+      (next) => {
+        setPreviewCode(next);
+        setEditorCode(next);
+        if (selectedHTMLElement?.selector === selector) {
+          setSelectedHTMLElement({ ...selectedHTMLElement, textContent: text });
+        }
+        commitToolbarMutationRef.current?.(next, `text "${text.slice(0, 30)}"`);
+      },
+      `Manual · text "${text.slice(0, 30)}"`,
+    );
+    if (!res.ok) {
+      if (res.reason === 'ambiguous') return;
+      toast.error('Could not update text — element contains nested markup or was not found. Try the AI edit instead.');
+    }
+  }, [applyMutatorAcrossVFS, selectedHTMLElement, setSelectedHTMLElement]);
 
   const handleFloatingImageReplace = useCallback((selector: string, src: string, hints?: SourceMatchHints) => {
     console.log('[WebBuilder] handleFloatingImageReplace called:', selector, src.substring(0, 50));
