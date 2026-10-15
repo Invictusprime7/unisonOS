@@ -10,6 +10,7 @@ import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
 import { safeParseBody, sanitizeString } from "../_shared/validate.ts";
 import { createImageGeneration, isImageGenerationConfigured } from "../_shared/ai/providerClient.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { decodeBase64 } from "jsr:@std/encoding@1/base64";
 
 /** Store a generated image and return a long-lived link, so site source never carries megabytes of base64. */
 async function storeGeneratedImage(userId: string, dataUrl: string): Promise<string | null> {
@@ -18,7 +19,9 @@ async function storeGeneratedImage(userId: string, dataUrl: string): Promise<str
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !key) return null;
     const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    // Native decoder: the per-character Uint8Array.from(atob()) loop on a multi-MB
+    // image blew the function's CPU limit and killed it with no error body.
+    const bytes = decodeBase64(b64);
     const admin = createClient(url, key);
     const path = `generated/${userId}/${crypto.randomUUID()}.png`;
     const up = await admin.storage.from("user-files").upload(path, bytes, { contentType: "image/png" });
@@ -139,6 +142,7 @@ serve(async (req: Request) => {
     }
 
     const result = await response.json();
+    console.log("[Generate-Image] provider ok, storing");
     const generated = result.data?.[0];
     const inline = generated?.b64_json ? `data:image/png;base64,${generated.b64_json}` : generated?.url;
     const stored = inline?.startsWith("data:") ? await storeGeneratedImage(auth.user.id, inline) : null;
