@@ -157,6 +157,25 @@ export function collectReachableSources(files: Record<string, string>, entry: st
   return seen;
 }
 
+/** Count of literal occurrences of an image link across editable source files. */
+export function countImageLiteral(files: Record<string, string>, literal: string): number {
+  if (!literal || literal.length < 8 || literal.startsWith('data:')) return 0;
+  let n = 0;
+  for (const [path, code] of Object.entries(files)) {
+    if (!/\.(tsx|jsx)$/i.test(path)) continue;
+    let i = code.indexOf(literal);
+    while (i >= 0) { n++; i = code.indexOf(literal, i + literal.length); }
+  }
+  return n;
+}
+
+/** Replace an image link only when it occurs exactly once in this file. */
+export function replaceImageLiteral(code: string, literal: string, next: string): string | null {
+  const i = code.indexOf(literal);
+  if (i < 0 || code.indexOf(literal, i + literal.length) >= 0) return null;
+  return code.slice(0, i) + next.replace(/"/g, '%22') + code.slice(i + literal.length);
+}
+
 export function findUniqueSourceMutation(
   files: Record<string, string>,
   excludedPath: string | null | undefined,

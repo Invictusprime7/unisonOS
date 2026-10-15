@@ -272,6 +272,8 @@ import {
   safeFindElement,
   findJSXClosingTag,
   findUniqueSourceMutation,
+  countImageLiteral,
+  replaceImageLiteral,
   type SourceMatchHints,
 } from "./web-builder/jsxSourceUtils";
 
@@ -959,6 +961,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
 
   const handleFloatingStyleUpdate = useCallback((selector: string, styles: Record<string, string>, hints?: SourceMatchHints) => {
     console.log('[WebBuilder] handleFloatingStyleUpdate called:', selector, styles);
+    const nextBg = Object.keys(styles).length === 1 ? styles.backgroundImage?.match(/url\(["']?([^"')]+)["']?\)/)?.[1] : undefined;
+    if (nextBg && tryReplaceImageLiteral(currentImageSrcFor(selector, hints), nextBg, 'Manual · replace background image')) return;
     const res = applyMutatorAcrossVFS(
       selector,
       (code) => mutateJSXStyles(code, selector, styles, findElementBoundsInJSX),
@@ -1004,8 +1008,44 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     }
   }, [applyMutatorAcrossVFS, selectedHTMLElement, setSelectedHTMLElement]);
 
+  /**
+   * Strongest image identity: the current image link itself. When it appears
+   * exactly once in the site's source, swap that literal — no selector guess.
+   */
+  const tryReplaceImageLiteral = useCallback((currentSrc: string | undefined, src: string, label: string): boolean => {
+    if (!currentSrc) return false;
+    const literal = currentSrc.trim();
+    if (countImageLiteral(virtualFS.getSandpackFiles(), literal) !== 1) return false;
+    const res = applyMutatorAcrossVFS(
+      literal.slice(0, 80),
+      (code) => replaceImageLiteral(code, literal, src),
+      (next) => {
+        setPreviewCode(next);
+        setEditorCode(next);
+        commitToolbarMutationRef.current?.(next, label.replace(/^Manual · /, ''));
+      },
+      label,
+    );
+    return res.ok;
+  }, [applyMutatorAcrossVFS]);
+
+  const currentImageSrcFor = (selector: string, hints?: SourceMatchHints): string | undefined => {
+    const fromHints = hints?.evidence?.find((e): e is string => typeof e === 'string' && /^(https?:|\/)/.test(e));
+    if (fromHints) return fromHints;
+    const sel = selectedElementRef.current;
+    if (!sel || (sel.selector !== selector && sel.imageTarget?.selector !== selector)) return undefined;
+    const attrs = (sel.attributes ?? {}) as Record<string, string>;
+    return sel.imageTarget?.src || attrs.src || String(sel.styles?.backgroundImage ?? '').match(/url\(["']?([^"')]+)["']?\)/)?.[1];
+  };
+
   const handleFloatingImageReplace = useCallback((selector: string, src: string, hints?: SourceMatchHints) => {
     console.log('[WebBuilder] handleFloatingImageReplace called:', selector, src.substring(0, 50));
+    if (tryReplaceImageLiteral(currentImageSrcFor(selector, hints), src, 'Manual · replace image')) {
+      if (selectedHTMLElement?.selector === selector) {
+        setSelectedHTMLElement({ ...selectedHTMLElement, attributes: { ...(selectedHTMLElement.attributes || {}), src } });
+      }
+      return;
+    }
     const res = applyMutatorAcrossVFS(
       selector,
       (code) => mutateJSXImageSrc(code, selector, src, findElementBoundsInJSX),
@@ -1027,7 +1067,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       if (res.reason === 'ambiguous') return;
       toast.error('Could not replace image. Try selecting the <img> directly.');
     }
-  }, [applyMutatorAcrossVFS, selectedHTMLElement, setSelectedHTMLElement]);
+  }, [applyMutatorAcrossVFS, tryReplaceImageLiteral, selectedHTMLElement, setSelectedHTMLElement]);
 
   const handleFloatingAttributeUpdate = useCallback((selector: string, attributes: Record<string, string>) => {
     console.log('[WebBuilder] handleFloatingAttributeUpdate called:', selector, attributes);
