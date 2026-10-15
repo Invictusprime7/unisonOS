@@ -454,7 +454,8 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const canHostPicture = hasImageControls || ['section', 'div', 'article', 'header', 'footer', 'aside', 'main', 'li', 'figure', 'a', 'button'].includes(tagLower);
   const needsPlacement = !hasImageControls;
   const hasText = String(element.textContent ?? '').trim().length > 0;
-  const isRepeat = element.descriptor?.instanceId != null;
+  // Repeated only when the clicked element itself is one of several matching siblings (cards in a grid).
+  const isRepeat = /\[\]$/.test(String((element.scopeAncestors as { structuralPath?: string } | undefined)?.structuralPath ?? ''));
   const choicesReady = (!needsPlacement || !!placement) && (!isRepeat || !!groupScope);
   const isTextElement = ['h1','h2','h3','h4','h5','h6','p','span','a','button','li','label','td','th'].includes(
     (element.tagName || '').toLowerCase()
