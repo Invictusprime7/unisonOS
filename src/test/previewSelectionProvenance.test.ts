@@ -1,7 +1,7 @@
 import * as Babel from '@babel/standalone';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { findElementBoundsInJSX, findUniqueSourceMutation } from '@/components/creatives/web-builder/jsxSourceUtils';
+import { findElementBoundsInJSX, findUniqueSourceMutation, countImageLiteral, replaceImageLiteral } from '@/components/creatives/web-builder/jsxSourceUtils';
 import { mutateJSXText } from '@/utils/jsxElementMutation';
 
 const read = (path: string) => readFileSync(path, 'utf8');
@@ -106,6 +106,18 @@ describe('preview selection provenance bridge', () => {
       .toMatchObject({ kind: 'match', path: '/src/components/Hero.tsx' });
     expect(findUniqueSourceMutation(files, '/src/pages/Home.tsx', mutate, { evidence: ['https://shop.png'] }))
       .toEqual({ kind: 'ambiguous', paths: ['/src/components/Testimonials.tsx', '/src/pages/Shop.tsx'] });
+  });
+
+  it('swaps an image by its exact link only when that link appears once in the site', () => {
+    const hero = 'https://cdn.example.com/hero-photo.png';
+    const files = {
+      '/src/pages/Home.tsx': `<img src="${hero}" alt="hero" />`,
+      '/src/pages/Shop.tsx': '<img src={product.image} alt={product.name} />',
+      '/src/components/TestimonialsCarousel.tsx': '<img src={current.avatar} />',
+    };
+    expect(countImageLiteral(files, hero)).toBe(1);
+    expect(replaceImageLiteral(files['/src/pages/Home.tsx'], hero, 'https://new.png')).toBe('<img src="https://new.png" alt="hero" />');
+    expect(countImageLiteral({ ...files, '/src/pages/About.tsx': `<img src="${hero}" />` }, hero)).toBe(2);
   });
 
   it('uses unique-source resolution for the toolbar VFS fallback', () => {
