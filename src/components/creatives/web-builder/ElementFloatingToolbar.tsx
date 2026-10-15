@@ -1,4 +1,3 @@
-import { generateSiteImage } from '@/services/media/generateSiteImage';
 import { RecordFieldsEditor } from './RecordFieldsEditor';
 /**
  * ElementFloatingToolbar - Context-Sensitive Toolbar for Element-Level Editing
@@ -493,18 +492,33 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
       .finally(() => { if (imageInputRef.current) imageInputRef.current.value = ''; });
   };
 
+  // The image box is a front-end of the AI Builder's image extension: same agent,
+  // same site context, same save path. No separate image call here.
   const handleImageGenerate = async () => {
     const p = imagePrompt.trim();
     if (!p || imageGenerating) return;
     setImageGenerating(true);
-    try {
-      replaceImage(await generateSiteImage(p));
-      setImagePrompt('');
-    } catch (err) {
-      toast.error('Could not generate the image', { description: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setImageGenerating(false);
-    }
+    const section = (element as { section?: unknown }).section as { id?: string; label?: string } | string | undefined;
+    const attrs = (element.attributes ?? {}) as Record<string, string>;
+    const rect = (element as { rect?: { width?: number; height?: number } }).rect;
+    window.dispatchEvent(new CustomEvent('unison:builder-send', { detail: {
+      prompt: p,
+      target: {
+        tagName: String(element.tagName ?? '').toLowerCase(),
+        text: String(element.textContent ?? '').trim().slice(0, 400),
+        selector,
+        section: typeof section === 'string' ? section : section?.id ?? section?.label,
+        imageKind: imageTarget?.kind ?? 'background',
+        imageSelector: imageTarget?.selector || selector,
+        imageSrc: imageTarget?.src || attrs.src || extractCssUrl(element.styles?.backgroundImage) || undefined,
+        imageAlt: attrs.alt,
+        width: rect?.width, height: rect?.height,
+        forceImage: true,
+        descriptor: element.descriptor,
+      },
+    } }));
+    setImagePrompt('');
+    window.setTimeout(() => setImageGenerating(false), 1500);
   };
 
   const handleImageUrlApply = () => {

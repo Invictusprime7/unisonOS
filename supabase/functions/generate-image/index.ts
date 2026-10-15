@@ -9,30 +9,7 @@ import { verifyAuth, authError } from "../_shared/auth.ts";
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
 import { safeParseBody, sanitizeString } from "../_shared/validate.ts";
 import { createImageGeneration, isImageGenerationConfigured } from "../_shared/ai/providerClient.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { decodeBase64 } from "jsr:@std/encoding@1/base64";
-
-/** Store a generated image and return a long-lived link, so site source never carries megabytes of base64. */
-async function storeGeneratedImage(userId: string, dataUrl: string): Promise<string | null> {
-  try {
-    const url = Deno.env.get("SUPABASE_URL");
-    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!url || !key) return null;
-    const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
-    // Native decoder: the per-character Uint8Array.from(atob()) loop on a multi-MB
-    // image blew the function's CPU limit and killed it with no error body.
-    const bytes = decodeBase64(b64);
-    const admin = createClient(url, key);
-    const path = `generated/${userId}/${crypto.randomUUID()}.png`;
-    const up = await admin.storage.from("user-files").upload(path, bytes, { contentType: "image/png" });
-    if (up.error) { console.warn("[Generate-Image] store failed:", up.error.message); return null; }
-    const signed = await admin.storage.from("user-files").createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
-    return signed.data?.signedUrl ?? null;
-  } catch (err) {
-    console.warn("[Generate-Image] store error:", err);
-    return null;
-  }
-}
+import { storeGeneratedImage } from "../_shared/ai/siteImage.ts";
 
 interface ImageGenerationRequest {
   prompt: string;

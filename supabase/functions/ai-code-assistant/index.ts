@@ -14,6 +14,7 @@ import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { verifyAuth, authError } from "../_shared/auth.ts";
 import { errorResponse } from "../_shared/response.ts";
 import { safeParseBody } from "../_shared/validate.ts";
+import { handleImageGenerate } from "./imageExtension.ts";
 
 serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
@@ -39,6 +40,11 @@ serve(async (req: Request) => {
       const status = parseError?.includes("exceeds") ? 413 : 400;
       console.error("[ai-code-assistant] body parse failed", { parseError, status });
       return errorResponse(parseError || "Invalid request body", status, corsHeaders);
+    }
+
+    // Image extension: site-aware image generation for the clicked element.
+    if ((rawBody as { mode?: unknown }).mode === "image-generate") {
+      return await handleImageGenerate(rawBody, req, auth.user.id, corsHeaders);
     }
 
     const parsed = AIRequestSchema.safeParse(rawBody);
