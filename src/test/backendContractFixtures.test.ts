@@ -42,6 +42,8 @@ import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import { getAllIndustries } from '@/platform/core/industryMatrix';
 import { getIntentDef } from '@/platform/core/intentSurfaceRegistry';
 import { getCapability } from '@/platform/core/capabilityRegistry';
+import { buildRoutePolicy } from '@/platform/core/routePolicy';
+import { validateProvisioning } from '@/platform/core/provisioningValidator';
 import { getCatalogSurface, projectRowToCardViewModel } from '@/platform/core/catalogSurfaceRegistry';
 import { getIndustrySeedDataTargets } from '@/services/app-builder/appBuilderGenerationContext';
 import { getResource } from '@/services/resources/resourceRegistry';
@@ -176,6 +178,22 @@ describe('backend contract fixtures', () => {
     expect(packFunctions(resolveCapabilityPacks(['commerce.checkout']).order)).toContain(checkout?.functionName);
   });
 
+  it('blocks nonprofit production readiness until a donation handler exists', () => {
+    const report = validateProvisioning(
+      ['donation'],
+      buildRoutePolicy([], ['donation']),
+      true,
+    );
+
+    expect(report.capabilities[0].checks).toContainEqual(expect.objectContaining({
+      check: 'handler',
+      label: 'Handler for donation.start',
+      status: 'missing',
+    }));
+    expect(report.productionReady).toBe(false);
+    expect(report.previewReady).toBe(false);
+  });
+
   it.each(getAllIndustries().map((industry) => [industry.industry, industry] as const))(
     '%s keeps static title edits out of every business data backend',
     async (industryName, industry) => {
@@ -268,6 +286,93 @@ describe('backend contract fixtures', () => {
       }
 
       expect(mocks.callProjectBackend).toHaveBeenCalledTimes(surfaces.length);
+      expect(mocks.listCmsRecords).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(getAllIndustries().map((industry) => [industry.industry, industry] as const))(
+    '%s dedicated catalog surfaces preserve list/get/create/update/delete contracts',
+    async (industryName) => {
+      const surfaces = [...new Set(getIndustrySeedDataTargets(industryName)
+        .map(({ target }) => target.catalogSurface)
+        .filter((surface): surface is string => Boolean(surface)))];
+      const context = contextForIndustry(industryName);
+      mocks.resolve.mockImplementation(async (projectId: string) => ({
+        bindingId: `binding-${projectId}`,
+        projectId,
+        siteId: `site-${industryName}`,
+        mode: 'dedicated',
+        provider: 'supabase',
+        status: 'ready',
+      }));
+
+      for (const resourceKey of surfaces) {
+        const definition = getResource(resourceKey)!;
+        const rows = new Map(fakeCatalogRecords(resourceKey).map((record) => [record.id, record]));
+        let nextId = 1;
+        mocks.callProjectBackend.mockImplementation(async (request: {
+          projectId: string;
+          action: string;
+          resource: string;
+          recordId?: string;
+          values?: Record<string, unknown>;
+        }) => {
+          expect(request.projectId).toBe(context.projectId);
+          expect(request.resource).toBe(resourceKey);
+          if (request.action === 'list') return [...rows.values()];
+          if (request.action === 'get') return rows.get(request.recordId ?? '') ?? null;
+          if (request.action === 'create') {
+            const created = { id: `created-${nextId++}`, ...(request.values ?? {}) };
+            rows.set(created.id, created);
+            return created;
+          }
+          if (request.action === 'update') {
+            const current = rows.get(request.recordId ?? '');
+            if (!current) return null;
+            const updated = { ...current, ...(request.values ?? {}) };
+            rows.set(updated.id, updated);
+            return updated;
+          }
+          if (request.action === 'delete') {
+            rows.delete(request.recordId ?? '');
+            return null;
+          }
+          throw new Error(`Unexpected catalog action: ${request.action}`);
+        });
+
+        const listed = await executeBackendCommandV2(context, { kind: 'resource.list', resourceKey });
+        expect(listed.ok, `${industryName}.${resourceKey} list`).toBe(true);
+
+        const editableFields = definition.schema.filter((field) => field.editable);
+        const titleField = editableFields.find((field) => field.required) ?? editableFields[0];
+        expect(titleField, `${industryName}.${resourceKey} editable field`).toBeTruthy();
+        const values = { [titleField!.key]: `Created ${industryName} fixture` };
+        const created = await executeBackendCommandV2(context, {
+          kind: 'resource.mutate', resourceKey, action: 'create', values,
+        });
+        expect(created).toMatchObject({ ok: true, data: { id: expect.stringMatching(/^created-/), ...values } });
+        if (!created.ok || !created.data || typeof created.data !== 'object' || !('id' in created.data)) continue;
+        const recordId = String(created.data.id);
+
+        expect(await executeBackendCommandV2(context, {
+          kind: 'resource.get', resourceKey, recordId,
+        })).toMatchObject({ ok: true, data: { id: recordId, ...values } });
+
+        const updateField = editableFields.find((field) => field.key !== titleField!.key) ?? titleField!;
+        const updateValues = { [updateField.key]: `Updated ${industryName} fixture` };
+        expect(await executeBackendCommandV2(context, {
+          kind: 'resource.mutate', resourceKey, action: 'update', recordId, values: updateValues,
+        })).toMatchObject({ ok: true, data: { id: recordId, ...values, ...updateValues } });
+
+        expect(await executeBackendCommandV2(context, {
+          kind: 'resource.mutate', resourceKey, action: 'delete', recordId,
+        })).toMatchObject({ ok: true, data: null });
+        expect(await executeBackendCommandV2(context, {
+          kind: 'resource.get', resourceKey, recordId,
+        })).toMatchObject({ ok: true, data: null });
+        vi.mocked(mocks.callProjectBackend).mockClear();
+      }
+
       expect(mocks.listCmsRecords).not.toHaveBeenCalled();
     },
   );

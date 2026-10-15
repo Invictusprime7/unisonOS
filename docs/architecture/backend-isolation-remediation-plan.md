@@ -91,7 +91,7 @@ Keep the existing `ProjectBackendResolver` → `ResourceRuntime` → typed adapt
 ### Parity test contract
 
 - Run identical fixture operations through shared and dedicated fake adapters for every domain declared supported. Compare record shape, editable-field validation, sort/filter behavior, null/not-found behavior, and structured errors.
-- Current test coverage exercises fake catalog list reads for every catalog surface derived by the ten canonical industries in both shared and dedicated modes; it proves facade routing/no-fallback only, not remote binding or Edge Function parity.
+- Current test coverage exercises fake shared catalog reads and dedicated list/get/create/update/delete operations for every catalog surface derived by the ten canonical industries; it proves facade routing/no-fallback only, not remote binding or Edge Function parity.
 - Assert dedicated failures, missing binding, unsupported resource, wrong runtime identity, and network failure never call the shared adapter.
 - Assert a caller cannot substitute a table name, business ID, site ID, or actor role to widen access; the server resolves binding and tenant relationships from authenticated project membership.
 - For content, compare builder draft visibility, public published-only reads, lifecycle transitions, and immutable revision behavior.
