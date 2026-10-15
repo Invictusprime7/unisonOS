@@ -1063,23 +1063,22 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     return match?.[2] || null;
   }
 
+  // Only the clicked element itself is an image target: an <img>, a bare wrapper
+  // around exactly one <img> with no text, or an element whose OWN background is
+  // a picture. Sections/cards that merely contain images, or sit inside a pictured
+  // parent, are not images — they get "add a picture" instead of a swap.
   function findImageTarget(el: Element): { kind: 'img' | 'background'; selector: string; src?: string } | null {
     if (el.tagName === 'IMG') {
       return { kind: 'img', selector: computeSelector(el), src: el.getAttribute('src') || undefined };
     }
-    const nestedImg = el.querySelector('img');
-    if (nestedImg) {
-      return { kind: 'img', selector: computeSelector(nestedImg), src: nestedImg.getAttribute('src') || undefined };
+    const imgs = el.querySelectorAll('img');
+    const bareWrapper = imgs.length === 1 && !(el.textContent || '').trim() && el.querySelectorAll('*').length <= 3;
+    if (bareWrapper) {
+      const only = imgs[0];
+      return { kind: 'img', selector: computeSelector(only), src: only.getAttribute('src') || undefined };
     }
-    let cur: Element | null = el;
-    let depth = 0;
-    while (cur && cur !== document.body && depth < 6) {
-      const bg = window.getComputedStyle(cur).backgroundImage;
-      const src = extractBackgroundImageUrl(bg);
-      if (src) return { kind: 'background', selector: computeSelector(cur), src };
-      cur = cur.parentElement;
-      depth++;
-    }
+    const src = extractBackgroundImageUrl(window.getComputedStyle(el).backgroundImage);
+    if (src) return { kind: 'background', selector: computeSelector(el), src };
     return null;
   }
 
