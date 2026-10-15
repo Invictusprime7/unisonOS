@@ -681,7 +681,7 @@ async function handleQuoteRequest(
         phone: params.phone as string,
         source: "quote_request",
         tags: ["quote_request"],
-      }, { onConflict: "business_id,email" });
+      }, { onConflict: "business_id,email", ignoreDuplicates: true });
   }
   
   if (error) {
@@ -773,7 +773,7 @@ async function handleNewsletterSubscribe(
         source: source || "newsletter_signup",
         tags: ["newsletter"],
         custom_fields: params,
-      }, { onConflict: "business_id,email" });
+      }, { onConflict: "business_id,email", ignoreDuplicates: true });
 
     if (contactError) {
       console.error("[intent-exec] Newsletter fallback contact error:", contactError);

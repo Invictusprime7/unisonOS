@@ -590,19 +590,38 @@ async function handleCartAdd(
   _projectId: string | undefined,
   data: Record<string, any>
 ): Promise<IntentResult> {
-  const productId = data.productId || data.product_id;
-  const sessionId = data.sessionId || data.session_id || data.visitorId || null;
+  const productId = String(data.productId || data.product_id || "");
+  const sessionId = typeof (data.sessionId || data.session_id || data.visitorId) === "string"
+    ? String(data.sessionId || data.session_id || data.visitorId).slice(0, 200)
+    : "";
   const quantity = Number(data.quantity || 1);
 
-  if (!productId) {
-    return { success: false, error: "productId is required for cart.add" };
+  if (!/^[0-9a-f-]{36}$/i.test(productId)) {
+    return { success: false, error: "A valid productId is required for cart.add" };
+  }
+  if (!sessionId) {
+    return { success: false, error: "sessionId is required for cart.add" };
+  }
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+    return { success: false, error: "Quantity must be between 1 and 100" };
+  }
+  const { data: product } = await supabase
+    .from("products")
+    .select("id")
+    .eq("id", productId)
+    .eq("business_id", _businessId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!product) {
+    return { success: false, error: "Product is unavailable" };
   }
 
+  // Visitor carts are bound to the session; never trust a client-sent user id.
   const { data: item, error } = await supabase
     .from("cart_items")
     .insert({
       session_id: sessionId,
-      user_id: data.userId || null,
+      user_id: null,
       product_id: productId,
       quantity,
     })

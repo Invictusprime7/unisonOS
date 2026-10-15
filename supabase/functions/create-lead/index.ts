@@ -175,25 +175,18 @@ serve(async (req) => {
         .from("crm_contacts")
         .select("id")
         .eq("email", normalizedEmail)
+        .eq("business_id", businessId)
         .limit(1)
         .maybeSingle();
 
       let contactId: string | null = existingContact?.id ?? null;
       if (contactId) {
-        await supabase
-          .from("crm_contacts")
-          .update({
-            first_name: first,
-            last_name: last,
-            phone: phone || null,
-            source: source || "web_form",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", contactId);
+        // Public submissions never overwrite an existing contact's details.
       } else {
         const { data: createdContact } = await supabase
           .from("crm_contacts")
           .insert({
+            business_id: businessId,
             email: normalizedEmail,
             first_name: first,
             last_name: last,
