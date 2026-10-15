@@ -70,6 +70,46 @@ Make shared-managed project resources tenant-safe without breaking intentional b
 - Keep private uploads private; verify list, read, upload, overwrite, delete, signed URL, and shared-link expiry behavior as the relevant roles.
 - Preserve files and paths during policy migration. Do not empty the bucket, rotate public URLs, or rename objects as cleanup.
 
+## Phase 3 Domain Adapter Parity
+
+Keep the existing `ProjectBackendResolver` → `ResourceRuntime` → typed adapter ownership chain. Do not add a parallel runtime, arbitrary SQL/table API, or client-selected backend.
+
+### Supported parity matrix to prove
+
+| Domain | Shared adapter | Dedicated adapter today | Phase 3 disposition |
+|---|---|---|---|
+| Catalog: services, products, menu, pricing, offers, testimonials, portfolio | `cms-records` through the catalog `ResourceRuntime` adapter | `project-backend` allowlists catalog surface contracts | First parity target: test list/get/create/update/delete only where the resource schema allows them, normalized fields, errors, ordering, and project isolation. |
+| Dynamic content types and entries | `cms-records` lifecycle commands | Unsupported; current dedicated path rejects non-catalog adapters | Keep explicitly unsupported until the connected schema has content-type/entry/revision contracts and publish-state parity. Never fall through to shared content. |
+| Business profile and site-local overrides | `businessProfileService` plus site profile projection | Unsupported; no dedicated profile adapter | Keep unsupported until account identity and site-local branding have separate schemas and update ownership. Do not mirror an account profile into every project implicitly. |
+| Public runtime reads | `site-runtime-read` projects approved rows from shared tables | No verified published dedicated reader; helper has no source callers | Keep public dedicated reads blocked until the exact site/project/capability projection is implemented and visitor tests match shared behavior. |
+| Business actions (booking, checkout, forms, intents) | Specialized existing handler per capability | No general dedicated parity; each handler has separate scope/idempotency contract | Prove per handler. Do not infer support from a resource CRUD adapter or a capability name. |
+
+### Parity test contract
+
+- Run identical fixture operations through shared and dedicated fake adapters for every domain declared supported. Compare record shape, editable-field validation, sort/filter behavior, null/not-found behavior, and structured errors.
+- Assert dedicated failures, missing binding, unsupported resource, wrong runtime identity, and network failure never call the shared adapter.
+- Assert a caller cannot substitute a table name, business ID, site ID, or actor role to widen access; the server resolves binding and tenant relationships from authenticated project membership.
+- For content, compare builder draft visibility, public published-only reads, lifecycle transitions, and immutable revision behavior.
+- For business profile, test account identity separately from project overrides; ordinary static presentation edits must stay on source/presentation ownership and make no business-data request.
+- For every claimed supported industry workflow, run the generated UI action/read against its capability-installed runtime contract. Keep unsupported domains visible as typed blockers rather than toasts that imply success.
+
+### Phase 3 exit gate
+
+Do not claim shared/dedicated parity until the staging binding schema matches server code, a dedicated test binding passes the exact shared contract fixtures, public read parity is proven for any published domain, and cross-project/capability denial tests pass. Current live state has zero dedicated bindings, and the local server currently selects a live-missing `site_id` column; these are blocking prerequisites, not cleanup details.
+
+## Phase 4 Stable Identity and Idempotent Provisioning
+
+- Reserve one `projectId`, `siteId`, and `launchSessionId` before generation and preserve them through home-chat, Wizard, App Builder, previews, publish, export, and reconnect. Route/page edits must not mint a new project identity.
+- Keep VFS/source revisions under `VFSCommitService` / `commitMutation`; resource provisioning receipts must not become a second source writer or accepted revision stream.
+- Replace name-only seed deduplication with stable resource IDs and durable operation receipts for catalog, content, and assets. Correlation IDs alone are not idempotency.
+- Make each provisioning stage retryable and observable. A repeated launch operation must not create duplicate project/site bindings, services, products, menu entries, bookings, or asset records.
+- Treat connected backend provisioning as a saga: record step status, verify the dedicated runtime identity, and report partial failure. No cross-database ACID assumption and no shared-storage fallback.
+- Before reworking seed behavior, add retry tests that run the same operation twice, assert one durable result, then simulate failure after each stage and resume using the original IDs.
+
+### Phase 4 exit gate
+
+Stable identity and idempotent retry tests pass for shared mode and any supported dedicated mode; runtime manifest IDs match the accepted project/site revision; and an interrupted launch resumes without duplicate resources or silently changing backend mode.
+
 ## Required Contract Tests
 
 - Cross-project read/write denial for every resource table and supported role.
