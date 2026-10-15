@@ -1,4 +1,4 @@
-import { generateSiteImage, locateImageSource, isImageGenerationRequest, IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
+import { generateSiteImage, locateImageSource, isImageGenerationRequest, IMAGE_GENERATED_EVENT, SiteImageBusyError, SiteImageRequestError, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 /**
  * AIBuilderPanel - Enhanced AI interface for Web Builder
  * 
@@ -856,7 +856,19 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           })
           .catch((err) => {
             const msg = err instanceof Error ? err.message : String(err);
+            // Nothing failed: a picture is genuinely still being made, so this
+            // is a status note rather than a red error the user has to decode.
+            if (err instanceof SiteImageBusyError) {
+              emitAgentEvent({ kind: 'error', runId, status: 'failed', message: msg });
+              toast.info('One picture at a time', { id, description: msg });
+              return;
+            }
             emitAgentEvent({ kind: 'error', runId, status: 'failed', message: msg });
+            // A refusal that states how long to wait is a hold, not a fault.
+            if (err instanceof SiteImageRequestError && err.retryAfterSeconds) {
+              toast.warning('The picture maker is busy', { id, description: msg });
+              return;
+            }
             toast.error('Could not generate the image', { id, description: msg });
           });
         return;
