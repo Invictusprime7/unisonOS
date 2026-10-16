@@ -99,6 +99,7 @@ export function useBusinessProfile(): BusinessProfileLive | null {
     } catch { /* noop */ }
 
     const onMessage = (event: MessageEvent) => {
+      if (event.source !== window.parent) return;
       const data = event.data as { type?: string; profile?: BusinessProfileLive | null } | null;
       if (!data || data.type !== 'BUSINESS_PROFILE_CHANGED') return;
       setProfile(data.profile ?? null);
