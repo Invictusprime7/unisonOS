@@ -212,7 +212,7 @@ async function sendNotificationEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Notifications <onboarding@resend.dev>",
+        from: "Notifications <${Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev"}>",
         to: [to],
         subject,
         html,

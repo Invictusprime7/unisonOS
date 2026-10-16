@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { Resend } from "https://esm.sh/resend@2.0.0?target=deno";
+import { sendResendEmail, DEFAULT_FROM_EMAIL } from "../_shared/resend.ts";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.ts";
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
@@ -70,14 +70,14 @@ async function sendEmailSafe(params: {
     console.warn("[create-lead] RESEND_API_KEY missing; skipping email");
     return;
   }
-  const resend = new Resend(apiKey);
-  await resend.emails.send({
-    from: "Unison <onboarding@resend.dev>",
+  const r = await sendResendEmail({
+      from: `Unison <${DEFAULT_FROM_EMAIL}>`,
     to: [params.to],
     subject: params.subject,
     html: params.html,
     reply_to: params.replyTo || undefined,
-  } as any);
+  });
+    if (!r.ok) console.warn(`[create-lead] email not delivered: ${r.status} ${r.error ?? ""}`);
 }
 
 serve(async (req) => {

@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
   const subject = fill(tpl.subject).replace(/&amp;/g, "&");
   const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#111">${fill(tpl.body)}<br/><br/>— ${vars.business}</div>`;
 
-  const from = `${fromName || businessName} <${fromEmail || "onboarding@resend.dev"}>`;
+  const from = `${fromName || businessName} <${fromEmail || (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev")}>`;
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",

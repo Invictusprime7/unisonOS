@@ -40,7 +40,7 @@ async function sendEmail(to: string, subject: string, html: string, replyTo?: st
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Unison <onboarding@resend.dev>",
+        from: "Unison <${Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev"}>",
         to: [to], subject, html, reply_to: replyTo,
       }),
     });

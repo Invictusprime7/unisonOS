@@ -614,7 +614,7 @@ async function sendEmail(config: Record<string, unknown>, context: RunContext, s
   }
   
   const fromName = settings?.default_sender_name || context.business.name || "Notification";
-  const fromEmail = settings?.default_sender_email || "onboarding@resend.dev";
+  const fromEmail = settings?.default_sender_email || (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev");
   
   try {
     const response = await fetch("https://api.resend.com/emails", {
