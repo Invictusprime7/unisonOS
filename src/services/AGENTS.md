@@ -15,3 +15,4 @@
 - Code-terminal file commands emit FileOps to `onPatch` and the host commits them via `commitBuilderFiles` inside `runExclusive('terminal')`; the terminal never writes the VFS itself. Why: the old `onWriteFile` → `importFiles` path bypassed save, checkpoints and the coordinator.
 - Catalog, content and business profile go through `src/services/resources/resourceRuntime.ts`; why: one edit path, separate tables.
 - Project lists (Home, Cloud) rank a project whose draft has no accepted revision by its creation time, never updated_at; why: maintenance writes bump empty shells above real saved work.
+- Projects with no saved version or source, older than 1 hour, are deleted by the owner-scoped `cleanup_empty_projects()` RPC on Home load; why: empty shells cluttered project lists.
