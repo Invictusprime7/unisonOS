@@ -93,7 +93,7 @@ if (placeholder) {
 
 try {
   const root = createRoot(rootElement);
-  if (!SUPABASE_IDENTITY.ok) {
+  if (SUPABASE_IDENTITY.ok === false) {
     // Fail closed: the app (and its auth/data clients) never load against the wrong backend.
     const reason = SUPABASE_IDENTITY.reason;
     root.render(
