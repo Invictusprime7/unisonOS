@@ -148,6 +148,13 @@
       "when": 1792143950265,
       "tag": "0020_tighten_content_and_subscription_access",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792148165778,
+      "tag": "0021_migration",
+      "breakpoints": true
     }
   ]
 }

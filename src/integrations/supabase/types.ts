@@ -5577,6 +5577,7 @@ export type Database = {
         Args: { p_business_id: string; p_permission: string }
         Returns: boolean
       }
+      cleanup_empty_projects: { Args: never; Returns: number }
       cms_apply_content_entry_command: {
         Args: {
           p_action: string

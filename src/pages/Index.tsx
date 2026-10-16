@@ -113,9 +113,17 @@ const Index = () => {
     const userId = user?.id;
     if (!userId || !isSupabaseConfigured) return;
 
+    // Remove the owner's empty shells (no saved version, no source, older than
+    // an hour) once per visit before listing.
+    const cleanup = supabase.rpc('cleanup_empty_projects').then(
+      ({ error }) => { if (error) console.warn('[Home] Empty project cleanup skipped:', error.message); },
+      () => undefined,
+    );
+
     const loadRecentProjects = async () => {
       setLoadingProjects(true);
       try {
+        await cleanup;
         const [projectResult, draftResult] = await Promise.all([
           listProjectsCompat({ ownerId: userId, limit: 100 }),
           supabase
