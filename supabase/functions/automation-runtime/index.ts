@@ -13,7 +13,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
-import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.ts";
+import { safeParseBody, sanitizeString, isValidUUID, escapeHtml } from "../_shared/validate.ts";
 import {
   normalizeWebhookMethod,
   sanitizeWebhookHeaders,
