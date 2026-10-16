@@ -258,7 +258,8 @@ export async function repairDraftBusinessLink(args: {
         eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
       };
     })
-      .update({ business_id: businessId, updated_at: new Date().toISOString() })
+      // Maintenance relink: not user activity, so leave updated_at alone.
+      .update({ business_id: businessId })
       .eq('id', draftRow.id);
     if (error) {
       notes.push(`Could not relink the draft to its business: ${error.message}`);

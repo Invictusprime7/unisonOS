@@ -98,3 +98,20 @@ describe('mergeWorkspaceProjects', () => {
     });
   });
 });
+
+describe('empty shell ordering', () => {
+  it('does not let maintenance-touched drafts without a revision outrank saved projects', async () => {
+    const { mergeWorkspaceProjects } = await import('@/services/cloudProjectDrafts');
+    const result = mergeWorkspaceProjects(
+      [
+        { id: 'shell', name: 'Untitled project', created_at: '2026-09-11T00:00:00Z', updated_at: '2026-10-16T10:30:00Z' } as never,
+        { id: 'saved', name: 'TRENDZ.', created_at: '2026-10-08T00:00:00Z', updated_at: '2026-10-15T19:00:00Z' } as never,
+      ],
+      [
+        { id: 'd-shell', project_id: 'shell', last_revision_id: null, created_at: '2026-09-11T00:00:00Z', updated_at: '2026-10-16T10:30:00Z' },
+        { id: 'd-saved', project_id: 'saved', last_revision_id: 'r1', created_at: '2026-10-08T00:00:00Z', updated_at: '2026-10-15T19:00:00Z' },
+      ],
+    );
+    expect(result.map((p) => p.id)).toEqual(['saved', 'shell']);
+  });
+});
