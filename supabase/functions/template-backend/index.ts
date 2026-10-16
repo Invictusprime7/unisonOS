@@ -267,6 +267,9 @@ serve(async (req) => {
         if (!sessionId) {
           return errorResponse('Session ID is required', 400, publicCorsHeaders);
         }
+        if (!/^cs_[A-Za-z0-9_]{10,200}$/.test(sessionId)) {
+          return errorResponse('Invalid session ID', 400, publicCorsHeaders);
+        }
 
         const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
         if (!stripeSecretKey) {
@@ -282,9 +285,6 @@ serve(async (req) => {
           }
         );
 
-        if (!/^cs_[A-Za-z0-9_]{10,200}$/.test(sessionId)) {
-          return errorResponse('Invalid session ID', 400, publicCorsHeaders);
-        }
         const session = await stripeResponse.json();
         // Customer details are never returned to an unauthenticated caller.
         return secureJsonResponse({
