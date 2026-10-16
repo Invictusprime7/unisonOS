@@ -18,6 +18,7 @@ import { createClient } from "@supabase/supabase-js";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { safeParseBody, isValidUUID, sanitizeString } from "../_shared/validate.ts";
+import { verifyAuth, verifyBusinessAccess, authError } from "../_shared/auth.ts";
 
 interface AutomationEventPayload {
   businessId: string;
@@ -78,6 +79,17 @@ export default async (req: Request) => {
     const normalizedBusinessId = sanitizeString(businessId, 100);
     if (!isValidUUID(normalizedBusinessId)) {
       return errorResponse("Invalid businessId format", 400, publicCorsHeaders);
+    }
+
+    // Only signed-in team members of the business (or the platform's own
+    // server functions) may trigger its automations.
+    const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+    const isInternal = !!bearer && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!isInternal) {
+      const auth = await verifyAuth(req);
+      if (!auth.user) return authError(auth.error || "Sign in to trigger automations", auth.status, publicCorsHeaders);
+      const access = await verifyBusinessAccess(auth.user.id, normalizedBusinessId);
+      if (!access.allowed) return authError("Only team members of this business can trigger its automations", 403, publicCorsHeaders);
     }
 
     // Validate intent is a non-empty string with safe characters

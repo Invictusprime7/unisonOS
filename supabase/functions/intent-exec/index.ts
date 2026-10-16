@@ -595,6 +595,19 @@ async function handleLeadCapture(
   params: Record<string, unknown>,
   context: { businessId: string }
 ): Promise<{ ok: boolean; result: unknown; clientActions: ClientAction[] }> {
+  // Leads are only accepted for a business that has a live published site.
+  const { data: liveSite } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("business_id", context.businessId)
+    .eq("publish_status", "published")
+    .not("active_published_revision_id", "is", null)
+    .limit(1)
+    .maybeSingle();
+  if (!liveSite) {
+    return { ok: false, result: { error: "This business is not accepting enquiries from this site." }, clientActions: [] };
+  }
+
   // Create lead/contact record
   const { data, error } = await supabase
     .from("crm_contacts")
