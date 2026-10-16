@@ -91,10 +91,10 @@ serve(async (req) => {
     const sanitizedPlan = typeof plan === "string" ? sanitizeString(plan, 50) : undefined;
     const sanitizedPriceId = typeof priceId === "string" ? sanitizeString(priceId, 200) : undefined;
     const baseUrl = getBaseAppUrl(req);
-    const resolvedSuccessUrl = typeof successUrl === "string" && isValidUrl(successUrl)
+    const resolvedSuccessUrl = isTrustedReturnUrl(successUrl, req, [baseUrl])
       ? successUrl
       : `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
-    const resolvedCancelUrl = typeof cancelUrl === "string" && isValidUrl(cancelUrl)
+    const resolvedCancelUrl = isTrustedReturnUrl(cancelUrl, req, [baseUrl])
       ? cancelUrl
       : `${baseUrl}/checkout/cancel`;
 

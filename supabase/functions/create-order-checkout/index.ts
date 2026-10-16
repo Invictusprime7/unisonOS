@@ -126,10 +126,10 @@ serve(async (req) => {
       ? sanitizeString(customerEmail, 255).toLowerCase()
       : undefined;
     const baseUrl = getBaseStoreUrl(req);
-    const resolvedSuccessUrl = typeof successUrl === "string" && isValidUrl(successUrl)
+    const resolvedSuccessUrl = isTrustedReturnUrl(successUrl, req)
       ? successUrl
       : `${baseUrl}/thank-you?order_id={ORDER_ID}&session_id={CHECKOUT_SESSION_ID}`;
-    const resolvedCancelUrl = typeof cancelUrl === "string" && isValidUrl(cancelUrl)
+    const resolvedCancelUrl = isTrustedReturnUrl(cancelUrl, req)
       ? cancelUrl
       : `${baseUrl}/shop`;
 

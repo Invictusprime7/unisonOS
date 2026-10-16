@@ -68,7 +68,7 @@ serve(async (req) => {
       ? sanitizeString(payload.action, 50) as ManageSubscriptionRequest["action"]
       : undefined;
     const immediately = payload.immediately === true;
-    const returnUrl = typeof payload.returnUrl === "string" && isValidUrl(payload.returnUrl)
+    const returnUrl = isTrustedReturnUrl(payload.returnUrl, req)
       ? payload.returnUrl
       : `${getBaseAppUrl(req)}/settings`;
 
