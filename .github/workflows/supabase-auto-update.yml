@@ -10,6 +10,7 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'supabase/functions/**'
+      - 'drizzle/migrations/**'
   workflow_dispatch:
     inputs:
       force_deploy:
@@ -65,6 +66,10 @@ jobs:
             BASE="$(git rev-parse HEAD~1)"
           fi
           CHANGED=$(git diff --name-only "$BASE" HEAD)
+          if echo "$CHANGED" | grep -q '^drizzle/migrations/' && ! echo "$CHANGED" | grep -q '^supabase/migrations/[0-9]\{14\}_.*\.sql$'; then
+            echo "::error::drizzle/migrations changed without a matching timestamped supabase/migrations/*.sql file. UNISON deploys only canonical supabase/migrations; add the equivalent migration there."
+            exit 1
+          fi
           if echo "$CHANGED" | grep -q '^supabase/migrations/'; then echo "migrations=true" >> "$GITHUB_OUTPUT"; else echo "migrations=false" >> "$GITHUB_OUTPUT"; fi
           if echo "$CHANGED" | grep -q '^supabase/functions/\(_shared/\|deno.json\|import_map.json\)'; then
             funcs=$(find supabase/functions -mindepth 1 -maxdepth 1 -type d ! -name '_shared' ! -name 'node_modules' -printf '%f\n' | sort | tr '\n' ' ')
