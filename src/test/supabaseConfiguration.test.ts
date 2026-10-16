@@ -18,15 +18,16 @@ it('uses the linked project for Auth and direct function calls without injected 
     expect(createClient).toHaveBeenCalledWith(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, expect.any(Object));
   } finally { vi.unstubAllEnvs(); }
 });
-it('shares sanitized injected configuration across both transports', async () => {
+it('ignores injected configuration for any non-UNISON project', async () => {
   vi.stubEnv('VITE_SUPABASE_URL', ' "https://override.supabase.co"\r\n');
   vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', ' "public-test-key"\r\n');
   vi.stubEnv('VITE_SUPABASE_DEV_PROXY', 'false');
   try {
     const env = await import('@/integrations/supabase/env');
     await import('@/integrations/supabase/client');
-    expect(env.SUPABASE_URL).toBe('https://override.supabase.co');
-    expect(createClient).toHaveBeenCalledWith(env.SUPABASE_URL, 'public-test-key', expect.any(Object));
+    expect(env.SUPABASE_URL).toBe('https://nfrdomdvyrbwuokathtw.supabase.co');
+    expect(env.SUPABASE_PUBLISHABLE_KEY).not.toBe('public-test-key');
+    expect(createClient).toHaveBeenCalledWith(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, expect.any(Object));
   } finally { vi.unstubAllEnvs(); }
 });
 
