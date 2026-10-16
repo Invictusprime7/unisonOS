@@ -9,7 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { sendResendEmail, DEFAULT_FROM_EMAIL } from "../_shared/resend.ts";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
-import { safeParseBody, isValidUUID } from "../_shared/validate.ts";
+import { safeParseBody, isValidUUID , escapeHtml } from "../_shared/validate.ts";
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 

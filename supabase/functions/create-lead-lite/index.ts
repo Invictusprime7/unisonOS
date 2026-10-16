@@ -9,7 +9,7 @@ import { serve } from "serve";
 import { createClient } from "@supabase/supabase-js";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
-import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.ts";
+import { safeParseBody, sanitizeString, isValidUUID , escapeHtml } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 
 const corsHeaders = publicCorsHeaders;
