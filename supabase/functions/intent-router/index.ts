@@ -362,14 +362,14 @@ async function handleContactSubmit(
         </h2>
         
         <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Name:</strong> ${customerName || "Not provided"}</p>
-          <p><strong>Email:</strong> <a href="mailto:${customerEmail}">${customerEmail || "Not provided"}</a></p>
-          <p><strong>Phone:</strong> ${data.phone ? `<a href="tel:${data.phone}">${data.phone}</a>` : "Not provided"}</p>
+          <p><strong>Name:</strong> ${escapeHtml(customerName || "Not provided")}</p>
+          <p><strong>Email:</strong> <a href="mailto:${escapeHtml(customerEmail)}">${escapeHtml(customerEmail || "Not provided")}</a></p>
+          <p><strong>Phone:</strong> ${data.phone ? `<a href="tel:${escapeHtml(data.phone)}">${escapeHtml(data.phone)}</a>` : "Not provided"}</p>
         </div>
         
         <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <h3 style="margin-top: 0;">Message</h3>
-          <p>${data.message || "No message provided"}</p>
+          <p>${escapeHtml(data.message || "No message provided")}</p>
         </div>
         
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
@@ -392,9 +392,9 @@ async function handleContactSubmit(
     const customerHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">We received your message!</h2>
-        <p>Hi ${customerName || "there"},</p>
-        <p>Thank you for contacting ${businessName}. We've received your message and will get back to you as soon as possible.</p>
-        <p style="color: #6b7280; font-size: 14px;">Reference: ${lead.id}</p>
+        <p>Hi ${escapeHtml(customerName || "there")},</p>
+        <p>Thank you for contacting ${escapeHtml(businessName)}. We've received your message and will get back to you as soon as possible.</p>
+        <p style="color: #6b7280; font-size: 14px;">Reference: ${escapeHtml(lead.id)}</p>
       </div>
     `;
     await sendNotificationEmail(customerEmail, customerSubject, customerHtml, notificationEmail || undefined);
@@ -501,15 +501,15 @@ async function handleQuoteRequest(
         
         <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #4f46e5;">Customer Details</h3>
-          <p><strong>Name:</strong> ${customerName || "Not provided"}</p>
-          <p><strong>Email:</strong> <a href="mailto:${customerEmail}">${customerEmail || "Not provided"}</a></p>
-          <p><strong>Phone:</strong> ${customerPhone ? `<a href="tel:${customerPhone}">${customerPhone}</a>` : "Not provided"}</p>
-          <p><strong>Company:</strong> ${data.company || "Not provided"}</p>
+          <p><strong>Name:</strong> ${escapeHtml(customerName || "Not provided")}</p>
+          <p><strong>Email:</strong> <a href="mailto:${escapeHtml(customerEmail)}">${escapeHtml(customerEmail || "Not provided")}</a></p>
+          <p><strong>Phone:</strong> ${customerPhone ? `<a href="tel:${escapeHtml(customerPhone)}">${escapeHtml(customerPhone)}</a>` : "Not provided"}</p>
+          <p><strong>Company:</strong> ${escapeHtml(data.company || "Not provided")}</p>
         </div>
         
         <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #92400e;">Quote Details</h3>
-          <p>${data.details || data.message || data.requirements || "No details provided"}</p>
+          <p>${escapeHtml(data.details || data.message || data.requirements || "No details provided")}</p>
         </div>
         
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
@@ -532,9 +532,9 @@ async function handleQuoteRequest(
     const customerHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">We've received your quote request!</h2>
-        <p>Hi ${customerName || "there"},</p>
-        <p>Thank you for reaching out to ${businessName}. We've received your quote request and will get back to you with a personalized quote as soon as possible.</p>
-        <p style="color: #6b7280; font-size: 14px;">Reference: ${lead.id}</p>
+        <p>Hi ${escapeHtml(customerName || "there")},</p>
+        <p>Thank you for reaching out to ${escapeHtml(businessName)}. We've received your quote request and will get back to you with a personalized quote as soon as possible.</p>
+        <p style="color: #6b7280; font-size: 14px;">Reference: ${escapeHtml(lead.id)}</p>
       </div>
     `;
     await sendNotificationEmail(customerEmail, customerSubject, customerHtml, notificationEmail || undefined);

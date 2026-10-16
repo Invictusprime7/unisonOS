@@ -283,11 +283,11 @@ serve(async (req) => {
             <div>
               <h1>New lead</h1>
               <p><strong>Business:</strong> ${biz?.name ?? businessId}</p>
-              <p><strong>Email:</strong> ${email}</p>
-              ${name ? `<p><strong>Name:</strong> ${name}</p>` : ""}
-              ${phone ? `<p><strong>Phone:</strong> ${phone}</p>` : ""}
-              <p><strong>Source:</strong> ${source || "web_form"}</p>
-              ${message ? `<p><strong>Message:</strong><br/>${message}</p>` : ""}
+              <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+              ${name ? `<p><strong>Name:</strong> ${escapeHtml(name)}</p>` : ""}
+              ${phone ? `<p><strong>Phone:</strong> ${escapeHtml(phone)}</p>` : ""}
+              <p><strong>Source:</strong> ${escapeHtml(source || "web_form")}</p>
+              ${message ? `<p><strong>Message:</strong><br/>${escapeHtml(message)}</p>` : ""}
             </div>
           `,
           replyTo: internalTo,
