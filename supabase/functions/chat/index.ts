@@ -39,6 +39,9 @@ serve(async (req) => {
     errorMessage?: string | null;
     tokens?: { prompt?: number; completion?: number; total?: number };
   }) => {
+    // Only signed-in callers produce log rows; anonymous requests cannot
+    // write into the internal request log.
+    if (!userId) return;
     try {
       await admin.from("ai_request_logs").insert({
         user_id: userId,
@@ -58,7 +61,16 @@ serve(async (req) => {
   };
 
   try {
-    const { messages, model = DEFAULT_GEMINI_GATEWAY_MODEL, reasoning } = await req.json();
+    const { messages: rawMessages, model = DEFAULT_GEMINI_GATEWAY_MODEL, reasoning } = await req.json();
+    // The server owns the system instructions: callers may only send user and
+    // assistant turns, as plain text.
+    const messages = (Array.isArray(rawMessages) ? rawMessages : [])
+      .filter((m: unknown): m is { role: string; content: string } =>
+        !!m && typeof m === "object"
+        && ((m as { role?: unknown }).role === "user" || (m as { role?: unknown }).role === "assistant")
+        && typeof (m as { content?: unknown }).content === "string")
+      .slice(-50)
+      .map((m) => ({ role: m.role, content: m.content.slice(0, 20_000) }));
     const response = await createChatCompletion({
       model,
       messages: [

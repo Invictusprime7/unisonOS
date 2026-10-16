@@ -9,7 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { sendResendEmail, DEFAULT_FROM_EMAIL } from "../_shared/resend.ts";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
-import { safeParseBody, isValidUUID } from "../_shared/validate.ts";
+import { safeParseBody, isValidUUID , escapeHtml } from "../_shared/validate.ts";
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 
@@ -197,13 +197,13 @@ serve(async (req) => {
         <div>
           <h1>New quote request</h1>
           <p><strong>Business:</strong> ${biz?.name ?? body.businessId}</p>
-          <p><strong>Name:</strong> ${body.name || "—"}</p>
-          <p><strong>Email:</strong> ${normalizedEmail}</p>
-          ${body.phone ? `<p><strong>Phone:</strong> ${body.phone}</p>` : ""}
-          ${body.serviceInterest ? `<p><strong>Interested in:</strong> ${body.serviceInterest}</p>` : ""}
-          ${body.budget ? `<p><strong>Budget:</strong> ${body.budget}</p>` : ""}
-          ${body.timeline ? `<p><strong>Timeline:</strong> ${body.timeline}</p>` : ""}
-          ${body.message ? `<p><strong>Message:</strong><br/>${body.message}</p>` : ""}
+          <p><strong>Name:</strong> ${escapeHtml(body.name || "—")}</p>
+          <p><strong>Email:</strong> ${escapeHtml(normalizedEmail)}</p>
+          ${body.phone ? `<p><strong>Phone:</strong> ${escapeHtml(body.phone)}</p>` : ""}
+          ${body.serviceInterest ? `<p><strong>Interested in:</strong> ${escapeHtml(body.serviceInterest)}</p>` : ""}
+          ${body.budget ? `<p><strong>Budget:</strong> ${escapeHtml(body.budget)}</p>` : ""}
+          ${body.timeline ? `<p><strong>Timeline:</strong> ${escapeHtml(body.timeline)}</p>` : ""}
+          ${body.message ? `<p><strong>Message:</strong><br/>${escapeHtml(body.message)}</p>` : ""}
         </div>
       `,
     });
@@ -215,9 +215,9 @@ serve(async (req) => {
     replyTo: ownerTo,
     html: `
       <div>
-        <h1>Thanks for reaching out${body.name ? `, ${body.name}` : ""}</h1>
+        <h1>Thanks for reaching out${body.name ? `, ${escapeHtml(body.name)}` : ""}</h1>
         <p>We received your request and will send a personalized quote within one business day.</p>
-        ${body.serviceInterest ? `<p><strong>You asked about:</strong> ${body.serviceInterest}</p>` : ""}
+        ${body.serviceInterest ? `<p><strong>You asked about:</strong> ${escapeHtml(body.serviceInterest)}</p>` : ""}
         <p>Talk soon,<br/>${biz?.name ?? "The team"}</p>
       </div>
     `,

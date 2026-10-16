@@ -9,7 +9,7 @@ import { serve } from "serve";
 import { createClient } from "@supabase/supabase-js";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
-import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.ts";
+import { safeParseBody, sanitizeString, isValidUUID , escapeHtml } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 
 const corsHeaders = publicCorsHeaders;
@@ -153,13 +153,13 @@ serve(async (req) => {
         business.notification_email,
         `New Lead: ${name || validEmail}`,
         `<h2>New Lead</h2>
-        <p><strong>Name:</strong> ${name || "N/A"}</p>
-        <p><strong>Email:</strong> ${validEmail}</p>
-        <p><strong>Phone:</strong> ${phone || "N/A"}</p>
-        <p><strong>Source:</strong> ${source}</p>
-        <p><strong>Message:</strong> ${message || "N/A"}</p>
+        <p><strong>Name:</strong> ${escapeHtml(name || "N/A")}</p>
+        <p><strong>Email:</strong> ${escapeHtml(validEmail)}</p>
+        <p><strong>Phone:</strong> ${escapeHtml(phone || "N/A")}</p>
+        <p><strong>Source:</strong> ${escapeHtml(source)}</p>
+        <p><strong>Message:</strong> ${escapeHtml(message || "N/A")}</p>
         <hr>
-        <p style="color:#666">Lead ID: ${lead.id}</p>`,
+        <p style="color:#666">Lead ID: ${escapeHtml(lead.id)}</p>`,
         validEmail
       );
     }

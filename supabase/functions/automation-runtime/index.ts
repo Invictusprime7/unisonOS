@@ -13,7 +13,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
-import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.ts";
+import { safeParseBody, sanitizeString, isValidUUID, escapeHtml } from "../_shared/validate.ts";
 import {
   normalizeWebhookMethod,
   sanitizeWebhookHeaders,
@@ -607,7 +607,7 @@ async function sendEmail(config: Record<string, unknown>, context: RunContext, s
   // Interpolate template variables
   const to = interpolate(config.to as string || context.contact?.email || context.payload?.email as string, context);
   const subject = interpolate(config.subject as string || "Message from {{business.name}}", context);
-  const body = interpolate(config.body as string || config.html as string || "", context);
+  const body = interpolate(config.body as string || config.html as string || "", context, true);
   
   if (!to) {
     return { sent: false, reason: "No recipient email" };
@@ -1024,7 +1024,7 @@ async function ghlSync(
 }
 
 // Template interpolation
-function interpolate(template: string, context: RunContext): string {
+function interpolate(template: string, context: RunContext, html = false): string {
   if (!template) return template;
   
   return template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
@@ -1040,6 +1040,8 @@ function interpolate(template: string, context: RunContext): string {
       }
     }
     
-    return value !== undefined && value !== null ? String(value) : match;
+    if (value === undefined || value === null) return match;
+    // Values come from visitor submissions; inside HTML bodies they are text, never markup.
+    return html ? escapeHtml(value) : String(value);
   });
 }
