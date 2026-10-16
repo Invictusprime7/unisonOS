@@ -3,6 +3,7 @@ import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts'
 import { checkRateLimit, getClientIp, rateLimitHeaders } from '../_shared/rateLimit.ts'
 import { secureJsonResponse, errorResponse } from '../_shared/response.ts'
 import { isValidUUID, safeParseBody, sanitizeString } from '../_shared/validate.ts'
+import { verifyAuth, verifyBusinessAccess, authError } from '../_shared/auth.ts'
 
 const INTENT_PATTERN = /^[a-zA-Z0-9._-]+$/
 const RATE_LIMIT_CONFIG = { maxRequests: 60, windowSeconds: 60 }
@@ -92,6 +93,12 @@ Deno.serve(async (req) => {
     if (body.payload && (typeof body.payload !== 'object' || Array.isArray(body.payload))) {
       return errorResponse('payload must be an object', 400, corsHeaders)
     }
+
+    // Only a signed-in member of the business may queue events for it.
+    const auth = await verifyAuth(req)
+    if (!auth.user) return authError(auth.error || 'Unauthorized', auth.status, corsHeaders)
+    const access = await verifyBusinessAccess(auth.user.id, body.businessId)
+    if (!access.allowed) return authError(access.error || 'Access denied', 403, corsHeaders)
 
     // Verify business exists
     const { data: business, error: businessError } = await supabase
