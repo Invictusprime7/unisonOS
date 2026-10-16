@@ -84,9 +84,9 @@ Deno.serve(async (req) => {
 
   const from = `${fromName || businessName} <${fromEmail || (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev")}>`;
 
-  const res = await fetch("https://api.resend.com/emails", {
+  const res = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY") ?? ""}`, "X-Connection-Api-Key": apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({ from, to: [to], subject, html }),
   });
   const text = await res.text();

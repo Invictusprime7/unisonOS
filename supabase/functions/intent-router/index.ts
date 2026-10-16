@@ -205,10 +205,10 @@ async function sendNotificationEmail(
   }
   
   try {
-    const response = await fetch("https://api.resend.com/emails", {
+    const response = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY") ?? ""}`, "X-Connection-Api-Key": apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

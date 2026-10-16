@@ -617,10 +617,10 @@ async function sendEmail(config: Record<string, unknown>, context: RunContext, s
   const fromEmail = settings?.default_sender_email || (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev");
   
   try {
-    const response = await fetch("https://api.resend.com/emails", {
+    const response = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${resendApiKey}`,
+        Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY") ?? ""}`, "X-Connection-Api-Key": resendApiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
