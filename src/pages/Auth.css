@@ -1,0 +1,46 @@
+@keyframes auth-launch-demo-scroll {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+.auth-launch-demo-track {
+  animation: auth-launch-demo-scroll 20s linear infinite;
+}
+
+@keyframes auth-demo-divider-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.auth-demo-floating-divider {
+  animation: auth-demo-divider-float 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-launch-demo-viewport {
+    overflow-y: auto;
+  }
+
+  .auth-launch-demo-track {
+    animation: none;
+  }
+
+  .auth-demo-floating-divider {
+    animation: none;
+  }
+
+  .auth-launch-demo-sequence[aria-hidden="true"] {
+    display: none;
+  }
+}

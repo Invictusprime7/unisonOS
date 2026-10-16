@@ -69,6 +69,20 @@ export const example = "import('@/components/example')";`;
     expect(prepared).toContain('"import(\'@/components/example\')"');
   });
 
+  it('preserves escaped hash-route regexes in the generated Sandpack entry', () => {
+    const files = prepareSandpackFiles({
+      '/src/main.tsx': `import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+createRoot(document.getElementById('root')!).render(<App />);`,
+      '/src/App.tsx': 'export default function App() { return <main>Ready</main>; }',
+      '/src/index.css': 'body { color: black; }',
+    });
+
+    expect(files['/index.tsx']).toContain(String.raw`navPath.replace(/^#\/?/, '')`);
+    expect(files['/index.tsx']).not.toContain("navPath.replace(/^#/?/");
+  });
+
   it('projects a sealed Wizard snapshot using multiline absolute imports and re-exports', () => {
     const authoredFiles = {
       '/src/App.tsx': `import {

@@ -441,7 +441,9 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
       const navPath = el.getAttribute('data-ut-path') || path;
       const targetPageId = el.getAttribute('data-ut-target-page-id');
       if (navPath && navPath !== '#') {
-        const route = navPath.startsWith('/') ? navPath : '/' + navPath;
+        const route = navPath.startsWith('#')
+          ? '/' + navPath.replace(/^#\\/?/, '')
+          : navPath.startsWith('/') ? navPath : '/' + navPath;
         window.location.hash = route;
       } else if (targetPageId) {
         // Fallback: ask parent to resolve page ID to route

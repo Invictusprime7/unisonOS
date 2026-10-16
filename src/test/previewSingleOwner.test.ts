@@ -127,6 +127,14 @@ describe('Web Builder preview ownership', () => {
     expect(filePrep).toContain('void __loadTailwindUtilities().finally(__mountPreview);');
   });
 
+  it('normalizes hash-style nav.goto targets into site routes, not page fragments', () => {
+    const filePrep = readSource('src/utils/sandpackFilePrep.ts');
+
+    expect(filePrep).toContain("navPath.startsWith('#')");
+    expect(filePrep).toContain(String.raw`navPath.replace(/^#\\/?/, '')`);
+    expect(filePrep).toContain('window.location.hash = route;');
+  });
+
   it('keeps the deployed Sandpack dependency-module progress surface in the preview corner', () => {
     const sharedPreview = readSource('src/components/VFSPreview.tsx');
     const viteConfig = readSource('vite.config.ts');
