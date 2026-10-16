@@ -7,7 +7,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { Resend } from "https://esm.sh/resend@2.0.0?target=deno";
+import { sendResendEmail, DEFAULT_FROM_EMAIL } from "../_shared/resend.ts";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { safeParseBody, isValidUUID } from "../_shared/validate.ts";
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
@@ -38,15 +38,15 @@ function safeEmail(email: unknown): string | null {
 async function sendEmailSafe(params: { to: string; subject: string; html: string; replyTo?: string | null }) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) return;
-  const resend = new Resend(apiKey);
   try {
-    await resend.emails.send({
-      from: "Unison Quotes <onboarding@resend.dev>",
+    const r = await sendResendEmail({
+      from: `Unison Quotes <${DEFAULT_FROM_EMAIL}>`,
       to: [params.to],
       subject: params.subject,
       html: params.html,
       reply_to: params.replyTo || undefined,
-    } as any);
+    });
+    if (!r.ok) console.warn(`[request-quote] email not delivered: ${r.status} ${r.error ?? ""}`);
   } catch (err) {
     console.warn("[request-quote] email send failed", err);
   }

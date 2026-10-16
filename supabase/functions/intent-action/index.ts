@@ -61,11 +61,11 @@ async function sendEmail(to: string, subject: string, html: string, replyTo?: st
   if (!apiKey) return false;
   
   try {
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY") ?? ""}`, "X-Connection-Api-Key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Notifications <onboarding@resend.dev>",
+        from: `Notifications <${Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev"}>`,
         to: [to], subject, html, reply_to: replyTo,
       }),
     });
