@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
+import { SUPABASE_IDENTITY } from "@/integrations/supabase/env";
 import "./index.css";
 import "@/design-system/unison-x-loveable-design-d5be96/design-system/unison/styles/tokens.css";
 import "./styles/unison-theme.css";
@@ -93,7 +93,20 @@ if (placeholder) {
 
 try {
   const root = createRoot(rootElement);
-  root.render(<App />);
+  if (SUPABASE_IDENTITY.ok === false) {
+    // Fail closed: the app (and its auth/data clients) never load against the wrong backend.
+    const reason = SUPABASE_IDENTITY.reason;
+    root.render(
+      <div role="alert" className="flex min-h-screen items-center justify-center bg-background p-8 text-center text-foreground">
+        <div>
+          <h1 className="mb-4 text-2xl font-semibold text-destructive">Wrong database connection</h1>
+          <p className="text-muted-foreground">{reason} Nothing was loaded or saved.</p>
+        </div>
+      </div>,
+    );
+    throw new Error(`[supabase] identity guard: ${reason}`);
+  }
+  void import("./App.tsx").then(({ default: App }) => root.render(<App />));
   
   // Mark app as loaded
   document.body.classList.add('app-loaded');

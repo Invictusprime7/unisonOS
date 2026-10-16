@@ -10,7 +10,10 @@ const projectRoot = process.cwd();
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, projectRoot, 'VITE_');
-  const supabaseTarget = (env.VITE_SUPABASE_URL || 'https://nfrdomdvyrbwuokathtw.supabase.co').replace(/\/+$/, '');
+  // UNISON is authoritative; injected URLs for any other project are ignored.
+  const UNISON_URL = 'https://nfrdomdvyrbwuokathtw.supabase.co';
+  const injected = (env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
+  const supabaseTarget = /^https:\/\/nfrdomdvyrbwuokathtw\.supabase\.co$/i.test(injected) ? injected : UNISON_URL;
 
   return {
     root: projectRoot,
