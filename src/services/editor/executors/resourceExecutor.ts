@@ -1,7 +1,8 @@
 /** Resource lane: saved record fields go through ResourceRuntime only. */
 import { applyResourceOp, getResourceRecord, parseResourceProvenance } from '@/services/resources/resourceRuntime';
 import { getResource } from '@/services/resources/resourceRegistry';
-import type { ResourceContext } from '@/services/resources/resourceTypes';
+import { executeResourceCommandCompatible } from '@/services/project-backend/runtimeProtocol';
+import type { ResourceContext, ResourceRecord } from '@/services/resources/resourceTypes';
 import type { EditorCommand, EditorCommandResult } from '../editorCommandTypes';
 
 function valuesFor(command: EditorCommand, field?: string): Record<string, unknown> {
@@ -16,8 +17,12 @@ export async function executeResourceCommand(command: EditorCommand, ctx: Resour
   const ref = (command.type === 'update-resource-field' && command.ref) || parseResourceProvenance(command.target.resourceMark);
   if (!ref) return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: 'This element is not linked to a saved item.' };
   const values = valuesFor(command, ref.field);
-  const before = await getResourceRecord(ref.resourceKey, ctx, ref.recordId).catch(() => null);
-  await applyResourceOp({ op: 'update', ref, values }, ctx);
+  const before = await executeResourceCommandCompatible<ResourceRecord | null>(ctx, {
+    kind: 'resource.get', resourceKey: ref.resourceKey, recordId: ref.recordId,
+  }, () => getResourceRecord(ref.resourceKey, ctx, ref.recordId)).catch(() => null);
+  await executeResourceCommandCompatible(ctx, {
+    kind: 'resource.mutate', resourceKey: ref.resourceKey, action: 'update', recordId: ref.recordId, values,
+  }, () => applyResourceOp({ op: 'update', ref, values }, ctx));
   const label = getResource(ref.resourceKey)?.label ?? ref.resourceKey;
   const previous = before ? Object.fromEntries(Object.keys(values).map((k) => [k, before[k]])) : null;
   return {

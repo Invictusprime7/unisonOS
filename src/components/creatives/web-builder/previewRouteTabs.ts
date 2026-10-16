@@ -15,6 +15,7 @@ export interface RegistryPageLike {
 }
 
 export interface PageSourceTarget {
+  pageId?: string;
   title: string;
   route: string;
   filePath: string;

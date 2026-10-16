@@ -24,7 +24,6 @@ describe('Preview resource editing', () => {
           attributes: { 'data-ut-resource': 'business-profile#business-1.name' },
         }}
         onUpdateStyles={() => undefined}
-        onUpdateText={() => undefined}
         onReplaceImage={() => undefined}
         onDelete={() => undefined}
         onDuplicate={() => undefined}

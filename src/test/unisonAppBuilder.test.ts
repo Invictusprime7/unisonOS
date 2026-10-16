@@ -28,7 +28,19 @@ function contract(): AppBuildContract {
       },
       pageRegistry: { pages: {}, funnels: {}, homePageId: 'home', version: 1 },
     },
-    business: { industry: 'salon', businessName: 'Northstar', goals: [], intents: [], capabilities: [], bindingGuide: '' },
+    business: {
+      industry: 'salon', businessName: 'Northstar', goals: [], intents: [], capabilities: [], bindingGuide: '',
+      branding: {
+        version: '1.0',
+        brandMark: {
+          source: { kind: 'business-profile', field: 'logoUrl' },
+          placements: [{ artifactId: 'navbar', slotId: 'navbar.brand' }, { artifactId: 'footer', slotId: 'footer.brand' }],
+          image: { objectFit: 'contain', preserveAspectRatio: true, maxWidthPx: 180, maxHeightPx: 48 },
+          accessibleName: 'Northstar', missingAssetFallback: { kind: 'text-wordmark', text: 'Northstar' },
+        },
+        logoCloud: { artifactId: 'logo-cloud', source: 'owner-authored', minimumItems: 4, emptyBehavior: 'hide_section', generatedEntriesAllowed: false },
+      },
+    },
     design: {
       seed: 'app-builder-test', themePresetId: 'editorial', themeTokens: {} as never,
       artDirection: {} as never, resolvedSiteDesignContext: designContext,
@@ -153,6 +165,74 @@ describe('UnisonAppBuilder facade', () => {
     expect(result.candidateFiles['/src/pages/Contact.tsx']).toContain('Contact us');
     expect(result.candidateFiles['/src/project-components/Mark.tsx']).toContain('Northstar');
     expect(result.revisionId).toBeNull();
+  });
+
+  it('generates an in-builder page candidate with scoped files and topology ops', async () => {
+    const page = {
+      pageId: 'focus', title: 'Focus', route: '/focus', filePath: '/src/pages/Focus.tsx',
+      role: 'custom', pageType: 'custom' as const, showInNav: true,
+    };
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: { ...input.files, [page.filePath]: 'export default function Focus(){return <main>Focus</main>}' },
+      revisionId: input.revisionId,
+      outcomes: input.pages.map((target) => ({ page: target, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
+    }));
+    const result = await createUnisonAppBuilder({ authorSite }).generatePages({
+      operationId: 'operation-page-generation',
+      baseRevisionId: 'revision-1',
+      currentFiles: baseFiles,
+      pages: [page],
+      existingRoutes: [{ title: 'Home', route: '/' }],
+      businessName: 'Northstar',
+      industry: 'salon',
+    });
+
+    expect(authorSite).toHaveBeenCalledOnce();
+    expect(authorSite.mock.calls[0][0].candidateOrigin).toBe('builder');
+    expect(authorSite.mock.calls[0][0].initialRouteOps).toEqual([
+      expect.objectContaining({ type: 'add_page', pageId: 'focus', route: '/focus' }),
+    ]);
+    expect(result.status).toBe('ready-for-commit');
+    expect(result.candidateFiles[page.filePath]).toContain('Focus');
+    expect(result.changeSet?.provenance.origin).toBe('builder');
+    expect(result.changeSet?.routeOps).toEqual([
+      expect.objectContaining({ type: 'add_page', pageId: 'focus', route: '/focus' }),
+    ]);
+  });
+
+  it('rejects an existing route before invoking the page author', async () => {
+    const authorSite = vi.fn();
+    const result = await createUnisonAppBuilder({ authorSite: authorSite as never }).generatePages({
+      operationId: 'operation-page-collision',
+      currentFiles: baseFiles,
+      pages: [{
+        pageId: 'about-new', title: 'About', route: '/about', filePath: '/src/pages/AboutNew.tsx',
+        role: 'about', pageType: 'about',
+      }],
+      existingRoutes: [{ title: 'About', route: '/About/' }],
+      businessName: 'Northstar',
+    });
+
+    expect(result.status).toBe('rejected');
+    expect(result.diagnostics[0]).toContain('Route already exists');
+    expect(authorSite).not.toHaveBeenCalled();
+  });
+
+  it('rejects files outside the generated page directory before authoring', async () => {
+    const authorSite = vi.fn();
+    const result = await createUnisonAppBuilder({ authorSite: authorSite as never }).generatePages({
+      operationId: 'operation-page-scope',
+      currentFiles: baseFiles,
+      pages: [{
+        pageId: 'runtime', title: 'Runtime', route: '/runtime', filePath: '/.unison/runtime-manifest.json',
+        role: 'custom', pageType: 'custom',
+      }],
+      businessName: 'Northstar',
+    });
+
+    expect(result.status).toBe('rejected');
+    expect(result.diagnostics[0]).toContain('must be TypeScript files under /src/pages/');
+    expect(authorSite).not.toHaveBeenCalled();
   });
 
   it('routes Builder edits through the existing Composer repair gates', async () => {

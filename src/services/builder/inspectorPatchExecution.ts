@@ -81,14 +81,15 @@ function findSlotTag(
   const candidates = Object.entries(files).filter(
     ([path, content]) => SOURCE_FILE_RE.test(path) && typeof content === 'string' && attr.test(content),
   );
-  if (candidates.length === 0) return null;
+  const scopedCandidates = sectionId
+    ? candidates.filter(([, content]) => new RegExp(`data-ut-section-id=["']${escapeRe(sectionId)}["']`).test(content))
+    : candidates;
+  if (scopedCandidates.length !== 1) return null;
 
-  const preferred = sectionId
-    ? candidates.find(([, content]) => content.includes(sectionId)) ?? candidates[0]
-    : candidates[0];
-
-  const [path, content] = preferred;
-  const match = attr.exec(content);
+  const [path, content] = scopedCandidates[0];
+  const matches = [...content.matchAll(new RegExp(attr.source, 'g'))];
+  if (matches.length !== 1) return null;
+  const match = matches[0];
   if (!match) return null;
 
   let start = match.index;
@@ -197,7 +198,7 @@ export function planInspectorExecution(
   if (!target) {
     return {
       kind: 'rejected',
-      reason: `Slot "${op.slotId}" was not found in the site source. Regenerate the page before editing it.`,
+      reason: `Slot "${op.slotId}" could not be uniquely matched to the selected section in the page source. Refresh the preview and reselect the text.`,
     };
   }
 

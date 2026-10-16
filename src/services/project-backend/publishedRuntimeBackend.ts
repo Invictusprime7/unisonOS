@@ -43,9 +43,12 @@ export function resolvePublishedSiteBackend(projectId: string): Promise<Publishe
   let hit = cache.get(projectId);
   if (!hit) {
     hit = (async () => {
-      const { data, error } = await supabase.rpc('resolve_published_site_backend' as never, { p_project_id: projectId } as never);
+      const { data, error } = await supabase.functions.invoke('resolve-published-site-backend', {
+        body: { projectId },
+      });
       if (error) throw new Error(error.message);
-      return parsePublishedBackendDescriptor(data);
+      if (!data?.success) throw new Error(data?.error || 'Published site backend could not be resolved.');
+      return parsePublishedBackendDescriptor(data.data);
     })();
     hit.catch(() => cache.delete(projectId));
     cache.set(projectId, hit);

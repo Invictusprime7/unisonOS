@@ -217,7 +217,38 @@ test('keeps GPT-5 completion tokens and reasoning controls', () => {
   assert(request.reasoning_effort === 'low', 'GPT-5 should retain reasoning_effort');
 });
 
-test('continues from Gemini billing exhaustion to the OpenAI fallback in hybrid mode', async () => {
+test('does not cooldown funded Gemini after a request-rate quota 429', async () => {
+    await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test' }, async () => {
+      let calls = 0;
+      globalThis.fetch = (async () => {
+        calls++;
+        if (calls <= 2) {
+          return new Response('{"error":{"message":"Quota exceeded for requests per minute"}}', {
+            status: 429,
+            headers: { 'retry-after': '0' },
+          });
+        }
+        return new Response(JSON.stringify({ choices: [{ message: { content: 'Gemini recovered' } }] }));
+      }) as typeof fetch;
+
+      const first = await runProviderLoop({
+        aiMessages: messages,
+        providerPlan: { ...hybridPlan, gatewayModels: [hybridPlan.gatewayModels[0]] },
+        navPageGen: false,
+      });
+      assert(first.earlyError?.status === 429, 'request-rate quota should remain a transient rate limit');
+
+      const second = await runProviderLoop({
+        aiMessages: messages,
+        providerPlan: { ...hybridPlan, gatewayModels: [hybridPlan.gatewayModels[0]] },
+        navPageGen: false,
+      });
+      assert(second.providerUsed === 'gemini' && second.content === 'Gemini recovered', 'the next request should retry funded Gemini');
+      assert(calls === 3, `expected the retried Gemini request to succeed, got ${calls} provider calls`);
+    });
+  });
+
+  test('continues from Gemini billing exhaustion to the OpenAI fallback in hybrid mode', async () => {
   const originalFetch = globalThis.fetch;
   const envNames = ['AI_PROVIDER_MODE', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'UNISONGEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'LOVABLE_API_KEY'];
   const originalEnv = new Map(envNames.map((name) => [name, Deno.env.get(name)]));

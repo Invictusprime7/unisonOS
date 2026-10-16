@@ -35,7 +35,9 @@ import {
   commitAdoptionRecord,
   shouldSkipNoopFilePatch,
 } from '@/services/builder/builderCommitController';
-import { VFSPreview, type VFSPreviewHandle } from '../VFSPreview';
+import { VFSPreview, type InlineTextEditChange, type VFSPreviewHandle } from '../VFSPreview';
+import { executeEditorCommand } from '@/services/editor/editorCommandService';
+import type { EditorTarget } from '@/services/editor/editorCommandTypes';
 import { DeployButton } from '@/components/DeployButton';
 import { CollapsiblePropertiesPanel } from "./web-builder/CollapsiblePropertiesPanel";
 import { CanvasDragDropService } from "@/services/canvasDragDropService";
@@ -497,7 +499,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile(1024);
-  const { launch } = useLaunch();
+  const { launch, updateLaunch } = useLaunch();
   const routeState = (location.state as WebBuilderRouteState | null) ?? null;
   const urlResumeId = useMemo(
     () => new URLSearchParams(location.search).get('id'),
@@ -575,8 +577,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     let cancelled = false;
     void (async () => {
       try {
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!cancelled && user?.id) setCurrentUserId(user.id);
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!cancelled && session?.user.id) setCurrentUserId(session.user.id);
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
@@ -1058,9 +1060,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       `Manual · text "${text.slice(0, 30)}"`,
     );
     if (!res.ok) {
-      if (res.reason === 'ambiguous') return;
+      if (res.reason === 'ambiguous') return false;
       toast.error('Could not update text — element contains nested markup or was not found. Try the AI edit instead.');
+      return false;
     }
+    return true;
   }, [applyMutatorAcrossVFS, selectedHTMLElement, setSelectedHTMLElement]);
 
   const handleFloatingImageReplace = useCallback((selector: string, src: string, hints?: SourceMatchHints) => {
@@ -2428,7 +2432,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       const filePath = resolveRouteSourceFile(files, route) ?? page?.filePath ?? null;
       if (!filePath) return [];
       const routeName = route === '/' ? 'Home' : route.split('/').filter(Boolean).pop()?.replace(/[-_]+/g, ' ') ?? 'Page';
-      return [{ title: page?.title || routeName, route, filePath, isHome: route === '/' }];
+      return [{ pageId: page?.pageId, title: page?.title || routeName, route, filePath, isHome: route === '/' }];
     });
   }, [creatorPlayground.pageRegistry, virtualFS.nodes]);
 
@@ -2661,9 +2665,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   ), [getSandpackFiles, vfsNodes, activePagePath, effectiveRouteState?.siteBundleSnapshot]);
 
   const currentResolvedSections = useMemo(() => {
-    if (!currentSiteSnapshot) return [];
     const liveFiles = getSandpackFiles();
-    const pageComposition = activePagePath
+    const pageComposition = activePagePath && currentSiteSnapshot
       ? collectResolvedCompositions(currentSiteSnapshot.vfsFiles)[activePagePath]
       : undefined;
     const pageSections = pageComposition?.sections.map((section) => ({
@@ -2671,9 +2674,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       sectionType: section.semanticType,
       variantId: section.variantId,
     }));
-    const activeVariants = currentSiteSnapshot.meta.designIntervention?.activeVariants
+    const activeVariants = currentSiteSnapshot?.meta.designIntervention?.activeVariants
       ?? readWizardDesignIntervention(liveFiles)?.activeVariants
-      ?? readWizardDesignIntervention(currentSiteSnapshot.vfsFiles)?.activeVariants;
+      ?? readWizardDesignIntervention(currentSiteSnapshot?.vfsFiles)?.activeVariants;
     return resolveInspectorCanonicalSections(
       pageComposition ? pageSections : undefined,
       activeVariants,
@@ -2874,8 +2877,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       }).files;
       assertNoMinimalFallbackPreview({ ...candidateFiles, ...preflightedFiles }, snapshotResolution, 'Builder VFS import preflight');
 
-      if (options?.replace) vfsResetToEmpty();
-      vfsImportFiles(preflightedFiles);
+      if (options?.replace) vfsReplaceFiles(preflightedFiles);
+      else vfsImportFiles(preflightedFiles);
       const syncedEntry = syncBuilderFromFiles(
         preflightedFiles,
         options?.preferredPath || normalizedEntryPoint || null,
@@ -2893,7 +2896,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       });
       return null;
     }
-  }, [syncBuilderFromFiles, vfsImportFiles, vfsResetToEmpty, launchEntryPoint, resolvedThemePresetId, effectiveRouteState, currentDraftId, pendingProjectionScope]);
+  }, [syncBuilderFromFiles, vfsImportFiles, vfsReplaceFiles, launchEntryPoint, resolvedThemePresetId, effectiveRouteState, currentDraftId, pendingProjectionScope]);
 
   // ── Move 3: revisionId-first hydration ──
   // When the route state carries a `revisionId` (persisted by VFSCommitService at
@@ -3358,10 +3361,17 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         toast.error('The layout was saved, but Preview could not reload it. Refresh the project to load the saved revision.');
         return false;
       }
+      console.info('[WebBuilder] presentation edit committed and adopted by Preview', {
+        sectionIds: presentationOps.flatMap((op) => 'sectionId' in op ? [op.sectionId] : []),
+        revisionId: commit.persistedRevisionId ?? null,
+      });
+      toast.success('Layout updated in Preview');
       return true;
     } catch (err) {
       console.warn('[WebBuilder] presentation commit failed:', err);
-      toast.error('Could not save the selected layout');
+      toast.error('Could not update Preview layout', {
+        description: err instanceof Error ? err.message : String(err),
+      });
       return false;
     } finally {
       presentationCommitInFlightRef.current = null;
@@ -3743,7 +3753,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       ?? effectiveRouteState?.siteBundleSnapshot
       ?? null;
     const registryPage = plan.pagePath
-      ? ((snapshot?.pageRegistry?.pages ?? []) as any[]).find((page: any) => page.filePath === plan.pagePath || page.path === plan.pagePath)
+      ? Object.values(snapshot?.pageRegistry?.pages ?? {}).find(
+          (page) => page.filePath === plan.pagePath || page.path === plan.pagePath,
+        )
       : undefined;
     const pageRole = registryPage?.pageRole ?? registryPage?.pageType ?? (registryPage?.isHome ? 'home' : null);
     const composedRole = toCompositionRole(pageRole);
@@ -3766,6 +3778,45 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       return false;
     }
     if (execution.kind === 'presentation') {
+      if (execution.ops.every((op) => op.type === 'setSectionCopy')) {
+        const identity = buildCommitIdentity({
+          userId: currentUserId,
+          businessId,
+          projectId: resolvedProjectId,
+          draftId: currentDraftId,
+          revisionId: '',
+        });
+        if (!identity) {
+          toast.error('The page is still loading its local edit context. Try the text edit again.');
+          return false;
+        }
+        try {
+          const preview = await commitMutation({
+            source: 'playground-edit',
+            identity,
+            current: buildCanonicalCommitCurrent(files, snapshot),
+            patch: { ...emptyPatchPlan(execution.summary), presentationOps: execution.ops },
+            options: { ...buildCommitOptions(snapshot), dryRun: true },
+          });
+          if (preview.status !== 'committed') throw new Error('The text edit could not be projected into the preview.');
+          const changedFiles = Object.fromEntries(
+            Object.entries(preview.vfsFiles).filter(([path, contents]) => files[path] !== contents),
+          );
+          if (Object.keys(changedFiles).length === 0) return true;
+          recordManualVFSEdit(execution.summary, files, { ...files, ...changedFiles });
+          // canonical-vfs-exempt: local-only text projection; durable revisions remain commitMutation-owned.
+          virtualFS.importFiles(changedFiles);
+          if (activePagePath && changedFiles[activePagePath]) {
+            setPreviewCode(changedFiles[activePagePath]);
+            setEditorCode(changedFiles[activePagePath]);
+          }
+          toast.success(`${execution.summary} applied to preview`);
+          return true;
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Could not apply the text edit to the preview');
+          return false;
+        }
+      }
       return commitPresentationOps(execution.ops);
     }
     if (execution.kind === 'theme') {
@@ -3789,17 +3840,92 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       return committed;
     }
 
-    const committed = await commitBuilderFiles(
-      Object.fromEntries(
-        execution.fileOps
-          .filter((op): op is Extract<FileOp, { contents: string }> => op.type !== 'delete')
-          .map((op) => [op.path, op.contents]),
-      ),
-      { source: 'playground-edit', summary: execution.summary, failureMessage: 'Could not apply this edit' },
+    const changedFiles = Object.fromEntries(
+      execution.fileOps
+        .filter((op): op is Extract<FileOp, { contents: string }> => op.type !== 'delete')
+        .map((op) => [op.path, op.contents]),
     );
-    if (committed) toast.success(execution.summary);
-    return Boolean(committed);
-  }, [effectiveRouteState, commitPresentationOps, commitThemeTokenOps, commitBindingOps, commitBuilderFiles, businessId, projectId]);
+    const nextFiles = { ...files, ...changedFiles };
+    recordManualVFSEdit(execution.summary, files, nextFiles);
+    // canonical-vfs-exempt: local-only visual text edit; durable revisions remain commitMutation-owned.
+    virtualFS.importFiles(changedFiles);
+    if (activePagePath && changedFiles[activePagePath]) {
+      setPreviewCode(changedFiles[activePagePath]);
+      setEditorCode(changedFiles[activePagePath]);
+    }
+    toast.success(`${execution.summary} applied to preview`);
+    return true;
+  }, [effectiveRouteState, commitPresentationOps, commitThemeTokenOps, commitBindingOps, businessId, projectId, currentUserId, resolvedProjectId, currentDraftId, buildCanonicalCommitCurrent, recordManualVFSEdit, virtualFS, activePagePath]);
+
+  const handleInlineTextCommit = useCallback(async (change: InlineTextEditChange): Promise<boolean> => {
+    const acceptedRevisionId = currentRevisionIdRef.current || null;
+    if (change.revisionId && acceptedRevisionId && change.revisionId !== acceptedRevisionId) {
+      toast.error('This preview is out of date. Refresh it before editing the text.');
+      return false;
+    }
+
+    const selected = selectedHTMLElement?.selector === change.selector ? selectedHTMLElement : null;
+    const descriptor = selected?.descriptor;
+    const target: EditorTarget = {
+      selector: change.selector,
+      pagePath: change.target.pagePath ?? activePagePath ?? null,
+      sectionId: change.target.sectionId,
+      sectionType: change.target.sectionType,
+      slotId: change.target.slotId,
+      resourceMark: change.target.resourceMark,
+      objectId: descriptor?.objectId ?? null,
+      ownerKind: descriptor?.ownerKind ?? null,
+      resourceKey: descriptor?.resourceKey ?? null,
+      catalogKind: descriptor?.catalogKind ?? null,
+      recordId: descriptor?.recordId ?? null,
+      field: descriptor?.field ?? null,
+      sourceLocator: descriptor?.sourceLocator ?? null,
+      instanceId: descriptor?.instanceId ?? null,
+    };
+
+    const result = await executeEditorCommand({ type: 'set-text', target, text: change.text }, {
+      source: 'toolbar',
+      resource: {
+        businessId: businessId ?? '',
+        projectId: resolvedProjectId ?? projectId ?? null,
+        siteId: effectiveRouteState?.siteId ?? launch?.siteId ?? null,
+        mode: 'builder',
+      },
+      executors: {
+        source: async (command) => {
+          if (command.type !== 'set-text') {
+            return { ok: false, command: command.type, lane: 'source', savedTo: null, changedFields: [], error: 'Unsupported inline edit.' };
+          }
+          const saved = command.target.slotId
+            ? await applyInspectorPatchPlan({
+                ok: true,
+                pagePath: command.target.pagePath ?? activePagePath ?? null,
+                description: `Update ${command.target.slotId}`,
+                resourceMark: command.target.resourceMark,
+                op: {
+                  type: 'set-slot-text',
+                  sectionId: command.target.sectionId ?? null,
+                  sectionType: command.target.sectionType as import('@/sections/types').SectionType | null,
+                  selector: command.target.selector ?? change.selector,
+                  slotId: command.target.slotId,
+                  value: command.text,
+                },
+              })
+            : handleFloatingTextUpdate(command.target.selector ?? change.selector, command.text);
+          return {
+            ok: saved,
+            command: command.type,
+            lane: 'source',
+            savedTo: command.target.pagePath ?? 'page source',
+            changedFields: ['text'],
+            error: saved ? undefined : 'The selected text could not be saved.',
+          };
+        },
+      },
+    });
+    if (!result.ok && result.error) toast.error('Could not save inline text', { description: result.error });
+    return result.ok;
+  }, [activePagePath, applyInspectorPatchPlan, businessId, effectiveRouteState?.siteId, handleFloatingTextUpdate, launch?.siteId, projectId, resolvedProjectId, selectedHTMLElement]);
 
 
   // ── Preview Floating Toolbar → VFSCommitService bridge ───────────────────
@@ -3813,6 +3939,12 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     commitToolbarMutationRef.current = (nextCode, summary, path) => {
       const targetPath = path ?? (activePagePath?.endsWith('.tsx') ? activePagePath : launchEntryPoint);
       if (!targetPath || !nextCode) return;
+      const isTextEdit = summary.startsWith('text ');
+      if (isTextEdit && (!currentUserId || !businessId || !currentDraftId)) {
+        toolbarPreEditRef.current = null;
+        toast.success('Text edit applied to preview');
+        return;
+      }
       const guardKey = `${targetPath}:${summary}:${nextCode.slice(0, 160)}`;
       const lastAttempt = toolbarMutationGuardRef.current.get(guardKey) ?? 0;
       if (Date.now() - lastAttempt < 2500) return;
@@ -3824,9 +3956,15 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           source: 'preview-toolbar',
           summary: `Toolbar · ${summary}`,
           preferredPath: activePagePath,
-          failureMessage: 'This toolbar change was not saved',
+          failureMessage: isTextEdit
+            ? 'Text edit applied to preview; project sync is unavailable'
+            : 'This toolbar change was not saved',
         });
         if (!after) {
+          if (isTextEdit) {
+            toolbarPreEditRef.current = null;
+            return;
+          }
           const prior = toolbarPreEditRef.current;
           if (!prior) return;
           // canonical-vfs-exempt: rollback restore of the pre-mutation working set
@@ -3845,7 +3983,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           .catch((err) => console.warn('[WebBuilder] toolbar verification failed:', err));
       });
     };
-  }, [activePagePath, launchEntryPoint, commitBuilderFiles, importBuilderFiles]);
+  }, [activePagePath, launchEntryPoint, currentUserId, businessId, currentDraftId, commitBuilderFiles, importBuilderFiles]);
 
 
 
@@ -8178,6 +8316,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                    // conflict when one AI edit spans 3+ files).
                   if (outcome.revisionId) {
                     currentRevisionIdRef.current = outcome.revisionId;
+                    updateLaunch({ revisionId: outcome.revisionId });
                     // Keep the rendered Builder state in lockstep with the
                     // accepted canonical revision. The ref protects sequential
                     // writes; state advances the preview and all consumers.
@@ -8532,6 +8671,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                  const mergedFiles = outcome.committedFiles ?? beforeFiles;
                 if (outcome.revisionId) {
                   currentRevisionIdRef.current = outcome.revisionId;
+                  updateLaunch({ revisionId: outcome.revisionId });
                   setCurrentRevisionId(outcome.revisionId);
                 }
                 if (outcome.commit?.dataOpsApplied.length) {
@@ -8750,7 +8890,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                           }
                         }}
                         businessId={businessId || undefined}
+                        siteId={effectiveRouteState?.siteId ?? launch?.siteId ?? undefined}
                         revisionId={currentRevisionId || null}
+                        onInlineTextCommit={handleInlineTextCommit}
                         onReady={() => console.log('[WebBuilder] VFSPreview ready')}
                         onError={(err) => {
                           setIframeErrors(prev => {
@@ -8966,23 +9108,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             <ElementFloatingToolbar
               element={selectedHTMLElement}
               onUpdateStyles={handleFloatingStyleUpdate}
-              onUpdateText={async (selector, text, target) => {
-                if (!target.slotId) return handleFloatingTextUpdate(selector, text);
-                return applyInspectorPatchPlan({
-                  ok: true,
-                  pagePath: target.pagePath ?? activePagePath ?? null,
-                  description: `Update ${target.slotId}`,
-                  resourceMark: target.resourceMark,
-                  op: {
-                    type: 'set-slot-text',
-                    sectionId: target.sectionId ?? null,
-                    sectionType: target.sectionType as import('@/sections/types').SectionType | null,
-                    selector,
-                    slotId: target.slotId,
-                    value: text,
-                  },
-                });
-              }}
               onUpdateAttributes={handleFloatingAttributeUpdate}
               onReplaceImage={handleFloatingImageReplace}
               onDelete={handleFloatingDelete}

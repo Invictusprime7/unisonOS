@@ -25,10 +25,11 @@
 
 import { resolveArtifact, type ArtifactAIEditScope } from '@/platform/core/artifactRegistry';
 
-export type EditScopeType = 'element' | 'block' | 'section' | 'page';
+export type EditScopeType = 'element' | 'block' | 'section' | 'page' | 'site';
 
 /** Scope ancestor metadata captured from the Preview DOM at click time. */
 export interface ScopeAncestors {
+  siteId?: string | null;
   elementId?: string | null;
   slotId?: string | null;
   blockId?: string | null;
@@ -144,7 +145,8 @@ export function resolveEditScope(input: ResolveEditScopeInput): EditScope {
   // A 'content'-only artifact (e.g. curated catalog copy) must not accept a
   // layout-level rewrite — cap the scope down to 'block' so the AI prompt
   // never touches structure, ordering, or bindings for that artifact.
-  if (aiEditScope === 'content' && (scopeType === 'section' || scopeType === 'page')) {
+  if (scopeType === 'site' && !ancestors.siteId) scopeType = 'page';
+  if (aiEditScope === 'content' && (scopeType === 'section' || scopeType === 'page' || scopeType === 'site')) {
     scopeType = 'block';
   }
 
@@ -160,7 +162,10 @@ export function resolveEditScope(input: ResolveEditScopeInput): EditScope {
       targetId = ancestors.sectionId || ancestors.pageId || 'unknown-section';
       break;
     case 'page':
-      targetId = ancestors.pageId || 'unknown-page';
+      targetId = ancestors.pageId || ancestors.pagePath || 'unknown-page';
+      break;
+    case 'site':
+      targetId = ancestors.siteId || 'unknown-site';
       break;
   }
 
@@ -174,7 +179,7 @@ export function resolveEditScope(input: ResolveEditScopeInput): EditScope {
   // is always high risk regardless of DOM scope.
   const riskLevel: EditScope['riskLevel'] = !aiEditable
     ? 'high'
-    : scopeType === 'page' ? 'high' : scopeType === 'section' ? 'medium' : 'low';
+    : scopeType === 'page' || scopeType === 'site' ? 'high' : scopeType === 'section' ? 'medium' : 'low';
 
   return {
     scopeType,
@@ -200,6 +205,7 @@ export function formatScopeLabel(scope: EditScope): string {
   const suffix = scope.scopeType === 'block' ? 'Block'
     : scope.scopeType === 'section' ? 'Section'
     : scope.scopeType === 'page' ? 'Page'
+    : scope.scopeType === 'site' ? 'Site'
     : 'Element';
   return id ? `${id} ${suffix}` : suffix;
 }
@@ -230,6 +236,14 @@ export function buildScopedPromptPrefix(scope: EditScope): string {
   if (scope.lockedBindings.length) {
     lines.push(`Locked intent bindings (preserve verbatim): ${scope.lockedBindings.join(', ')}`);
   }
-  lines.push('Reject any change that touches other sections, pages, routing, or global tokens.');
+  if (scope.scopeType === 'site') {
+    lines.push('Site scope may coordinate multiple routes, but change only the targets required by the interpreted request; preserve unrelated pages, bindings, and global tokens.');
+  } else if (scope.scopeType === 'page') {
+    lines.push('Keep changes within this page. Do not alter other routes, shared navigation, or global tokens unless the interpreted request explicitly requires them.');
+  } else if (scope.scopeType === 'section') {
+    lines.push('Keep changes within this section. Do not alter neighboring sections, other pages, routes, or global tokens.');
+  } else {
+    lines.push('Keep changes within this selected target and preserve its surrounding structure and bindings.');
+  }
   return lines.join('\n');
 }

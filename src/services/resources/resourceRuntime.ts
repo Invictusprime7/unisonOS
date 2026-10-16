@@ -52,7 +52,7 @@ export async function queryResource(key: string, ctx: ResourceContext): Promise<
   const def = defOrThrow(key);
   return withProjectBackend(ctx.projectId, async (d) => dedicated(d, def, ctx.projectId)
     ? ((await callProjectBackend<unknown[]>({ projectId: ctx.projectId, action: 'list', resource: def.key })) ?? []).map(rec)
-    : RESOURCE_ADAPTERS[def.storage.adapter].query(def, ctx));
+    : RESOURCE_ADAPTERS[def.storage.adapter].query(def, ctx), ctx.siteId);
 }
 
 export async function getResourceRecord(key: string, ctx: ResourceContext, id: string): Promise<ResourceRecord | null> {
@@ -61,7 +61,7 @@ export async function getResourceRecord(key: string, ctx: ResourceContext, id: s
     if (!dedicated(d, def, ctx.projectId)) return RESOURCE_ADAPTERS[def.storage.adapter].get(def, ctx, id);
     const r = await callProjectBackend({ projectId: ctx.projectId, action: 'get', resource: def.key, recordId: id });
     return r ? rec(r) : null;
-  });
+  }, ctx.siteId);
 }
 
 export function buildDuplicateResourceValues(def: ResourceDefinition, record: ResourceRecord): Record<string, unknown> {
@@ -127,7 +127,7 @@ export async function applyResourceOp(op: ResourceDataOp, ctx: ResourceContext):
     if (op.op === 'update') return adapter.update(def, ctx, op.ref.recordId, filterWritableValues(def, op.values));
     await adapter.delete!(def, ctx, op.ref.recordId);
     return null;
-    });
+    }, ctx.siteId);
   } catch (err) {
     recordMutationEvent({ correlationId, at: Date.now(), kind: 'resource-op', surface: 'resource-runtime', baseRevisionId: null, resultRevisionId: null, resourceKey: def.key, resourceOp: op.op, recordId: op.op === 'create' ? null : op.ref.recordId, ok: false, error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - startedAt });
     throw err;

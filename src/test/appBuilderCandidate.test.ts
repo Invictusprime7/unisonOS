@@ -22,7 +22,19 @@ function contract(): AppBuildContract {
       },
       pageRegistry: { pages: {}, funnels: {}, homePageId: 'home', version: 1 },
     },
-    business: { industry: 'salon', businessName: 'Northstar', goals: [], intents: [], capabilities: [], bindingGuide: '' },
+    business: {
+      industry: 'salon', businessName: 'Northstar', goals: [], intents: [], capabilities: [], bindingGuide: '',
+      branding: {
+        version: '1.0',
+        brandMark: {
+          source: { kind: 'business-profile', field: 'logoUrl' },
+          placements: [{ artifactId: 'navbar', slotId: 'navbar.brand' }, { artifactId: 'footer', slotId: 'footer.brand' }],
+          image: { objectFit: 'contain', preserveAspectRatio: true, maxWidthPx: 180, maxHeightPx: 48 },
+          accessibleName: 'Northstar', missingAssetFallback: { kind: 'text-wordmark', text: 'Northstar' },
+        },
+        logoCloud: { artifactId: 'logo-cloud', source: 'owner-authored', minimumItems: 4, emptyBehavior: 'hide_section', generatedEntriesAllowed: false },
+      },
+    },
     design: {
       seed: 'candidate-closure', themePresetId: 'editorial', themeTokens: {} as never,
       artDirection: {} as never, resolvedSiteDesignContext, uiFoundation: {} as never,

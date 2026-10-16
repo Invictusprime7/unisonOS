@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { X, LayoutGrid, Sparkles, Database, Zap, AlertTriangle, Check } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   resolveInspectorModel,
   buildInspectorPatchPlan,
@@ -60,11 +61,14 @@ export const PropertyInspectorPanel: React.FC<PropertyInspectorPanelProps> = ({
     const plan: InspectorPatchPlan = buildInspectorPatchPlan(model, mutation);
     if (plan.ok === false) {
       setRejection(plan.reason);
+      toast.error('Inspector change unavailable', { description: plan.reason });
       return false;
     }
     setRejection(null);
     if (!onApplyPatchPlan) {
-      setRejection('This inspector is not connected to a mutation handler.');
+      const reason = 'This inspector is not connected to a mutation handler.';
+      setRejection(reason);
+      toast.error('Inspector change unavailable', { description: reason });
       return false;
     }
 
@@ -151,7 +155,7 @@ export const PropertyInspectorPanel: React.FC<PropertyInspectorPanelProps> = ({
                           setPendingVariantId((current) => option.current || current === option.id ? null : option.id);
                           setRejection(null);
                         }}
-                        disabled={applying}
+                        disabled={applying || option.current}
                         aria-pressed={pending}
                         className={cn(
                           'flex min-w-0 flex-1 items-center justify-between rounded-md border px-2 py-1.5 text-left text-[11px] transition-colors disabled:cursor-wait disabled:opacity-50',

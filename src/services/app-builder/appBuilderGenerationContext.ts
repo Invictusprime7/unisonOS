@@ -75,14 +75,56 @@ export function buildIndustryAuthoringContext(industry: string, enabledCapabilit
   ].join('\n');
 }
 
+export function buildIndustryIconContext(
+  industry: string,
+  enabledCapabilities: readonly string[],
+  intents: readonly string[],
+): string {
+  const registeredSurfaces = new Set(listCatalogSurfaces().map((surface) => surface.surfaceId));
+  const industrySurfaces = new Set(getIndustrySeedDataTargets(industry)
+    .map(({ target }) => target.catalogSurface)
+    .filter((surface): surface is string => !!surface && registeredSurfaces.has(surface)));
+  const seedDataKeys = new Set(getIndustryProfile(industry)?.seedDataKeys ?? []);
+  const searchableSurfaces = ['menu', 'pricing', 'products', 'services']
+    .filter((surface) => industrySurfaces.has(surface));
+  const cartableSurfaces = ['menu', 'products', 'services']
+    .filter((surface) => industrySurfaces.has(surface));
+  const purchaseRequested = intents.some((intent) => intent === 'cart.add' || intent === 'cart.checkout');
+  const cartEnabled = enabledCapabilities.includes('commerce') && purchaseRequested && cartableSurfaces.length > 0;
+  const affordances = [
+    seedDataKeys.has('menu_items') ? 'menu -> Utensils' : '',
+    seedDataKeys.has('products') ? 'products -> Package' : '',
+    seedDataKeys.has('pricing_tiers') ? 'pricing -> BadgeDollarSign' : '',
+    seedDataKeys.has('services') && enabledCapabilities.includes('booking') ? 'services -> CalendarDays' : '',
+    seedDataKeys.has('portfolio_items') ? 'portfolio content -> Images' : '',
+    seedDataKeys.has('service_areas') ? 'owner-provided service areas -> MapPin' : '',
+  ].filter(Boolean);
+
+  return [
+    'CANONICAL ICON CONTEXT: derive interactive icons from this contract, registered content surfaces, and content actually rendered on the page; industry identity alone does not authorize an action.',
+    `Search: ${searchableSurfaces.length ? `Search is eligible for rendered, non-empty searchable content on ${searchableSurfaces.join(', ')}; omit the control on pages without such content.` : 'no searchable catalog surface is declared; omit search unless the page has another real searchable collection.'}`,
+    `Cart: ${cartEnabled ? `ShoppingBag or ShoppingCart may represent cart actions for ${cartableSurfaces.join(', ')}; bind only to the requested cart intent and enabled commerce capability.` : 'omit shopping bag/cart actions: commerce requires both an enabled commerce capability and an explicit cart.add or cart.checkout intent with a cartable registered surface.'}`,
+    `Industry content affordances: ${affordances.join(', ') || 'none from the industry seed profile'}. Use only when the matching content is rendered; icons never imply an unprovisioned API, route, or capability.`,
+    'Use only icon exports available through approved project dependencies, and give icon-only controls an accessible name.',
+  ].join('\n');
+}
+
 export function buildAppBuilderGenerationContext(contract: AppBuildContract): AppBuilderGenerationContext {
   const { business, runtime } = contract;
   const designSources = resolveDesignSourceBundle(contract);
   const materialization = materializeDesignSources(designSources);
   const industryContext = buildIndustryAuthoringContext(business.industry, business.capabilities);
+  const iconContext = buildIndustryIconContext(business.industry, business.capabilities, business.intents);
+  const logoContext = [
+    `CANONICAL LOGO CONTRACT: brand mark source ${business.branding.brandMark.source.kind}.${business.branding.brandMark.source.field}; render only in ${business.branding.brandMark.placements.map(({ slotId }) => slotId).join(', ')} using the registered business-profile binding, never a hard-coded URL.`,
+    `Preserve the logo's intrinsic ratio with object-fit: contain within ${business.branding.brandMark.image.maxWidthPx}x${business.branding.brandMark.image.maxHeightPx}px; use accessible name "${business.branding.brandMark.accessibleName}". If the profile has no logo, render the text wordmark "${business.branding.brandMark.missingAssetFallback.text}"; do not generate or source a replacement mark.`,
+    `Logo cloud is separate social proof: use ${business.branding.logoCloud.artifactId} only with owner-authored entries, at least ${business.branding.logoCloud.minimumItems}; generated entries are forbidden and the empty behavior is ${business.branding.logoCloud.emptyBehavior}.`,
+  ].join('\n');
   const compose = (modules: string) => [
     `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}.`,
     industryContext,
+    iconContext,
+    logoContext,
     `Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.`,
     business.bindingGuide ? `Binding guide: ${business.bindingGuide}` : '',
     `Protected paths: ${runtime.protectedPaths.join(', ')}.`,

@@ -230,6 +230,32 @@ describe('site authoring orchestrator', () => {
     expect(r.outcomes.map((o) => o.status)).toEqual(['authored', 'kept-baseline']);
   }, 30000);
 
+  it('keeps planned route operations on Builder-authored page candidates', async () => {
+    const page = { pageId: 'focus', title: 'Focus', route: '/focus', filePath: '/src/pages/Focus.tsx', role: 'custom' };
+    const routeOp = { type: 'add_page' as const, pageId: 'focus', title: 'Focus', route: '/focus', pageType: 'custom' as const, showInNav: true };
+    let committedCandidate: AICandidateChangeSet | undefined;
+    const r = await authorSitePages({
+      pages: [page],
+      designContext: null,
+      businessName: 'B',
+      files: base,
+      candidateOrigin: 'builder',
+      initialRouteOps: [routeOp],
+      invoke: vi.fn(async (input: { messages: Array<{ content: string }> }) => {
+        const req = JSON.parse(input.messages[0].content);
+        return good(req.page.filePath, 'Focus page');
+      }) as never,
+      commitPage: async (files, _page, _before, candidate) => {
+        committedCandidate = candidate;
+        return { files, revisionId: 'revision-focus' };
+      },
+    });
+
+    expect(r.outcomes[0].status).toBe('authored');
+    expect(committedCandidate?.provenance.origin).toBe('builder');
+    expect(committedCandidate?.routeOps).toContainEqual(routeOp);
+  });
+
   it('carries the accepted Home language into a distinct loose-fit fashion page', async () => {
     const fashionPages = [
       { pageId: 'story', title: 'Our Story', route: '/our-story', filePath: '/src/pages/About.tsx', role: 'brand-story' },

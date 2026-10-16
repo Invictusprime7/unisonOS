@@ -159,10 +159,13 @@ export function resolveInspectorModel(selection: InspectorSelection | null | und
   const ancestors = selection?.scopeAncestors ?? {};
   const variantId = readVariantId(selection ?? {});
   const sectionType = (ancestors.sectionType as SectionType | undefined) ?? null;
-  const canonicalMatches = (selection?.canonicalSections ?? []).filter((section) =>
-    (!sectionType || section.sectionType === sectionType)
-      && (!variantId || section.variantId === variantId),
+  const familyMatches = (selection?.canonicalSections ?? []).filter((section) =>
+    !sectionType || section.sectionType === sectionType,
   );
+  const variantMatches = variantId
+    ? familyMatches.filter((section) => section.variantId === variantId)
+    : familyMatches;
+  const canonicalMatches = variantMatches.length > 0 ? variantMatches : familyMatches;
   const sectionId = ancestors.sectionId
     ?? (canonicalMatches.length === 1 ? canonicalMatches[0].sectionId : null);
   const slotIdRaw = ancestors.slotId ?? selection?.attributes?.['data-ut-slot'] ?? null;

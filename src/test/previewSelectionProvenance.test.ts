@@ -21,6 +21,34 @@ describe('preview selection provenance bridge', () => {
     expect(bridge).toContain("revisionId = typeof data.revisionId === 'string' ? data.revisionId : null;");
   });
 
+  it('edits selected plain text in the preview surface instead of the floating toolbar', () => {
+    const bridge = read('src/utils/sandpackFilePrep.ts');
+    const preview = read('src/components/VFSPreview.tsx');
+    const toolbar = read('src/components/creatives/web-builder/ElementFloatingToolbar.tsx');
+
+    expect(bridge).toContain("element.setAttribute('contenteditable', 'true')");
+    expect(bridge).toContain("type: 'INLINE_TEXT_EDIT_COMMIT'");
+    expect(bridge).toContain("finishInlineTextEdit(false)");
+    expect(preview).toContain("type: 'INLINE_TEXT_EDIT_RESULT'");
+    expect(preview).toContain('onInlineTextCommit');
+    expect(toolbar).not.toContain('Edit Text');
+    expect(toolbar).not.toContain('onUpdateText');
+  });
+
+  it('carries stable site identity into the selected scope and only offers site scope when known', () => {
+    const bridge = read('src/utils/sandpackFilePrep.ts');
+    const preview = read('src/components/VFSPreview.tsx');
+    const toolbar = read('src/components/creatives/web-builder/ElementFloatingToolbar.tsx');
+    const panel = read('src/components/creatives/web-builder/AIBuilderPanel.tsx');
+
+    expect(preview).toContain('revisionId, siteId },');
+    expect(bridge).toContain('activeSiteId = typeof data.siteId === \'string\' ? data.siteId : null;');
+    expect(bridge).toContain('siteId,');
+    expect(toolbar).toContain("...(ancestors.siteId ? ['site' as const] : [])");
+    expect(toolbar).toContain("selection: scopeOverride ? 'explicit' : 'auto'");
+    expect(panel).toContain('selectedEditScope: selectedTarget?.editScope ?? null');
+  });
+
   it('keeps newlines escaped inside the generated Preview asset scan script', () => {
     const bridge = read('src/utils/sandpackFilePrep.ts');
     expect(bridge).toContain(".filter(Boolean).join('\\\\n') : '';");
@@ -35,7 +63,7 @@ describe('preview selection provenance bridge', () => {
     const builder = read('src/components/creatives/WebBuilder.tsx');
     const panel = read('src/components/creatives/web-builder/AIBuilderPanel.tsx');
     expect(preview).toContain("data.element.revisionId !== revisionId");
-    expect(preview).toContain("revisionId }, '*'");
+    expect(preview).toContain("revisionId, siteId }, '*'");
     expect(builder).toContain('revisionId: el.revisionId');
     expect(panel).toContain('revisionId: selectedTarget.revisionId');
   });

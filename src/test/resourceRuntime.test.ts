@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const listContentRecords = vi.fn();
+const listCmsRecords = vi.fn(async () => [{ id: 'p1', name: 'Tee', price: 20 }]);
 const updateCmsRecord = vi.fn();
+const resolveProjectBackend = vi.fn();
 vi.mock('@/services/cmsRecordService', () => ({
-  listCmsRecords: vi.fn(async () => [{ id: 'p1', name: 'Tee', price: 20 }]),
+  listCmsRecords: () => listCmsRecords(),
   createCmsRecord: vi.fn(), removeCmsRecord: vi.fn(), updateCmsRecord: (...a: unknown[]) => updateCmsRecord(...a),
   listContentRecords: (...a: unknown[]) => listContentRecords(...a),
   getContentRecord: vi.fn(), createContentRecord: vi.fn(), updateContentRecord: vi.fn(),
+}));
+vi.mock('@/services/project-backend/projectBackendResolver', () => ({
+  projectBackendResolver: { resolve: (...a: unknown[]) => resolveProjectBackend(...a), invalidate: vi.fn() },
 }));
 vi.mock('@/services/businessProfileService', () => ({
   loadBusinessProfile: vi.fn(async (id: string) => ({ businessId: id, name: 'Acme' })),
@@ -60,6 +65,19 @@ describe('Resource Runtime', () => {
 
   it('catalog reads go through the catalog adapter', async () => {
     expect((await queryResource('products', ctx))[0].id).toBe('p1');
+  });
+
+  it('rejects a project/site mismatch before using the shared resource adapter', async () => {
+    resolveProjectBackend.mockResolvedValue({
+      bindingId: 'binding-1', projectId: 'project-1', siteId: 'site-other',
+      mode: 'shared-legacy', provider: 'supabase', status: 'ready',
+    });
+    listCmsRecords.mockClear();
+
+    await expect(queryResource('products', {
+      ...ctx, projectId: 'project-1', siteId: 'site-1',
+    })).rejects.toThrow('bound to another site');
+    expect(listCmsRecords).not.toHaveBeenCalled();
   });
 
   it('published runtime never returns draft content', async () => {

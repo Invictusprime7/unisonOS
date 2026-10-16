@@ -20,6 +20,7 @@ import {
 } from "../_shared/industryPagePatterns.ts";
 
 import type { ClassifiedTask } from "../_shared/taskClassifier.ts";
+import { builderEditClassificationDirective } from "../_shared/taskClassifier.ts";
 import type { AIRequest } from "../_shared/requestSchema.ts";
 import { buildProviderPlan, isGeminiExclusiveProviderMode } from "../_shared/providerRouter.ts";
 import { postProcessContent, buildResponseBody } from "../_shared/responseNormalizer.ts";
@@ -700,6 +701,10 @@ async function runBuilderLane(
       goals: (env?.goals ?? []).length,
       scope: env?.scope?.level,
     });
+  }
+
+  if (task.editClassification) {
+    finalSystemPrompt += `\n\n${builderEditClassificationDirective(task.editClassification)}`;
   }
 
   const unisonDirective = buildUnisonContextDirective(parsed.unisonContext);

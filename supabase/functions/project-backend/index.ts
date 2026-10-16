@@ -10,18 +10,10 @@ import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { verifyAuth, authError } from "../_shared/auth.ts";
 import { isValidUUID, safeParseBody } from "../_shared/validate.ts";
 import { getCmsResourceContract } from "../_shared/catalogSurfaceSummary.ts";
+import { decryptConnectedProjectSecret } from "../_shared/connectedProjectCrypto.ts";
 
 type Action = "list" | "get" | "create" | "update" | "delete";
 const ACTIONS: Action[] = ["list", "get", "create", "update", "delete"];
-
-async function decryptSecret(ciphertext: string, keyB64: string): Promise<string> {
-  // Format: base64(iv[12] || aes-gcm ciphertext)
-  const raw = Uint8Array.from(atob(ciphertext), (c) => c.charCodeAt(0));
-  const keyBytes = Uint8Array.from(atob(keyB64), (c) => c.charCodeAt(0));
-  const key = await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["decrypt"]);
-  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12) }, key, raw.slice(12));
-  return new TextDecoder().decode(plain);
-}
 
 serve(async (req) => {
   const pre = handleCorsPreflightRequest(req);
@@ -81,7 +73,7 @@ serve(async (req) => {
   }
 
   let secret: string;
-  try { secret = await decryptSecret(binding.secret_key_ciphertext, encKey); }
+  try { secret = await decryptConnectedProjectSecret(binding.secret_key_ciphertext, encKey); }
   catch { return json({ success: false, error: "This site's database key could not be read." }, 500); }
   const site = createClient(binding.project_url, secret, { auth: { persistSession: false } });
 

@@ -63,6 +63,35 @@ describe('property inspector model (M9)', () => {
     expect(plan).toMatchObject({ ok: true, op: { type: 'set-variant', sectionId: 'hero-canonical' } });
   });
 
+  it('uses a unique page-local section family when descriptor variant metadata is stale', () => {
+    const model = resolveInspectorModel({
+      attributes: { 'data-ut-variant': 'hero:launch-showcase' },
+      scopeAncestors: { sectionType: 'hero' },
+      canonicalSections: [{ sectionId: 'home-hero', sectionType: 'hero', variantId: 'hero:centered' }],
+    });
+
+    expect(model.sectionId).toBe('home-hero');
+    expect(model.warnings).not.toContain('This element has no canonical section identity, so edits cannot be scoped.');
+    expect(buildInspectorPatchPlan(model, { kind: 'variant', variantId: 'hero:image-fan' as never })).toMatchObject({
+      ok: true,
+      op: { type: 'set-variant', sectionId: 'home-hero' },
+    });
+  });
+
+  it('still rejects a stale descriptor when multiple same-family sections could match', () => {
+    const model = resolveInspectorModel({
+      attributes: { 'data-ut-variant': 'hero:launch-showcase' },
+      scopeAncestors: { sectionType: 'hero' },
+      canonicalSections: [
+        { sectionId: 'home-hero', sectionType: 'hero', variantId: 'hero:centered' },
+        { sectionId: 'home-secondary-hero', sectionType: 'hero', variantId: 'hero:split-image' },
+      ],
+    });
+
+    expect(model.sectionId).toBeNull();
+    expect(model.warnings[0]).toContain('multiple canonical sections');
+  });
+
   it('recovers section identity from active variants when a legacy page has no composition descriptor', () => {
     const canonicalSections = resolveInspectorCanonicalSections(undefined, {
       'home-hero': 'hero:launch-showcase',

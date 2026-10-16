@@ -195,6 +195,17 @@ describe('snapshot projector', () => {
         acknowledgementState: 'conflicted',
         conflicts: [{ path: '/src/App.tsx', reason: 'overlapping-change' }],
       });
+
+      expect(projectSnapshotVfsFiles(revisionNine, resolution, {
+        pendingSourceConflictPolicy: 'accepted-only',
+      })).toMatchObject({
+        '/src/App.tsx': 'router R9',
+        '/src/pages/About.tsx': 'about R0',
+      });
+      expect(getPendingVfsOperations('draft-rebase')[0]).toMatchObject({
+        acknowledgementState: 'conflicted',
+        conflicts: [{ path: '/src/App.tsx', reason: 'overlapping-change' }],
+      });
     } finally {
       clearPendingVfsOperations('draft-rebase');
     }

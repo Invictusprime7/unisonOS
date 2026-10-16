@@ -15,6 +15,7 @@ import {
   normalizeEnvelope,
   requiresRenderableUiPatch,
   type BuilderRequestEnvelope,
+  type BuilderScopeLevel,
 } from '@/types/builderRequestEnvelope';
 import { matchAbstractGoals } from '@/platform/core/abstractGoalRegistry';
 import { normalizeBusinessCapability } from '@/platform/core/businessCapabilityVocabulary';
@@ -26,7 +27,28 @@ export interface InterpretContext {
   vertical?: string;
   capabilities?: string[];
   currentPageId?: string;
-  selectedElement?: { selector?: string; sectionId?: string; blockId?: string } | null;
+  currentPagePath?: string;
+  selectedEditScope?: {
+    scopeType: 'element' | 'block' | 'section' | 'page' | 'site';
+    targetId: string;
+    selection: 'explicit' | 'auto';
+  } | null;
+  pageTargets?: Array<{ pageId?: string; title: string; route: string; filePath: string; isHome?: boolean }>;
+  selectedElement?: {
+    selector?: string;
+    text?: string;
+    tagName?: string;
+    pageId?: string | null;
+    pagePath?: string | null;
+    sectionId?: string | null;
+    sectionType?: string | null;
+    blockId?: string | null;
+    slotId?: string | null;
+    sourceLocator?: string | null;
+    resourceMark?: string | null;
+    targetPath?: string | null;
+    intent?: string | null;
+  } | null;
   filePaths?: string[];
   recentTurns?: Array<{ role: string; content: string }>;
   objective?: string;
@@ -48,6 +70,8 @@ export async function interpretBuilderRequest(
   const hints = buildEnvelopeHints(prompt, {
     hasExistingTemplate: ctx.hasExistingTemplate,
     hasSelectedElement: Boolean(ctx.selectedElement),
+    selectedScope: ctx.selectedEditScope?.scopeType,
+    selectedScopeExplicit: ctx.selectedEditScope?.selection === 'explicit',
   });
 
   const abstractGoals = matchAbstractGoals(prompt);
@@ -77,6 +101,9 @@ export async function interpretBuilderRequest(
           vertical: ctx.vertical,
           capabilities: ctx.capabilities,
           currentPageId: ctx.currentPageId,
+          currentPagePath: ctx.currentPagePath,
+          selectedEditScope: ctx.selectedEditScope ?? null,
+          pageTargets: ctx.pageTargets?.slice(0, 40),
           selectedElement: ctx.selectedElement ?? null,
           filePaths: ctx.filePaths,
           recentTurns: ctx.recentTurns,
@@ -91,6 +118,8 @@ export async function interpretBuilderRequest(
         envelope: heuristicEnvelope(prompt, {
           hasExistingTemplate: ctx.hasExistingTemplate,
           hasSelectedElement: Boolean(ctx.selectedElement),
+          selectedScope: ctx.selectedEditScope?.scopeType,
+          selectedScopeExplicit: ctx.selectedEditScope?.selection === 'explicit',
         }),
         degraded: true,
         reason: error?.message || data?.reason || 'no_envelope',
@@ -104,6 +133,8 @@ export async function interpretBuilderRequest(
       envelope: heuristicEnvelope(prompt, {
         hasExistingTemplate: ctx.hasExistingTemplate,
         hasSelectedElement: Boolean(ctx.selectedElement),
+        selectedScope: ctx.selectedEditScope?.scopeType,
+        selectedScopeExplicit: ctx.selectedEditScope?.selection === 'explicit',
       }),
       degraded: true,
       reason: err instanceof Error ? err.message : 'invoke_failed',

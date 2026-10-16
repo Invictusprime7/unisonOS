@@ -117,6 +117,16 @@ describe('AppBuildContract', () => {
     expect(contract.protocolVersion).toBe(APP_BUILDER_PROTOCOL_VERSION);
     expect(contract.topology.sitePlan).toBe(input.sitePlan);
     expect(contract.topology.pageRegistry).toBe(input.pageRegistry);
+    expect(contract.business.branding.brandMark).toEqual(expect.objectContaining({
+      source: { kind: 'business-profile', field: 'logoUrl' },
+      placements: [{ artifactId: 'navbar', slotId: 'navbar.brand' }, { artifactId: 'footer', slotId: 'footer.brand' }],
+      accessibleName: input.businessName,
+      missingAssetFallback: { kind: 'text-wordmark', text: input.businessName },
+    }));
+    expect(contract.business.branding.logoCloud).toEqual(expect.objectContaining({
+      artifactId: 'logo-cloud', source: 'owner-authored', minimumItems: 4,
+      emptyBehavior: 'hide_section', generatedEntriesAllowed: false,
+    }));
     expect(contract.design.resolvedSiteDesignContext).toBe(input.designContext);
     expect(contract.design.resolvedSiteDesignContext.contract).toBe(input.designContext.contract);
     expect(contract.design.registryContext).toBe(input.registryContext);
@@ -139,10 +149,33 @@ describe('AppBuildContract', () => {
 
   it('rejects unknown protocol versions and incomplete topology', () => {
     const contract = buildAppBuildContract(makeInput());
-    expect(() => parseAppBuildContract(JSON.stringify({ ...contract, protocolVersion: 'unison-app-builder/2' }))).toThrow('Unsupported AppBuildContract protocol');
+    expect(() => parseAppBuildContract(JSON.stringify({ ...contract, protocolVersion: 'unison-app-builder/unsupported' }))).toThrow('Unsupported AppBuildContract protocol');
     expect(() => parseAppBuildContract(JSON.stringify({
       ...contract,
       topology: { ...contract.topology, sitePlan: { ...contract.topology.sitePlan, pages: [] } },
     }))).toThrow('topology must include at least one page');
+  });
+
+  it('rejects contracts without the explicit logo contract', () => {
+    const contract = buildAppBuildContract(makeInput());
+    const { branding: _branding, ...business } = contract.business;
+    expect(() => parseAppBuildContract(JSON.stringify({ ...contract, business })))
+      .toThrow('valid logo and brand-mark contract');
+  });
+
+  it('rejects logo rules that drift from the canonical artifact registry', () => {
+    const contract = buildAppBuildContract(makeInput());
+    const tampered = {
+      ...contract,
+      business: {
+        ...contract.business,
+        branding: {
+          ...contract.business.branding,
+          brandMark: { ...contract.business.branding.brandMark, placements: [] },
+        },
+      },
+    };
+    expect(() => parseAppBuildContract(JSON.stringify(tampered)))
+      .toThrow('logo rules must match the canonical artifact registry');
   });
 });

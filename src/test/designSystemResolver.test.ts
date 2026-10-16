@@ -68,6 +68,10 @@ describe('AppBuilderGenerationContext (R0/R1)', () => {
     const contract = buildAppBuildContract(makeInput([impl('hero:prisma-cinematic', 'hero'), impl('hero:generic', 'hero')]));
     const ctx = buildAppBuilderGenerationContext(contract);
     expect(ctx.runtimeContext).toContain('Approved dependencies: react');
+    expect(ctx.runtimeContext).toContain('CANONICAL ICON CONTEXT');
+    expect(ctx.runtimeContext).toContain('CANONICAL LOGO CONTRACT');
+    expect(ctx.runtimeContext).toContain('owner-authored entries');
+    expect(ctx.runtimeContext).toContain('render the text wordmark');
     const used = reportDesignSourceUsage(contract, ctx.designSources, { '/src/pages/Home.tsx': 'data-ut-variant="hero:prisma-cinematic"' });
     expect(used.referencedPerPage['page-home']).toEqual(['hero:prisma-cinematic']);
     const bare = reportDesignSourceUsage(contract, ctx.designSources, { '/src/pages/Home.tsx': '<Section/>' });

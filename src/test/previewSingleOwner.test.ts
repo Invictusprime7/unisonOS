@@ -54,6 +54,16 @@ describe('Web Builder preview ownership', () => {
     expect(builder.match(/onSyncFiles=\{templateCustomizer\.isDirty \? undefined : virtualFS\.replaceFiles\}/g)).toHaveLength(1);
   });
 
+  it('adopts accepted revision files atomically so Preview recompiles from the complete VFS', () => {
+    const sharedPreview = readSource('src/components/VFSPreview.tsx');
+    const builder = readSource('src/components/creatives/WebBuilder.tsx');
+
+    expect(builder).toContain('if (options?.replace) vfsReplaceFiles(preflightedFiles);');
+    expect(builder).not.toContain('if (options?.replace) vfsResetToEmpty();');
+    expect(sharedPreview).toContain('const filesSignature = useMemo(() => createVfsHandoffSignature(rawFiles)');
+    expect(sharedPreview).toContain('pendingCompileRef.current = { key, files, launchState: launchRef.current };');
+  });
+
   it('keeps the connected Sandpack provider mounted during background recompiles', () => {
     const sharedPreview = readSource('src/components/VFSPreview.tsx');
 

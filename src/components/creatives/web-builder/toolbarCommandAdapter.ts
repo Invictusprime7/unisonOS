@@ -16,7 +16,7 @@ import type { ResourceContext } from '@/services/resources/resourceTypes';
 
 export interface ToolbarCommandHandlers {
   onUpdateStyles: (selector: string, styles: Record<string, string>) => void;
-  onUpdateText: (selector: string, text: string, target: EditorCommand['target']) => void | boolean | Promise<void | boolean>;
+  onUpdateText?: (selector: string, text: string, target: EditorCommand['target']) => void | boolean | Promise<void | boolean>;
   onUpdateAttributes?: (selector: string, attributes: Record<string, string>) => void;
   onReplaceImage: (selector: string, src: string) => void;
   onDelete: (selector: string) => void;
@@ -44,6 +44,7 @@ export function useToolbarCommands(
       const source: LaneExecutor = async (cmd) => {
         switch (cmd.type) {
           case 'set-text':
+            if (!handlers.onUpdateText) return unsupported(cmd, 'source');
             if (await handlers.onUpdateText(selector, cmd.text, cmd.target) === false) {
               return { ok: false, command: cmd.type, lane: 'source', savedTo: null, changedFields: [], error: 'The selected text could not be saved.' };
             }

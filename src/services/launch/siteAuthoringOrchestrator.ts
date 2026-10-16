@@ -19,6 +19,7 @@ import { projectSiteDesignContract } from '@/services/launch/siteDesignContract'
 import type { AIComposerRequest } from '@/contracts/aiComposerContract';
 import { runComposerRepairLoop, type ComposerInvoke, type ComposerLoopResult, type ComposerStopReason } from '@/services/builder/aiRepairLoop';
 import { buildAICandidateChangeSet, type AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
+import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import { selectSourceKnowledge } from '@/services/builder/sourceKnowledgeContext';
 import { isImageLedRole, verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
@@ -66,12 +67,16 @@ export interface SiteAuthoringProgress {
 export interface SiteAuthoringInput {
   pages: AuthoringPage[];
   homePageId?: string;
+  industry?: string;
+  existingRoutes?: readonly { title: string; route: string }[];
   designContext: ResolvedSiteDesignContext | null;
   businessName: string;
   /** Owner's own description from the home-page planning chat. */
   visionBrief?: string;
   files: Record<string, string>;
   revisionId?: string | null;
+  candidateOrigin?: 'builder' | 'wizard';
+  initialRouteOps?: readonly TopologyChange[];
   commitPage: (nextFiles: Record<string, string>, page: AuthoringPage, beforeFiles: Record<string, string>, candidate: AICandidateChangeSet) =>
     Promise<{ files: Record<string, string>; revisionId?: string | null }>;
   preflight?: (changed: Record<string, string>) => Record<string, string>;
@@ -188,11 +193,12 @@ export function selectPageContextFiles(files: Record<string, string>, page: Auth
 
 export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAuthoringResult> {
   const now = input.now ?? (() => Date.now());
+  const candidateOrigin = input.candidateOrigin ?? 'wizard';
   const deadline = now() + (input.budgetMs ?? 240_000);
   // Default: after Home, write up to 4 pages at once — fast, within the shared rate limit.
   const concurrency = Math.max(1, Math.floor(input.concurrency ?? 4));
   const ordered = orderAuthoringPages(input.pages, input.homePageId).slice(0, input.maxPages ?? Infinity);
-  const routes = ordered.map((p) => ({ title: p.title, route: p.route }));
+  const routes = [...(input.existingRoutes ?? []), ...ordered.map((p) => ({ title: p.title, route: p.route }))];
   let files = input.files;
   let revisionId = input.revisionId;
   const outcomes: PageAuthoringOutcome[] = [];
@@ -202,7 +208,7 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
   // One universal planner assigns each page a distinct narrative + topology job.
   // A sealed plan from the AppBuildContract is authoritative; replanning here would fork the design.
   const compositionPlan = input.compositionPlan ?? planSiteComposition(
-    input.designContext?.contract.industry ?? 'generic',
+    input.designContext?.contract.industry ?? input.industry ?? 'generic',
     ordered.map((p) => ({ pageId: p.pageId, role: p.role })),
     input.designContext?.fingerprint ?? input.businessName,
     {
@@ -286,8 +292,9 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
         language: establishedLanguage,
         forbiddenImplementations: input.designContext?.hardLegality.forbiddenImplementations,
       },
-      candidateOrigin: 'wizard',
+      candidateOrigin,
       candidateIntent: `author:${page.role}`,
+      initialRouteOps: input.initialRouteOps,
       resolveDependencies: input.resolveDependencies,
       pageCheck: input.pageCheck,
     });
@@ -356,7 +363,7 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
           baseRevisionId: revisionId ?? undefined,
           targetPages: [page.filePath],
           resolveDependencies: false,
-          origin: 'wizard',
+          origin: candidateOrigin,
           intent: `author:${page.role}`,
           routeOps: prepared.build.changeSet.routeOps,
           evidence: prepared.build.changeSet.provenance.evidence,

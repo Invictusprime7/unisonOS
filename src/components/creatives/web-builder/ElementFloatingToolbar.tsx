@@ -17,7 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
 import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
-  Type, Palette, Trash2, Copy, MoveUp, MoveDown, Edit3,
+  Type, Palette, Trash2, Copy, MoveUp, MoveDown,
   ChevronDown, Image, Maximize2, Undo2, Sparkles,
   Send, X, Loader2, AlertCircle, CheckCircle2, Link2, Eye, EyeOff,
 } from 'lucide-react';
@@ -69,7 +69,6 @@ interface SelectedElement {
 interface ElementFloatingToolbarProps {
   element: SelectedElement | null;
   onUpdateStyles: (selector: string, styles: Record<string, string>) => void;
-  onUpdateText: (selector: string, text: string, target: EditorTarget) => void | boolean | Promise<void | boolean>;
   onUpdateAttributes?: (selector: string, attributes: Record<string, string>) => void;
   onReplaceImage: (selector: string, src: string) => void;
   onDelete: (selector: string) => void;
@@ -231,6 +230,11 @@ const InlineAIPanel: React.FC<InlineAIPanelProps> = ({
         imageKind: element.imageTarget?.kind === 'img' || String(element.tagName).toLowerCase() === 'img' ? 'img' : element.imageTarget ? 'background' : undefined,
         imageSelector: element.imageTarget?.selector || selector,
         scopeAncestors: ancestors,
+        editScope: {
+          scopeType: editScope.scopeType,
+          targetId: editScope.targetId,
+          selection: scopeOverride ? 'explicit' : 'auto',
+        },
         provenance: {
           sourceTable: ancestors.sourceTable,
           rowId: ancestors.rowId,
@@ -245,7 +249,7 @@ const InlineAIPanel: React.FC<InlineAIPanelProps> = ({
     setSuccess(true);
     setPrompt('');
     setTimeout(() => onClose(), 900);
-  }, [prompt, loading, element, onAIEditComplete, onRequestAI, onClose, editScope, systemType, systemsBuildContext, businessId, projectId, industry, templateName, activePagePath, getVFSFiles, ancestors]);
+  }, [prompt, loading, element, onAIEditComplete, onRequestAI, onClose, editScope, scopeOverride, systemType, systemsBuildContext, businessId, projectId, industry, templateName, activePagePath, getVFSFiles, ancestors]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
@@ -271,11 +275,10 @@ const InlineAIPanel: React.FC<InlineAIPanelProps> = ({
         </button>
       </div>
 
-      {/* Scope chips — Element | Block | Section. Default is the auto-derived
-          scope from EditScopeResolver; user can override per prompt. */}
-      <div className="flex items-center gap-1 mb-1.5">
+      {/* Scope chips mirror the hierarchy resolved from the selected object. */}
+      <div className="flex flex-wrap items-center gap-1 mb-1.5">
         <span className="text-[9px] uppercase tracking-wider text-white/40 mr-1">Scope:</span>
-        {(['element', 'block', 'section'] as EditScopeType[]).map((s) => {
+        {(['element', 'block', 'section', 'page', ...(ancestors.siteId ? ['site' as const] : [])] as EditScopeType[]).map((s) => {
           const isActive = activeScopeType === s;
           const isAuto = autoScope === s && !scopeOverride;
           return (
@@ -370,7 +373,6 @@ const InlineAIPanel: React.FC<InlineAIPanelProps> = ({
 export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   element,
   onUpdateStyles,
-  onUpdateText,
   onUpdateAttributes,
   onReplaceImage,
   onDelete,
@@ -391,8 +393,6 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   getVFSFiles,
   readiness,
 }) => {
-  const [isEditingText, setIsEditingText] = useState(false);
-  const [editText, setEditText] = useState('');
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [attributeDraft, setAttributeDraft] = useState<Record<string, string>>({});
   const [imageUrlDraft, setImageUrlDraft] = useState('');
@@ -410,7 +410,6 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (element?.textContent) setEditText(element.textContent);
     setAttributeDraft({
       href: element?.attributes?.href || '',
       'data-ut-path': element?.attributes?.['data-ut-path'] || '',
@@ -421,7 +420,6 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
     setImageUrlDraft(element?.imageTarget?.src || element?.attributes?.src || extractCssUrl(element?.styles?.backgroundImage) || '');
     setPlacement(null);
     setGroupScope(null);
-    setIsEditingText(false);
     setIsAIOpen(false);
     if (imageInputRef.current) imageInputRef.current.value = '';
   }, [element]);
@@ -429,7 +427,7 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
   // Every toolbar action goes through the shared EditorCommandService (§25):
   // lane resolution + capability check first, host commit handlers second.
   const runCommand = useToolbarCommands(
-    { onUpdateStyles, onUpdateText, onUpdateAttributes, onReplaceImage, onDelete, onDuplicate, onMoveUp, onMoveDown },
+    { onUpdateStyles, onUpdateAttributes, onReplaceImage, onDelete, onDuplicate, onMoveUp, onMoveDown },
     { businessId: businessId ?? undefined, projectId: projectId ?? undefined },
   );
 
@@ -505,13 +503,6 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
       target: { ...target, selector: imageTarget?.selector || selector },
       styles: { backgroundImage: `url("${nextSrc.replace(/"/g, '%22')}")` },
     });
-  };
-
-  const handleTextSave = () => {
-    if (editText.trim() !== element.textContent) {
-      void runCommand({ type: 'set-text', target, text: editText.trim() });
-    }
-    setIsEditingText(false);
   };
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -676,29 +667,8 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
 
         <Separator orientation="vertical" className="h-6 mx-0.5 bg-white/[0.1]" />
 
-        {/* Text editors */}
         {isTextElement && (
           <>
-            {isEditingText ? (
-              <div className="flex items-center gap-1">
-                <Input
-                  value={editText}
-                  onChange={e => setEditText(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleTextSave(); if (e.key === 'Escape') setIsEditingText(false); }}
-                  className="h-7 text-xs w-40"
-                  autoFocus
-                />
-                <Button size="sm" onClick={handleTextSave} className="h-7 text-xs px-2">Save</Button>
-                <Button variant="ghost" size="sm" onClick={() => setIsEditingText(false)} className="h-7 text-xs px-2">Cancel</Button>
-              </div>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => setIsEditingText(true)} className="h-7 text-xs gap-1">
-                <Edit3 className="w-3 h-3" />Edit Text
-              </Button>
-            )}
-
-            <Separator orientation="vertical" className="h-6 mx-0.5 bg-white/[0.1]" />
-
             {/* Font size */}
             <Popover>
               <PopoverTrigger asChild>

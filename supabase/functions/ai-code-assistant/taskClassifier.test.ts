@@ -1,4 +1,8 @@
-import { classifyTask } from "../_shared/taskClassifier.ts";
+import {
+  builderEditClassificationDirective,
+  classifyBuilderEditTask,
+  classifyTask,
+} from "../_shared/taskClassifier.ts";
 
 function assertEquals(actual: unknown, expected: unknown): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -73,4 +77,32 @@ Deno.test("keeps surgical and behavioral intent ahead of the template-react tran
   const behavioral = classifyTask({ mode: "template-react", editMode: true, navPageGen: false, surgicalEdit: false, behavioralEdit: true, debugMode: false });
   assertEquals(surgical.type, "surgical_edit");
   assertEquals(behavioral.type, "behavioral_edit");
+});
+
+Deno.test("classifies copy relocation with distinct source and destination semantics", () => {
+  const classification = classifyBuilderEditTask({
+    editorOperations: ["copy.move"],
+    scope: { relation: "source_destination" },
+    complexity: "compound",
+  });
+
+  assertEquals(classification, "content_relocation");
+  if (!classification) throw new Error("Expected an edit classification");
+  if (!builderEditClassificationDirective(classification).includes("Move the content exactly once")) {
+    throw new Error("Relocation guidance must prevent duplicate content");
+  }
+});
+
+Deno.test("classifies page creation plus footer routes as one multi-target operation", () => {
+  const classification = classifyBuilderEditTask({
+    editorOperations: ["page.create", "navigation.update", "route.bind"],
+    scope: { relation: "multi_target" },
+    complexity: "compound",
+  });
+
+  assertEquals(classification, "page_and_route");
+  if (!classification) throw new Error("Expected an edit classification");
+  if (!builderEditClassificationDirective(classification).includes("canonical route operations")) {
+    throw new Error("Page routing guidance must preserve topology ownership");
+  }
 });

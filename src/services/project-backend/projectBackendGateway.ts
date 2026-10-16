@@ -14,10 +14,14 @@ export class ProjectBackendUnavailableError extends Error {}
 export async function withProjectBackend<T>(
   projectId: string | null | undefined,
   run: (descriptor: ProjectBackendDescriptor | null) => Promise<T>,
+  expectedSiteId?: string | null,
 ): Promise<T> {
   // Single-site businesses without a resolved project are resolved server-side (cms-records).
   if (!projectId) return run(null);
   const descriptor = await projectBackendResolver.resolve(projectId);
+  if (expectedSiteId && descriptor.siteId !== expectedSiteId) {
+    throw new ProjectBackendUnavailableError('This project is bound to another site.');
+  }
   const health = describeBackendStatus(descriptor);
   if (!health.ok) throw new ProjectBackendUnavailableError(health.reason);
   return run(descriptor);

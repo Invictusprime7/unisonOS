@@ -102,7 +102,7 @@ import { parseIconWireIntent, stampIconIntentInSource } from '@/utils/iconWireIn
 import { wireGhlBinding } from '@/services/skills/ghlSkillPack';
 import { detectSections } from '@/utils/sectionSwapper';
 import { isThemeOnlyRequest } from '@/services/theme/themeEdit';
-import { isBuilderSessionError, runBuilderTurn } from '@/services/builderBrainClient';
+import { isBuilderProviderUnavailable, isBuilderSessionError, runBuilderTurn, shouldOfferBuilderProviderRetry } from '@/services/builderBrainClient';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
 import {
   envelopeRunIdFromResponse,
@@ -135,6 +135,8 @@ import {
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { buildAICandidateChangeSet, type AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
+import { deriveFilePath } from '@/services/routeNavigationService';
+import { createBuilderPage } from '@/types/pageRegistry';
 import { buildSequentialAiTasks } from '@/services/builder/sequentialAiTasks';
 import { findUnrequestedCopyChanges, findUnrequestedScopedSideEffects } from '@/services/builder/scopedEditContentGuard';
 
@@ -807,6 +809,11 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   const [agentTarget, setAgentTarget] = useState<{
     tagName: string; text?: string; selector?: string; section?: string; intent?: string; revisionId?: string | null;
     scopeAncestors?: import('@/services/editScopeResolver').ScopeAncestors;
+    editScope?: {
+      scopeType: import('@/services/editScopeResolver').EditScopeType;
+      targetId: string;
+      selection: 'explicit' | 'auto';
+    };
     provenance?: { sourceTable?: string | null; rowId?: string | null; field?: string | null; bindingId?: string | null; targetPath?: string | null; resource?: string | null };
     descriptor?: import('@/services/editor/editableObjectDescriptor').EditableObjectDescriptor;
   } | null>(null);
@@ -1163,6 +1170,27 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     const capabilityInterpretation = await interpretBuilderRequest(userContent, {
       vertical: systemType ?? undefined,
       filePaths: Object.keys(vfsFiles ?? {}),
+      pageTargets,
+      currentPageId: selectedTarget?.scopeAncestors?.pageId
+        ?? pageTargets?.find((page) => page.filePath === defaultTargetFile)?.pageId,
+      currentPagePath: selectedTarget?.scopeAncestors?.pagePath
+        ?? pageTargets?.find((page) => page.filePath === defaultTargetFile)?.route,
+      selectedElement: selectedTarget ? {
+        selector: selectedTarget.selector,
+        text: selectedTarget.text,
+        tagName: selectedTarget.tagName,
+        pageId: selectedTarget.scopeAncestors?.pageId,
+        pagePath: selectedTarget.scopeAncestors?.pagePath,
+        sectionId: selectedTarget.scopeAncestors?.sectionId,
+        sectionType: selectedTarget.scopeAncestors?.sectionType,
+        blockId: selectedTarget.scopeAncestors?.blockId,
+        slotId: selectedTarget.scopeAncestors?.slotId,
+        sourceLocator: selectedTarget.scopeAncestors?.sourceLocator,
+        resourceMark: selectedTarget.provenance?.resource,
+        targetPath: selectedTarget.scopeAncestors?.targetPath,
+        intent: selectedTarget.intent,
+      } : null,
+      selectedEditScope: selectedTarget?.editScope ?? null,
       hasExistingTemplate: Object.keys(vfsFiles ?? {}).length > 0,
     });
 
@@ -1877,6 +1905,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       let lastError = null;
       let canonicalRouteOps: TopologyChange[] = [];
       let canonicalCandidate: AICandidateChangeSet | undefined;
+      let dedicatedPageGeneration = false;
       
       // Global timeout for the whole turn. A source edit runs the Composer
       // write → check → repair loop (up to 3 provider calls), so 150s cut
@@ -2173,24 +2202,99 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             }
             canonicalCandidate = candidate;
             canonicalRouteOps = candidate.routeOps;
-            const files = Object.fromEntries(candidate.fileOps
-              .filter((operation) => operation.type !== 'delete')
-              .map((operation) => [operation.path, operation.content]));
-            const deletions = candidate.fileOps
-              .filter((operation) => operation.type === 'delete')
-              .map((operation) => operation.path);
-            response = {
-              data: {
-                content: JSON.stringify({
-                  files,
-                  deletions,
-                  explanation: editResult.summary ?? 'Unison App Builder prepared this source candidate.',
-                }),
-                actionType: 'canonical-source-edit',
-                filesDetected: Object.keys(files),
-              },
-              error: null,
-            };
+            const pageOps = candidate.routeOps.filter((operation) => operation.type === 'add_page');
+            if (pageOps.length > 0) {
+              const pageTargetsForGeneration = pageOps.map((operation) => {
+                const pageId = operation.pageId!;
+                const title = operation.title!;
+                const route = operation.route!;
+                const page = createBuilderPage(pageId, title, route, operation.pageType ?? 'custom', {
+                  showInNav: operation.showInNav ?? true,
+                  navOrder: operation.navOrder,
+                  createdBy: 'ai',
+                });
+                page.filePath = deriveFilePath(page);
+                return {
+                  pageId: page.pageId,
+                  title: page.title,
+                  route: page.path,
+                  filePath: page.filePath,
+                  role: page.pageRole ?? page.pageType,
+                  pageType: page.pageType,
+                  showInNav: page.showInNav,
+                  navOrder: page.navOrder,
+                };
+              });
+              const generation = await unisonAppBuilder.generatePages({
+                operationId: `builder-pages:${generateId()}`,
+                baseRevisionId: revisionId ?? null,
+                currentFiles: vfsFiles!,
+                pages: pageTargetsForGeneration,
+                existingRoutes: pageTargets.map(({ title, route }) => ({ title, route })),
+                businessName: templateName?.trim() || 'Website',
+                industry: userDesignProfile?.industryHints?.[0] ?? systemType ?? 'generic',
+                visionBrief: _userContent.slice(0, 1200),
+                registryContext: builderRegistryContext ?? undefined,
+                runtimeContext: [
+                  themeContextBlock,
+                  pageStructureContext,
+                  businessDataContext,
+                  backendStateContext,
+                  behaviorContext,
+                  unisonContext,
+                ].filter(Boolean).join('\n').slice(0, 12000),
+                signal: globalAbort.signal,
+                budgetMs: 240_000,
+                concurrency: 3,
+                onProgress: ({ page, index, total, phase }) => {
+                  liveStep(
+                    phase === 'authoring' ? 'generating' : 'validating',
+                    phase === 'authoring'
+                      ? `Authoring page ${index + 1}/${total}: ${page.title}`
+                      : `${page.title}: ${phase}`,
+                    page.route,
+                  );
+                },
+              });
+              if (generation.status !== 'ready-for-commit' || !generation.changeSet) {
+                throw new Error(generation.diagnostics[0] ?? 'App Builder could not author every requested page.');
+              }
+              canonicalCandidate = generation.changeSet;
+              canonicalRouteOps = [...generation.routeOps];
+              dedicatedPageGeneration = true;
+              const files = Object.fromEntries(Object.entries(generation.candidateFiles)
+                .filter(([path, content]) => vfsFiles![path] !== content));
+              response = {
+                data: {
+                  content: JSON.stringify({
+                    files,
+                    explanation: `Unison App Builder prepared ${generation.outcomes.length} new page${generation.outcomes.length === 1 ? '' : 's'}.`,
+                  }),
+                  actionType: 'canonical-page-generation',
+                  filesDetected: Object.keys(files),
+                },
+                error: null,
+              };
+            } else {
+              const files = Object.fromEntries(candidate.fileOps
+                .filter((operation) => operation.type !== 'delete')
+                .map((operation) => [operation.path, operation.content]));
+              const deletions = candidate.fileOps
+                .filter((operation) => operation.type === 'delete')
+                .map((operation) => operation.path);
+              response = {
+                data: {
+                  content: JSON.stringify({
+                    files,
+                    deletions,
+                    explanation: editResult.summary ?? 'Unison App Builder prepared this source candidate.',
+                  }),
+                  actionType: 'canonical-source-edit',
+                  filesDetected: Object.keys(files),
+                },
+                error: null,
+              };
+            }
           } else response = await runBuilderTurn<any>({
             messages: conversationHistory,
             registryContext: builderRegistryContext ?? undefined,
@@ -2658,11 +2762,18 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             console.log('[AIBuilderPanel] Applying candidate to VFS:', Object.keys(normalizedFiles));
             vfsEventBus.emit('ai:apply:start', { source: 'multi-file' });
             markPreviewPending();
-            const sequentialTasks = buildSequentialAiTasks(
-              normalizedFiles,
-              multiFileDeletions,
-              canonicalCandidate,
-            );
+            const sequentialTasks = dedicatedPageGeneration
+              ? [{
+                  id: `${canonicalCandidate?.id ?? 'builder-pages'}:1`,
+                  files: normalizedFiles,
+                  deletions: multiFileDeletions,
+                  paths: [...Object.keys(normalizedFiles), ...multiFileDeletions],
+                }]
+              : buildSequentialAiTasks(
+                  normalizedFiles,
+                  multiFileDeletions,
+                  canonicalCandidate,
+                );
             let applyOutcome: Awaited<ReturnType<AIBuilderApplyCallback>> = {
               success: false,
               errors: ['The AI candidate did not produce an executable task.'],
@@ -2969,7 +3080,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       // ── Robust error extraction ──
       // supabase.functions.invoke throws FunctionsHttpError whose `.context`
       // is the raw Response object. We need to read it properly.
-      let errorMessage = 'Unknown error';
+        let errorMessage = 'Unknown error';
 
       // Helper: try to pull a message from a FunctionsHttpError context
       const extractFromContext = async (ctx: unknown): Promise<string | null> => {
@@ -3033,13 +3144,22 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         }
       }
       
+      const providerUnavailable = isBuilderProviderUnavailable(errorMessage);
+      const offerProviderRetry = shouldOfferBuilderProviderRetry(errorMessage, droppedFiles.length);
+      if (offerProviderRetry && selectedTarget) setAgentTarget(selectedTarget);
       const sessionExpired = isBuilderSessionError(error);
       if (sessionExpired) {
         errorMessage = 'Your session expired. Please sign in again, then resend your request.';
+      } else if (providerUnavailable) {
+        errorMessage = 'AI is temporarily unavailable. This request was not applied; your original request and selected scope are preserved.';
       }
       const finalErrorContent = sessionExpired ? errorMessage : /^Too many requests\./i.test(errorMessage)
         ? `Sorry, I encountered an error: ${errorMessage}`
         : `Sorry, I encountered an error: ${errorMessage}. Please try again or simplify your request.`;
+      const retryAsk = offerProviderRetry ? {
+        question: 'ai-provider-retry',
+        options: [{ label: 'Retry this request', reply: _userContent }],
+      } : undefined;
 
       setMessages(prev => {
         if (streamingId && prev.some(m => m.id === streamingId)) {
@@ -3058,6 +3178,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   content: finalErrorContent,
                   thinking: [...(m.thinking ?? []), errorStep],
                   isStreaming: false,
+                  ask: retryAsk,
                 }
               : m
           );
@@ -3068,6 +3189,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           role: 'assistant',
           content: finalErrorContent,
           timestamp: new Date(),
+          ask: retryAsk,
         }];
       });
     } finally {
@@ -3125,6 +3247,27 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       const debugInterpretation = await interpretBuilderRequest(errorPrompt, {
         vertical: systemType ?? undefined,
         filePaths: Object.keys(debugVfs),
+        pageTargets,
+        currentPageId: agentTarget?.scopeAncestors?.pageId
+          ?? pageTargets?.find((page) => page.filePath === defaultTargetFile)?.pageId,
+        currentPagePath: agentTarget?.scopeAncestors?.pagePath
+          ?? pageTargets?.find((page) => page.filePath === defaultTargetFile)?.route,
+        selectedElement: agentTarget ? {
+          selector: agentTarget.selector,
+          text: agentTarget.text,
+          tagName: agentTarget.tagName,
+          pageId: agentTarget.scopeAncestors?.pageId,
+          pagePath: agentTarget.scopeAncestors?.pagePath,
+          sectionId: agentTarget.scopeAncestors?.sectionId,
+          sectionType: agentTarget.scopeAncestors?.sectionType,
+          blockId: agentTarget.scopeAncestors?.blockId,
+          slotId: agentTarget.scopeAncestors?.slotId,
+          sourceLocator: agentTarget.scopeAncestors?.sourceLocator,
+          resourceMark: agentTarget.provenance?.resource,
+          targetPath: agentTarget.scopeAncestors?.targetPath,
+          intent: agentTarget.intent,
+        } : null,
+        selectedEditScope: agentTarget?.editScope ?? null,
         hasExistingTemplate: hasVfsContext,
       });
       const { plan: debugTaskPlan } = interpretPrompt(errorPrompt, {

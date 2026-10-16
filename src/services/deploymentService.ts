@@ -250,23 +250,29 @@ export async function deployToProvider(
         snapshot: (publishedRevision.siteBundleSnapshot as SiteBundleSnapshot | null) ?? request.snapshot ?? null,
       };
 
-      // Phase 8 — backend/deploy identity preflight. The site must deploy
-      // against a ready backend binding, and the deployed bundle carries its
-      // public runtime contract (unison.runtime.json). Public values only.
-      backendPreflight = await runDeployBackendPreflight({ projectId: request.projectId });
-      if (!backendPreflight.ok) {
-        const errorResponse: DeploymentResponse = {
-          status: 'error',
-          provider: request.provider,
-          error: `Publish blocked: ${backendPreflight.reason}`,
-        };
-        onProgress?.({
-          isDeploying: false,
-          progress: 0,
-          message: 'Publish blocked — backend binding is not ready.',
-          result: errorResponse,
-        });
-        return errorResponse;
+      // Backend-free projects still require a persisted identity and revision.
+      // Only an accepted runtime that requires a backend needs a binding.
+      const runtimeManifest = publishedRevision.runtimeManifest;
+      const backendFree = typeof runtimeManifest === 'object'
+        && runtimeManifest !== null
+        && 'backendRequired' in runtimeManifest
+        && runtimeManifest.backendRequired === false;
+      if (!backendFree) {
+        backendPreflight = await runDeployBackendPreflight({ projectId: request.projectId });
+        if (!backendPreflight.ok) {
+          const errorResponse: DeploymentResponse = {
+            status: 'error',
+            provider: request.provider,
+            error: `Publish blocked: ${backendPreflight.reason}`,
+          };
+          onProgress?.({
+            isDeploying: false,
+            progress: 0,
+            message: 'Publish blocked — backend binding is not ready.',
+            result: errorResponse,
+          });
+          return errorResponse;
+        }
       }
     }
 

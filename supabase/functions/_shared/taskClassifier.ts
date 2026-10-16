@@ -38,6 +38,61 @@ export interface ClassifiedTask {
   skipResearch: boolean;
   /** Whether to skip thinking tags */
   skipThinking: boolean;
+  /** Semantic edit class derived from the authoritative BuilderRequestEnvelope. */
+  editClassification?: BuilderEditClassification | null;
+}
+
+export type BuilderEditClassification =
+  | 'content_relocation'
+  | 'section_structure'
+  | 'page_and_route'
+  | 'copy_edit'
+  | 'visual_edit'
+  | 'asset_edit'
+  | 'resource_edit'
+  | 'binding_edit'
+  | 'behavior_edit'
+  | 'compound_edit'
+  | 'general_edit';
+
+export function classifyBuilderEditTask(envelope: unknown): BuilderEditClassification | null {
+  if (!envelope || typeof envelope !== 'object') return null;
+  const value = envelope as { editorOperations?: unknown; scope?: { relation?: unknown }; complexity?: unknown };
+  const operations = new Set(Array.isArray(value.editorOperations)
+    ? value.editorOperations.filter((item): item is string => typeof item === 'string')
+    : []);
+  if (operations.size === 0) return null;
+
+  if (value.scope?.relation === 'source_destination' || operations.has('copy.move')) return 'content_relocation';
+  if (operations.has('page.create') || operations.has('page.rename') || operations.has('page.remove')
+    || operations.has('route.bind') || operations.has('navigation.update')) return 'page_and_route';
+  if (operations.has('section.create') || operations.has('section.remove')
+    || operations.has('section.move') || operations.has('section.reorder')) return 'section_structure';
+  if (operations.has('resource.update')) return 'resource_edit';
+  if (operations.has('binding.update') || operations.has('intent.bind')) return 'binding_edit';
+  if (operations.has('behavior.update')) return 'behavior_edit';
+  if (operations.has('asset.replace')) return 'asset_edit';
+  if (operations.has('style.update') || operations.has('theme.update')) return 'visual_edit';
+  if (operations.has('copy.rewrite') || operations.has('copy.reorder')) return 'copy_edit';
+  if (operations.size > 1 || value.complexity === 'compound' || value.complexity === 'program') return 'compound_edit';
+  return 'general_edit';
+}
+
+export function builderEditClassificationDirective(classification: BuilderEditClassification): string {
+  const directives: Record<BuilderEditClassification, string> = {
+    content_relocation: 'Resolve both source and destination before editing. Move the content exactly once; do not duplicate it. Preserve the destination section and all unrelated content.',
+    section_structure: 'Plan the requested section creation, removal, or order explicitly. Preserve stable section identities, page chrome, and unrelated sections.',
+    page_and_route: 'Treat page creation and navigation updates as one coordinated change. Use canonical route operations; never author or replace compiler-owned /src/App.tsx.',
+    copy_edit: 'Edit the requested copy only. Preserve markup, links, bindings, and layout unless the request explicitly includes them.',
+    visual_edit: 'Keep the change presentation-owned. Use existing theme tokens and registered variants; do not change copy, routes, or data bindings unless requested.',
+    asset_edit: 'Change only the requested asset reference through the existing asset owner. Preserve surrounding markup and durable asset identity.',
+    resource_edit: 'Change live data through the registered ResourceRuntime resource, not generated source. Preserve server-authoritative values and ownership.',
+    binding_edit: 'Use canonical binding/intent operations. Preserve capability contracts and destinations unless the request explicitly changes them.',
+    behavior_edit: 'Trace the existing interaction and implement the requested behavior through its owning controller and capability contract.',
+    compound_edit: 'Decompose the request into explicit ordered operations, preserve dependencies between them, and validate the complete result before returning it.',
+    general_edit: 'Identify the smallest correct owner and target before editing; preserve all unrelated behavior and structure.',
+  };
+  return `[EDIT TASK CLASS: ${classification}]\n${directives[classification]}`;
 }
 
 /**

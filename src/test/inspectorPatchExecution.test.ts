@@ -80,6 +80,20 @@ describe('inspector patch execution', () => {
     expect(next).toContain('data-ut-slot="hero.media"');
   });
 
+  it('does not edit a matching slot from a different section', () => {
+    const result = planInspectorExecution(
+      plan({ type: 'set-slot-text', sectionId: 'missing-section', selector: '', slotId: 'hero.headline', value: 'Wrong page' }),
+      { files: {
+        ...files,
+        '/src/pages/Other.tsx': '<section data-ut-section-id="other-section"><h1 data-ut-slot="hero.headline">Other page</h1></section>',
+      } },
+    );
+    expect(result).toMatchObject({
+      kind: 'rejected',
+      reason: 'Slot "hero.headline" could not be uniquely matched to the selected section in the page source. Refresh the preview and reselect the text.',
+    });
+  });
+
   it('routes composition-owned copy without requiring a source JSX slot', () => {
     const result = planInspectorExecution(
       plan({ type: 'set-slot-text', sectionId: null, sectionType: 'hero' as never, selector: '', slotId: 'hero.headline', value: 'New headline' }),

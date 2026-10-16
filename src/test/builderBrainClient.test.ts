@@ -7,6 +7,8 @@ import {
   isProviderTimeoutError,
   isRateLimitError,
   isTransportError,
+  isBuilderProviderUnavailable,
+  shouldOfferBuilderProviderRetry,
 } from '@/services/builderBrainClient';
 
 describe('builder brain rate-limit retry', () => {
@@ -20,6 +22,19 @@ describe('builder brain rate-limit retry', () => {
   it('does not append duplicate edge error detail', () => {
     expect(builderEdgeErrorMessage({ error: 'AI request failed.', details: 'AI request failed.' }, 500))
       .toBe('AI request failed.');
+  });
+
+  it('recognizes provider exhaustion without confusing missing configuration for transient outage', () => {
+    expect(isBuilderProviderUnavailable('All AI providers failed. Last errors: Gemini timeout.')).toBe(true);
+    expect(isBuilderProviderUnavailable('AI service unavailable — all models are busy.')).toBe(true);
+    expect(isBuilderProviderUnavailable('AI service not configured. Set project secrets.')).toBe(false);
+  });
+
+  it('offers retry only when the original request payload can be reconstructed', () => {
+    const unavailable = 'AI service unavailable — all models are busy.';
+    expect(shouldOfferBuilderProviderRetry(unavailable, 0)).toBe(true);
+    expect(shouldOfferBuilderProviderRetry(unavailable, 1)).toBe(false);
+    expect(shouldOfferBuilderProviderRetry('AI service not configured.', 0)).toBe(false);
   });
 
   it('uses a short default delay when Lane B does not provide Retry-After', () => {

@@ -38,6 +38,11 @@ const ABSTRACT_GOAL_ONTOLOGY = `
 
 /** The ONLY values allowed in requestedBusinessCapabilities. */
 const CAPABILITY_VOCABULARY = BUSINESS_CAPABILITY_IDS.join(" | ");
+const EDITOR_OPERATION_VOCABULARY = [
+  "copy.rewrite", "copy.move", "copy.reorder", "section.create", "section.remove", "section.move", "section.reorder",
+  "page.create", "page.rename", "page.remove", "route.bind", "navigation.update", "style.update", "theme.update",
+  "asset.replace", "resource.update", "binding.update", "intent.bind", "behavior.update", "backend.configure", "debug.fix",
+] as const;
 
 const SYSTEM_PROMPT = `You are the Request Interpreter for Unison's AI Builder — an AI business system builder (website + catalog + CRM + bookings + automations as one connected system).
 
@@ -57,16 +62,21 @@ Rules:
 ${ABSTRACT_GOAL_ONTOLOGY}
 5. needsExternalResearch is TRUE only when the answer genuinely depends on current external information (competitor/product research, live pricing, third-party API docs). Editing, debugging, local backend wiring, and architecture questions are FALSE.
 6. needsApproval is TRUE for backend/database/destructive/deployment changes.
-7. complexity: simple = one coherent change; compound = multiple related changes; program = multi-phase work across site + backend.
-8. executionMode: answer_only (no code), direct_patch, planned_patch, tool_actions, mixed.
-9. confidence is your own 0..1 estimate. If the request is ambiguous, list ambiguities instead of guessing silently.
+7. EDIT OPERATION VOCABULARY — classify requested mutations separately from broad domains. Use only: ${EDITOR_OPERATION_VOCABULARY.join(' | ')}. A request may require several operations.
+8. TARGET RELATIONSHIP — scope.relation is single_target, source_destination, multi_target, or site_wide. For copy.move / section.move / section.reorder, identify sourceTarget and destinationTarget separately; never treat the destination as an extra source edit. For footer links pointing to a new page, classify page.create + navigation.update + route.bind and use multi_target. Do not fabricate selectors or page IDs; if the target cannot be resolved from context, add an ambiguity and a goal to resolve it.
+9. SELECTED AI EDIT SCOPE — when PROJECT CONTEXT includes selectedEditScope.selection=explicit, treat that scope as a hard bound. If the requested operation requires a wider target, list the scope conflict as an ambiguity and ask for confirmation; do not silently widen it. If selection=auto, you may widen only to the minimum scope required by the operation plan and state that scope.
+10. Preserve canonical ownership: page/route changes are topology-owned, saved-record changes are resource-owned, intent changes are binding-owned, and visual changes are presentation-owned. Never turn source copy into a business capability.
+11. complexity: simple = one coherent change; compound = multiple related changes; program = multi-phase work across site + backend.
+12. executionMode: answer_only (no code), direct_patch, planned_patch, tool_actions, mixed.
+13. confidence is your own 0..1 estimate. If the request is ambiguous, list ambiguities instead of guessing silently.
 
 Return ONLY minified JSON matching:
-{"summary":string,"requestKinds":string[],"domains":string[],"scope":{"level":string,"targets":string[]},"goals":[{"id":string,"description":string,"priority":"required"|"preferred"|"optional"}],"constraints":string[],"assumptions":string[],"dependencies":string[],"ambiguities":string[],"complexity":string,"executionMode":string,"needsExternalResearch":boolean,"needsApproval":boolean,"confidence":number,"businessGoals":string[],"designTraits":string[],"experienceFeatures":string[],"editorOperations":string[],"requestedBusinessCapabilities":string[]}
-
+{"summary":string,"requestKinds":string[],"domains":string[],"scope":{"level":string,"targets":string[],"relation":"single_target"|"source_destination"|"multi_target"|"site_wide","sourceTarget"?:string,"destinationTarget"?:string},"goals":[{"id":string,"description":string,"priority":"required"|"preferred"|"optional"}],"constraints":string[],"assumptions":string[],"dependencies":string[],"ambiguities":string[],"complexity":string,"executionMode":string,"needsExternalResearch":boolean,"needsApproval":boolean,"confidence":number,"businessGoals":string[],"designTraits":string[],"experienceFeatures":string[],"editorOperations":string[],"requestedBusinessCapabilities":string[]}
 requestKinds ⊂ create|edit|debug|review|explain|plan|data_binding|backend_configuration|deployment
-domains ⊂ layout|visual_design|copy|navigation|catalog|crm|booking|auth|commerce|forms|automation|database|runtime
-scope.level ∈ element|block|section|page|site|backend|workspace`;
+domains ⊂ layout|visual_design|copy|navigation|catalog|crm|booking|auth|commerce|forms|automation|database|runtime|content_structure|pages|assets|typography|accessibility
+scope.level ∈ element|block|section|page|site|backend|workspace
+scope.relation ∈ single_target|source_destination|multi_target|site_wide
+editorOperations ⊂ ${EDITOR_OPERATION_VOCABULARY.join(" | ")}`;
 
 interface InterpretRequestBody {
   prompt?: string;
@@ -77,7 +87,24 @@ interface InterpretRequestBody {
     vertical?: string;
     capabilities?: string[];
     currentPageId?: string;
-    selectedElement?: { selector?: string; sectionId?: string; blockId?: string } | null;
+    currentPagePath?: string;
+    pageTargets?: Array<{ pageId?: string; title?: string; route?: string; filePath?: string; isHome?: boolean }>;
+    selectedEditScope?: { scopeType?: string; targetId?: string; selection?: 'explicit' | 'auto' } | null;
+    selectedElement?: {
+      selector?: string;
+      text?: string;
+      tagName?: string;
+      pageId?: string | null;
+      pagePath?: string | null;
+      sectionId?: string | null;
+      sectionType?: string | null;
+      blockId?: string | null;
+      slotId?: string | null;
+      sourceLocator?: string | null;
+      resourceMark?: string | null;
+      targetPath?: string | null;
+      intent?: string | null;
+    } | null;
     filePaths?: string[];
     recentTurns?: Array<{ role: string; content: string }>;
     objective?: string;
@@ -106,9 +133,33 @@ function buildContextBlock(ctx: InterpretRequestBody["context"]): string {
   if (ctx.vertical) lines.push(`vertical: ${ctx.vertical}`);
   if (ctx.capabilities?.length) lines.push(`installedCapabilities: ${ctx.capabilities.slice(0, 40).join(", ")}`);
   if (ctx.currentPageId) lines.push(`currentPage: ${ctx.currentPageId}`);
+  if (ctx.currentPagePath) lines.push(`currentRoute: ${ctx.currentPagePath}`);
+  if (ctx.selectedEditScope) {
+    lines.push(`selectedEditScope: ${ctx.selectedEditScope.scopeType || 'unknown'} target=${ctx.selectedEditScope.targetId || 'unknown'} selection=${ctx.selectedEditScope.selection || 'auto'}`);
+  }
+  if (ctx.pageTargets?.length) {
+    const pages = ctx.pageTargets.slice(0, 40).map((page) =>
+      `- ${page.title || 'Untitled'} | route=${page.route || 'unknown'} | file=${page.filePath || 'unknown'}${page.pageId ? ` | id=${page.pageId}` : ''}${page.isHome ? ' | home' : ''}`
+    );
+    lines.push(`pageManifest:\n${pages.join('\n')}`);
+  }
   if (ctx.selectedElement) {
     lines.push(
-      `selectedElement: ${[ctx.selectedElement.selector, ctx.selectedElement.sectionId, ctx.selectedElement.blockId]
+      `selectedElement: ${[
+        ctx.selectedElement.tagName,
+        ctx.selectedElement.text?.slice(0, 160),
+        ctx.selectedElement.selector,
+        ctx.selectedElement.pageId,
+        ctx.selectedElement.pagePath,
+        ctx.selectedElement.sectionId,
+        ctx.selectedElement.sectionType,
+        ctx.selectedElement.blockId,
+        ctx.selectedElement.slotId,
+        ctx.selectedElement.sourceLocator,
+        ctx.selectedElement.resourceMark,
+        ctx.selectedElement.targetPath,
+        ctx.selectedElement.intent,
+      ]
         .filter(Boolean)
         .join(" | ")}`,
     );

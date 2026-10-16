@@ -165,7 +165,7 @@ export async function runProviderLoop(opts: {
   // budget to Gemini and the managed gateway.
   let openaiQuotaExhausted = directOnCooldown('openai');
   const isQuotaExhausted = (detail: string) =>
-    /credits are depleted|prepayment|quota|billing|insufficient|exceeded your current quota/i.test(detail);
+    /insufficient[_\s-]?quota|insufficient (?:credits?|funds?)|credits? (?:are )?(?:depleted|exhausted)|prepayment|billing.{0,40}(?:required|disabled|inactive|exhausted|insufficient)|payment required|exceeded your current quota/i.test(detail);
   const isGeminiModelId = (id: string) => id.startsWith('google/') || id.startsWith('gemini-');
   // Tracks whether any provider failed for a non-rate-limit reason (timeout,
   // 500, empty response, etc.). When true, a deferred 429 from one provider

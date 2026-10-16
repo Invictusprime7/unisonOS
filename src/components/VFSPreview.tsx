@@ -84,6 +84,19 @@ const PREVIEW_ARTIFACT_COMPILE_TIMEOUT_MS = 180_000;
 
 // Local Vite server URL (for development without Docker)
 const LOCAL_PREVIEW_URL = import.meta.env.VITE_LOCAL_PREVIEW_URL || '';
+export interface InlineTextEditChange {
+  selector: string;
+  text: string;
+  revisionId: string | null;
+  target: {
+    pagePath: string | null;
+    sectionId: string | null;
+    sectionType: string | null;
+    slotId: string | null;
+    resourceMark: string | null;
+  };
+}
+
 export interface VFSPreviewProps {
   /** VFS nodes for file content */
   nodes: VirtualNode[];
@@ -127,6 +140,8 @@ export interface VFSPreviewProps {
   enableSelection?: boolean;
   /** Callback when an element is selected */
   onElementSelect?: (elementData: any) => void;
+  /** Commit a text edit performed directly on a selected preview leaf. */
+  onInlineTextCommit?: (change: InlineTextEditChange) => boolean | void | Promise<boolean | void>;
 }
 
 export interface VFSPreviewHandle {
@@ -354,6 +369,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   device = 'desktop',
   enableSelection = false,
   onElementSelect,
+  onInlineTextCommit,
 }, ref) => {
   const builderSession = React.useContext(BuilderSessionContext);
   const { launch } = useLaunch();
@@ -456,8 +472,10 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     key: string;
     files: Record<string, string>;
     launchState: typeof launch;
+    pendingSourceConflictPolicy: 'block' | 'accepted-only';
   } | null>(null);
   const [compileDrainVersion, setCompileDrainVersion] = useState(0);
+  const [acceptedRevisionPreview, setAcceptedRevisionPreview] = useState(false);
   const unmountedRef = useRef(false);
   const compileAttemptRef = useRef(0);
   const activeCompileControllerRef = useRef<AbortController | null>(null);
@@ -482,7 +500,8 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   }, []);
 
   useEffect(() => {
-    const key = `${filesSignature}::${launchSignature}`;
+    const pendingSourceConflictPolicy = acceptedRevisionPreview ? 'accepted-only' : 'block';
+    const key = `${filesSignature}::${launchSignature}::${pendingSourceConflictPolicy}`;
     if (compiledKeyRef.current === key || inFlightKeyRef.current === key) return;
 
     // Builder hydration publishes the route handoff, committed revision, and
@@ -490,9 +509,9 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     // of invalidating the compile already in flight. Invalidating every result
     // before first paint caused the permanent "Preparing preview" loop even
     // though every individual VFS snapshot was renderable.
-    pendingCompileRef.current = { key, files, launchState: launchRef.current };
+    pendingCompileRef.current = { key, files, launchState: launchRef.current, pendingSourceConflictPolicy };
     setCompileDrainVersion((version) => version + 1);
-  }, [files, filesSignature, launchSignature]);
+  }, [acceptedRevisionPreview, files, filesSignature, launchSignature]);
 
   useEffect(() => {
     if (inFlightKeyRef.current) return;
@@ -544,6 +563,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         const result = await buildPreviewArtifactsAsync({
           sourceFiles: request.files,
           launchState: request.launchState,
+          pendingSourceConflictPolicy: request.pendingSourceConflictPolicy,
         }, { signal: compileController.signal });
 
         if (!isStale()) {
@@ -623,12 +643,14 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   const hasCompiledPreview = Object.keys(sandpackFiles).length > 0;
   const legacyTimeoutRecoveryKeyRef = useRef<string | null>(null);
   const retryArtifactCompile = useCallback(() => {
-    const key = `${filesSignature}::${launchSignature}`;
+    const pendingSourceConflictPolicy = acceptedRevisionPreview ? 'accepted-only' : 'block';
+    const key = `${filesSignature}::${launchSignature}::${pendingSourceConflictPolicy}`;
     compiledKeyRef.current = null;
     pendingCompileRef.current = {
       key,
       files,
       launchState: launchRef.current,
+      pendingSourceConflictPolicy,
     };
     setPreviewCompile((current) => ({
       ...current,
@@ -637,7 +659,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       compiling: true,
     }));
     setCompileDrainVersion((version) => version + 1);
-  }, [files, filesSignature, launchSignature]);
+  }, [acceptedRevisionPreview, files, filesSignature, launchSignature]);
 
   useEffect(() => {
     if (!pipelineError?.message.includes('did not respond within 30 seconds')) return;
@@ -815,7 +837,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     const send = () => {
       const win = getPreviewWindow();
       if (win) {
-        win.postMessage({ type: 'EDIT_MODE_TOGGLE', enabled, activationKey: key, revisionId }, '*');
+        win.postMessage({ type: 'EDIT_MODE_TOGGLE', enabled, activationKey: key, revisionId, siteId }, '*');
       }
       attempts++;
       if (!bridgeReadyRef.current && attempts < 12) {
@@ -823,7 +845,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       }
     };
     send();
-  }, [getPreviewWindow, revisionId]);
+  }, [getPreviewWindow, revisionId, siteId]);
 
   // Re-push state whenever Edit/Select mode toggles
   useEffect(() => {
@@ -959,6 +981,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
               enabled: enableSelection,
               activationKey: editActivationKeyRef.current,
               revisionId,
+              siteId,
             }, '*');
             // Fresh iframe document (rebuild) — re-attach the highlight to the
             // same object the user had selected before the redraw.
@@ -984,6 +1007,32 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
           resource: sa.resource ?? data.element.attributes?.['data-ut-resource'] ?? null,
         };
         onElementSelect?.(data.element);
+        return;
+      }
+      if (data.type === 'INLINE_TEXT_EDIT_COMMIT') {
+        const source = event.source as Window | null;
+        const respond = (ok: boolean) => {
+          try { source?.postMessage({ type: 'INLINE_TEXT_EDIT_RESULT', editId: data.editId, ok }, '*'); }
+          catch { /* preview navigated during the save */ }
+        };
+        if (!source || !onInlineTextCommit || typeof data.editId !== 'number'
+          || typeof data.selector !== 'string' || typeof data.text !== 'string'
+          || (revisionId && data.revisionId && data.revisionId !== revisionId)) {
+          respond(false);
+          return;
+        }
+        void Promise.resolve(onInlineTextCommit({
+          selector: data.selector,
+          text: data.text,
+          revisionId: typeof data.revisionId === 'string' ? data.revisionId : null,
+          target: {
+            pagePath: typeof data.target?.pagePath === 'string' ? data.target.pagePath : null,
+            sectionId: typeof data.target?.sectionId === 'string' ? data.target.sectionId : null,
+            sectionType: typeof data.target?.sectionType === 'string' ? data.target.sectionType : null,
+            slotId: typeof data.target?.slotId === 'string' ? data.target.slotId : null,
+            resourceMark: typeof data.target?.resourceMark === 'string' ? data.target.resourceMark : null,
+          },
+        })).then((result) => respond(result !== false)).catch(() => respond(false));
         return;
       }
       if (data.type === 'UT_REACQUIRE_RESULT' && data.ok === false) {
@@ -1101,7 +1150,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
     window.addEventListener('message', handlePreviewMessage);
     return () => window.removeEventListener('message', handlePreviewMessage);
-  }, [builderSession.projectId, builderSession.runtimeContext?.projectId, onNavigate, onIntentTrigger, businessId, siteId, revisionId, onError, onReady, onElementSelect, enableSelection, getPreviewWindow, clearDirectPreviewSelection]);
+  }, [builderSession.projectId, builderSession.runtimeContext?.projectId, onNavigate, onIntentTrigger, businessId, siteId, revisionId, onError, onReady, onElementSelect, onInlineTextCommit, enableSelection, getPreviewWindow, clearDirectPreviewSelection]);
 
 
   
@@ -1442,6 +1491,12 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         <div className="px-3 py-2 bg-destructive/10 text-destructive text-sm flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
           {dockerService.error}
+        </div>
+      )}
+
+      {acceptedRevisionPreview && backend === 'sandpack' && !previewCompiling && !pipelineError && (
+        <div role="status" className="flex items-center gap-2 border-b border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+          Showing the last accepted revision. Conflicting pending edits are preserved but not included in this preview.
         </div>
       )}
       

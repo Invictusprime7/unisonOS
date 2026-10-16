@@ -91,10 +91,15 @@ function publishedPayload(): Record<string, string> {
 describe('persisted publish parity (M1 exit condition)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.invoke.mockResolvedValue({
-      data: { status: 'success', provider: 'vercel', url: 'https://published.test' },
-      error: null,
-    });
+    mocks.invoke.mockImplementation(async (functionName: string) => functionName === 'resolve-project-backend'
+      ? {
+          data: { success: true, data: { bindingId: 'shared:project-1', projectId: 'project-1', siteId: null, mode: 'shared-legacy', status: 'ready' } },
+          error: null,
+        }
+      : {
+          data: { status: 'success', provider: 'vercel', url: 'https://published.test' },
+          error: null,
+        });
     mocks.projectQuery.maybeSingle.mockResolvedValue({ data: { id: 'project-1' }, error: null });
     mocks.rpc.mockResolvedValue({
       data: { bindingId: 'binding-1', projectId: 'project-1', siteId: null, mode: 'shared-legacy', status: 'ready' },

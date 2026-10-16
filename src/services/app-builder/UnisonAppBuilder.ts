@@ -7,6 +7,7 @@
  */
 
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
+import { buildAICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import {
   runComposerRepairLoop,
   type ComposerLoopInput,
@@ -24,12 +25,15 @@ import {
   type AppBuildResult,
   type AppEditRequest,
   type AppEditResult,
+  type AppBuilderPageGenerationRequest,
+  type AppBuilderPageGenerationResult,
   type AppRepairRequest,
 } from './appBuilderContracts';
 import { orchestrateAppBuild } from './appBuilderOrchestrator';
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
+  generatePages(input: AppBuilderPageGenerationRequest): Promise<AppBuilderPageGenerationResult>;
   edit(input: AppEditRequest): Promise<AppEditResult>;
   repair(input: AppRepairRequest): Promise<AppEditResult>;
 }
@@ -61,6 +65,114 @@ export function createUnisonAppBuilder(
   const service: UnisonAppBuilder = {
     async generate(input) {
       return orchestrateAppBuild(input, { authorSite, runComposer });
+    },
+
+    async generatePages(input) {
+      const reject = (diagnostics: string[]): AppBuilderPageGenerationResult => ({
+        operationId: input.operationId,
+        protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
+        baseRevisionId: input.baseRevisionId,
+        status: input.signal?.aborted ? 'cancelled' : 'rejected',
+        stopReason: input.signal?.aborted ? 'cancelled' : 'validation-failed',
+        candidateFiles: { ...input.currentFiles },
+        routeOps: [],
+        outcomes: [],
+        diagnostics,
+      });
+      if (input.pages.length === 0 || input.pages.length > 12) {
+        return reject(['Page generation requires between 1 and 12 page targets.']);
+      }
+      const pageIds = new Set<string>();
+      const routes = new Set((input.existingRoutes ?? []).map(({ route }) => normalizeRoute(route)));
+      const filePaths = new Set<string>();
+      for (const page of input.pages) {
+        const route = normalizeRoute(page.route);
+        if (!/^[A-Za-z0-9_-]{1,80}$/.test(page.pageId) || pageIds.has(page.pageId)) {
+          return reject([`Duplicate or invalid page ID: ${page.pageId}`]);
+        }
+        if (!page.title.trim() || page.title.length > 120) return reject([`Invalid page title for ${page.pageId}.`]);
+        if (!/^\/[A-Za-z0-9/_-]*$/.test(route) || route === '/' || route.includes('//')) {
+          return reject([`Invalid new page route: ${page.route}`]);
+        }
+        if (routes.has(route)) return reject([`Route already exists: ${route}`]);
+        if (!/^\/src\/pages\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.tsx?$/.test(page.filePath)) {
+          return reject([`${page.filePath}: generated pages must be TypeScript files under /src/pages/.`]);
+        }
+        if (filePaths.has(page.filePath) || input.currentFiles[page.filePath] !== undefined) {
+          return reject([`${page.filePath}: page generation cannot replace an existing file.`]);
+        }
+        pageIds.add(page.pageId);
+        routes.add(route);
+        filePaths.add(page.filePath);
+      }
+      const routeOps = input.pages.map((page) => ({
+        type: 'add_page' as const,
+        pageId: page.pageId,
+        title: page.title,
+        route: page.route,
+        pageType: page.pageType,
+        showInNav: page.showInNav,
+        navOrder: page.navOrder,
+        createdBy: 'ai' as const,
+      }));
+      const authored = await authorSite({
+        pages: input.pages.map(({ pageId, title, route, filePath, role }) => ({ pageId, title, route, filePath, role })),
+        designContext: input.designContext ?? null,
+        industry: input.industry,
+        existingRoutes: input.existingRoutes,
+        businessName: input.businessName,
+        visionBrief: input.visionBrief,
+        files: { ...input.currentFiles },
+        revisionId: input.baseRevisionId,
+        candidateOrigin: 'builder',
+        initialRouteOps: routeOps,
+        registryContext: input.registryContext,
+        runtimeContext: input.runtimeContext,
+        signal: input.signal,
+        budgetMs: input.budgetMs,
+        concurrency: input.concurrency,
+        onProgress: input.onProgress,
+        resolveDependencies: false,
+        commitPage: async (files) => ({ files, revisionId: input.baseRevisionId }),
+      });
+      const diagnostics = authored.outcomes.flatMap((outcome) => outcome.errors);
+      const complete = authored.outcomes.length === input.pages.length
+        && authored.outcomes.every((outcome) => outcome.status === 'authored');
+      if (!complete) {
+        return {
+          operationId: input.operationId,
+          protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
+          baseRevisionId: input.baseRevisionId,
+          status: input.signal?.aborted ? 'cancelled' : 'rejected',
+          stopReason: input.signal?.aborted ? 'cancelled' : 'provider-error',
+          candidateFiles: authored.files,
+          routeOps: [],
+          outcomes: authored.outcomes,
+          diagnostics: diagnostics.length ? diagnostics : ['Not every requested page was authored.'],
+        };
+      }
+      const changeSet = buildAICandidateChangeSet({
+        aiFiles: authored.files,
+        baseFiles: { ...input.currentFiles },
+        baseRevisionId: input.baseRevisionId ?? undefined,
+        targetPages: input.pages.map((page) => page.filePath),
+        origin: 'builder',
+        intent: 'in-builder-multi-page-generation',
+        routeOps,
+        resolveDependencies: false,
+      }).changeSet;
+      return {
+        operationId: input.operationId,
+        protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
+        baseRevisionId: input.baseRevisionId,
+        status: 'ready-for-commit',
+        stopReason: 'complete',
+        candidateFiles: authored.files,
+        changeSet,
+        routeOps,
+        outcomes: authored.outcomes,
+        diagnostics,
+      };
     },
 
     async edit(input) {
@@ -121,3 +233,9 @@ export function createUnisonAppBuilder(
 export const unisonAppBuilder = createUnisonAppBuilder();
 
 export default unisonAppBuilder;
+
+function normalizeRoute(route: string): string {
+  const trimmed = route.trim();
+  if (!trimmed.startsWith('/') || /[?#\s]/.test(trimmed)) return trimmed;
+  return (trimmed.replace(/\/+$/, '') || '/').toLowerCase();
+}

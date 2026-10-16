@@ -30,9 +30,12 @@ export const projectBackendResolver = {
     let hit = cache.get(projectId);
     if (!hit) {
       hit = (async () => {
-        const { data, error } = await supabase.rpc('resolve_project_backend' as never, { p_project_id: projectId } as never);
+        const { data, error } = await supabase.functions.invoke('resolve-project-backend', {
+          body: { projectId },
+        });
         if (error) throw new Error(error.message);
-        return parseProjectBackendDescriptor(data);
+        if (!data?.success) throw new Error(data?.error || 'Project backend could not be resolved.');
+        return parseProjectBackendDescriptor(data.data);
       })();
       hit.catch(() => cache.delete(projectId));
       cache.set(projectId, hit);

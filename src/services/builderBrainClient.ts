@@ -333,6 +333,14 @@ export function builderEdgeErrorMessage(
   return `${summary} ${details.slice(0, 360)}`;
 }
 
+export function isBuilderProviderUnavailable(message: string): boolean {
+  return /all AI providers failed|all AI models failed|AI providers failed to produce a response|AI service unavailable/i.test(message);
+}
+
+export function shouldOfferBuilderProviderRetry(message: string, attachmentCount: number): boolean {
+  return attachmentCount === 0 && isBuilderProviderUnavailable(message);
+}
+
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {

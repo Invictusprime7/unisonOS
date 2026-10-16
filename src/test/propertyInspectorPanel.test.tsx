@@ -12,6 +12,28 @@ const selection: InspectorSelection = {
 };
 
 describe('property inspector mutation lifecycle', () => {
+  it('keeps layout choices usable and explains why confirmation cannot commit without identity', () => {
+    const onApplyPatchPlan = vi.fn();
+    render(
+      <PropertyInspectorPanel
+        selection={{
+          attributes: { 'data-ut-variant': 'hero:launch-showcase' },
+          scopeAncestors: { sectionType: 'hero' },
+        }}
+        onApplyPatchPlan={onApplyPatchPlan}
+      />,
+    );
+
+    const imageFan = getVariantById('hero:image-fan')!;
+    expect(screen.getByText(/no canonical section identity/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByText(imageFan.name, { exact: true }).closest('button')!);
+    const confirm = screen.getByRole('button', { name: `Confirm ${imageFan.name}` });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+    expect(screen.getByText('No canonical section identity for this selection.')).toBeInTheDocument();
+    expect(onApplyPatchPlan).not.toHaveBeenCalled();
+  });
+
   it('waits for preview adoption and retains the panel when the mutation fails', async () => {
     let finishApply!: (applied: boolean) => void;
     const onApplyPatchPlan = vi.fn(() => new Promise<boolean>((resolve) => {

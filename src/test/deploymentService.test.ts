@@ -45,15 +45,37 @@ describe('deployToProvider publication projection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.loadLatestPublishReadyRevisionForProject.mockResolvedValue(publishedRevision);
-    mocks.invoke.mockResolvedValue({
-      data: { status: 'success', provider: 'vercel', url: 'https://example.test' },
-      error: null,
-    });
+    mocks.invoke.mockImplementation(async (functionName: string) => functionName === 'resolve-project-backend'
+      ? {
+          data: { success: true, data: { bindingId: 'shared:project-1', projectId: 'project-1', siteId: null, mode: 'shared-legacy', status: 'ready' } },
+          error: null,
+        }
+      : {
+          data: { status: 'success', provider: 'vercel', url: 'https://example.test' },
+          error: null,
+        });
     mocks.projectQuery.maybeSingle.mockResolvedValue({ data: { id: 'project-1' }, error: null });
     mocks.rpc.mockResolvedValue({
       data: { bindingId: 'binding-1', projectId: 'project-1', siteId: null, mode: 'shared-legacy', status: 'ready' },
       error: null,
     });
+  });
+
+  it('publishes a backend-free project without resolving a backend binding', async () => {
+    mocks.loadLatestPublishReadyRevisionForProject.mockResolvedValue({
+      ...publishedRevision,
+      runtimeManifest: { backendRequired: false },
+    });
+
+    const result = await deployToProvider({
+      provider: 'vercel',
+      projectId: 'project-1',
+      files: { '/index.html': 'stale caller state' },
+    });
+
+    expect(result.status).toBe('success');
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.invoke).toHaveBeenCalledWith('publish-site', expect.anything());
   });
 
   it('sets the project active published revision after deployment', async () => {

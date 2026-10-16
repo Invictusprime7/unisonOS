@@ -13,11 +13,65 @@ import type { ThemeTokens } from '@/sections/types';
 import { planSiteComposition, type SiteCompositionPlan } from '@/services/composition';
 import type { ResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import type { WizardAggregatedRegistryContext } from '@/services/launch/wizardRegistryAggregation';
-import type { PageRegistry } from '@/types/pageRegistry';
+import type { BuilderPageType, PageRegistry } from '@/types/pageRegistry';
 import type { AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
+import { getArtifact } from '@/platform/core/artifactRegistry';
 
-export const APP_BUILDER_PROTOCOL_VERSION = 'unison-app-builder/1' as const;
+export const APP_BUILDER_PROTOCOL_VERSION = 'unison-app-builder/2' as const;
+
+export interface AppBuilderLogoContract {
+  version: '1.0';
+  brandMark: {
+    source: { kind: 'business-profile'; field: 'logoUrl' };
+    placements: Array<{ artifactId: string; slotId: string }>;
+    image: { objectFit: 'contain'; preserveAspectRatio: true; maxWidthPx: 180; maxHeightPx: 48 };
+    accessibleName: string;
+    missingAssetFallback: { kind: 'text-wordmark'; text: string };
+  };
+  logoCloud: {
+    artifactId: 'logo-cloud';
+    source: 'owner-authored';
+    minimumItems: number;
+    emptyBehavior: 'hide_section' | 'empty_state' | 'show_placeholder';
+    generatedEntriesAllowed: false;
+  };
+}
+
+function deriveAppBuilderLogoContract(businessName: string): AppBuilderLogoContract {
+  const placements = (['navbar', 'footer'] as const).map((artifactId) => {
+    const artifact = getArtifact(artifactId);
+    const slotId = `${artifactId}.brand`;
+    if (!artifact || artifact.dataSource.kind !== 'business-profile'
+      || !artifact.dataSource.profileFields?.includes('logoUrl')
+      || !artifact.supportedSlots.includes(slotId)) {
+      throw new Error(`AppBuildContract requires the registered ${artifactId} logo binding.`);
+    }
+    return { artifactId, slotId };
+  });
+  const logoCloud = getArtifact('logo-cloud');
+  if (!logoCloud || logoCloud.dataSource.kind !== 'authored') {
+    throw new Error('AppBuildContract requires the registered owner-authored logo-cloud artifact.');
+  }
+
+  return {
+    version: '1.0',
+    brandMark: {
+      source: { kind: 'business-profile', field: 'logoUrl' },
+      placements,
+      image: { objectFit: 'contain', preserveAspectRatio: true, maxWidthPx: 180, maxHeightPx: 48 },
+      accessibleName: businessName,
+      missingAssetFallback: { kind: 'text-wordmark', text: businessName },
+    },
+    logoCloud: {
+      artifactId: 'logo-cloud',
+      source: 'owner-authored',
+      minimumItems: logoCloud.dataSource.minRows,
+      emptyBehavior: logoCloud.dataSource.fallbackMode,
+      generatedEntriesAllowed: false,
+    },
+  };
+}
 
 export type AppBuildCandidateStatus =
   | 'planning'
@@ -78,6 +132,7 @@ export interface AppBuildContract {
   business: {
     industry: string;
     businessName: string;
+    branding: AppBuilderLogoContract;
     /** Owner's planning-chat brief carried from WizardSelections.visionPrompt. */
     visionBrief?: string;
     goals: readonly string[];
@@ -160,6 +215,49 @@ export interface AppBuilderPageTarget {
   route: string;
   filePath: string;
   role: string;
+}
+
+export interface AppBuilderNewPageTarget extends AppBuilderPageTarget {
+  pageId: string;
+  pageType: BuilderPageType;
+  showInNav?: boolean;
+  navOrder?: number;
+}
+
+export interface AppBuilderPageGenerationRequest {
+  operationId: string;
+  baseRevisionId?: string | null;
+  currentFiles: Readonly<Record<string, string>>;
+  pages: readonly AppBuilderNewPageTarget[];
+  existingRoutes?: readonly { title: string; route: string }[];
+  businessName: string;
+  industry?: string;
+  designContext?: ResolvedSiteDesignContext | null;
+  visionBrief?: string;
+  registryContext?: unknown;
+  runtimeContext?: string;
+  signal?: AbortSignal;
+  budgetMs?: number;
+  concurrency?: number;
+  onProgress?: (event: {
+    page: AppBuilderPageTarget;
+    index: number;
+    total: number;
+    phase: 'authoring' | 'committed' | 'kept-baseline';
+  }) => void;
+}
+
+export interface AppBuilderPageGenerationResult {
+  operationId: string;
+  protocolVersion: typeof APP_BUILDER_PROTOCOL_VERSION;
+  baseRevisionId?: string | null;
+  status: 'ready-for-commit' | 'rejected' | 'cancelled';
+  stopReason: AppBuildCandidateStopReason;
+  candidateFiles: Readonly<Record<string, string>>;
+  changeSet?: AICandidateChangeSet;
+  routeOps: readonly TopologyChange[];
+  outcomes: readonly AppBuildPageOutcome[];
+  diagnostics: readonly string[];
 }
 
 export interface AppEditRequest {
@@ -275,6 +373,16 @@ function assertAppBuildContract(value: unknown): asserts value is AppBuildContra
   if (!contract.identity || !contract.topology || !contract.business || !contract.design || !contract.runtime) {
     throw new Error('AppBuildContract is incomplete.');
   }
+  if (contract.business.branding?.version !== '1.0'
+    || contract.business.branding.brandMark?.source?.field !== 'logoUrl'
+    || !Array.isArray(contract.business.branding.brandMark.placements)
+    || contract.business.branding.logoCloud?.generatedEntriesAllowed !== false) {
+    throw new Error('AppBuildContract requires a valid logo and brand-mark contract.');
+  }
+  const expectedBranding = deriveAppBuilderLogoContract(contract.business.businessName);
+  if (JSON.stringify(stableJsonValue(contract.business.branding)) !== JSON.stringify(stableJsonValue(expectedBranding))) {
+    throw new Error('AppBuildContract logo rules must match the canonical artifact registry.');
+  }
   requireNonEmpty(contract.identity.projectId, 'identity.projectId');
   requireNonEmpty(contract.identity.businessId, 'identity.businessId');
   requireNonEmpty(contract.identity.siteId, 'identity.siteId');
@@ -308,6 +416,7 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
     business: {
       industry: input.industry,
       businessName: input.businessName,
+      branding: deriveAppBuilderLogoContract(input.businessName),
       visionBrief: input.visionBrief?.trim() || undefined,
       goals: [...input.goals],
       intents: [...input.intents],

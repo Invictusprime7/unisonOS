@@ -12,12 +12,14 @@ import {
   assertSnapshotPreviewRouteReachability,
   projectSnapshotVfsFiles,
   resolveSnapshot,
+  type PendingSourceConflictPolicy,
 } from '@/services/snapshotProjector';
 
 export interface PreviewArtifactsOptions {
   sourceFiles: Record<string, string>;
   launchState?: LaunchState | null;
   baseDependencies?: Record<string, string>;
+  pendingSourceConflictPolicy?: PendingSourceConflictPolicy;
 }
 
 export interface PreviewArtifactsResult {
@@ -60,9 +62,10 @@ export function buildPreviewArtifacts(
     sourceFiles: rawSourceFiles,
     launchState = null,
     baseDependencies = SANDPACK_PREVIEW_CORE_DEPENDENCIES,
+    pendingSourceConflictPolicy = 'block',
   } = options;
 
-  const pre = prepareForCompile(rawSourceFiles, launchState);
+  const pre = prepareForCompile(rawSourceFiles, launchState, pendingSourceConflictPolicy);
   const rawSandpackFiles = pre.launchStateWithRecoveredTheme
     ? launchStateToSandpackFiles({
         launchState: pre.launchStateWithRecoveredTheme,
@@ -88,9 +91,10 @@ export async function buildPreviewArtifactsAsync(
     sourceFiles: rawSourceFiles,
     launchState = null,
     baseDependencies = SANDPACK_PREVIEW_CORE_DEPENDENCIES,
+    pendingSourceConflictPolicy = 'block',
   } = options;
 
-  const pre = prepareForCompile(rawSourceFiles, launchState);
+  const pre = prepareForCompile(rawSourceFiles, launchState, pendingSourceConflictPolicy);
   const rawSandpackFiles = pre.launchStateWithRecoveredTheme
     ? await launchStateToSandpackFilesAsync({
         launchState: pre.launchStateWithRecoveredTheme,
@@ -106,9 +110,13 @@ export async function buildPreviewArtifactsAsync(
   return finishPreviewArtifacts(rawSandpackFiles, pre, baseDependencies);
 }
 
-function prepareForCompile(rawSourceFiles: Record<string, string>, launchState: LaunchState | null) {
+function prepareForCompile(
+  rawSourceFiles: Record<string, string>,
+  launchState: LaunchState | null,
+  pendingSourceConflictPolicy: PendingSourceConflictPolicy,
+) {
   const initialResolution = resolveSnapshot(rawSourceFiles, launchState);
-  const sourceFiles = projectSnapshotVfsFiles(rawSourceFiles, initialResolution);
+  const sourceFiles = projectSnapshotVfsFiles(rawSourceFiles, initialResolution, { pendingSourceConflictPolicy });
 
   const metadataThemePresetId = readThemePresetIdFromSourceFiles(sourceFiles);
   const themePresetId = metadataThemePresetId ||

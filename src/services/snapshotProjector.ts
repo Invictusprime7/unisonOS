@@ -850,9 +850,12 @@ function reconcilePendingVfsOperations(
  * overlapping path — EXCEPT paths with a newer live edit that the snapshot has
  * not absorbed yet.
  */
+export type PendingSourceConflictPolicy = 'block' | 'accepted-only';
+
 export function projectSnapshotVfsFiles(
   files: Record<string, string>,
   resolution: SnapshotResolution,
+  options: { pendingSourceConflictPolicy?: PendingSourceConflictPolicy } = {},
 ): Record<string, string> {
   if (!resolution.isWizardDraft || !resolution.snapshot) return files;
 
@@ -878,17 +881,22 @@ export function projectSnapshotVfsFiles(
     resolution.projectionScope,
     resolution.acceptedRevisionId,
   );
+  const acceptedOnly = options.pendingSourceConflictPolicy === 'accepted-only';
   if (reconciliation.conflicts.length > 0) {
     const paths = [...new Set(reconciliation.conflicts.map((conflict) => conflict.path))].sort();
-    throw new PreviewPipelineError(
-      'vfs',
-      `Pending source conflicts with accepted revision ${resolution.acceptedRevisionId ?? '(unknown)'} at ${paths.join(', ')}. Reload or re-author the pending change from the accepted revision.`,
-      { blockedFiles: paths, recoverableByRelaunch: true },
-    );
+    if (!acceptedOnly) {
+      throw new PreviewPipelineError(
+        'vfs',
+        `Pending source conflicts with accepted revision ${resolution.acceptedRevisionId ?? '(unknown)'} at ${paths.join(', ')}. Reload or re-author the pending change from the accepted revision.`,
+        { blockedFiles: paths, recoverableByRelaunch: true },
+      );
+    }
   }
   const pendingChanges = new Map<string, PendingVfsChange>();
-  for (const operation of reconciliation.operations) {
-    for (const change of operation.changes) pendingChanges.set(change.path, change);
+  if (!acceptedOnly) {
+    for (const operation of reconciliation.operations) {
+      for (const change of operation.changes) pendingChanges.set(change.path, change);
+    }
   }
 
   // A sealed Wizard snapshot is a complete runtime projection, not an overlay.

@@ -799,8 +799,17 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
   let active = false;
   let activationKey = 0;
   let revisionId: string | null = null;
+  let activeSiteId: string | null = null;
   let hoverEl: HTMLElement | null = null;
   let selectedEl: HTMLElement | null = null;
+  let inlineEditingEl: HTMLElement | null = null;
+  let inlineOriginalHtml = '';
+  let inlineOriginalText = '';
+  let inlineEditSequence = 0;
+  let pendingInlineEdit: { editId: number; element: HTMLElement; originalHtml: string } | null = null;
+  let inlineOriginalEditable: string | null = null;
+  let inlineBlurHandler: (() => void) | null = null;
+  let inlineKeyHandler: ((event: KeyboardEvent) => void) | null = null;
 
   const STYLE_ID = '__ut-select-style';
   function ensureStyles() {
@@ -810,6 +819,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     style.textContent = [
       '.__ut-hover { outline: 2px dashed hsl(190 95% 55%) !important; outline-offset: 2px !important; cursor: pointer !important; }',
       '.__ut-selected { outline: 2px solid hsl(190 95% 55%) !important; outline-offset: 2px !important; box-shadow: 0 0 0 4px hsla(190, 95%, 55%, 0.18) !important; }',
+      '.__ut-inline-edit { cursor: text !important; outline: 2px solid hsl(190 95% 55%) !important; outline-offset: 3px !important; }',
       'html.__ut-select-mode, html.__ut-select-mode body { cursor: crosshair !important; }',
     ].join('\\n');
     document.head.appendChild(style);
@@ -930,6 +940,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     field: string | null;
     targetPath: string | null;
     pageId: string | null;
+    siteId: string | null;
     pagePath: string | null;
     intents: string[];
     primaryIntent: string | null;
@@ -955,6 +966,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     let field: string | null = null;
     let targetPath: string | null = el.getAttribute('data-ut-path') || el.getAttribute('href') || null;
     let pageId: string | null = null;
+    const siteId = activeSiteId;
     let pagePath: string | null = null;
     const intents: string[] = [];
     const primaryIntent: string | null = el.getAttribute('data-ut-intent') || null;
@@ -1038,6 +1050,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
       resource,
       targetPath,
       pageId,
+      siteId,
       pagePath,
       intents,
       primaryIntent,
@@ -1113,6 +1126,92 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
       },
     }, '*');
   }
+
+  function isInlineTextLeaf(el: HTMLElement): boolean {
+    const tag = el.tagName.toLowerCase();
+    return ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a', 'button', 'li', 'label', 'td', 'th', 'strong', 'em', 'small'].includes(tag)
+      && el.children.length === 0
+      && !!(el.textContent || '').trim()
+      && !el.isContentEditable;
+  }
+
+  function finishInlineTextEdit(save: boolean) {
+    const element = inlineEditingEl;
+    if (!element) return;
+    const originalHtml = inlineOriginalHtml;
+    const originalText = inlineOriginalText;
+    const text = (element.innerText || element.textContent || '').replace(/\u00a0/g, ' ').trim();
+    if (inlineBlurHandler) element.removeEventListener('blur', inlineBlurHandler);
+    if (inlineKeyHandler) element.removeEventListener('keydown', inlineKeyHandler);
+    element.classList.remove('__ut-inline-edit');
+    if (inlineOriginalEditable === null) element.removeAttribute('contenteditable');
+    else element.setAttribute('contenteditable', inlineOriginalEditable);
+    element.removeAttribute('data-ut-inline-edit');
+    inlineEditingEl = null;
+    inlineBlurHandler = null;
+    inlineKeyHandler = null;
+    inlineOriginalEditable = null;
+    if (!save) {
+      element.innerHTML = originalHtml;
+      return;
+    }
+    if (text === originalText) return;
+
+    const editId = ++inlineEditSequence;
+    pendingInlineEdit = { editId, element, originalHtml };
+    const scope = collectScopeAncestors(element);
+    window.parent.postMessage({
+      type: 'INLINE_TEXT_EDIT_COMMIT',
+      editId,
+      revisionId,
+      selector: computeSelector(element),
+      text,
+      target: {
+        pagePath: scope.pagePath,
+        sectionId: scope.sectionId,
+        sectionType: scope.sectionType,
+        slotId: scope.slotId,
+        resourceMark: element.getAttribute('data-ut-resource') || findAncestorAttr(element, 'data-ut-resource'),
+      },
+    }, '*');
+  }
+
+  function beginInlineTextEdit(element: HTMLElement, event: MouseEvent) {
+    if (inlineEditingEl === element) return;
+    if (inlineEditingEl) finishInlineTextEdit(true);
+    inlineEditingEl = element;
+    inlineOriginalHtml = element.innerHTML;
+    inlineOriginalText = (element.innerText || element.textContent || '').replace(/\u00a0/g, ' ').trim();
+    inlineOriginalEditable = element.getAttribute('contenteditable');
+    element.setAttribute('contenteditable', 'true');
+    element.setAttribute('data-ut-inline-edit', 'true');
+    element.classList.add('__ut-inline-edit');
+    element.focus();
+
+    const doc = element.ownerDocument as Document & {
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    };
+    const range = doc.caretRangeFromPoint?.(event.clientX, event.clientY) ?? doc.createRange();
+    if (!range.startContainer || !element.contains(range.startContainer)) range.selectNodeContents(element);
+    range.collapse(range.startContainer !== element);
+    const selection = doc.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    inlineBlurHandler = () => finishInlineTextEdit(true);
+    inlineKeyHandler = (keyEvent) => {
+      if (keyEvent.key === 'Escape') {
+        keyEvent.preventDefault();
+        finishInlineTextEdit(false);
+      } else if ((keyEvent.metaKey || keyEvent.ctrlKey) && keyEvent.key === 'Enter') {
+        keyEvent.preventDefault();
+        finishInlineTextEdit(true);
+      }
+    };
+    element.addEventListener('blur', inlineBlurHandler);
+    element.addEventListener('keydown', inlineKeyHandler);
+  }
+
   (bridgeWindow as any).__unisonPreviewSelectElement = selectPreviewElement;
 
   function isUiChrome(el: Element | null): boolean {
@@ -1138,10 +1237,16 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     if (!active) return;
     const t = e.target as HTMLElement | null;
     if (!t || isUiChrome(t)) return;
+    if (inlineEditingEl && (inlineEditingEl === t || inlineEditingEl.contains(t))) {
+      e.stopPropagation();
+      if (typeof (e as any).stopImmediatePropagation === 'function') (e as any).stopImmediatePropagation();
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     if (typeof (e as any).stopImmediatePropagation === 'function') (e as any).stopImmediatePropagation();
     selectPreviewElement(t);
+    if (isInlineTextLeaf(t)) beginInlineTextEdit(t, e);
   }
 
   function activate() {
@@ -1155,6 +1260,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
   }
   function deactivate() {
     if (!active) return;
+    if (inlineEditingEl) finishInlineTextEdit(true);
     active = false;
     clearHover();
     clearSelected();
@@ -1170,11 +1276,18 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     if (data.type === 'EDIT_MODE_TOGGLE') {
       activationKey = typeof data.activationKey === 'number' ? data.activationKey : activationKey + 1;
       revisionId = typeof data.revisionId === 'string' ? data.revisionId : null;
+      activeSiteId = typeof data.siteId === 'string' ? data.siteId : null;
       if (data.enabled) activate(); else deactivate();
       window.parent.postMessage({ type: 'EDIT_MODE_READY', activationKey, enabled: !!data.enabled }, '*');
     }
     if (data.type === 'EDIT_MODE_CLEAR_SELECTION') {
       clearSelected();
+    }
+    if (data.type === 'INLINE_TEXT_EDIT_RESULT' && pendingInlineEdit?.editId === data.editId) {
+      if (!data.ok && pendingInlineEdit.element.isConnected) {
+        pendingInlineEdit.element.innerHTML = pendingInlineEdit.originalHtml;
+      }
+      pendingInlineEdit = null;
     }
     // M1c: after a Sandpack rebuild the iframe document is recreated and the
     // previous selection is lost. The parent replays the last selection

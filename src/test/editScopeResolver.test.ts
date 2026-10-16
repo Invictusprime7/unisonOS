@@ -20,6 +20,40 @@ describe('editScopeResolver artifact wiring (Stage 1)', () => {
     expect(scope.scopeType).toBe('section');
   });
 
+  it('supports explicit page and site scopes with stable topology identities', () => {
+    const pageScope = resolveEditScope({
+      ancestors: { pageId: 'page-services', pagePath: '/services', sectionId: 'services' },
+      selectedScope: 'page',
+    });
+    expect(pageScope.scopeType).toBe('page');
+    expect(pageScope.targetId).toBe('page-services');
+    expect(pageScope.riskLevel).toBe('high');
+
+    const siteScope = resolveEditScope({
+      ancestors: { siteId: 'site-1', pageId: 'page-services', pagePath: '/services' },
+      selectedScope: 'site',
+    });
+    expect(siteScope.scopeType).toBe('site');
+    expect(siteScope.targetId).toBe('site-1');
+    expect(siteScope.riskLevel).toBe('high');
+    expect(buildScopedPromptPrefix(siteScope)).toContain('Site scope may coordinate multiple routes');
+  });
+
+  it('downgrades site scope without stable site identity and still caps content-only artifacts', () => {
+    const missingSite = resolveEditScope({
+      ancestors: { pageId: 'page-1', pagePath: '/services' },
+      selectedScope: 'site',
+    });
+    expect(missingSite.scopeType).toBe('page');
+    expect(missingSite.targetId).toBe('page-1');
+
+    const contentOnly = resolveEditScope({
+      ancestors: { siteId: 'site-1', sectionId: 'nav-1', sectionType: 'navbar', clickedTag: 'nav' },
+      selectedScope: 'site',
+    });
+    expect(contentOnly.scopeType).toBe('block');
+  });
+
   it('caps a content-only artifact down to block scope even when section/page is requested', () => {
     const ancestors: ScopeAncestors = {
       sectionId: 'nav-1',

@@ -177,6 +177,30 @@ export async function executeBackendCommandV2<T = unknown>(
   }
 }
 
+export function runtimeContextFromResourceContext(context: ResourceContext): RuntimeContextV2 | null {
+  if (![context.projectId, context.siteId, context.businessId].every(validIdentity)) return null;
+  return {
+    protocolVersion: 2,
+    projectId: context.projectId,
+    siteId: context.siteId,
+    businessId: context.businessId,
+    operationId: newRuntimeOperationId(),
+    actorKind: context.mode === 'builder' ? 'studio-user' : 'visitor',
+  };
+}
+
+export async function executeResourceCommandCompatible<T>(
+  context: ResourceContext,
+  command: BackendCommandV2,
+  legacy: () => Promise<T>,
+): Promise<T> {
+  const runtimeContext = runtimeContextFromResourceContext(context);
+  if (!runtimeContext) return legacy();
+  const result = await executeBackendCommandV2<T>(runtimeContext, command);
+  if (result.ok === false) throw new Error(`${result.error.code}: ${result.error.message}`);
+  return result.data;
+}
+
 export function newRuntimeOperationId(): string {
   return crypto.randomUUID();
 }

@@ -22,7 +22,14 @@ export interface EnvelopeShape {
   summary?: string;
   requestKinds?: string[];
   domains?: string[];
-  scope?: { level?: string; targets?: string[]; [k: string]: unknown };
+  scope?: {
+    level?: string;
+    targets?: string[];
+    relation?: string;
+    sourceTarget?: string;
+    destinationTarget?: string;
+    [k: string]: unknown;
+  };
   goals?: EnvelopeGoalShape[];
   constraints?: string[];
   requestedCapabilities?: string[];
@@ -69,6 +76,7 @@ export function buildEnvelopeDirective(envelope?: EnvelopeShape | null): string 
   const businessGoals = clean(envelope.businessGoals);
   const ambiguities = clean(envelope.ambiguities);
   const targets = clean(envelope.scope?.targets);
+  const editorOperations = clean(envelope.editorOperations);
   const goals = Array.isArray(envelope.goals)
     ? envelope.goals
         .map((g) => ({
@@ -94,6 +102,12 @@ export function buildEnvelopeDirective(envelope?: EnvelopeShape | null): string 
   if (summary) lines.push(`Summary: ${summary}`);
   if (kinds.length) lines.push(`Request kinds: ${kinds.join(', ')}`);
   if (domains.length) lines.push(`Domains in play: ${domains.join(', ')}`);
+  if (editorOperations.length) {
+    lines.push(
+      `Editor operations: ${editorOperations.join(', ')}`,
+      'Treat these as the interpreted mutation plan, not as backend capabilities. Preserve each operation through the canonical owner and ask for clarification rather than inventing missing targets.',
+    );
+  }
 
   const scopeLevel = typeof envelope.scope?.level === 'string' ? envelope.scope.level : undefined;
   if (scopeLevel || targets.length) {
@@ -102,6 +116,10 @@ export function buildEnvelopeDirective(envelope?: EnvelopeShape | null): string 
       'Use this scope as a priority signal. Widen the authored file set when required to deliver a complete compatible implementation.',
     );
   }
+  const scopeRelation = typeof envelope.scope?.relation === 'string' ? envelope.scope.relation : undefined;
+  if (scopeRelation) lines.push(`Target relationship: ${scopeRelation}`);
+  if (envelope.scope?.sourceTarget) lines.push(`Source target: ${envelope.scope.sourceTarget}`);
+  if (envelope.scope?.destinationTarget) lines.push(`Destination target: ${envelope.scope.destinationTarget}`);
 
   if (envelope.complexity || envelope.executionMode) {
     lines.push(

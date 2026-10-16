@@ -153,3 +153,9 @@ verify_jwt = false
 
 [functions.project-backend]
 verify_jwt = false
+
+[functions.resolve-project-backend]
+verify_jwt = false
+
+[functions.resolve-published-site-backend]
+verify_jwt = false

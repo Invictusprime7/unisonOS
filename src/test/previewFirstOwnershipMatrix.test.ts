@@ -7,6 +7,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 
+const runtimeProtocol = vi.hoisted(() => ({ execute: vi.fn(), nextOperation: 0 }));
+
 vi.mock('@/services/resources/resourceRuntime', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/resources/resourceRuntime')>();
   return {
@@ -15,6 +17,20 @@ vi.mock('@/services/resources/resourceRuntime', async (importOriginal) => {
     getResourceRecord: vi.fn(async () => ({ id: 'r1', name: 'Old name' })),
   };
 });
+
+vi.mock('@/services/project-backend/runtimeProtocol', () => ({
+  executeResourceCommandCompatible: (context: { projectId?: string | null; siteId?: string | null; businessId: string; mode: string }, command: unknown, legacy: () => Promise<unknown>) => {
+    if (!context.projectId || !context.siteId || !context.businessId) return legacy();
+    return runtimeProtocol.execute({
+      protocolVersion: 2,
+      projectId: context.projectId,
+      siteId: context.siteId,
+      businessId: context.businessId,
+      operationId: `toolbar-operation-${++runtimeProtocol.nextOperation}`,
+      actorKind: context.mode === 'builder' ? 'studio-user' : 'visitor',
+    }, command);
+  },
+}));
 
 import { applyResourceOp } from '@/services/resources/resourceRuntime';
 import { registerContentTypes } from '@/services/resources/resourceRegistry';
@@ -74,7 +90,9 @@ const MATRIX: FixtureCase[] = [
 
 describe('M0 ownership fixture matrix', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     resetEditorCommandEvents();
+    runtimeProtocol.nextOperation = 0;
     registerContentTypes([{ id: 't-articles', slug: 'articles', name: 'Articles', field_schema: [{ key: 'title' }, { key: 'body', type: 'textarea' }] }]);
   });
 
@@ -166,6 +184,35 @@ describe('M0 ownership fixture matrix', () => {
     expect(events[0].lane).toBe('resource');
     expect(events[0].target.resourceMark).toBe(mark('services', 's1', 'name'));
     expect(events[0].ok).toBe(true);
+  });
+
+  it('uses V2 for fully scoped editor resource reads and writes', async () => {
+    runtimeProtocol.execute.mockImplementation(async (context, command) => ({
+      ok: true,
+      operationId: context.operationId,
+      data: command.kind === 'resource.get'
+        ? { id: 's1', name: 'Old name' }
+        : { id: 's1', name: 'Cut & Blowdry' },
+    }));
+
+    const result = await executeEditorCommand(MATRIX[0].command, {
+      ...ctx,
+      resource: { ...ctx.resource, siteId: 'site-1' },
+    });
+
+    expect(result).toMatchObject({ ok: true, lane: 'resource' });
+    expect(runtimeProtocol.execute).toHaveBeenCalledTimes(2);
+    const [readContext, readCommand] = runtimeProtocol.execute.mock.calls[0];
+    const [writeContext, writeCommand] = runtimeProtocol.execute.mock.calls[1];
+    expect(readContext).toMatchObject({
+      protocolVersion: 2, projectId: 'p1', siteId: 'site-1', businessId: 'b1', actorKind: 'studio-user',
+    });
+    expect(readCommand).toEqual({ kind: 'resource.get', resourceKey: 'services', recordId: 's1' });
+    expect(writeCommand).toEqual({
+      kind: 'resource.mutate', resourceKey: 'services', action: 'update', recordId: 's1', values: { name: 'Cut & Blowdry' },
+    });
+    expect(readContext.operationId).not.toBe(writeContext.operationId);
+    expect(applyResourceOp).not.toHaveBeenCalled();
   });
 
   it('lanes without a host executor fail explicitly and are still recorded', async () => {

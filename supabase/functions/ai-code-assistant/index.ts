@@ -8,7 +8,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import { AIRequestSchema } from "../_shared/requestSchema.ts";
-import { classifyTask } from "../_shared/taskClassifier.ts";
+import { classifyBuilderEditTask, classifyTask } from "../_shared/taskClassifier.ts";
 import { runAssistantOrchestrator } from "./orchestrator.ts";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { verifyAuth, authError } from "../_shared/auth.ts";
@@ -80,11 +80,12 @@ serve(async (req: Request) => {
     const needsResearch = envelope?.needsExternalResearch === true;
     const task = {
       ...baseTask,
+      editClassification: classifyBuilderEditTask(envelope),
       skipResearch: needsResearch ? false : (clientSkipResearch ?? baseTask.skipResearch),
     };
 
     console.log(
-      `[ai-code-assistant] task=${task.type} fastPath=${task.fastPath} skipResearch=${task.skipResearch} envelopeKinds=${
+      `[ai-code-assistant] task=${task.type} editClass=${task.editClassification ?? 'none'} fastPath=${task.fastPath} skipResearch=${task.skipResearch} envelopeKinds=${
         JSON.stringify((envelope?.requestKinds as string[] | undefined) ?? [])
       } elapsed-classify=${Date.now() - startMs}ms`,
     );
