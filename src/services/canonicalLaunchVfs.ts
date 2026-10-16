@@ -1,3 +1,4 @@
+import { SUPABASE_REMOTE_URL } from '@/integrations/supabase/env';
 import type { LayoutCategory } from '@/data/templates/types';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import {
@@ -253,7 +254,7 @@ function normalizeLegacyRevealGroupImports(files: Record<string, string>): Recor
 export function buildPublishedRuntimeConfig(
   input: Pick<BuildCanonicalLaunchArtifactsInput, 'siteId' | 'businessId' | 'projectId' | 'siteBundleSnapshot'>,
 ): PublishedRuntimeConfig {
-  const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || DEFAULT_PUBLIC_SUPABASE_URL).trim().replace(/\/$/, '');
+  const supabaseUrl = SUPABASE_REMOTE_URL.replace(/\/$/, '');
 
   return {
     version: '1.0',
