@@ -174,6 +174,7 @@ export interface AppEditRequest {
   knowledgeQuery?: string;
   registryContext?: unknown;
   runtimeContext?: string;
+  gatewayOptions?: Record<string, unknown>;
   diagnostics?: readonly string[];
   initialRouteOps?: readonly TopologyChange[];
   signal?: AbortSignal;

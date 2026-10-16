@@ -50,6 +50,7 @@ describe('UnisonAppBuilder facade', () => {
 
     expect(launcher).toContain('unisonAppBuilder.generate({');
     expect(builder).toContain('unisonAppBuilder.edit({');
+    expect(builder).toContain('promptAnalysis.structuredDirective');
     expect(launcher).not.toContain('authorSitePages({');
     expect(builder).not.toContain('runComposerRepairLoop({');
     const orchestrator = readFileSync('src/services/app-builder/appBuilderOrchestrator.ts', 'utf8');
@@ -179,9 +180,11 @@ describe('UnisonAppBuilder facade', () => {
       instruction: 'Change the headline',
       page: { title: 'Home', route: '/', role: 'home', filePath: '/src/pages/Home.tsx' },
       sourceTargets: ['/src/pages/Home.tsx'],
+      gatewayOptions: { selectedModelId: 'openai/gpt-4.1', reasoningEffort: 'high', timeoutMs: 110_000 },
     });
 
     expect(runComposer).toHaveBeenCalledOnce();
+    expect(runComposer.mock.calls[0][0].gatewayOptions).toEqual({ selectedModelId: 'openai/gpt-4.1', reasoningEffort: 'high', timeoutMs: 110_000 });
     expect(result.stopReason).toBe('complete');
     expect(result.changeSet).toBe(changeSet);
     expect(result.candidate.files).toEqual(nextFiles);

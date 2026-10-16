@@ -49,6 +49,7 @@ export interface ComposerLoopInput {
   maxAttempts?: number;
   signal?: AbortSignal;
   timeoutMs?: number;
+  gatewayOptions?: Record<string, unknown>;
   invoke?: ComposerInvoke;
   affinity?: {
     language?: HomepageVisualLanguage;
@@ -112,7 +113,13 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
     const { data, error } = await invoke({
       mode: AI_COMPOSER_MODES[request.task],
       messages: [{ role: 'user', content: JSON.stringify(request) }],
-      gatewayOptions: { timeoutMs: Math.min(145_000, remainingMs - 5_000) },
+      gatewayOptions: {
+        ...input.gatewayOptions,
+        timeoutMs: Math.min(
+          typeof input.gatewayOptions?.timeoutMs === 'number' ? input.gatewayOptions.timeoutMs : 145_000,
+          remainingMs - 5_000,
+        ),
+      },
     }, { timeoutMs: remainingMs, signal: input.signal });
 
     if (error || !data) {

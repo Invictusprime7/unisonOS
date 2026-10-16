@@ -1883,9 +1883,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       // healthy edits off mid-repair with a reason-less abort. Give the loop
       // its full budget and always abort with a readable reason.
       const globalAbort = new AbortController();
+      const BUILDER_TURN_TIMEOUT_MS = 420_000;
       const globalTimeout = setTimeout(
         () => globalAbort.abort(new DOMException('The AI edit took longer than 7 minutes and was stopped. Try a smaller, more specific change.', 'TimeoutError')),
-        420_000,
+        BUILDER_TURN_TIMEOUT_MS,
       );
       
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -2114,6 +2115,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               page,
               brief: [
                 'Edit the accepted React project without changing unrelated source.',
+                promptAnalysis.structuredDirective
+                  ? `Structured analysis of the request (clarifying guidance; the original instruction is authoritative):\n${promptAnalysis.structuredDirective}`
+                  : '',
                 themeContextBlock,
                 pageStructureContext ? `Page structure: ${pageStructureContext}` : '',
                 siteAnalysisContext ? `Component structure: ${siteAnalysisContext}` : '',
@@ -2147,8 +2151,15 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 unisonContext,
               ]
                 .filter(Boolean).map((value) => typeof value === 'string' ? value : JSON.stringify(value)).join('\n').slice(0, 12000),
+              gatewayOptions: gatewayConfig ? {
+                selectedModelId: gatewayConfig.selectedModelId,
+                reasoningEffort: gatewayConfig.reasoningEffort,
+                timeoutMs: gatewayConfig.timeoutMs,
+                autoModelSelection: gatewayConfig.autoModelSelection,
+                maxTokens: gatewayConfig.maxTokens,
+              } : undefined,
               signal: globalAbort.signal,
-              timeoutMs: gatewayConfig?.timeoutMs,
+              timeoutMs: BUILDER_TURN_TIMEOUT_MS,
             });
             if (editResult.candidate.status !== 'ready-for-commit' || !editResult.changeSet) {
               emitAgentEvent({ kind: 'plan', message: 'Could not finish writing the change', status: 'failed' });

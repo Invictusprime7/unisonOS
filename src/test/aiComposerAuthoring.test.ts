@@ -40,6 +40,29 @@ describe('AI composer repair loop', () => {
       expect(invoke.mock.calls[1][0].gatewayOptions.timeoutMs).toBe(55_000);
     } finally { spy.mockRestore(); }
   });
+  it('uses the selected model settings on the first Composer generation', async () => {
+    const invoke = vi.fn().mockResolvedValue(good('/src/pages/Home.tsx', 'First-pass edit'));
+    const gatewayOptions = {
+      selectedModelId: 'openai/gpt-4.1',
+      reasoningEffort: 'high',
+      timeoutMs: 110_000,
+      autoModelSelection: false,
+      maxTokens: 32_768,
+    };
+
+    const result = await runComposerRepairLoop({
+      request,
+      baseFiles: base,
+      invoke: invoke as never,
+      timeoutMs: 420_000,
+      gatewayOptions,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke.mock.calls[0][0].gatewayOptions).toEqual(gatewayOptions);
+  });
+
   it("skips a repair turn when less than a minute is left", async () => {
     let clock = 100_000;
     const spy = vi.spyOn(Date, "now").mockImplementation(() => clock);
