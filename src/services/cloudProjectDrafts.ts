@@ -87,16 +87,28 @@ export function mergeWorkspaceProjects(
   const represented = new Set(projects.map((project) => project.id));
   const result: WorkspaceProjectRecord[] = projects.map((project) => {
     const latestDraft = latestDraftByProject.get(project.id);
+    const createdAt = project.created_at || project.updated_at || new Date(0).toISOString();
+    // Without an accepted revision there is no saved work to date. Maintenance
+    // (business relinks, restore attempts, name syncs) bumps updated_at on
+    // empty shells, which must not push real saved projects off Recent.
+    if (latestDraft && !latestDraft.last_revision_id) {
+      return {
+        ...project,
+        name: resolveWorkspaceDraftName(latestDraft, project.name),
+        created_at: createdAt,
+        updated_at: createdAt,
+        draft_id: latestDraft.id,
+        revision_id: null,
+      };
+    }
     const projectUpdatedAt = String(project.updated_at || project.created_at || '');
-    // A draft with no accepted revision can be a browser recovery shell. It
-    // must not make an old linked project appear newly saved.
     const draftUpdatedAt = latestDraft?.last_revision_id ? draftActivity(latestDraft) : '';
     return {
       ...project,
       name: latestDraft
         ? resolveWorkspaceDraftName(latestDraft, project.name)
         : project.name,
-      created_at: project.created_at || project.updated_at || new Date(0).toISOString(),
+      created_at: createdAt,
       // Draft commits can advance without changing projects.updated_at. Carry
       // that durable activity into the profile ordering and card freshness.
       updated_at: draftUpdatedAt > projectUpdatedAt ? draftUpdatedAt : project.updated_at || null,
