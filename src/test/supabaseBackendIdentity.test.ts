@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { resolveSupabaseClientUrl, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/env';
+import { AUTHORITATIVE_SUPABASE_URL, resolveSupabaseClientUrl, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/env';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 describe('Supabase backend identity', () => {
   const envSource = read('src/integrations/supabase/env.ts');
   const linkedRef = /project_id\s*=\s*"([a-z0-9]+)"/.exec(read('supabase/config.toml'))![1];
-  const fallbackUrl = /'https:\/\/([a-z0-9]+)\.supabase\.co'/.exec(envSource)![0].slice(1, -1);
+  const fallbackUrl = AUTHORITATIVE_SUPABASE_URL;
   const fallbackRef = /https:\/\/([a-z0-9]+)\.supabase\.co/.exec(fallbackUrl)![1];
   const fallbackKey = /'((?:eyJ|sb_publishable_)[^']+)'/.exec(envSource)![1];
 
@@ -27,7 +27,8 @@ describe('Supabase backend identity', () => {
 
   it('keeps launch and deployment examples aligned with the same backend', () => {
     expect(SUPABASE_PUBLISHABLE_KEY).toBe(fallbackKey);
-    expect(read('src/services/canonicalLaunchVfs.ts')).toContain(fallbackUrl);
+    expect(read('src/services/canonicalLaunchVfs.ts')).toContain('SUPABASE_REMOTE_URL');
+    expect(read('vite.config.ts')).toContain(fallbackUrl);
     const vercelEnv = read('docs/vercel-env-setup.md');
     expect(vercelEnv).toContain('src/integrations/supabase/env.ts');
     expect(vercelEnv).toContain('.env.example');
