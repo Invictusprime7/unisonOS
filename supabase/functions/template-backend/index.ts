@@ -282,11 +282,14 @@ serve(async (req) => {
           }
         );
 
+        if (!/^cs_[A-Za-z0-9_]{10,200}$/.test(sessionId)) {
+          return errorResponse('Invalid session ID', 400, publicCorsHeaders);
+        }
         const session = await stripeResponse.json();
+        // Customer details are never returned to an unauthenticated caller.
         return secureJsonResponse({
           verified: session.payment_status === 'paid',
           templateId: session.metadata?.template_id,
-          customerEmail: session.customer_details?.email,
         }, 200, publicCorsHeaders);
       }
 

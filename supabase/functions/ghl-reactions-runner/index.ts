@@ -11,6 +11,7 @@
  * Marks the source event processed when at least one rule matched.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { verifyAuth, verifyBusinessAccess } from '../_shared/auth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -62,6 +63,25 @@ Deno.serve(async (req) => {
 
   if (!event.business_id) {
     return new Response(JSON.stringify({ ok: true, skipped: 'no business_id' }), {
+      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Only a signed-in member of the event's business may run its reactions.
+  const auth = await verifyAuth(req);
+  if (!auth.user) {
+    return new Response(JSON.stringify({ error: auth.error || 'Unauthorized' }), {
+      status: auth.status || 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const access = await verifyBusinessAccess(auth.user.id, event.business_id);
+  if (!access.allowed) {
+    return new Response(JSON.stringify({ error: 'Access denied' }), {
+      status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  if (event.processed) {
+    return new Response(JSON.stringify({ ok: true, skipped: 'already processed' }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
