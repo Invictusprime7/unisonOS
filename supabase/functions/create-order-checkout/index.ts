@@ -8,6 +8,7 @@ import {
   sanitizeString,
   isValidEmail,
   isValidUrl,
+  isTrustedReturnUrl,
   isValidUUID,
   isNonEmptyString,
 } from "../_shared/validate.ts";

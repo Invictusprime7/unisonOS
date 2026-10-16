@@ -4,7 +4,7 @@ import Stripe from "stripe";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { verifyAuth, authError } from "../_shared/auth.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
-import { safeParseBody, sanitizeString, isValidUrl } from "../_shared/validate.ts";
+import { safeParseBody, sanitizeString, isValidUrl, isTrustedReturnUrl } from "../_shared/validate.ts";
 
 interface ManageSubscriptionRequest {
   action: "cancel" | "reactivate" | "update-payment" | "get-invoices";
