@@ -98,7 +98,6 @@ export interface PublishedRuntimeConfig {
   controllerEndpoints: Record<string, string>;
 }
 
-const DEFAULT_PUBLIC_SUPABASE_URL = 'https://nfrdomdvyrbwuokathtw.supabase.co';
 
 export interface CanonicalLaunchArtifacts {
   files: Record<string, string>;
