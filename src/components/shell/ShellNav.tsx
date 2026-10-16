@@ -17,10 +17,10 @@ export function ShellNav({ items, className }: ShellNavProps) {
         const content = (
           <span
             className={cn(
-              "inline-flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors",
+              "inline-flex h-9 items-center px-2 text-sm transition-colors",
               item.isActive
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                ? "text-foreground underline decoration-primary underline-offset-4"
+                : "text-muted-foreground hover:text-foreground hover:underline hover:decoration-primary hover:underline-offset-4",
               !item.href && "cursor-not-allowed opacity-50",
             )}
           >
@@ -29,7 +29,12 @@ export function ShellNav({ items, className }: ShellNavProps) {
         );
 
         return item.href ? (
-          <Link key={item.id} to={item.href} aria-current={item.isActive ? "page" : undefined}>
+          <Link
+            key={item.id}
+            to={item.href}
+            aria-current={item.isActive ? "page" : undefined}
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {content}
           </Link>
         ) : (
