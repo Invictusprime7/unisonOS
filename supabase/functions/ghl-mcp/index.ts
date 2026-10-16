@@ -145,6 +145,14 @@ const corsHeaders = {
 app.options("/*", (c) => new Response("ok", { headers: corsHeaders }));
 
 app.all("/*", async (c) => {
+  // Tools act with the project's CRM credentials, so only the service itself
+  // (server-to-server) may call them; public callers are refused.
+  const bearer = (c.req.header("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!bearer || bearer !== SERVICE_KEY) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
   const res = await httpHandler(c.req.raw);
   // Re-emit with CORS headers
   const headers = new Headers(res.headers);
