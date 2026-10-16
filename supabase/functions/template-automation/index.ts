@@ -93,38 +93,44 @@ serve(async (req) => {
       }
 
       case 'updateCartItem': {
+        const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
         const itemId = typeof data.itemId === "string" ? sanitizeString(data.itemId, 120) : "";
         const quantity = typeof data.quantity === "number" ? Math.max(0, Math.min(100, Math.trunc(data.quantity))) : 0;
-        if (!itemId) {
-          return errorResponse("itemId is required", 400, publicCorsHeaders);
+        if (!itemId || !sessionId) {
+          return errorResponse("sessionId and itemId are required", 400, publicCorsHeaders);
         }
+        // Cart rows can only be changed by the visitor session that owns them.
         if (quantity <= 0) {
-          const { error } = await supabase.from('cart_items').delete().eq('id', itemId);
+          const { error } = await supabase.from('cart_items').delete().eq('id', itemId).eq('session_id', sessionId);
           if (error) throw error;
         } else {
           const { error } = await supabase
             .from('cart_items')
             .update({ quantity })
-            .eq('id', itemId);
+            .eq('id', itemId)
+            .eq('session_id', sessionId);
           if (error) throw error;
         }
         return secureJsonResponse({ success: true }, 200, publicCorsHeaders);
       }
 
       case 'removeFromCart': {
+        const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
         const itemId = typeof data.itemId === "string" ? sanitizeString(data.itemId, 120) : "";
-        if (!itemId) {
-          return errorResponse("itemId is required", 400, publicCorsHeaders);
+        if (!itemId || !sessionId) {
+          return errorResponse("sessionId and itemId are required", 400, publicCorsHeaders);
         }
-        const { error } = await supabase.from('cart_items').delete().eq('id', itemId);
+        const { error } = await supabase.from('cart_items').delete().eq('id', itemId).eq('session_id', sessionId);
         if (error) throw error;
         return secureJsonResponse({ success: true }, 200, publicCorsHeaders);
       }
 
       case 'clearCart': {
         const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
-        if (!sessionId) {
-          return errorResponse("sessionId is required", 400, publicCorsHeaders);
+        // The session id is the visitor's private cart key; short or guessable
+        // values are refused so one visitor cannot empty another's cart.
+        if (!sessionId || sessionId.length < 16) {
+          return errorResponse("A valid sessionId is required", 400, publicCorsHeaders);
         }
         const { error } = await supabase.from('cart_items').delete().eq('session_id', sessionId);
         if (error) throw error;
@@ -175,16 +181,20 @@ serve(async (req) => {
       }
 
       case 'getOrder': {
+        const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
         const orderId = typeof data.orderId === "string" ? sanitizeString(data.orderId, 120) : "";
-        if (!orderId) {
-          return errorResponse("orderId is required", 400, publicCorsHeaders);
+        if (!orderId || !sessionId) {
+          return errorResponse("sessionId and orderId are required", 400, publicCorsHeaders);
         }
+        // Only the visitor session that placed the order can read it back.
         const { data: order, error } = await supabase
           .from('orders')
           .select('*')
           .eq('id', orderId)
-          .single();
+          .eq('session_id', sessionId)
+          .maybeSingle();
         if (error) throw error;
+        if (!order) return errorResponse("Order not found", 404, publicCorsHeaders);
         return secureJsonResponse({ success: true, order }, 200, publicCorsHeaders);
       }
 

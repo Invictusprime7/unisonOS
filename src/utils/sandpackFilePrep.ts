@@ -525,6 +525,8 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
 
   // ── Message handlers for navigation and intent commands ──
   window.addEventListener('message', function (event) {
+    // Commands are only accepted from the builder that hosts this preview.
+    if (event.source !== window.parent || window.parent === window) return;
     if (event.data?.type === 'NAV_ROUTE' && event.data.route) {
       window.location.hash = event.data.route;
     }
@@ -1271,6 +1273,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
   }
 
   window.addEventListener('message', function (event) {
+    if (event.source !== window.parent || window.parent === window) return;
     const data = event.data;
     if (!data || typeof data !== 'object') return;
     if (data.type === 'EDIT_MODE_TOGGLE') {

@@ -131,3 +131,31 @@ export function validateFields(
 
   return errors;
 }
+
+/** Escape untrusted text before it is placed inside an HTML email or page. */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * A caller-supplied return link is only trusted when it points back to the
+ * site that made the request (its Origin header) or to an explicitly allowed
+ * base URL; anything else falls back to the server default.
+ */
+export function isTrustedReturnUrl(value: unknown, req: Request, extraBases: Array<string | null | undefined> = []): value is string {
+  if (typeof value !== "string" || !isValidUrl(value)) return false;
+  let target: URL;
+  try { target = new URL(value); } catch { return false; }
+  if (target.protocol !== "https:" && !/^(localhost|127\.0\.0\.1)$/.test(target.hostname)) return false;
+  const allowed = new Set<string>();
+  for (const base of [req.headers.get("origin"), ...extraBases]) {
+    if (!base) continue;
+    try { allowed.add(new URL(base).origin); } catch { /* ignore */ }
+  }
+  return allowed.has(target.origin);
+}

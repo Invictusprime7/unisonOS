@@ -1137,6 +1137,8 @@ export function generateRuntimeInjectionScript(config: TemplateRuntimeConfig): s
 
   // Listen for messages from parent
   window.addEventListener('message', function(e) {
+    // Only the hosting page may send results; others are ignored.
+    if (e.source !== window.parent || window.parent === window) return;
     const data = e.data;
     if (!data || typeof data !== 'object') return;
 

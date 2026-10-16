@@ -22,7 +22,7 @@ export function ShellBreadcrumbs({ items, className }: ShellBreadcrumbsProps) {
           <span key={`${item.id}-${index}`} className="flex min-w-0 items-center gap-1">
             {index > 0 && <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
             {item.href && !isLast ? (
-              <Link to={item.href} className="truncate transition-colors hover:text-foreground">
+              <Link to={item.href} className="truncate transition-colors hover:text-foreground hover:underline hover:decoration-primary hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {label}
               </Link>
             ) : (

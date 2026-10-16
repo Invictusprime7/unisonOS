@@ -62,7 +62,11 @@ export class RPCHost {
   }
 
   private async handleMessage(event: MessageEvent) {
+    // Only the window this host was paired with may call it or answer it.
+    if (!this.targetWindow || event.source !== this.targetWindow) return;
+    if (this.targetOrigin !== '*' && event.origin !== this.targetOrigin) return;
     const data = event.data;
+    if (!data || typeof data !== 'object') return;
 
     // Handle response
     if (data.id && this.pendingRequests.has(data.id)) {

@@ -4,7 +4,7 @@ import Stripe from "stripe";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { verifyAuth, authError } from "../_shared/auth.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
-import { safeParseBody, sanitizeString, isValidUrl } from "../_shared/validate.ts";
+import { safeParseBody, sanitizeString, isValidUrl, isTrustedReturnUrl } from "../_shared/validate.ts";
 
 // Price IDs for each plan — must be set via Stripe dashboard env vars.
 // If unset the checkout will fail with a clear 400 (not a silent Stripe rejection).
@@ -91,10 +91,10 @@ serve(async (req) => {
     const sanitizedPlan = typeof plan === "string" ? sanitizeString(plan, 50) : undefined;
     const sanitizedPriceId = typeof priceId === "string" ? sanitizeString(priceId, 200) : undefined;
     const baseUrl = getBaseAppUrl(req);
-    const resolvedSuccessUrl = typeof successUrl === "string" && isValidUrl(successUrl)
+    const resolvedSuccessUrl = isTrustedReturnUrl(successUrl, req, [baseUrl])
       ? successUrl
       : `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
-    const resolvedCancelUrl = typeof cancelUrl === "string" && isValidUrl(cancelUrl)
+    const resolvedCancelUrl = isTrustedReturnUrl(cancelUrl, req, [baseUrl])
       ? cancelUrl
       : `${baseUrl}/checkout/cancel`;
 

@@ -178,6 +178,8 @@ export function useSectionData(
         : '/';
 
     const onMessage = (event: MessageEvent) => {
+      // Catalog data is only accepted from the builder hosting this preview.
+      if (event.source !== window.parent) return;
       const data: any = event.data;
       if (!data) return;
       if (data.type === 'CATALOG_BINDINGS_CHANGED') {

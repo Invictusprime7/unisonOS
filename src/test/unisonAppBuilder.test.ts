@@ -264,7 +264,8 @@ describe('UnisonAppBuilder facade', () => {
     });
 
     expect(runComposer).toHaveBeenCalledOnce();
-    expect(runComposer.mock.calls[0][0].gatewayOptions).toEqual({ selectedModelId: 'openai/gpt-4.1', reasoningEffort: 'high', timeoutMs: 110_000 });
+    const firstCall = runComposer.mock.calls[0] as unknown as [{ gatewayOptions?: unknown }] | undefined;
+    expect(firstCall?.[0].gatewayOptions).toEqual({ selectedModelId: 'openai/gpt-4.1', reasoningEffort: 'high', timeoutMs: 110_000 });
     expect(result.stopReason).toBe('complete');
     expect(result.changeSet).toBe(changeSet);
     expect(result.candidate.files).toEqual(nextFiles);

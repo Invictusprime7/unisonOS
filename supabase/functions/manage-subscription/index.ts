@@ -4,7 +4,7 @@ import Stripe from "stripe";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { verifyAuth, authError } from "../_shared/auth.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
-import { safeParseBody, sanitizeString, isValidUrl } from "../_shared/validate.ts";
+import { safeParseBody, sanitizeString, isValidUrl, isTrustedReturnUrl } from "../_shared/validate.ts";
 
 interface ManageSubscriptionRequest {
   action: "cancel" | "reactivate" | "update-payment" | "get-invoices";
@@ -68,7 +68,7 @@ serve(async (req) => {
       ? sanitizeString(payload.action, 50) as ManageSubscriptionRequest["action"]
       : undefined;
     const immediately = payload.immediately === true;
-    const returnUrl = typeof payload.returnUrl === "string" && isValidUrl(payload.returnUrl)
+    const returnUrl = isTrustedReturnUrl(payload.returnUrl, req)
       ? payload.returnUrl
       : `${getBaseAppUrl(req)}/settings`;
 

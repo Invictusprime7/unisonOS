@@ -1,4 +1,5 @@
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
+import { createClient } from "@supabase/supabase-js";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { verifyAuth, verifyBusinessAccess, authError } from "../_shared/auth.ts";
 import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.ts";
@@ -247,6 +248,20 @@ Deno.serve(async (req) => {
       case "triggerWorkflow": {
         if (!workflowId) return errorResponse("workflowId is required", 400, corsHeaders);
         if (!contactId) return errorResponse("contactId is required to trigger a workflow", 400, corsHeaders);
+        if (!isInternalRequest) {
+          // A signed-in caller may only trigger workflows for a contact that
+          // already belongs to a business they have access to.
+          if (!businessId) return errorResponse("businessId is required to trigger a workflow", 400, corsHeaders);
+          const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+          const { data: known } = await admin
+            .from("ghl_webhook_events")
+            .select("id")
+            .eq("business_id", businessId)
+            .eq("contact_id", contactId)
+            .limit(1)
+            .maybeSingle();
+          if (!known) return authError("This contact does not belong to your business", 403, corsHeaders);
+        }
         result = await postGhlJson(
           `/contacts/${encodeURIComponent(contactId)}/workflow/${encodeURIComponent(workflowId)}`,
           apiKey,

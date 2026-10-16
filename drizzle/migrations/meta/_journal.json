@@ -141,6 +141,13 @@
       "when": 1792079790616,
       "tag": "0019_site_live_broadcast",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792143950265,
+      "tag": "0020_tighten_content_and_subscription_access",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,7 @@ import { serve } from "serve";
 import { createClient } from "@supabase/supabase-js";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { errorResponse } from "../_shared/response.ts";
-import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.ts";
+import { safeParseBody, sanitizeString, isValidUUID , escapeHtml } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -165,7 +165,7 @@ serve(async (req) => {
         await sendEmail(
           bizSettings.notification_email,
           `New Lead: ${name || email}`,
-          `<h2>New Lead</h2><p>Name: ${name}</p><p>Email: ${email}</p><p>Phone: ${data.phone || "N/A"}</p><p>Message: ${data.message || "N/A"}</p>`,
+          `<h2>New Lead</h2><p>Name: ${escapeHtml(name)}</p><p>Email: ${escapeHtml(email)}</p><p>Phone: ${escapeHtml(data.phone || "N/A")}</p><p>Message: ${escapeHtml(data.message || "N/A")}</p>`,
           email || undefined
         );
       }
@@ -221,7 +221,7 @@ serve(async (req) => {
         await sendEmail(
           bizSettings.notification_email,
           `Quote Request from ${name || email}`,
-          `<h2>Quote Request</h2><p>Name: ${name}</p><p>Email: ${email}</p><p>Details: ${data.message || JSON.stringify(data)}</p>`,
+          `<h2>Quote Request</h2><p>Name: ${escapeHtml(name)}</p><p>Email: ${escapeHtml(email)}</p><p>Details: ${escapeHtml(data.message || JSON.stringify(data))}</p>`,
           email || undefined
         );
       }

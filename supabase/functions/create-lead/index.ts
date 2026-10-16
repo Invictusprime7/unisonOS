@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { sendResendEmail, DEFAULT_FROM_EMAIL } from "../_shared/resend.ts";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
-import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.ts";
+import { safeParseBody, sanitizeString, isValidUUID , escapeHtml } from "../_shared/validate.ts";
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 
@@ -283,11 +283,11 @@ serve(async (req) => {
             <div>
               <h1>New lead</h1>
               <p><strong>Business:</strong> ${biz?.name ?? businessId}</p>
-              <p><strong>Email:</strong> ${email}</p>
-              ${name ? `<p><strong>Name:</strong> ${name}</p>` : ""}
-              ${phone ? `<p><strong>Phone:</strong> ${phone}</p>` : ""}
-              <p><strong>Source:</strong> ${source || "web_form"}</p>
-              ${message ? `<p><strong>Message:</strong><br/>${message}</p>` : ""}
+              <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+              ${name ? `<p><strong>Name:</strong> ${escapeHtml(name)}</p>` : ""}
+              ${phone ? `<p><strong>Phone:</strong> ${escapeHtml(phone)}</p>` : ""}
+              <p><strong>Source:</strong> ${escapeHtml(source || "web_form")}</p>
+              ${message ? `<p><strong>Message:</strong><br/>${escapeHtml(message)}</p>` : ""}
             </div>
           `,
           replyTo: internalTo,
