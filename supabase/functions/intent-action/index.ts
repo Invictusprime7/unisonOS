@@ -65,7 +65,7 @@ async function sendEmail(to: string, subject: string, html: string, replyTo?: st
       method: "POST",
       headers: { Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY") ?? ""}`, "X-Connection-Api-Key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Notifications <${Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev"}>",
+        from: `Notifications <${Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev"}>`,
         to: [to], subject, html, reply_to: replyTo,
       }),
     });
