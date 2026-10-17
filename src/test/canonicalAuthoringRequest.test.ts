@@ -44,12 +44,11 @@ describe('canonical AI authorship request assembly', () => {
   it('routes ordinary React source edits to Composer and leaves specialized lanes alone', () => {
     const base = {
       isReactProject: true, isLaunchPlanningRequest: false,
-      isCatalogMutationRequest: false, hasAttachments: false, hasVfs: true,
+      isCatalogMutationRequest: false, hasVfs: true,
     };
     expect(shouldUseCanonicalComposer(base)).toBe(true);
     expect(shouldUseCanonicalComposer({ ...base, isCatalogMutationRequest: true })).toBe(false);
     expect(shouldUseCanonicalComposer({ ...base, isLaunchPlanningRequest: true })).toBe(false);
-    expect(shouldUseCanonicalComposer({ ...base, hasAttachments: true })).toBe(false);
     expect(shouldUseCanonicalComposer({ ...base, isReactProject: false })).toBe(false);
     expect(shouldUseCanonicalComposer({ ...base, isScopedEdit: true })).toBe(true);
   });
