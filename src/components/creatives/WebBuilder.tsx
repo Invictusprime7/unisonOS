@@ -3869,7 +3869,56 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     }
     toast.success(`${execution.summary} applied to preview`);
     return true;
-  }, [effectiveRouteState, commitPresentationOps, commitThemeTokenOps, commitBindingOps, businessId, projectId, currentUserId, resolvedProjectId, currentDraftId, buildCanonicalCommitCurrent, recordManualVFSEdit, virtualFS, activePagePath]);
+    };
+
+    // One execution contract (§25): inspector ops the command vocabulary
+    // covers go through executeEditorCommand — the same ownership resolution,
+    // capability checks, telemetry and resource lane as toolbar/inline/AI.
+    // planInspectorExecution stays the pure planner the lanes execute.
+    const op = plan.op;
+    if (op.type === 'set-slot-text' || op.type === 'set-slot-asset' || op.type === 'set-intent') {
+      const target: EditorTarget = {
+        selector: op.selector ?? null,
+        pagePath: plan.pagePath ?? activePagePath ?? null,
+        sectionId: op.sectionId ?? null,
+        sectionType: op.sectionType ?? null,
+        slotId: op.slotId ?? null,
+        resourceMark: plan.resourceMark ?? null,
+      };
+      const command: EditorCommand = op.type === 'set-slot-text'
+        ? { type: 'set-text', target, text: String(op.value ?? '') }
+        : op.type === 'set-slot-asset'
+          ? { type: 'replace-asset', target, url: String(op.value ?? ''), alt: op.alt ? String(op.alt) : undefined }
+          : { type: 'bind-intent', target, intent: String(op.intent ?? '') };
+      const runPlanned = async (cmd: EditorCommand, lane: EditorCommandResult['lane']): Promise<EditorCommandResult> => {
+        const applied = await applyExecution();
+        return {
+          ok: applied,
+          command: cmd.type,
+          lane,
+          savedTo: plan.pagePath ?? 'page source',
+          changedFields: [],
+          error: applied ? undefined : 'The change could not be saved.',
+        };
+      };
+      const result = await executeEditorCommand(command, {
+        source: 'inspector',
+        resource: {
+          businessId: businessId ?? '',
+          projectId: resolvedProjectId ?? projectId ?? null,
+          siteId: effectiveRouteState?.siteId ?? launch?.siteId ?? null,
+          mode: 'builder',
+        },
+        executors: {
+          source: (cmd) => runPlanned(cmd, 'source'),
+          presentation: (cmd) => runPlanned(cmd, 'presentation'),
+          binding: (cmd) => runPlanned(cmd, 'binding'),
+        },
+      });
+      return result.ok;
+    }
+    return applyExecution();
+  }, [effectiveRouteState, commitPresentationOps, commitThemeTokenOps, commitBindingOps, businessId, projectId, currentUserId, resolvedProjectId, currentDraftId, buildCanonicalCommitCurrent, recordManualVFSEdit, virtualFS, activePagePath, launch?.siteId]);
 
   const handleInlineTextCommit = useCallback(async (change: InlineTextEditChange): Promise<boolean> => {
     const acceptedRevisionId = currentRevisionIdRef.current || null;
