@@ -9,7 +9,7 @@ export function invalidArbitraryClasses(source: string): string[] {
     // Spaces inside an arbitrary value split a Tailwind candidate; underscores are required instead.
     for (const candidate of classes.split(/\s+/)) {
       if (!candidate.includes('[') || candidate.startsWith('[')) continue; // arbitrary selectors are not CSS values
-      const start = candidate.indexOf('['');
+      const start = candidate.indexOf('[');
       const end = candidate.lastIndexOf(']');
       const raw = candidate.slice(start + 1, end);
       let invalid = end < start || !raw || /\$\{|\b(?:undefined|NaN)\b/.test(raw);

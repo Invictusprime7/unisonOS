@@ -39,6 +39,13 @@ function components(ids: string[], family: string) {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.sessionStorage.clear(); });
 
 describe('App Builder portable recipe behavior', () => {
+  it.each([['data-table:striped-rows', 'DataTable'], ['data-table:dashboard-overview', 'DashboardOverview']])('renders bound table values safely in %s', (id, exportName) => {
+    const Table = components([id], 'DataTable')[exportName];
+    const { container } = render(<Table sourceTable="services" columns={[{ key: 'name', label: 'Name' }, { key: 'price', label: 'Price' }, { key: 'details', label: 'Details' }]} rows={[{ id: 'service-7', name: { label: 'Consultation' }, price: 0, details: { nested: 'Not a React child' } }]} />);
+    expect(container.querySelector('[data-ut-row-id="service-7"][data-ut-field="name"]')?.textContent).toBe('Consultation');
+    expect(container.querySelector('[data-ut-source-table="services"][data-ut-field="price"]')?.textContent).toBe('0');
+    expect(container.querySelector('[data-ut-field="details"]')?.textContent).toBe('');
+  });
   it('keeps distinct supplied section and functional instance identities through named exports', () => {
     const { AuthSignIn } = components(['auth-form:split-panel'], 'AuthForm');
     const { container } = render(<><AuthSignIn sectionId="auth-a" componentInstanceId="cmp_a" /><AuthSignIn sectionId="auth-b" componentInstanceId="cmp_b" /></>);
