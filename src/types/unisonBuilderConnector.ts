@@ -37,6 +37,8 @@ export interface ConnectorRegistryContext {
   artDirectionPackId: string | null;
   allowedImplementationIds: readonly string[];
   projection: BuilderRegistryContext | null;
+  /** Verified live compiler-owned implementation -> public export mapping. */
+  materializedRecipes: import('@/services/app-builder/design/designSourceMaterializer').DesignSourceManifest['implementations'];
 }
 
 export interface DesignSystemConstraints {

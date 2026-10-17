@@ -31,6 +31,7 @@ import {
 } from './appBuilderContracts';
 import { orchestrateAppBuild } from './appBuilderOrchestrator';
 import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
+import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
@@ -74,6 +75,7 @@ export function createUnisonAppBuilder(
         files: input.currentFiles,
         revisionId: input.baseRevisionId,
         // New pages belong to approved route operations, not existing-source targets.
+        registryContext: input.connectorContext?.registryContext ?? resolveBuilderRegistryContext({ vfsFiles: { ...input.currentFiles }, industry: input.industry }),
         sourceTargets: [],
       });
       const reject = (diagnostics: string[]): AppBuilderPageGenerationResult => ({
@@ -189,6 +191,7 @@ export function createUnisonAppBuilder(
         files: input.currentFiles,
         revisionId: input.baseRevisionId,
         sourceTargets: input.sourceTargets,
+        registryContext: input.connectorContext?.registryContext ?? resolveBuilderRegistryContext({ vfsFiles: { ...input.currentFiles }, pageRole: input.page.role }),
       });
       const assembled = await assembleCanonicalAuthoringRequest({
         task: 'builder_source_edit',

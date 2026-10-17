@@ -3,6 +3,8 @@
 import type { DesignSourceBundle } from './DesignSourceBundle';
 import { DESIGN_SOURCE_BUNDLE_VERSION } from './DesignSourceBundle';
 import { compilePortableRecipes, DESIGN_SOURCE_ROOT, type MaterializedDesignModule } from './portableRecipeCompiler';
+import { compilerOwnershipHash } from '@/platform/core/resolvedComposition';
+import { getVariantById } from '@/sections/variants';
 
 export const DESIGN_SOURCE_MANIFEST_PATH = '/.unison/design-source-manifest.json';
 
@@ -17,6 +19,29 @@ export interface DesignSourceManifest {
 export interface DesignSourceMaterialization {
   files: Record<string, string>;
   manifest: DesignSourceManifest;
+}
+
+/** Live compiler-owned bytes, not a second registry or inferred export names. */
+export function readMaterializedDesignSources(files?: Readonly<Record<string, string>>): DesignSourceManifest['implementations'] {
+  const raw = files?.[DESIGN_SOURCE_MANIFEST_PATH];
+  if (!raw || !files) return {};
+  try {
+    const manifest = JSON.parse(raw) as DesignSourceManifest;
+    if (manifest.version !== DESIGN_SOURCE_BUNDLE_VERSION || manifest.root !== DESIGN_SOURCE_ROOT || !Array.isArray(manifest.modules)) return {};
+    const verified = new Set(manifest.modules.filter(module =>
+      module.path.startsWith(DESIGN_SOURCE_ROOT + '/') && typeof files[module.path] === 'string'
+      && compilerOwnershipHash(files[module.path]) === module.hash,
+    ).map(module => module.path));
+    return Object.fromEntries(Object.entries(manifest.implementations ?? {}).filter(([id, entry]) => {
+      const variant = getVariantById(id);
+      return variant?.vfs?.mode === 'portable-recipe' && variant.vfs.certification === 'approved'
+        && variant.sectionType === entry.sectionType && entry.certification === 'approved'
+        && verified.has(entry.modulePath) && verified.has(entry.modulePath.replace(/\/([^/]+)\.tsx$/, '/recipes/$1.ts'))
+        && typeof entry.exportName === 'string'
+        && files[entry.modulePath].includes('export const ' + entry.exportName + ' =')
+        && files[entry.modulePath].includes('variantId=' + JSON.stringify(id));
+    }));
+  } catch { return {}; }
 }
 
 export function materializeDesignSources(bundle: DesignSourceBundle): DesignSourceMaterialization {
