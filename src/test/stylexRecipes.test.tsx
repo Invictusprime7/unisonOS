@@ -18,7 +18,7 @@ function loadRecipe(source: string) {
     '@/unison/ui/radix/dialog': Dialog,
     '@/unison/ui/icons': icons,
   };
-  const module = { exports: {} as { default: React.ComponentType<Record<string, unknown>> } };
+  const module = { exports: {} as { default: React.FunctionComponent<Record<string, unknown>> } };
   const code = transform(source, { plugins: ['transform-modules-commonjs'] }).code!;
   new Function('require', 'module', 'exports', code)((name: string) => {
     if (!(name in dependencies)) throw new Error(`Unexpected generated dependency: ${name}`);

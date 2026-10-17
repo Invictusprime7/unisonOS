@@ -23,7 +23,7 @@ function contractIssues(name: string, source: string): string[] {
     if (key === 'data-ut-variant' && !getVariantById(value.value)) {
       issues.push(`${name}: invalid variant ${value.value}`);
     }
-    if (key === 'data-ut-intent' && !Object.hasOwn(INTENT_REGISTRY, value.value)) {
+    if (key === 'data-ut-intent' && !Object.prototype.hasOwnProperty.call(INTENT_REGISTRY, value.value)) {
       issues.push(`${name}: non-canonical intent ${value.value}`);
     }
   };
