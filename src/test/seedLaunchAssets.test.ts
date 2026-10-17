@@ -26,7 +26,7 @@ vi.mock('@/services/cmsRecordService', () => ({
   mutateContentRecord: mocks.mutateContentRecord,
 }));
 
-import { adoptLongformFromSite, seedLaunchAssets } from '@/services/resources/seedLaunchAssets';
+import { seedLaunchAssets } from '@/services/resources/seedLaunchAssets';
 import { createEmptyCreatorData } from '@/types/creatorData';
 
 describe('launch content seeding contract', () => {
