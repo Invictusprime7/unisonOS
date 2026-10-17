@@ -63,6 +63,7 @@ import { buildSystemGraph, renderSystemGraphForPrompt } from '@/services/agent-r
 import { AgentCommandPalette } from './ai-chat/AgentCommandPalette';
 import { CatalogPanel } from './ai-chat/CatalogPanel';
 import { agentOperations } from '@/services/agent-runtime/operations';
+import { dispatchBuilderOperation } from '@/services/unisonBuilderToolDispatch';
 import { renderCatalogForPrompt } from '@/services/agent-runtime/catalogOps';
 import { parseResourceValueRequest } from '@/services/agent-runtime/resourceValueRequest';
 import { parseResourceProvenance } from '@/services/resources/resourceRuntime';
@@ -1155,7 +1156,13 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       const value = ref ? parseResourceValueRequest(userContent, ref.field) : null;
       if (ref && value !== null) {
         try {
-          const { summary } = await agentOperations.update_resource_field({ files: vfsFiles ?? {}, businessId, projectId: projectId ?? undefined } as never, resourceMark, value);
+          const agentCtx = { files: vfsFiles ?? {}, businessId, projectId: projectId ?? undefined };
+          const connector = createUnisonBuilderContext({
+            projectId: projectId ?? null,
+            businessId,
+            selection: { resourceMark, componentPath: selectedTarget?.provenance?.componentPath ?? undefined } as never,
+          });
+          const { summary } = await dispatchBuilderOperation(connector, agentCtx, 'update_resource_field', resourceMark, value);
           setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: `${summary}. The page shows the saved record, so its layout and buttons are unchanged.`, timestamp: new Date() }]);
           toast.success(summary);
         } catch (error) {
