@@ -192,6 +192,7 @@ export function createUnisonAppBuilder(
         baseFiles: { ...input.currentFiles },
         baseRevisionId: input.baseRevisionId ?? undefined,
         sourceTargets: [...input.sourceTargets],
+        approvedRouteOps: input.initialRouteOps,
         routes: [...(input.routes ?? [])],
         registryContext: input.registryContext,
         runtimeContext: [renderUnisonBuilderDirective(connector), input.runtimeContext].filter(Boolean).join('\n'),
