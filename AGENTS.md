@@ -24,4 +24,4 @@
 - Auth state listeners stay synchronous and defer auth-backed queries/audits to a later task; why: awaiting SDK calls inside its session lock deadlocks successful sign-in.
 - Before app load, bridge only auth keys to sessionStorage on quota errors; never evict project data or edit the generated client. Why: full storage must not block sign-in; fallback lasts until the tab closes.
 
-- Builder feature preferences are optional local UI state enforced at request/execution boundaries; command tools control the menu, while catalog and business actions gate their own connected operations. Why: hiding a control must not authorize disabled mutations.
+- Builder preferences are optional local state enforced at request/execution boundaries; tools gate the menu, catalog/business settings gate their operations. Why: hiding controls cannot authorize disabled mutations.
