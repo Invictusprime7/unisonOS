@@ -67,3 +67,17 @@ Existing specifier occurrences survive unrelated edits, but adding occurrences r
 The existing Composer endpoint, repair loop and sole commit writer are preserved. No migrations or production records changed; canonical workflow deployment and authenticated edit/read-back remain pending.
 
 Verification: 107 tests pass across eleven suites, including nine module syntax forms, scoped subpaths, local imports, remote/protocol rejection, computed loads, comment/string handling, existing-import preservation, edge repair and pre-candidate client refusal. Mirrored contracts match and preview build is OK. Edge import maps pin the explicit parser version; deployed edge execution is not verified.
+
+## Phase 4a — Audited legacy cleanup
+
+Removed `src/utils/stripComposerTrailer.ts`: repository-wide source, function, script and documentation searches found no imports or callers. Active Composer parsing remains in `composerLane.ts`; this removal changes neither authoring nor accepted saved source. The existing legacy-retirement test now prevents this unused helper from returning.
+
+| Audited consumer | Decision | Reason |
+| --- | --- | --- |
+| `src/utils/aiResponseParser.ts` | Retain | Builder panel still consumes multi-file and stylesheet extraction for non-Composer turns. |
+| `src/services/builder/sequentialAiTasks.ts` | Retain | Builder panel consumes it during multi-file candidate application. |
+| `src/services/builder/canonicalAuthoringRequest.ts` | Retain | Active request assembly and eligibility for Builder, launch and repair. |
+| `src/services/builder/aiRepairLoop.ts` | Retain | Shared by App Builder, WebBuilder and launch authoring. |
+| Dependency resolver/extractor | Retain | Classification and accepted inventory assembly are not replaced by Composer import approvals. |
+
+No active fallback or saved-project compatibility path was removed. Remaining fallback consolidation requires caller migration and acceptance evidence, not deletion based on filenames. Verification: 116 tests pass across ten suites, including saved declarative-page hydration, certified defaults, Composer parsing/repair and connector dispatch; fresh-launch authority lint and preview build are OK. No database operations or deployments occurred. Authenticated cross-industry edit/read-back remains blocked by the available session's backend mismatch.

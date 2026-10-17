@@ -18,7 +18,9 @@
 - [x] Builder route/dependency request enforcement: exact planned route operations and existing accepted dependencies; 75 regression tests pass; canonical workflow deployment and signed-in acceptance remain unverified
 - [x] Builder intent/capability authoring enforcement: canonical capability-derived actions; reject unsupported declared and new literal DOM intents before candidate preparation; 84 regression tests pass; computed bindings, deployment and live readiness remain unverified
 - [x] Actual-import dependency enforcement: AST inspection at the shared proposal boundary for undeclared packages, remote/computed imports; 107 regression tests pass; deployment and signed-in acceptance remain unverified
-- Later: audited legacy removal; authenticated cross-industry browser acceptance
+- [x] Phase 4a: audited Builder consumers; removed unused Composer trailer helper, retained active parser/repair/compatibility paths; 116 tests and authority lint pass
+- [ ] Phase 4b: migrate active non-Composer fallback callers before further removals (requires authenticated acceptance evidence on authoritative backend)
+- Later: authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON
 - Audit persistence: evaluate existing telemetry before adding canonical migrations; no new tables or record changes in Phase 1
 
