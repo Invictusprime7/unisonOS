@@ -2,9 +2,8 @@
  * Catalog operations exposed through `agentOperations` — the one surface the
  * AI, the command menu and the Catalog panel use to read and change a
  * business's products / services / menu / plans. Table + field mapping comes
- * from `catalogSurfaceRegistry`; rows are written server-side by the
- * `cms-records` function under business access rules. Every write emits a
- * `data_change` agent event.
+ * from `catalogSurfaceRegistry`; Resource Runtime owns project-backend
+ * routing, storage validation and one invalidation/event per saved record.
  */
 import { getCatalogSurface, getCatalogSurfaceByTable, type CatalogSourceTable, type CatalogSurface } from '@/platform/core/catalogSurfaceRegistry';
 import { applyResourceOp, queryResource } from '@/services/resources/resourceRuntime';
