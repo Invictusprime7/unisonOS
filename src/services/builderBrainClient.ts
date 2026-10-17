@@ -21,10 +21,13 @@ import {
 } from "@/integrations/supabase/env";
 import { shrinkBuilderTurnPayload, BUILDER_BODY_RETRY_BUDGETS } from "@/services/builderPayloadBudget";
 import type { UnisonAIContext } from "@/unison/aiContext";
+import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
+import type { UnisonBuilderConnectorInput } from '@/types/unisonBuilderConnector';
 export type BuilderTurnResponse<T = unknown> = { data: T | null; error: unknown };
 
 export interface BuilderTurnInput {
   messages: Array<{ role: string; content: unknown }>;
+  connectorContext?: UnisonBuilderConnectorInput;
   mode?: string;
   currentCode?: string;
   editMode?: boolean;
@@ -374,6 +377,18 @@ export async function runBuilderTurn<TResponse = any>(
   input: BuilderTurnInput,
   options: BuilderTurnOptions = {},
 ): Promise<{ data: TResponse; error: any }> {
+  if (input.connectorContext) {
+    try {
+      const context = createUnisonBuilderContext(input.connectorContext);
+      const { connectorContext: _connectorContext, ...payload } = input;
+      input = {
+        ...payload,
+        messages: [{ role: 'system', content: renderUnisonBuilderDirective(context) }, ...input.messages],
+      };
+    } catch (error) {
+      return { data: null as TResponse, error };
+    }
+  }
   const maxAttempts = 2;
   const baseDelays = [600, 1400, 2800];
   // Provider cooldowns are seconds-scale; back off harder than transport retries.
