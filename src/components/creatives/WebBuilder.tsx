@@ -2,7 +2,8 @@ import { describeSelection, type EditableObjectDescriptor } from '@/services/edi
 import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 import { insertImageIntoElement, coverBackgroundStyles, anchoredFinder, textRunsFromHtml } from '@/components/creatives/web-builder/pictureInsertion';
 /* cache-bust: 20260309 */
-import { shouldPauseAutosave, runExclusive, recordCommit, getLastCommit } from '@/services/builder/builderMutationCoordinator';
+import { shouldPauseAutosave, runExclusive, recordCommit, getLastCommit, isAiEditActive, holdEditUntilAiIdle, onAiIdleWithHeldEdits, takeHeldEdits } from '@/services/builder/builderMutationCoordinator';
+import { rebaseTextEdit } from '@/services/builder/textEditRebase';
 import type { TerminalFileOp, TerminalRouteOp } from '@/services/terminalCommands';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { captureIntentBaseline, deriveIntentChecks, verifyCommittedChange } from '@/services/agent-runtime/browserVerification';
@@ -3953,6 +3954,19 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         toast.success('Text edit applied to preview');
         return;
       }
+      // Typing while the AI generates or saves would be wiped by the AI's
+      // whole-file write. Hold the edit and replay it on top afterwards.
+      if (isAiEditActive()) {
+        const before = toolbarPreEditRef.current?.[targetPath]
+          ?? lastPersistedVfsFilesRef.current[targetPath]
+          ?? null;
+        if (before !== null && before !== nextCode) {
+          holdEditUntilAiIdle({ path: targetPath, before, after: nextCode, summary });
+          toolbarPreEditRef.current = null;
+          toast.message('Edit kept', { description: 'It will be saved on top of the AI’s change when the AI finishes.' });
+          return;
+        }
+      }
       const guardKey = `${targetPath}:${summary}:${nextCode.slice(0, 160)}`;
       const lastAttempt = toolbarMutationGuardRef.current.get(guardKey) ?? 0;
       if (Date.now() - lastAttempt < 2500) return;
@@ -3992,6 +4006,30 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       });
     };
   }, [activePagePath, launchEntryPoint, currentUserId, businessId, currentDraftId, commitBuilderFiles, importBuilderFiles]);
+
+  // Replay edits held during an AI save on top of the AI's result.
+  useEffect(() => onAiIdleWithHeldEdits(() => {
+    for (const edit of takeHeldEdits()) {
+      const latest = virtualFSRef.current.getSandpackFiles()[edit.path];
+      if (typeof latest !== 'string') continue;
+      const rebased = rebaseTextEdit(edit.before, edit.after, latest);
+      if (rebased.status === 'unchanged') continue;
+      if (rebased.status === 'applied') {
+        commitToolbarMutationRef.current?.(rebased.code, edit.summary, edit.path);
+        continue;
+      }
+      const page = edit.path.split('/').pop() ?? edit.path;
+      toast.warning('The AI changed the same text you edited', {
+        description: `Choose what to keep on ${page}.`,
+        duration: Infinity,
+        action: {
+          label: 'Keep my edit',
+          onClick: () => commitToolbarMutationRef.current?.(edit.after, edit.summary, edit.path),
+        },
+        cancel: { label: 'Discard', onClick: () => undefined },
+      });
+    }
+  }), []);
 
 
 
