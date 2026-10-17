@@ -62,10 +62,10 @@ import { emitAgentEvent, lineDelta } from '@/services/agent-runtime/agentEvents'
 import { buildSystemGraph, renderSystemGraphForPrompt } from '@/services/agent-runtime/systemGraph';
 import { AgentCommandPalette } from './ai-chat/AgentCommandPalette';
 import { CatalogPanel } from './ai-chat/CatalogPanel';
-import { agentOperations } from '@/services/agent-runtime/operations';
 import { dispatchBuilderOperation } from '@/services/unisonBuilderToolDispatch';
 import { STALE_EDIT_PREFIX } from '@/services/builder/builderMutationCoordinator';
-import { createUnisonBuilderContext } from '@/services/unisonBuilderConnector';
+import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
+import { captureBuilderRequestState, assertBuilderRequestState, type BuilderRequestState } from '@/services/builder/builderRequestState';
 import { renderCatalogForPrompt } from '@/services/agent-runtime/catalogOps';
 import { parseResourceValueRequest } from '@/services/agent-runtime/resourceValueRequest';
 import { parseResourceProvenance } from '@/services/resources/resourceRuntime';
@@ -575,6 +575,8 @@ interface AIBuilderPanelProps {
   projectId?: string | null;
   /** Currently accepted durable revision used as the Composer candidate base. */
   revisionId?: string | null;
+  /** Read current canonical identity and VFS together, not a render-time closure. */
+  getCurrentRequestState?: () => BuilderRequestState;
   /** Active business id — required for GHL fast-path bindings. */
   businessId?: string | null;
   /** Executes an explicitly approved, fully resolved business capability plan. */
@@ -679,6 +681,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   previewRef,
   projectId,
   revisionId,
+  getCurrentRequestState,
   businessId,
   onApproveCapabilityPlan,
   layoutOps,
@@ -846,8 +849,8 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   }, []);
 
 
-  const imageContextRef = useRef({ vfsFiles, projectId, businessId, industry: systemType as string | null | undefined });
-  imageContextRef.current = { vfsFiles, projectId, businessId, industry: systemType as string | null | undefined };
+  const imageContextRef = useRef({ vfsFiles, projectId, businessId, revisionId, getCurrentRequestState, industry: systemType as string | null | undefined });
+  imageContextRef.current = { vfsFiles, projectId, businessId, revisionId, getCurrentRequestState, industry: systemType as string | null | undefined };
 
   // Floating toolbar requests run through this same agent, scoped to the clicked element.
   useEffect(() => {
@@ -870,12 +873,23 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         if (located.pagePath) emitAgentEvent({ kind: 'discovery', runId, status: 'ok', path: located.pagePath, message: `Found the ${t.placement ? 'element' : 'image'} in ${located.pagePath}` });
         emitAgentEvent({ kind: 'tool_call', runId, status: 'running', message: 'Writing the art direction and generating the image' });
         const id = toast.loading('Generating image…');
-        void generateSiteImage(prompt, {
-          kind: t.imageKind, selector: t.imageSelector || t.selector, alt: t.imageAlt, currentSrc: t.imageSrc,
-          nearbyText: t.text, section: t.section, repeatLabel: where, width: t.width, height: t.height,
-        }, { projectId: ctx.projectId ?? undefined, businessId: ctx.businessId ?? undefined, industry: ctx.industry ?? undefined, ...located })
-          .then(({ url, prompt: used }) => {
-            window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: { selector: (t.imageSelector || t.selector)!, src: url, kind: t.imageKind!, currentSrc: t.imageSrc, alt: t.imageAlt, pagePath: located.pagePath ?? t.pagePath, placement: t.placement, scrim: t.scrim, text: t.text, evidence: t.evidence, ownerPath: t.ownerPath, tagName: t.tagName, runs: t.runs } }));
+        void (async () => {
+          const state = captureBuilderRequestState(ctx.getCurrentRequestState?.() ?? { files: ctx.vfsFiles ?? {}, revisionId: ctx.revisionId ?? null, projectId: ctx.projectId ?? null, businessId: ctx.businessId ?? null });
+          const page = resolveCanonicalAuthoringPage(state.files, t.ownerPath ?? t.pagePath ?? located.pagePath);
+          const registry = resolveBuilderRegistryContext({ vfsFiles: state.files, projectId: state.projectId, businessId: state.businessId, industry: ctx.industry, pageRole: page.role });
+          const connector = createUnisonBuilderContext({ ...state, sourceTargets: [page.filePath], registryContext: registry, descriptor: t.descriptor, selection: { projectId: state.projectId, revisionId: t.revisionId, selector: t.imageSelector || t.selector, componentPath: page.filePath, clickedTag: t.tagName } });
+          const source = await dispatchBuilderOperation(connector, state, 'inspect_file', page.filePath);
+          const result = await generateSiteImage(prompt, {
+            kind: t.imageKind ?? 'img', selector: t.imageSelector || t.selector, alt: t.imageAlt, currentSrc: t.imageSrc,
+            nearbyText: t.text, section: t.section, repeatLabel: where, width: t.width, height: t.height,
+          }, { projectId: state.projectId ?? undefined, businessId: state.businessId ?? undefined, industry: ctx.industry ?? undefined, pagePath: page.filePath, sourceSnippet: source ?? undefined, siteStyle: renderUnisonBuilderDirective(connector) });
+          assertBuilderRequestState(state, ctx.getCurrentRequestState?.() ?? state);
+          return { ...result, pagePath: page.filePath };
+        })()
+          .then(({ url, prompt: used, pagePath }) => {
+            const imageSelector = t.imageSelector || t.selector;
+            if (!imageSelector || !t.imageKind) return;
+            window.dispatchEvent(new CustomEvent<ImageGeneratedDetail>(IMAGE_GENERATED_EVENT, { detail: { selector: imageSelector, src: url, kind: t.imageKind, currentSrc: t.imageSrc, alt: t.imageAlt, pagePath, placement: t.placement, scrim: t.scrim, text: t.text, evidence: t.evidence, ownerPath: t.ownerPath, tagName: t.tagName, runs: t.runs } }));
             emitAgentEvent({ kind: 'commit', runId, status: 'ok', message: 'Image generated — saving to your site' });
             setMessages((prev) => [...prev, { id: generateId(), role: 'assistant', content: `Made a new ${t.section ? `${t.section} ` : ''}image for you and saved it to the site.\n\nArt direction: ${used}`, timestamp: new Date() }]);
             toast.success('Image generated — saving to your site', { id });
@@ -1085,6 +1099,18 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     // Capture the selected entity before clearing the UI chip; the AI turn
     // resolves this immutable selection against the same graph revision.
     const selectedTarget = agentTarget;
+    const requestState = captureBuilderRequestState(getCurrentRequestState?.() ?? imageContextRef.current.getCurrentRequestState?.() ?? { files: imageContextRef.current.vfsFiles ?? {}, revisionId: imageContextRef.current.revisionId ?? null, projectId: imageContextRef.current.projectId ?? null, businessId: imageContextRef.current.businessId ?? null });
+    // Keep all downstream analysis and authoring on this one source/identity tuple.
+    const { files: requestFiles, revisionId: requestRevision, projectId: requestProject, businessId: requestBusiness } = requestState;
+    const vfsFiles = requestFiles;
+    const revisionId = requestRevision;
+    const projectId = requestProject;
+    const businessId = requestBusiness;
+    const ensureCurrentRequest = () => assertBuilderRequestState(requestState, getCurrentRequestState?.() ?? requestState);
+    if (selectedTarget?.revisionId && selectedTarget.revisionId !== revisionId) {
+      toast.error('This selection is from an older version. Select the element again.');
+      return;
+    }
     // Build file context suffix
     const targetContext = agentTarget
       ? `\n\n[Target element — apply this request to it only: <${agentTarget.tagName}>${agentTarget.text ? ` "${agentTarget.text}"` : ''}${agentTarget.section ? ` in section "${agentTarget.section}"` : ''}${agentTarget.scopeAncestors?.pagePath ? ` on the page at route "${agentTarget.scopeAncestors.pagePath}" (edit only that page's source)` : ''}${agentTarget.selector ? ` (selector ${agentTarget.selector})` : ''}${agentTarget.intent ? `; its button action "${agentTarget.intent}" and destination must stay unchanged` : ''}${agentTarget.provenance?.sourceTable && agentTarget.provenance.rowId ? `; canonical data owner ${agentTarget.provenance.sourceTable}/${agentTarget.provenance.rowId}${agentTarget.provenance.field ? ` field ${agentTarget.provenance.field}` : ''}` : ''}${agentTarget.provenance?.resource ? `; its value comes from saved record ${agentTarget.provenance.resource} — keep the data-ut-resource mark and do not hardcode a new value in place of the record` : ''}${agentTarget.provenance?.bindingId ? `; binding ${agentTarget.provenance.bindingId}` : ''}${agentTarget.provenance?.targetPath ? `; link target ${agentTarget.provenance.targetPath}` : ''}${agentTarget.descriptor?.ownerKind === 'source' && agentTarget.descriptor.instanceId != null ? `; it is repeat #${agentTarget.descriptor.instanceId + 1} of a repeated item — change only that instance, not its siblings` : ''}]`
@@ -1174,11 +1200,12 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       const value = ref ? parseResourceValueRequest(userContent, ref.field) : null;
       if (ref && value !== null) {
         try {
-          const agentCtx = { files: vfsFiles ?? {}, businessId, projectId: projectId ?? undefined };
+          ensureCurrentRequest();
+          const agentCtx = { files: vfsFiles ?? {}, businessId, projectId: projectId ?? undefined, revisionId };
           const connector = createUnisonBuilderContext({
             projectId: projectId ?? null,
-            businessId,
-            selection: { resourceMark, componentPath: defaultTargetFile ?? undefined } as never,
+            businessId, revisionId,
+            selection: { resourceMark, componentPath: defaultTargetFile ?? undefined },
           });
           const { summary } = await dispatchBuilderOperation(connector, agentCtx, 'update_resource_field', resourceMark, value);
           setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: `${summary}. The page shows the saved record, so its layout and buttons are unchanged.`, timestamp: new Date() }]);
@@ -1822,7 +1849,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           businessId: businessId ?? null,
           projectId: projectId ?? null,
           industry: industryForCatalog,
-          selectedSection: null,
+          selectedSection: selectedTarget?.scopeAncestors?.sectionId ? { sectionId: selectedTarget.scopeAncestors.sectionId, componentType: selectedTarget.scopeAncestors.componentType ?? undefined, pagePath: selectedTarget.scopeAncestors.pagePath ?? undefined } : null,
         });
         const rendered = renderCatalogContextForPrompt(catalogCtx);
         connectorCatalogSummary = rendered || null;
@@ -2036,9 +2063,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             const graphText = renderSystemGraphForPrompt(graph);
             if (graphText) previewSnapshot = `${previewSnapshot ?? ''}\n\n${graphText}`.trim();
             if (selectedTarget) {
-              const selectedEntity = agentOperations.inspect_editable_entity({
-                files: vfsFiles ?? {}, revisionId,
-              }, {
+              const inspectionContext = createUnisonBuilderContext({ files: vfsFiles, revisionId, projectId, businessId });
+              const selectedEntity = await dispatchBuilderOperation(inspectionContext, {
+                files: vfsFiles, revisionId, projectId, businessId,
+              }, 'inspect_editable_entity', {
                 selector: selectedTarget.selector,
                 revisionId: selectedTarget.revisionId,
                 pagePath: selectedTarget.scopeAncestors?.pagePath,
@@ -2082,7 +2110,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             || Boolean(selectedTarget?.provenance?.sourceTable);
           if (businessId && needsCatalog) {
             try {
-              const catalog = await agentOperations.inspect_catalog({ files: vfsFiles ?? {}, businessId });
+              const agentCtx = { files: vfsFiles ?? {}, businessId, projectId, revisionId };
+              const connector = createUnisonBuilderContext({ ...agentCtx });
+              const catalog = await dispatchBuilderOperation(connector, agentCtx, 'inspect_catalog');
               previewSnapshot = `${previewSnapshot ?? ''}\n\n${renderCatalogForPrompt(catalog)}`.trim();
               emitAgentEvent({ kind: 'discovery', message: `Read ${catalog.length} catalog items`, status: 'ok' });
             } catch { /* best-effort */ }
@@ -2115,6 +2145,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
           // V4 M8: the in-Builder lane receives the SAME bounded canonical
           // registry projection the Wizard composer and Lane B already get.
+          ensureCurrentRequest();
           const canonicalPageContext = isReactProject && vfsFiles
             ? resolveCanonicalAuthoringPage(vfsFiles, resolvedTargetFile || defaultTargetFile)
             : null;
@@ -2137,7 +2168,8 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             isScopedEdit: isSurgicalEdit || isBehavioralEdit,
           });
           if (useCanonicalComposer) {
-            const page = canonicalPageContext!;
+            if (!canonicalPageContext) throw new Error('Select an existing page before editing.');
+            const page = canonicalPageContext;
             const editorDiagnostics = diagnosticsAggregator.getDiagnosticsForFiles(
               Object.keys(vfsFiles ?? {}),
               ['typescript'],
@@ -2174,7 +2206,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               ].filter(Boolean).join('\n').slice(0, 6500),
               knowledgeQuery: `${_userContent} ${page.role} ${systemType ?? ''}`,
               instruction: _userContent.slice(0, 4000),
-              currentFiles: vfsFiles!,
+              currentFiles: vfsFiles,
               baseRevisionId: revisionId,
               connectorContext: {
                 projectId, businessId, revisionId,
@@ -2201,7 +2233,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               sourceTargets: Array.from(new Set([
                 page.filePath,
                 ...(isCartWiringRequest
-                  ? sourceTargetsForCartWiring(vfsFiles!, page.filePath)
+                  ? sourceTargetsForCartWiring(vfsFiles, page.filePath)
                   : []),
               ])),
               routes: [],
@@ -2268,10 +2300,12 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   navOrder: page.navOrder,
                 };
               });
+              ensureCurrentRequest();
               const generation = await unisonAppBuilder.generatePages({
                 operationId: `builder-pages:${generateId()}`,
+                connectorContext: { projectId, businessId, revisionId, catalogSummary: connectorCatalogSummary, registryContext: builderRegistryContext, requestEnvelope: capabilityInterpretation.envelope },
                 baseRevisionId: revisionId ?? null,
-                currentFiles: vfsFiles!,
+                currentFiles: vfsFiles,
                 pages: pageTargetsForGeneration,
                 existingRoutes: pageTargets.map(({ title, route }) => ({ title, route })),
                 businessName: templateName?.trim() || 'Website',
@@ -2306,7 +2340,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               canonicalRouteOps = [...generation.routeOps];
               dedicatedPageGeneration = true;
               const files = Object.fromEntries(Object.entries(generation.candidateFiles)
-                .filter(([path, content]) => vfsFiles![path] !== content));
+                .filter(([path, content]) => vfsFiles[path] !== content));
               response = {
                 data: {
                   content: JSON.stringify({
@@ -2338,7 +2372,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 error: null,
               };
             }
-          } else response = await runBuilderTurn<any>({
+          } else {
+            ensureCurrentRequest();
+            response = await runBuilderTurn<any>({
             messages: conversationHistory,
             connectorContext: {
               projectId, businessId, revisionId,
@@ -2369,7 +2405,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             },
             requestEnvelope: capabilityInterpretation.envelope,
             unisonContext,
-            // Specialized non-source lanes and multimodal attachment turns keep
+            // Specialized non-source and non-React lanes keep
             // their established transport. Ordinary React source authorship is
             // handled above by the canonical Composer protocol.
             mode: isLaunchPlanningRequest ? 'launch-desk' : (isSurgicalEdit && !isReactProject ? 'code' : 'template-react'),
@@ -2409,6 +2445,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               maxTokens: gatewayConfig.maxTokens,
             } : undefined,
           });
+          }
           
           // Check for retryable errors
           if (response.error) {
@@ -3285,6 +3322,36 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     setMessages(prev => [...prev, userMessage]);
 
     try {
+      const state = captureBuilderRequestState(getCurrentRequestState?.() ?? { files: vfsFiles ?? {}, revisionId: revisionId ?? null, projectId: projectId ?? null, businessId: businessId ?? null });
+      const targetPath = error.file && state.files[error.file.startsWith('/') ? error.file : `/${error.file}`] !== undefined
+        ? (error.file.startsWith('/') ? error.file : `/${error.file}`) : defaultTargetFile;
+      if (targetPath && targetPath !== '/src/App.tsx' && /^\/src\/.+\.(?:tsx?|jsx?)$/.test(targetPath) && state.files[targetPath] !== undefined) {
+        const page = resolveCanonicalAuthoringPage(state.files, targetPath);
+        const registry = resolveBuilderRegistryContext({ vfsFiles: state.files, projectId: state.projectId, businessId: state.businessId, industry: systemType, templateId: templateName, pageRole: page.role });
+        const catalogContext = await buildCatalogContext({ projectId: state.projectId, businessId: state.businessId, industry: systemType, selectedSection: null });
+        assertBuilderRequestState(state, getCurrentRequestState?.() ?? state);
+        const result = await unisonAppBuilder.repair({
+          operationId: `debug:${generateId()}`, currentFiles: state.files, baseRevisionId: state.revisionId,
+          page, sourceTargets: [targetPath], instruction: errorPrompt,
+          diagnostics: [errorPrompt], registryContext: registry ?? undefined,
+          connectorContext: { ...state, registryContext: registry, catalogSummary: renderCatalogContextForPrompt(catalogContext) },
+          timeoutMs: 420_000,
+        });
+        if (result.candidate.status !== 'ready-for-commit' || !result.changeSet) throw new Error(result.candidate.diagnostics[0] ?? 'The repair did not pass validation.');
+        const candidate = result.changeSet;
+        const output = canonicalCandidateOutput(candidate);
+        const category: AIEditPermissionCategory = error.type === 'supabase' ? 'backend' : 'behavioral';
+        if (!canAutoApply(category)) {
+          setHeldFiles({ ...output, routeOps: candidate.routeOps, candidate, reason: 'Review this repair before applying it.' });
+          setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: 'Repair prepared for review. Your saved site is unchanged.', timestamp: new Date() }]);
+          return;
+        }
+        const outcome = await applyAIBuilderFiles(onApplyToVFS, output.files, { origin: 'debug-fix', prompt: errorPrompt, summary: result.summary, deletions: output.deletions, routeOps: candidate.routeOps, candidate });
+        if (!outcome.success) throw new Error(outcome.errors?.[0] ?? 'The repair could not be saved.');
+        setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: result.summary ?? 'Saved the validated repair.', timestamp: new Date() }]);
+        return;
+      }
+      // Retain non-React/legacy compatibility until authenticated replacement acceptance.
       // Build a compact VFS snapshot for debug context (max 5 files, truncated)
       const debugVfs: Record<string, string> = {};
       if (vfsFiles) {
@@ -3351,6 +3418,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       });
 
       const response = await runBuilderTurn<any>({
+        connectorContext: { projectId: state.projectId, businessId: state.businessId, revisionId: state.revisionId },
         messages: debugHistory,
         requestEnvelope: debugInterpretation.envelope,
         unisonContext: buildUnisonAIContext(debugTaskPlan),

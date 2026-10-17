@@ -379,7 +379,10 @@ export async function runBuilderTurn<TResponse = any>(
 ): Promise<{ data: TResponse; error: any }> {
   if (input.connectorContext) {
     try {
-      const context = createUnisonBuilderContext(input.connectorContext);
+      const context = createUnisonBuilderContext({
+        ...input.connectorContext,
+        files: input.vfsFiles ?? input.connectorContext.files,
+      });
       const { connectorContext: _connectorContext, ...payload } = input;
       input = {
         ...payload,

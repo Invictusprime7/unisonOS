@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Unified AI Builder request closure
+- [x] Wire React debug repairs to App Builder candidates; page creation carries connector context; image requests and catalog/selection inspections use enforced tools; capture live VFS/revision, refuse stale preparation/selection and unsupported capability bindings
+- [ ] Verify page creation, image replacement, catalog edits and capability bindings through save → preview → reopen on UNISON (regressions pass; browser reaches sign-in without runtime errors, but available session targets another backend)
+- [ ] Remove legacy non-React/specialized paths only after authenticated replacement acceptance; retained pending a valid UNISON session and designated test project
+
 ## Sign-in recovery
 - [x] Recover auth-key quota errors with tab-persistent fallback, without deleting project data
 - [x] Release auth listener locks before onboarding lookups and audit logging; reset loading on thrown sign-in errors; 11 regression tests pass

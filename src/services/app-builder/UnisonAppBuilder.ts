@@ -69,6 +69,13 @@ export function createUnisonAppBuilder(
     },
 
     async generatePages(input) {
+      const connector = createUnisonBuilderContext({
+        ...input.connectorContext,
+        files: input.currentFiles,
+        revisionId: input.baseRevisionId,
+        // New pages belong to approved route operations, not existing-source targets.
+        sourceTargets: [],
+      });
       const reject = (diagnostics: string[]): AppBuilderPageGenerationResult => ({
         operationId: input.operationId,
         protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
@@ -128,7 +135,7 @@ export function createUnisonAppBuilder(
         candidateOrigin: 'builder',
         initialRouteOps: routeOps,
         registryContext: input.registryContext,
-        runtimeContext: input.runtimeContext,
+        runtimeContext: [renderUnisonBuilderDirective(connector), input.runtimeContext].filter(Boolean).join('\n'),
         signal: input.signal,
         budgetMs: input.budgetMs,
         concurrency: input.concurrency,

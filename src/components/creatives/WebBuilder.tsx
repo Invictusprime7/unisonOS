@@ -8197,6 +8197,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 previewRef={livePreviewRef}
                 projectId={currentDraftId ?? null}
                 revisionId={currentRevisionId || null}
+                getCurrentRequestState={() => ({ files: virtualFSRef.current.getSandpackFiles(), revisionId: currentRevisionIdRef.current || null, projectId: resolvedProjectId ?? null, businessId: businessId ?? null })}
                 businessId={businessId ?? null}
                 layoutOps={layoutOpsForAI}
                 onApproveCapabilityPlan={approveCapabilityPlanFromPanel}
@@ -8572,6 +8573,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               previewRef={livePreviewRef}
               projectId={currentDraftId ?? null}
               revisionId={currentRevisionId || null}
+              getCurrentRequestState={() => ({ files: virtualFSRef.current.getSandpackFiles(), revisionId: currentRevisionIdRef.current || null, projectId: resolvedProjectId ?? null, businessId: businessId ?? null })}
               businessId={businessId ?? null}
               layoutOps={layoutOpsForAI}
               onApproveCapabilityPlan={approveCapabilityPlanFromPanel}
