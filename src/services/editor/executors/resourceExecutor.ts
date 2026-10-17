@@ -7,10 +7,23 @@ import type { EditorCommand, EditorCommandResult } from '../editorCommandTypes';
 
 function valuesFor(command: EditorCommand, field?: string): Record<string, unknown> {
   if (command.type === 'update-resource-field') return command.values;
-  const key = field ?? (command.type === 'replace-asset' ? 'image' : 'name');
+  const key = field ?? defaultFieldFor(command);
   if (command.type === 'set-text') return { [key]: command.text };
   if (command.type === 'replace-asset') return { [key]: command.url };
   return {};
+}
+
+/** Unmarked fields resolve from the resource schema, never a hardcoded guess. */
+function defaultFieldFor(command: EditorCommand): string {
+  const ref = parseResourceProvenance(command.target.resourceMark);
+  const schema = ref ? getResource(ref.resourceKey)?.schema ?? [] : [];
+  if (command.type === 'replace-asset') {
+    return schema.find((f) => f.editable && f.type === 'image')?.key ?? 'image';
+  }
+  return schema.find((f) => f.editable && f.key === 'name')?.key
+    ?? schema.find((f) => f.editable && f.key === 'title')?.key
+    ?? schema.find((f) => f.editable && f.type === 'text')?.key
+    ?? 'name';
 }
 
 export async function executeResourceCommand(command: EditorCommand, ctx: ResourceContext): Promise<EditorCommandResult> {

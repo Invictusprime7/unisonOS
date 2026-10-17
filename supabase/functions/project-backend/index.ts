@@ -15,6 +15,53 @@ import { decryptConnectedProjectSecret } from "../_shared/connectedProjectCrypto
 type Action = "list" | "get" | "create" | "update" | "delete";
 const ACTIONS: Action[] = ["list", "get", "create", "update", "delete"];
 
+/**
+ * One tenant-scoped contract for every resource kind (guidebook §41–43):
+ * catalog surfaces come from the canonical summary; the site profile and
+ * CMS content entries are declared here against the dedicated runtime schema
+ * (`site_profiles`, `content_entries`). Unknown resources are rejected cleanly.
+ */
+interface DedicatedContract {
+  resource: string;
+  sourceTable: string;
+  sortField: string;
+  editableFields: Record<string, string>;
+  requiredFields: string[];
+  /** CMS content entries are filtered by this type and store fields in `data`. */
+  contentType?: string;
+  /** Single-record resources resolve to the site's one row. */
+  singleRecord?: boolean;
+}
+
+function contractFor(resource: string): DedicatedContract | null {
+  const cms = getCmsResourceContract(resource);
+  if (cms) return cms;
+  if (resource === "business-profile") {
+    return {
+      resource,
+      sourceTable: "site_profiles",
+      sortField: "id",
+      editableFields: {
+        name: "text", tagline: "text", description: "textarea", logoUrl: "text",
+        phone: "text", email: "text", website: "text", address: "json", hours: "json", socialLinks: "json",
+      },
+      requiredFields: ["name"],
+      singleRecord: true,
+    };
+  }
+  if (resource.startsWith("content:")) {
+    return {
+      resource,
+      sourceTable: "content_entries",
+      sortField: "created_at",
+      editableFields: { title: "text", slug: "text", status: "text", data: "json" },
+      requiredFields: [],
+      contentType: resource.slice("content:".length),
+    };
+  }
+  return null;
+}
+
 serve(async (req) => {
   const pre = handleCorsPreflightRequest(req);
   if (pre) return pre;
@@ -32,7 +79,7 @@ serve(async (req) => {
   const resource = String(body?.resource ?? "");
   if (!isValidUUID(projectId)) return json({ success: false, error: "A site is required." }, 400);
   if (!ACTIONS.includes(action)) return json({ success: false, error: "Unknown action." }, 400);
-  const contract = getCmsResourceContract(resource);
+  const contract = contractFor(resource);
   if (!contract) return json({ success: false, error: "Unknown kind of saved item." }, 400);
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -84,14 +131,43 @@ serve(async (req) => {
   }
 
   const table = contract.sourceTable;
-  const recordId = body?.recordId ? String(body.recordId) : undefined;
+  let recordId = body?.recordId ? String(body.recordId) : undefined;
   const values = (body?.values ?? {}) as Record<string, unknown>;
-  const allowed = Object.fromEntries(Object.entries(values).filter(([k]) => k in contract.editableFields));
+
+  // Content entries keep their field values inside a `data` jsonb column,
+  // filtered by content type; the site profile is the site's single row.
+  const scoped = () => {
+    let q = site.from(table).select("*");
+    if (contract.contentType) q = q.eq("content_type", contract.contentType);
+    return q;
+  };
+  if (contract.singleRecord && action !== "list" && action !== "create") {
+    const { data: row } = await scoped().order(contract.sortField).limit(1).maybeSingle();
+    if (!row) return json({ success: false, error: "This site's profile isn't provisioned yet." }, 404);
+    recordId = String((row as { id: unknown }).id);
+  }
+
+  let allowed = Object.fromEntries(Object.entries(values).filter(([k]) => k in contract.editableFields));
+  if (contract.contentType) {
+    const { title, slug, status, ...dataFields } = values;
+    allowed = {};
+    if (typeof title === "string") allowed.title = title;
+    if (typeof slug === "string") allowed.slug = slug;
+    if (typeof status === "string") allowed.status = status;
+    if (action === "update" && recordId) {
+      const { data: current } = await scoped().eq("id", recordId).maybeSingle();
+      const currentData = (current as { data?: Record<string, unknown> } | null)?.data ?? {};
+      allowed.data = { ...currentData, ...dataFields };
+    } else {
+      allowed.data = dataFields;
+    }
+    if (action === "create") allowed.content_type = contract.contentType;
+  }
 
   let result: { data: unknown; error: { message: string } | null };
-  if (action === "list") result = await site.from(table).select("*").order(contract.sortField);
+  if (action === "list") result = await scoped().order(contract.sortField);
   else if (!recordId && action !== "create") return json({ success: false, error: "An item is required." }, 400);
-  else if (action === "get") result = await site.from(table).select("*").eq("id", recordId!).maybeSingle();
+  else if (action === "get") result = await scoped().eq("id", recordId!).maybeSingle();
   else if (action === "create") result = await site.from(table).insert(allowed).select().single();
   else if (action === "update") result = await site.from(table).update(allowed).eq("id", recordId!).select().single();
   else result = await site.from(table).delete().eq("id", recordId!);
