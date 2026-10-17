@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: AI Builder frontend replacement
+- [ ] Replace Builder chrome/composer with minimal borders and reduced hover fills; expose compact feature settings
+- [ ] Enforce feature toggles at request dispatch, use the connector for tool actions, and retire legacy source-writing/debug fallback branches
+- [ ] Verify settings and interface interactions; authenticated saved-project acceptance needs a valid UNISON session
+
 ## Active: Unified AI Builder request closure
 - [x] Wire React debug repairs to App Builder candidates; page creation carries connector context; image requests and catalog/selection inspections use enforced tools; capture live VFS/revision, refuse stale preparation/selection and unsupported capability bindings
 - [ ] Verify page creation, image replacement, catalog edits and capability bindings through save → preview → reopen on UNISON (regressions pass; browser reaches sign-in without runtime errors, but available session targets another backend)
