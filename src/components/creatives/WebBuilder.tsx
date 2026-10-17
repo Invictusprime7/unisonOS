@@ -300,10 +300,6 @@ import { exportFabricCanvasToHtmlCss } from "./web-builder/fabricExport";
  * Returns warnings if the AI significantly altered the template structure.
  */
 // AI code preservation + validation helpers extracted to web-builder/aiCodeHelpers.ts
-import {
-  type CodeValidationResult,
-  extractStyleBlocks,
-} from "./web-builder/aiCodeHelpers";
 
 
 // Define SelectedElement interface to match HTMLElementPropertiesPanel expected type
@@ -8174,7 +8170,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 onToolsHostChange={setAIBuilderToolsHost}
                 onCustomizerHostChange={setAIBuilderCustomizerHost}
                 customizerAvailable={Boolean(previewCode && !selectedObject)}
-                onThemeEdit={requestThemeEdit}
                 currentCode={previewCode}
                 systemType={activeSystemType}
                 templateName={currentTemplateName}
@@ -8393,7 +8388,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               onToolsHostChange={setAIBuilderToolsHost}
               onCustomizerHostChange={setAIBuilderCustomizerHost}
               customizerAvailable={Boolean(previewCode && !selectedObject)}
-                onThemeEdit={requestThemeEdit}
               currentCode={previewCode}
               systemType={activeSystemType}
               templateName={currentTemplateName}

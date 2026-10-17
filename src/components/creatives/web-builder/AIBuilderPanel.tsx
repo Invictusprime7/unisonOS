@@ -454,8 +454,7 @@ interface AIBuilderPanelProps {
   vfsContext?: string | null;
   /** Full VFS file map for component-level site analysis */
   vfsFiles?: Record<string, string> | null;
-  /** Direct VFS apply callback — bypasses legacy onCodeGenerated pipeline, uses AI→VFS orchestrator */
-  onThemeEdit?: (prompt: string) => Promise<boolean>;
+  /** Canonical candidate apply callback, including presentation changes. */
   onApplyToVFS: AIBuilderApplyCallback;
   /** Preview handle ref for building component behavior maps (DOM inspection) */
   previewRef?: React.RefObject<{ getIframe?: () => HTMLIFrameElement | null } | null>;
@@ -2218,7 +2217,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       let explanationText = neutralizeModelSuccessClaim(aiContent) || CANDIDATE_GENERATED_NOTICE;
       let multiFileOutput: Record<string, string> | null = null;
       let multiFileDeletions: string[] = [];
-      const structuredContractExtractionFailed = false;
       let transactionVerdict: string | null = null;
       if (canonicalCandidate?.fileOps.length) {
         const preparedOutput = canonicalCandidateOutput(canonicalCandidate);
@@ -2359,18 +2357,14 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       const executionFailed = thinkingSteps.some(step => step.type === 'error');
       if (!executionFailed) thinkingSteps.push({
         id: generateId(),
-        type: structuredContractExtractionFailed ? 'error' : aiReasoning ? 'reasoning' : 'complete',
-        message: structuredContractExtractionFailed
-          ? 'Response validation failed'
-          : aiReasoning
+        type: aiReasoning ? 'reasoning' : 'complete',
+        message: aiReasoning
           ? `Extended reasoning complete (${(aiReasoning.length / 1000).toFixed(1)}k chars)`
           : 'Generation complete',
         timestamp: new Date(),
-        details: structuredContractExtractionFailed
-          ? 'The response contained a files contract that could not be parsed.'
-          : aiReasoning ? aiReasoning.slice(0, 500) + (aiReasoning.length > 500 ? '…' : '') : undefined,
+        details: aiReasoning ? aiReasoning.slice(0, 500) + (aiReasoning.length > 500 ? '…' : '') : undefined,
       });
-      if (aiReasoning && !structuredContractExtractionFailed && !executionFailed) {
+      if (aiReasoning && !executionFailed) {
         thinkingSteps.push({
           id: generateId(),
           type: 'complete',
@@ -2379,7 +2373,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         });
       }
 
-      if (structuredContractExtractionFailed || executionFailed) {
+      if (executionFailed) {
         advancePlanStep(taskPlan, 'patch', 'failed');
         advancePlanStep(taskPlan, 'refresh_preview', 'failed');
       } else if (!multiFileOutput) {
@@ -2393,9 +2387,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           ? {
               ...m,
               content: [
-                explanationText || (structuredContractExtractionFailed
-                  ? 'The AI response could not be converted into project files.'
-                  : neutralizeModelSuccessClaim(aiContent) || CANDIDATE_GENERATED_NOTICE),
+                explanationText || neutralizeModelSuccessClaim(aiContent) || CANDIDATE_GENERATED_NOTICE,
                 transactionVerdict,
               ].filter(Boolean).join('\n\n'),
 

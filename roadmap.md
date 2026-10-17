@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Active: Builder result and preview closure
-- [ ] Retire remaining AI editing fallback paths; keep connector candidates and canonical saves as the result path
-- [ ] Fix invalid Tailwind arbitrary values and table cell bindings behind preview failures; add and run focused regressions
-- [ ] Verify Builder result → save → preview → reopen on the designated project where authenticated access is available
+- [x] Retire remaining AI editing fallback paths; removed unused response extraction, legacy code/file callbacks and synthesized file responses; candidate apply stays canonical
+- [x] Fix portable table export collision, safe table cell values/record ownership, and diagnose malformed Tailwind arbitrary values before acceptance; 80 regression tests pass
+- [ ] Verify Builder result → save → preview → reopen on the designated project; available session targets the other backend, so the sandbox loads an empty workspace rather than the saved site
 
 ## Active: Recipe contract corrections
 - [x] Correct FAQ layout-derived IDs and canonical auth bindings; remove unregistered intents from locally handled controls, regenerate portable recipes; 211 regression tests pass

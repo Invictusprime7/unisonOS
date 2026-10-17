@@ -74,7 +74,7 @@ Removed `src/utils/stripComposerTrailer.ts`: repository-wide source, function, s
 
 | Audited consumer | Decision | Reason |
 | --- | --- | --- |
-| `src/utils/aiResponseParser.ts` | Retain | Builder panel still consumes multi-file and stylesheet extraction for non-Composer turns. |
+| `src/utils/aiResponseParser.ts` | Retired | No production callers remain; Builder source results are projected only from App Builder candidates. |
 | `src/services/builder/sequentialAiTasks.ts` | Retain | Builder panel consumes it during multi-file candidate application. |
 | `src/services/builder/canonicalAuthoringRequest.ts` | Retain | Active request assembly and eligibility for Builder, launch and repair. |
 | `src/services/builder/aiRepairLoop.ts` | Retain | Shared by App Builder, WebBuilder and launch authoring. |
@@ -87,3 +87,9 @@ No active fallback or saved-project compatibility path was removed. Remaining fa
 Removed unused structured-tag parsing, response-to-VFS generation, component-signature APIs and HTML-import re-exports from `aiResponseParser.ts`. Repository-wide caller searches found only the Builder panel and extraction tests importing this module; both use the retained `extractMultiFileOutput` and `extractStylesheetOutput`. Those implementations are unchanged, including malformed JSON compatibility and explicit deletions. The underlying `aiWebParser.ts` importer remains intact.
 
 The parser's public-export regression test asserts it exposes exactly the two extraction functions. Verification: 74 tests pass across six extraction, legacy isolation/hydration, request assembly, App Builder and import-enforcement suites; authority lint and preview build are OK. This is dead-API retirement, not migration of active fallback mutations. Phase 4b still requires caller migration and authenticated acceptance; no records, endpoints or deployments changed.
+
+### Builder result closure
+
+Retired the now-unused extraction parser and its compatibility-only tests, legacy generated-code/file-patch callbacks at both Builder mounts, and synthesized JSON file responses. Canonical candidate operations remain the only source result; review and auto-apply keep the existing queued `onApplyToVFS` → canonical mutation boundary. Launch planning and catalog chat transport remain; neither may author source. Saved-site import/hydration compatibility remains untouched.
+
+Portable table exports no longer collide with the family's default implementation name. Table cells render scalar/label values safely and expose record ownership only with an explicit source table and persisted row ID. Candidate gates diagnose malformed arbitrary CSS values before save without rewriting accepted preview source. Authenticated result/save/reopen is still unverified: the available session targets another backend, and the designated project shows an empty workspace in the sandbox.
