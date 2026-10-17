@@ -1170,6 +1170,7 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
       revisionId,
       selector: computeSelector(element),
       text,
+      originalText,
       target: {
         pagePath: scope.pagePath,
         sectionId: scope.sectionId,

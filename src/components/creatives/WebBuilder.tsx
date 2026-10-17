@@ -3839,8 +3839,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     if (execution.kind === 'resource') {
       if (!businessId) { toast.error('This site is not linked to a business yet.'); return false; }
       try {
-        const { applyResourceOp } = await import('@/services/resources/resourceRuntime');
-        await applyResourceOp({ op: 'update', ref: execution.ref, values: execution.values }, { businessId, projectId: projectId ?? null, mode: 'builder' });
+        const result = await executeEditorCommand({
+          type: 'update-resource-field', target: { resourceMark: plan.resourceMark, projectId: resolvedProjectId ?? projectId },
+          ref: execution.ref, values: execution.values,
+        }, { source: 'inspector', resource: { businessId, projectId: resolvedProjectId ?? projectId, siteId: effectiveRouteState?.siteId ?? launch?.siteId, mode: 'builder' } });
+        if (!result.ok) throw new Error(result.error ?? 'Could not save this item.');
         toast.success(`${execution.summary} — saved to the linked item`);
         return true;
       } catch (err) {
@@ -3886,7 +3889,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         resourceMark: plan.resourceMark ?? null,
       };
       const command: EditorCommand = op.type === 'set-slot-text'
-        ? { type: 'set-text', target, text: String(op.value ?? '') }
+        ? { type: 'set-text', target, text: String(op.value ?? ''), originalText: selectedElementRef.current?.selector === op.selector ? selectedElementRef.current?.textContent : undefined }
         : op.type === 'set-slot-asset'
           ? { type: 'replace-asset', target, url: String(op.value ?? ''), alt: op.alt ? String(op.alt) : undefined }
           : { type: 'bind-intent', target, intent: String(op.intent ?? '') };
@@ -3915,6 +3918,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           binding: (cmd) => runPlanned(cmd, 'binding'),
         },
       });
+      if (!result.ok && result.error) toast.error('Could not apply this edit', { description: result.error });
       return result.ok;
     }
     return applyExecution();
@@ -3946,8 +3950,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       instanceId: descriptor?.instanceId ?? null,
     };
 
-    const result = await executeEditorCommand({ type: 'set-text', target, text: change.text }, {
-      source: 'toolbar',
+    const result = await executeEditorCommand({ type: 'set-text', target, text: change.text, originalText: change.originalText }, {
+      source: 'inline',
       resource: {
         businessId: businessId ?? '',
         projectId: resolvedProjectId ?? projectId ?? null,

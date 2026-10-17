@@ -12,7 +12,9 @@ import { Button } from '@/components/ui/button';
 import { Database, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { getResource } from '@/services/resources/resourceRegistry';
-import { applyResourceOp, getResourceRecord, parseResourceProvenance } from '@/services/resources/resourceRuntime';
+import { parseResourceProvenance } from '@/services/resources/resourceRuntime';
+import { executeEditorCommand } from '@/services/editor/editorCommandService';
+import { readEditorResource } from '@/services/editor/executors/resourceExecutor';
 import { uploadForPlacement } from '@/services/assets/uploadPlacement';
 import type { ResourceFieldDefinition, ResourceRecord } from '@/services/resources/resourceTypes';
 
@@ -54,7 +56,7 @@ export function RecordFieldsEditor({ mark, businessId, projectId, defaultOpen = 
     if (!open || !ref || !def || !businessId) return;
     let alive = true;
     setLoading(true);
-    getResourceRecord(ref.resourceKey, { businessId, projectId, mode: 'builder' }, ref.recordId)
+    readEditorResource(ref, { businessId, projectId, mode: 'builder' })
       .then((r) => {
         if (!alive) return;
         setRecord(r);
@@ -83,8 +85,12 @@ export function RecordFieldsEditor({ mark, businessId, projectId, defaultOpen = 
     setSaving(true);
     try {
       const values = Object.fromEntries(changed.map((f) => [f.key, fromDraft(f, nextDraft[f.key])]));
-      const next = await applyResourceOp({ op: 'update', ref, values }, { businessId, projectId, mode: 'builder' });
       const previous = Object.fromEntries(changed.map((f) => [f.key, record?.[f.key] ?? null]));
+      const result = await executeEditorCommand({ type: 'update-resource-field', target: { resourceMark: mark, projectId }, ref, values, expected: previous }, {
+        source: 'inspector', resource: { businessId, projectId, mode: 'builder' },
+      });
+      if (!result.ok) throw new Error(result.error ?? 'Could not save this item.');
+      const next = result.record;
       const applied = next ?? (record ? { ...record, ...values } : null);
       setRecord(applied);
       setDraft(nextDraft);
@@ -93,7 +99,8 @@ export function RecordFieldsEditor({ mark, businessId, projectId, defaultOpen = 
           label: 'Undo',
           onClick: async () => {
             try {
-              const back = await applyResourceOp({ op: 'update', ref, values: previous }, { businessId, projectId, mode: 'builder' });
+              await result.undo?.();
+              const back = await readEditorResource(ref, { businessId, projectId, mode: 'builder' });
               const restored = back ?? (applied ? { ...applied, ...previous } : null);
               setRecord(restored);
               setDraft(Object.fromEntries(fields.map((f) => [f.key, toDraft(restored?.[f.key])])));
