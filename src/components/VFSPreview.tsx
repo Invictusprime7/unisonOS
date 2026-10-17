@@ -12,6 +12,7 @@
  * - Open in new tab
  */
 
+import { resolvePendingVfsConflicts } from '@/services/snapshotProjector';
 import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle, useRef, useMemo, Component, type ReactNode, type ErrorInfo } from 'react';
 import { cn } from '@/lib/utils';
 import { 
@@ -1377,6 +1378,12 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
           error={pipelineError}
           onRetry={retryArtifactCompile}
           onRelaunch={goLauncher}
+          onResolveConflict={(choice) => {
+            const pending = pipelineError.details.pendingConflict;
+            if (!pending) return;
+            resolvePendingVfsConflicts(pending.scope, pending.acceptedRevisionId, choice);
+            retryArtifactCompile();
+          }}
         />
       </div>
     );
