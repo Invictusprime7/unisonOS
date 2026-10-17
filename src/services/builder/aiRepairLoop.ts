@@ -157,7 +157,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
     narrate('file_change', `Drafted changes to ${response.fileOps.length} file${response.fileOps.length === 1 ? '' : 's'}`, 'ok');
     const scope = composerScopeViolations(request.task, request.page.filePath, response.fileOps);
     if (scope.length) {
-      narrate('verification', 'The draft reached outside the requested area; narrowing it', 'failed');
+      narrate('verification', 'The draft reached outside the requested area; narrowing it', 'running');
       lastErrors = scope;
       request = {
         ...request,
@@ -205,7 +205,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       pageCheck: input.pageCheck,
     });
     lastPrepared = prepared;
-    narrate('verification', prepared.ok ? 'Checks passed' : `Found ${prepared.errors.length} problem${prepared.errors.length === 1 ? '' : 's'}; fixing`, prepared.ok ? 'ok' : 'failed');
+    narrate('verification', prepared.ok ? 'Checks passed' : `Found ${prepared.errors.length} problem${prepared.errors.length === 1 ? '' : 's'}; fixing`, prepared.ok ? 'ok' : 'running');
     if (prepared.ok) {
       return { ok: true, reason: 'accepted', attempts: attempt, response, prepared, errors: [] };
     }
