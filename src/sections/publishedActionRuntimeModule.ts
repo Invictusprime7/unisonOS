@@ -33,6 +33,33 @@ function controllerForIntent(intent: string): RuntimeController | undefined {
   return CONTROLLERS.find((controller) => controller.intents.includes(intent));
 }
 
+async function submitAuth(form: HTMLFormElement, intent: string) {
+  const runtime = PUBLISHED_RUNTIME_CONFIG;
+  const endpoint = (runtime.controllerEndpoints as Record<string, string>)['site-auth'];
+  if (!runtime.siteId || !endpoint || !GENERATED_SITE_RUNTIME_MANIFEST.enabledCapabilities.includes('auth')) {
+    throw new Error('Authentication is not connected for this site.');
+  }
+  const fields = new FormData(form);
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      siteId: runtime.siteId,
+      action: intent === 'auth.register' ? 'register' : 'login',
+      email: fields.get('email'), password: fields.get('password'), name: fields.get('name'),
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok || result.success !== true || !result.session) {
+    throw new Error(result.error || 'Authentication could not be completed.');
+  }
+  // A site session never replaces the platform's auth session.
+  window.sessionStorage.setItem('unison-site-session:' + runtime.siteId, JSON.stringify(result.session));
+  form.reset();
+  window.dispatchEvent(new CustomEvent('unison:site-auth', { detail: { siteId: runtime.siteId, user: result.user } }));
+  showActionStatus(form, intent === 'auth.register' ? 'Account created.' : 'Signed in.');
+}
+
 function createSessionId(): string {
   const storageKey = 'unison-runtime-session';
   const existing = window.sessionStorage.getItem(storageKey);
@@ -277,6 +304,16 @@ export function usePublishedActionRuntime() {
       if (!element) return;
       const intent = element.dataset.utIntent || '';
       if (!intent || element.closest('form[data-demo-form="true"]')) return;
+      // Form submit controls belong to submit, never a duplicate click dispatch.
+      if (element.closest('form[data-intent-form^="auth."]')) return;
+
+      if (intent === 'auth.login' || intent === 'auth.register') {
+        event.preventDefault();
+        const form = document.querySelector('form[data-intent-form="' + intent + '"]') as HTMLFormElement | null;
+        if (form) form.querySelector<HTMLInputElement>('input')?.focus();
+        else showActionStatus(element, 'The authentication form is not available on this page.');
+        return;
+      }
 
       if (focusForm(intent)) {
         event.preventDefault();
@@ -296,6 +333,16 @@ export function usePublishedActionRuntime() {
 
     const onSubmit = (event: SubmitEvent) => {
       const form = event.target as HTMLFormElement | null;
+      const intent = form?.dataset.intentForm;
+      if (form && (intent === 'auth.login' || intent === 'auth.register')) {
+        event.preventDefault();
+        if (form.getAttribute('aria-busy') === 'true' || !form.reportValidity()) return;
+        form.setAttribute('aria-busy', 'true');
+        void submitAuth(form, intent)
+          .catch((error) => showActionStatus(form, error instanceof Error ? error.message : 'Authentication could not be completed.'))
+          .finally(() => form.removeAttribute('aria-busy'));
+        return;
+      }
       if (!form?.matches('form[data-intent-form="booking.create"]')) return;
       event.preventDefault();
       form.setAttribute('aria-busy', 'true');

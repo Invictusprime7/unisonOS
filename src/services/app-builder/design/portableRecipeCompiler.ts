@@ -133,7 +133,7 @@ export function compilePortableRecipes(bundle: DesignSourceBundle, root: string 
   for (const [path, source] of Object.entries(emitted)) {
     const target = reroot(path, root);
     files[target] = source;
-    moduleComponent[target] = path.split('/').pop()!.replace(/\.\w+$/, '');
+    moduleComponent[target] = (path.split('/').pop() ?? path).replace(/\.\w+$/, '');
   }
   const implementationModules: Record<string, string> = {};
   const exportNames: Record<string, string> = {};
@@ -142,13 +142,13 @@ export function compilePortableRecipes(bundle: DesignSourceBundle, root: string 
   for (const [id, component] of [...componentOf].sort(([a], [b]) => a.localeCompare(b))) {
     const wrapper = reroot(`${COMPONENTS_ROOT}/${component}.tsx`, root);
     const recipe = reroot(`${COMPONENTS_ROOT}/recipes/${component}.ts`, root);
-    if (files[wrapper] && files[recipe]?.includes(`"${id}"`)) {
+    const identifier = files[recipe] ? variantIdentifier(files[recipe], id) : undefined;
+    if (files[wrapper] && identifier) {
       implementationModules[id] = wrapper;
-      const identifier = variantIdentifier(files[recipe], id);
       if (identifier) exportNames[id] = identifier;
       const hint = identifier ? variantPropHints(files[recipe], identifier) : undefined;
       if (hint) propHints[id] = hint;
-      if (identifier) shims.set(wrapper, [...(shims.get(wrapper) ?? []), `export const ${identifier} = (props: any) => <${component} props={props} variantId=${JSON.stringify(id)} />;`]);
+      shims.set(wrapper, [...(shims.get(wrapper) ?? []), `export const ${identifier} = ({ sectionId, componentInstanceId, ...props }: any) => <${component} sectionId={sectionId} componentInstanceId={componentInstanceId} props={props} variantId=${JSON.stringify(id)} />;`]);
     } else unresolved.push(id);
   }
   for (const [wrapper, lines] of shims) files[wrapper] = `${files[wrapper].trimEnd()}\n\n${[...new Set(lines)].join('\n')}\n`;

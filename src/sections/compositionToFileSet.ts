@@ -326,13 +326,17 @@ import { THEME } from './theme';
 const LAYOUT_VARIANTS: Record<string, string> = ${JSON.stringify(map)};
 const DEFAULT_VARIANT_ID = ${JSON.stringify(defaultVariantId)};
 
-export default function ${componentName}({ props: explicitProps, variantId, ...rest }: { props?: any; variantId?: string; [key: string]: any }) {
+export default function ${componentName}({ props: explicitProps, variantId, sectionId, componentInstanceId, ...rest }: { props?: any; variantId?: string; sectionId?: string; componentInstanceId?: string; [key: string]: any }) {
+  const renderId = React.useId();
   const props = explicitProps ?? rest;
   const requestedId = variantId || (props && LAYOUT_VARIANTS[props.layout]) || DEFAULT_VARIANT_ID;
+  if (variantId && !Object.prototype.hasOwnProperty.call(REGISTERED_VARIANTS, variantId)) throw new Error('Unsupported ${componentName} variant: ' + variantId);
   const resolvedId = REGISTERED_VARIANTS[requestedId] ? requestedId : DEFAULT_VARIANT_ID;
   const Component = REGISTERED_VARIANTS[resolvedId];
   if (!Component) return null;
-  return <Component section={{ type: ${JSON.stringify(family.sectionType)}, variantId: resolvedId, props }} theme={THEME} />;
+  return <div data-ut-section-id={sectionId || renderId} data-ut-section-type=${JSON.stringify(family.sectionType)} data-ut-variant={resolvedId} data-ut-component-instance-id={componentInstanceId || undefined}>
+    <Component section={{ id: sectionId || renderId, type: ${JSON.stringify(family.sectionType)}, variantId: resolvedId, props }} theme={THEME} />
+  </div>;
 }
 `;
 }
