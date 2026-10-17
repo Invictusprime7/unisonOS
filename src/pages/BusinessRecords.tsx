@@ -52,7 +52,7 @@ export default function BusinessRecords() {
   const scopedBusinessId = projects.find((p) => p.id === projectId)?.business_id ?? businessId;
   useEffect(() => {
     let alive = true;
-    setSelected(null); setRecords([]);
+    setRecords([]);
     if (!projectId || !scopedBusinessId) return;
     setLoading(true); setErrors([]);
     void (async () => {
@@ -67,6 +67,7 @@ export default function BusinessRecords() {
     })();
     return () => { alive = false; };
   }, [projectId, scopedBusinessId, revision]);
+  useEffect(() => { setSelected(null); }, [projectId, scopedBusinessId]);
   useEffect(() => onResourceInvalidated((event) => {
     if (event.projectId === projectId && event.businessId === scopedBusinessId) setRevision((r) => r + 1);
   }), [projectId, scopedBusinessId]);

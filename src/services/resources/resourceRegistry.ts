@@ -108,6 +108,7 @@ export function contentTypeToResource(row: ContentTypeRow): ResourceDefinition |
     const t = String(o.type ?? 'text') as ResourceFieldType;
     return [{ key, label: String(o.label ?? key), type: CONTENT_FIELD_TYPES.has(t) ? t : 'text', required: o.required === true, editable: true }];
   });
+  if (!schema.some((field) => field.key === 'title')) schema.unshift({ key: 'title', label: 'Title', type: 'text', required: true, editable: true });
   return {
     key: `content:${slug}`,
     kind: 'content',
