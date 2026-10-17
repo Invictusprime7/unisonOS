@@ -999,6 +999,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     }
     let streamingId: string | null = null;
     let globalTimeout: ReturnType<typeof setTimeout> | undefined;
+    const originalRequest = input.trim();
     try {
     // Build file context suffix
     const targetContext = agentTarget
@@ -2532,7 +2533,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         : `Sorry, I encountered an error: ${errorMessage}. Please try again or simplify your request.`;
       const retryAsk = offerProviderRetry ? {
         question: 'ai-provider-retry',
-        options: [{ label: 'Retry this request', reply: _userContent }],
+        options: [{ label: 'Retry this request', reply: originalRequest }],
       } : undefined;
 
       setMessages(prev => {

@@ -426,6 +426,9 @@ export function resolveEditSourceTargets(
   const roots = options.siteScope ? options.pageFiles : [options.preferredFile];
   const targets = roots.flatMap(preferredFile => {
     const target = resolveEditTarget(prompt, analysis, { files: options.files, preferredFile, restrictToPreferredFile: true });
+    const inlinePart = /\b(nav|navbar|navigation)\b/i.test(prompt) ? /<nav[\s/>]/i
+      : /\bfooter\b/i.test(prompt) ? /<footer[\s/>]/i : null;
+    if (inlinePart && inlinePart.test(options.files[preferredFile] ?? '') && (!target || target.file === preferredFile)) return [preferredFile];
     return target ? [target.file] : options.siteScope ? [] : [preferredFile];
   });
   return [...new Set(targets)].filter(path => typeof options.files[path] === 'string');
