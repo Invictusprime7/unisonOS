@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: Builder prompted-edit completion
+- [ ] Resolve prompted targets against the visible page and its actual source owners; remove competing scope hints
+- [ ] Preserve selected-element instructions and full conversation context through canonical App Builder edits
+- [ ] Verify targeted source → canonical candidate → save outcomes with regression tests
+- [ ] Verify signed-in save → preview → reopen on the designated UNISON project; blocked by unavailable authoritative session
+
 ## Active: Uploaded preview-first architecture merge
 - [x] Merge recommendations into the guidebook; retain the mounted operations modal, distinct resource schemas, canonical launch compilation and binding services
 - [x] Retire unused Playground compile API and unmounted duplicate panel; inferred hydration stays clean; catalog tools delegate to project-scoped Resource Runtime without global source swaps
