@@ -15,6 +15,7 @@ vi.mock('@/services/resources/resourceRuntime', async (importOriginal) => {
     ...actual,
     applyResourceOp: vi.fn(async () => undefined),
     getResourceRecord: vi.fn(async () => ({ id: 'r1', name: 'Old name' })),
+    queryResource: vi.fn(async () => [{ id: 'r1', name: 'Old name' }, { id: 'm1', name: 'Old name' }, { id: 'p1', name: 'Old name' }]),
   };
 });
 
