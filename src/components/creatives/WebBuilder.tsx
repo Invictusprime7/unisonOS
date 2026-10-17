@@ -8297,6 +8297,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   // P0.3 — one transaction: validate + persist in a single
                   // canonical commit, mirror, then settle on one terminal state.
                   const beforeSnapshotFiles = beforeFiles;
+                  const baseRevisionForRecord = currentRevisionIdRef.current || null;
+                  const absorbedThroughSequence = getPendingVfsSequenceWatermark();
                   const outcome = await runBuilderAiMutation(commitCtx, {
                     mirror: (committedFiles) => {
                       try {
@@ -8338,9 +8340,15 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                     const { refreshDataOperationResources } = await import('@/services/dataOperationRefresh');
                     refreshDataOperationResources({ projectId: projectIdForCommit, businessId, results: outcome.commit.dataOpsApplied });
                   }
-                   recordPendingVfsMutation({
+                  // The commit was built from the live working set: absorb what it
+                  // contains and advance the autosave baseline to the accepted bytes.
+                  absorbPendingVfsOperations(pendingProjectionScope, { throughSequence: absorbedThroughSequence });
+                  lastPersistedVfsFilesRef.current = { ...mergedFiles };
+                  lastSavedVfsSignatureRef.current = computeBuilderVfsSignature(mergedFiles);
+                  lastRecordedPendingVfsSignatureRef.current = '';
+                  recordPendingVfsMutation({
                     scope: pendingProjectionScope,
-                    baseRevisionId: currentRevisionIdRef.current || null,
+                    baseRevisionId: baseRevisionForRecord,
                     candidateRevisionId: outcome.revisionId ?? null,
                     beforeFiles: beforeSnapshotFiles,
                     afterFiles: mergedFiles,
