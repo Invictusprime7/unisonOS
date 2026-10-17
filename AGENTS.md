@@ -1,20 +1,19 @@
 # Architecture decisions
 - Vite unsets Babel breaking mode; browsers lack Node process.
-
 - Load Unison tokens after base CSS, bridge app roles in `src/styles/unison-theme.css`, and load font links in `main.tsx`; why: vendor values win without vendor edits or saved-site regeneration.
 
 - `LauncherWizard` is selection-only: it captures intent and invokes launch orchestration, but never authors or mutates VFS source.
 - `UnisonAppBuilder` is the sole fresh-launch application author: derive `AppBuildContract`, generate/repair one candidate, promote after site-wide closure.
 - The canonical platform owns topology/routes, capabilities/intents/bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation; never generate competing pages after App Builder authorship.
 - `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
-- Saved projects hydrate accepted revisions; parsers and Playground hydration are read-only compatibility. Candidates stay unsanitized/unsplit; uploads lead context and images survive Composer repairs. Why: preserve source; signed-in acceptance remains required.
+- Saved projects hydrate accepted revisions; parsers/Playground hydration are read-only. Candidates stay unsanitized/unsplit; uploads lead context and images survive Composer repairs. Why: preserve source; signed-in acceptance remains required.
 - Composer contracts are byte-mirrored at `supabase/functions/_shared/aiComposerContract.ts` and `src/contracts/aiComposerContract.ts`; enforce targets, planned routes, dependency/new import reads and literal intents; hunks preferred, whole-file replaces accepted. Why: authoring vocabulary is not ownership or readiness.
 - Composer author/repair/edit modes stay in `ai-code-assistant/composerLane.ts`; why: no parallel pipelines.
 - Page composition intelligence lives in `src/services/composition/` (one universal planner + data-only industry profiles, consumed under App Builder orchestration); why: industries differ by data, never by engine.
 - Variant selection goes through `src/services/designImplementationEligibility.ts`; variants carry authored `capabilities`/`compatibility`/`lifecycle`/`ai` contracts, preferred over string inference. Why: registry growth narrows candidates deterministically, never widens AI context.
 - WebBuilder launch-handoff dedupes on `routeHandoffImportedRef`, never `importedRouteStateRef`; why: revision adoption updates the shared ref, replaying original Wizard files over saved edits.
 - `projects` ↔ `builder_drafts` name-sync triggers skip when `pg_trigger_depth() > 1` and write only changed values; why: re-entry raises SQLSTATE 27000 and blocks saves.
-- Persist draft chat in owner-only `builder_chat_history` via debounced `aiHistoryStore.setMessages`; localStorage is a cache. Why: conversations must survive devices/sessions.
+- Persist draft chat in owner-only `builder_chat_history` via debounced `aiHistoryStore.setMessages`; localStorage is a cache. Why: chats survive devices.
 - App Builder pages pass `pageStructureGate.ts` (nav, footer, body, media) via `pageCheck`; briefs lead with own target/archetype. Why: routers add no chrome.
 - Live-VFS commits absorb pending ops recorded before capture and advance the autosave baseline; pending ops conflict only off another base revision. Why: lagging baselines raised false conflicts.
 
