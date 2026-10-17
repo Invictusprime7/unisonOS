@@ -17,6 +17,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     root: projectRoot,
+    // Babel 7 reads this Node-only feature flag during module initialization.
+    // Replace only the flag, not process or the host environment.
+    define: {
+      'process.env.BABEL_TYPES_8_BREAKING': 'undefined',
+    },
     server: {
       host: "::",
       port: 8080,

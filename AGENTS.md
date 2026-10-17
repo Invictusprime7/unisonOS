@@ -1,4 +1,5 @@
 # Architecture decisions
+- Vite unsets Babel's breaking flag; browsers have no Node process.
 
 - Load Unison tokens after base CSS, bridge app roles in `src/styles/unison-theme.css`, and load font links in `main.tsx`; why: vendor values win without vendor edits or saved-site regeneration.
 

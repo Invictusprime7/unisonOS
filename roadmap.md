@@ -1,5 +1,9 @@
 # Roadmap
 
+## Active: Web Builder browser startup
+- [x] Replace Babel's Node-only breaking-mode flag without exposing host environment variables
+- [x] Verify Babel initialization without `process` in isolated browser bundles, 22 editor regressions, authority lint, and live Builder startup with zero page errors; saved-project content remains blocked by the authoritative-session issue below
+
 ## Active: Selected text editing
 - [x] Preserve nested inline formatting/icons in selected literal text and canonical slot edits; anchor direct edits to clicked text, prefer explicit AI source ownership and refuse ambiguous text matches
 - [x] Run nested-text, inspector, rendering and canonical edit regressions
