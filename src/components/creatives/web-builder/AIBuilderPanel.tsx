@@ -1200,7 +1200,13 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       }
     }
 
-    const thinkingSteps: ThinkingStep[] = [];
+    const _fileContext = fileContext + placementContext;
+    const _attachments = attachments;
+    const _userContent = userContent;
+    const launchBrief = isLaunchPlanningRequest ? extractLaunchBriefFromPrompt(_userContent) : undefined;
+    let streamingId: string | null = null;
+    try {
+      const thinkingSteps: ThinkingStep[] = [];
       streamingId = generateId();
       
       // Add streaming message immediately (visible with empty thinking)
