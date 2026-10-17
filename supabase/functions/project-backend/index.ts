@@ -11,6 +11,7 @@ import { verifyAuth, authError } from "../_shared/auth.ts";
 import { isValidUUID, safeParseBody } from "../_shared/validate.ts";
 import { getCmsResourceContract } from "../_shared/catalogSurfaceSummary.ts";
 import { decryptConnectedProjectSecret } from "../_shared/connectedProjectCrypto.ts";
+import { applyExpectedFilters } from "../_shared/recordCompareAndSet.ts";
 
 type Action = "list" | "get" | "create" | "update" | "delete";
 const ACTIONS: Action[] = ["list", "get", "create", "update", "delete"];
@@ -167,10 +168,22 @@ serve(async (req) => {
   let result: { data: unknown; error: { message: string } | null };
   if (action === "list") result = await scoped().order(contract.sortField);
   else if (!recordId && action !== "create") return json({ success: false, error: "An item is required." }, 400);
-  else if (action === "get") result = await scoped().eq("id", recordId!).maybeSingle();
+  else if (action === "get") result = await scoped().eq("id", recordId ?? "").maybeSingle();
   else if (action === "create") result = await site.from(table).insert(allowed).select().single();
-  else if (action === "update") result = await site.from(table).update(allowed).eq("id", recordId!).select().single();
-  else result = await site.from(table).delete().eq("id", recordId!);
+  else if (action === "update") {
+    let update = site.from(table).update(allowed).eq("id", recordId ?? "");
+    if (contract.contentType) update = update.eq("content_type", contract.contentType);
+    if (body?.expected) {
+      try { update = applyExpectedFilters(update, body.expected as Record<string, unknown>, contract.editableFields); }
+      catch { return json({ success: false, error: "Invalid expected fields." }, 400); }
+    }
+    result = await update.select().maybeSingle();
+    if (!result.error && !result.data) return json({ success: false, error: "Conflict: this item changed elsewhere or is no longer available." }, 409);
+  } else {
+    let remove = site.from(table).delete().eq("id", recordId ?? "");
+    if (contract.contentType) remove = remove.eq("content_type", contract.contentType);
+    result = await remove;
+  }
 
   if (action !== "list" && action !== "get") {
     await admin.from("audit_logs").insert({

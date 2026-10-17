@@ -2,6 +2,7 @@ import { serve } from "serve";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
+import { applyExpectedFilters } from "../_shared/recordCompareAndSet.ts";
 import { isValidUUID, safeParseBody } from "../_shared/validate.ts";
 import {
   getCmsResourceContract,
@@ -43,6 +44,7 @@ interface CmsRequest {
   resource?: string;
   recordId?: string;
   values?: Record<string, unknown>;
+  expected?: Record<string, unknown>;
   contentTypeId?: string;
   status?: string;
   changeSummary?: string;
@@ -487,14 +489,18 @@ serve(async (req) => {
   }
 
   if (body.action === "update") {
-    const { data, error } = await admin
+    let update = admin
       .from(resource.sourceTable)
       .update(projectId ? { ...validation.values, project_id: projectId } : validation.values)
       .eq("id", body.recordId!)
       .eq("business_id", body.businessId)
-      .or(projectReadFilter(projectId))
-      .select("*")
-      .maybeSingle();
+      .or(projectReadFilter(projectId));
+    if (body.expected) {
+      try { update = applyExpectedFilters(update, body.expected, resource.editableFields); }
+      catch { return jsonError("Invalid expected fields", 400, corsHeaders); }
+    }
+    const { data, error } = await update.select("*").maybeSingle();
+    if (!error && !data && body.expected) return jsonError("Conflict: this item changed elsewhere. Reload the item and try again.", 409, corsHeaders);
     if (error || !data) return jsonError("CMS record not found or could not be updated", 404, corsHeaders);
     audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, resource: resource.resource, action: body.action, recordId: body.recordId });
     return secureJsonResponse({ success: true, resource: resource.resource, record: data }, 200, corsHeaders);
