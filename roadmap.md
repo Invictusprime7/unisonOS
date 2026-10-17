@@ -1,5 +1,9 @@
 # Roadmap
 
+## Active: Selected text editing
+- [ ] Preserve nested inline formatting when replacing selected generated text; anchor source edits to the clicked text
+- [ ] Run nested-text and inspector regressions; verify saved-project editing where authoritative access is available
+
 ## Active: Builder result and preview closure
 - [x] Retire remaining AI editing fallback paths; removed unused response extraction, legacy code/file callbacks and synthesized file responses; candidate apply stays canonical
 - [x] Fix portable table export collision, safe table cell values/record ownership, and diagnose malformed Tailwind arbitrary values before acceptance; 80 regression tests pass
