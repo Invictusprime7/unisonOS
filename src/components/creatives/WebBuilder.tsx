@@ -5012,6 +5012,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       });
       lastRecordedPendingVfsSignatureRef.current = pendingMutationKey;
     }
+    // Everything recorded up to here is contained in `currentVfsFiles`, the
+    // exact working set this save commits.
+    const absorbedThroughSequence = getPendingVfsSequenceWatermark();
 
     const reason = options?.reason || 'interval_autosave';
     const snapshot: BuilderRecoverySnapshot = {
@@ -5148,6 +5151,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             acceptedRevisionId: commit.persistedRevisionId,
           });
         }
+        absorbPendingVfsOperations(pendingProjectionScope, { throughSequence: absorbedThroughSequence });
         markBuilderRecoveryPersisted(snapshot, existingDraftId, undefined, commit.persistedRevisionId);
         if (!isActiveBuilderCommitScope(activeCommitScopeRef.current, capturedCommitScope)) {
           // The old project's durable commit succeeded, but its completion must
