@@ -119,6 +119,25 @@ describe('App Builder candidate closure', () => {
     expect(report.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
   });
 
+  it('accepts binding markers placed in the shared nav and footer a page renders', async () => {
+    const withBindingGuide = contract();
+    withBindingGuide.business.bindingGuide = [
+      '- Page Home (/), slot nav.menu: label "Menu", marker data-ut-cta="icon.menu", intent nav.goto, target menu',
+      '- Page Home (/), slot footer.newsletter: label "Subscribe", marker data-ut-cta="cta.newsletter-submit" or data-ut-cta="cta.newsletter", intent newsletter.subscribe, target newsletter',
+    ].join('\n');
+    const files = {
+      ...initialFiles,
+      '/src/pages/Home.tsx': "import SiteNav from '@/project-components/SiteNav';\nimport SiteFooter from '../project-components/SiteFooter';\nexport default function Home(){return <main><SiteNav /><SiteFooter /></main>}",
+      '/src/project-components/SiteNav.tsx': 'export default function SiteNav(){return <nav><button data-ut-cta="icon.menu">Menu</button></nav>}',
+      '/src/project-components/SiteFooter.tsx': 'export default function SiteFooter(){return <footer><button data-ut-cta="cta.newsletter">Subscribe</button></footer>}',
+      '/src/pages/Contact.tsx': 'export default function Contact(){return <main>Contact</main>}',
+    };
+
+    const report = await validateAppBuildCandidate({ contract: withBindingGuide, files, initialFiles });
+
+    expect(report.issues.filter((issue) => issue.code === 'wizard-binding-marker-missing')).toEqual([]);
+  });
+
   it('blocks pages that reach into recipe internals', async () => {
     const files = {
       ...initialFiles,

@@ -6,6 +6,7 @@
 - [x] Verify source-owner resolution, incomplete-source rejection and canonical candidate/revision boundaries: 57 tests, both authority lints and preview build pass; durable save acceptance remains below
 - [ ] Verify signed-in save → preview → reopen on the designated UNISON project; blocked by unavailable authoritative session
 - [x] Remove false "Pending source conflicts" after in-line text edits: commits absorb captured pending ops, autosave baseline follows every accepted revision, same-revision ops never conflict; 45 tests pass
+- [x] Launch check and button wiring read markers in the shared nav/footer components a page renders (newsletter, menu/search/account icons, nav quote); 34 tests pass; live relaunch unverified
 
 ## Active: Uploaded preview-first architecture merge
 - [x] Merge recommendations into the guidebook; retain the mounted operations modal, distinct resource schemas, canonical launch compilation and binding services
