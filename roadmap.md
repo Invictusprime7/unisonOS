@@ -80,6 +80,8 @@
 
 ## Active: Preview-First Resource & Editing Consolidation (guidebook: docs/milestones/PREVIEW_FIRST_RESOURCE_CONSOLIDATION_2026-10-11.md)
 
+- [ ] Current request: consolidate testimonials, projects, case studies and FAQs in their canonical registries with all existing aliases; build one scoped Records page; preserve saved IDs and publishing history, no destructive record merge without authoritative data access.
+
 - [x] M0 (PR1): editor command instrumentation (correlation IDs, lane, save target) + golden ownership fixture matrix test
 - [x] M0 remainder: mutation telemetry — commitMutation (base→result revision IDs), runExclusive (surface/duration/outcome), applyResourceOp (key/op/recordId) all record MutationEvents in editorTelemetry; 4 new tests pass
 - [x] M1a: EditableObjectDescriptor + EditorTarget identity (tested)
