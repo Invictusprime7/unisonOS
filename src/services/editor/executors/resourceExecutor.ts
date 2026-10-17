@@ -2,7 +2,7 @@
 import { applyResourceOp, getResourceRecord, parseResourceProvenance, queryResource } from '@/services/resources/resourceRuntime';
 import { getResource } from '@/services/resources/resourceRegistry';
 import { executeResourceCommandCompatible } from '@/services/project-backend/runtimeProtocol';
-import type { ResourceContext, ResourceRecord } from '@/services/resources/resourceTypes';
+import type { ResourceContext, ResourceEntityRef, ResourceRecord } from '@/services/resources/resourceTypes';
 import type { EditorCommand, EditorCommandResult } from '../editorCommandTypes';
 
 function valuesFor(command: EditorCommand, field?: string): Record<string, unknown> {
