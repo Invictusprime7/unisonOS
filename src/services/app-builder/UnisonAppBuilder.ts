@@ -210,6 +210,20 @@ export function createUnisonAppBuilder(
         images: input.images,
         diagnostics: input.diagnostics ? [...input.diagnostics] : undefined,
       });
+      if (!assembled.evidence.sourceContextComplete) {
+        const diagnostics = [
+          ...assembled.evidence.omittedSourcePaths.map(path => `Source unavailable within the request budget: ${path}`),
+          ...assembled.evidence.unresolvedImports.map(path => `Unresolved source import: ${path}`),
+        ];
+        return {
+          operationId: input.operationId,
+          protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
+          baseRevisionId: input.baseRevisionId,
+          candidate: { candidateId: `${input.operationId}:candidate`, status: 'rejected', files: input.currentFiles, entryPoint: input.page.filePath, attempts: 0, diagnostics },
+          candidateFiles: input.currentFiles,
+          stopReason: 'validation-failed',
+        };
+      }
       const composer = await runComposer({
         request: assembled.request,
         baseFiles: { ...input.currentFiles },

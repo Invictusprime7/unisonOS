@@ -81,7 +81,7 @@ import { toast } from 'sonner';
 import type { BusinessSystemType } from '@/data/templates/types';
 import type { SystemsBuildContext } from '@/types/systemsBuildContext';
 import { generateCanonicalDesignPrompt } from '@/sections/promptContext/canonicalDesignPrompt';
-import { analyzeReactSite, resolveEditTarget } from '@/utils/reactSiteAnalysis';
+import { analyzeReactSite, resolveEditTarget, resolveEditSourceTargets } from '@/utils/reactSiteAnalysis';
 import { resolveExplicitPageTarget, resolveRouteSourceFile, resolveLocalImports, type PageSourceTarget } from './previewRouteTabs';
 import { buildComponentBehaviorMap, formatBehaviorMapForPrompt } from '@/services/aiVFSOrchestrator';
 import { AIGatewayOptions, type GatewayConfig } from './AIGatewayOptions';
@@ -997,6 +997,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       toast.error('This selection is from an older version. Select the element again.');
       return;
     }
+    let streamingId: string | null = null;
+    let globalTimeout: ReturnType<typeof setTimeout> | undefined;
+    const originalRequest = input.trim();
+    try {
     // Build file context suffix
     const targetContext = agentTarget
       ? `\n\n[Target element — apply this request to it only: <${agentTarget.tagName}>${agentTarget.text ? ` "${agentTarget.text}"` : ''}${agentTarget.section ? ` in section "${agentTarget.section}"` : ''}${agentTarget.scopeAncestors?.pagePath ? ` on the page at route "${agentTarget.scopeAncestors.pagePath}" (edit only that page's source)` : ''}${agentTarget.selector ? ` (selector ${agentTarget.selector})` : ''}${agentTarget.intent ? `; its button action "${agentTarget.intent}" and destination must stay unchanged` : ''}${agentTarget.provenance?.sourceTable && agentTarget.provenance.rowId ? `; canonical data owner ${agentTarget.provenance.sourceTable}/${agentTarget.provenance.rowId}${agentTarget.provenance.field ? ` field ${agentTarget.provenance.field}` : ''}` : ''}${agentTarget.provenance?.resource ? `; its value comes from saved record ${agentTarget.provenance.resource} — keep the data-ut-resource mark and do not hardcode a new value in place of the record` : ''}${agentTarget.provenance?.bindingId ? `; binding ${agentTarget.provenance.bindingId}` : ''}${agentTarget.provenance?.targetPath ? `; link target ${agentTarget.provenance.targetPath}` : ''}${agentTarget.descriptor?.ownerKind === 'source' && agentTarget.descriptor.instanceId != null ? `; it is repeat #${agentTarget.descriptor.instanceId + 1} of a repeated item — change only that instance, not its siblings` : ''}]`
@@ -1105,6 +1109,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       } : null,
       selectedEditScope: selectedTarget?.editScope ?? null,
       hasExistingTemplate: Object.keys(vfsFiles ?? {}).length > 0,
+      recentTurns: messages.filter(m => !m.isStreaming && (m.role === 'user' || m.role === 'assistant') && m.content.trim()).map(m => ({ role: m.role, content: m.content })),
     });
 
     const capabilityPlan = planBusinessCapabilities({
@@ -1192,8 +1197,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     const _attachments = attachments;
     const _userContent = userContent;
     const launchBrief = isLaunchPlanningRequest ? extractLaunchBriefFromPrompt(_userContent) : undefined;
-    let streamingId: string | null = null;
-    try {
       const thinkingSteps: ThinkingStep[] = [];
       streamingId = generateId();
       
@@ -1296,7 +1299,15 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       let editTargetContext = '';
       let resolvedTargetFile: string | null = null;
       let selectionPinnedFile: string | null = null;
+      let resolvedSourceTargets: string[] = [];
       const requestedPageTarget = resolveExplicitPageTarget(rawInput, pageTargets);
+      let visiblePageFile = requestedPageTarget?.filePath ?? defaultTargetFile;
+      if (!requestedPageTarget) {
+        try {
+          const route = previewRef?.current?.getIframe?.()?.contentWindow?.location.hash;
+          if (route) visiblePageFile = resolveRouteSourceFile(vfsFiles, route.replace(/^#/, '')) ?? visiblePageFile;
+        } catch { /* The host's active page remains authoritative for cross-origin previews. */ }
+      }
       let isReactProject = false;
       if (vfsFiles && Object.keys(vfsFiles).length > 0) {
         // Detect if the VFS project is React-based (has .tsx/.jsx component files)
@@ -1328,11 +1339,11 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             siteAnalysisContext = analysis.sectionMap;
           }
           // For surgical edits, resolve which component/file the user is targeting
-          if (isSurgicalEdit || selectedSourceFile || requestedPageTarget) {
+          if (promptAnalysis.targets.length || isSurgicalEdit || selectedSourceFile || requestedPageTarget) {
             const analysedTarget = selectedSourceFile ? null : resolveEditTarget(rawInput, analysis, {
-              preferredFile: requestedPageTarget?.filePath ?? defaultTargetFile,
+              preferredFile: visiblePageFile,
               files: vfsFiles,
-              restrictToPreferredFile: Boolean(requestedPageTarget),
+              restrictToPreferredFile: Boolean(visiblePageFile),
             });
             const target = selectedSourceFile
               ? { file: selectedSourceFile, component: selectedSourceFile.split('/').pop()?.replace(/\.\w+$/, '') ?? selectedSourceFile, section: selectedTarget?.section, confidence: 'high' as const }
@@ -1360,7 +1371,17 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               resolvedTargetFile = requestedPageTarget.filePath;
             }
           }
-        } catch { /* analysis is best-effort */ }
+          const siteScope = !requestedPageTarget && !selectedSourceFile && (capabilityInterpretation.envelope.scope.level === 'site' || /\b(across (?:the |all )?(?:site|pages)|site[ -]wide|whole site|every page|all pages)\b/i.test(rawInput));
+          resolvedSourceTargets = resolveEditSourceTargets(rawInput, analysis, {
+            files: vfsFiles,
+            pageFiles: pageTargets.map(page => page.filePath),
+            preferredFile: visiblePageFile ?? resolveCanonicalAuthoringPage(vfsFiles).filePath,
+            siteScope,
+            pinnedFile: selectedSourceFile,
+          });
+          if (siteScope && resolvedSourceTargets.length === 0) throw new Error('Could not identify the requested site part in the page sources. Select it in Preview or name its component.');
+          resolvedTargetFile = resolvedSourceTargets[0] ?? resolvedTargetFile;
+        } catch (error) { throw error; }
       } else if (currentCode) {
         // Fallback: detect React from currentCode if no vfsFiles available
         isReactProject = currentCode.includes('import ') && (
@@ -1588,7 +1609,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       // its full budget and always abort with a readable reason.
       const globalAbort = new AbortController();
       const BUILDER_TURN_TIMEOUT_MS = 420_000;
-      const globalTimeout = setTimeout(
+      globalTimeout = setTimeout(
         () => globalAbort.abort(new DOMException('The AI edit took longer than 7 minutes and was stopped. Try a smaller, more specific change.', 'TimeoutError')),
         BUILDER_TURN_TIMEOUT_MS,
       );
@@ -1749,9 +1770,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           }
 
           // ── Build conversation history for multi-turn awareness ──
-          // Include up to 10 prior user/assistant exchanges (compact: only role + content, capped)
-          const MAX_HISTORY_TURNS = 6;
-          const MAX_HISTORY_CHAR_PER_MSG = 1500;
+          // Preserve prior requests and decisions; source bytes use their own bounded projection.
           const conversationHistory: Array<{ role: string; content: string }> = [];
           const priorMessages = messages.filter(m => 
             (m.role === 'user' || m.role === 'assistant') && 
@@ -1760,12 +1779,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             !m.isStreaming
           );
           // Take last N messages (excluding the current user message which is already in promptForAI)
-          const historySlice = priorMessages.slice(-MAX_HISTORY_TURNS);
+          const historySlice = priorMessages;
           for (const m of historySlice) {
             // For assistant messages, strip thinking/reasoning artifacts and keep only the explanation
-            const content = m.role === 'assistant'
-              ? (m.content || '').slice(0, MAX_HISTORY_CHAR_PER_MSG)
-              : (m.content || '').slice(0, MAX_HISTORY_CHAR_PER_MSG);
+            const content = m.content;
             if (content.trim()) {
               conversationHistory.push({ role: m.role, content });
             }
@@ -1777,7 +1794,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           // registry projection the Wizard composer and Lane B already get.
           ensureCurrentRequest();
           const canonicalPageContext = vfsFiles
-            ? resolveCanonicalAuthoringPage(vfsFiles, resolvedTargetFile || defaultTargetFile)
+            ? resolveCanonicalAuthoringPage(vfsFiles, resolvedTargetFile || visiblePageFile, visiblePageFile)
             : null;
           const builderRegistryContext = resolveBuilderRegistryContext({
             vfsFiles: vfsFiles ?? undefined,
@@ -1856,7 +1873,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 } : null,
               },
               sourceTargets: Array.from(new Set([
-                page.filePath,
+                ...(resolvedSourceTargets.length ? resolvedSourceTargets : [page.filePath]),
                 ...(isCartWiringRequest
                   ? sourceTargetsForCartWiring(vfsFiles, page.filePath)
                   : []),
@@ -1864,6 +1881,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               routes: [],
               registryContext: builderRegistryContext ?? undefined,
               runtimeContext: [
+                targetContext,
+                editTargetContext,
+                `Conversation history (prior instructions, not proof of completed saves):\n${JSON.stringify(priorMessages.map(m => ({ role: m.role, content: m.content })))}`,
                 isCartWiringRequest ? generatedSourceInventory : '',
                 capabilityPlan.proposal.intentBindings.length && needsRenderableUiPatch
                   ? `Requested UI bindings: ${JSON.stringify(capabilityPlan.proposal.intentBindings)}. Find or create real matching controls in the authored source, adding these exact data-ut-slot and data-ut-intent attributes. Do not label unrelated controls to satisfy a target. Backend activation remains a separate capability approval.`
@@ -2513,7 +2533,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         : `Sorry, I encountered an error: ${errorMessage}. Please try again or simplify your request.`;
       const retryAsk = offerProviderRetry ? {
         question: 'ai-provider-retry',
-        options: [{ label: 'Retry this request', reply: _userContent }],
+        options: [{ label: 'Retry this request', reply: originalRequest }],
       } : undefined;
 
       setMessages(prev => {
@@ -2548,6 +2568,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         }];
       });
     } finally {
+      if (globalTimeout !== undefined) clearTimeout(globalTimeout);
       setIsLoading(false);
     }
   };

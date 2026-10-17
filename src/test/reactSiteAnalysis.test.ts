@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveEditTarget, type ComponentInfo } from '@/utils/reactSiteAnalysis';
+import { analyzeReactSite, resolveEditTarget, resolveEditSourceTargets, type ComponentInfo } from '@/utils/reactSiteAnalysis';
 
 const component = (name: string, file: string, sectionLabel: string | null): ComponentInfo => ({
   name,
@@ -17,6 +17,32 @@ const component = (name: string, file: string, sectionLabel: string | null): Com
 });
 
 describe('resolveEditTarget', () => {
+  const sharedFiles = {
+    '/src/pages/Home.tsx': "import SiteNav from '../components/SiteNav'; export default function Home(){return <><SiteNav/><main>Home</main></>}",
+    '/src/pages/Pricing.tsx': "import SiteNav from '../components/SiteNav'; export default function Pricing(){return <><SiteNav/><main>Pricing</main></>}",
+    '/src/components/SiteNav.tsx': 'export default function SiteNav(){return <nav><a href="/">Home</a></nav>}',
+  };
+  it('targets the actual shared navbar rather than the default Pricing page', () => {
+    expect(resolveEditSourceTargets('Turn navbar into a floating nav', analyzeReactSite(sharedFiles), {
+      files: sharedFiles, preferredFile: '/src/pages/Pricing.tsx', pageFiles: ['/src/pages/Home.tsx', '/src/pages/Pricing.tsx'], siteScope: false,
+    })).toEqual(['/src/components/SiteNav.tsx']);
+  });
+  it('deduplicates a shared owner across all pages without adding unrelated page writes', () => {
+    expect(resolveEditSourceTargets('Turn navbar into a floating nav across all pages', analyzeReactSite(sharedFiles), {
+      files: sharedFiles, preferredFile: '/src/pages/Pricing.tsx', pageFiles: ['/src/pages/Home.tsx', '/src/pages/Pricing.tsx'], siteScope: true,
+    })).toEqual(['/src/components/SiteNav.tsx']);
+  });
+  it('includes each inline navbar owner for site-wide navigation edits', () => {
+    const files = { '/src/pages/Home.tsx': 'export default function Home(){return <nav/>}', '/src/pages/Pricing.tsx': 'export default function Pricing(){return <nav/>}' };
+    expect(resolveEditSourceTargets('Change navbar across all pages', analyzeReactSite(files), {
+      files, preferredFile: '/src/pages/Pricing.tsx', pageFiles: Object.keys(files), siteScope: true,
+    })).toEqual(Object.keys(files));
+  });
+  it('never expands a pinned selection to other owners', () => {
+    expect(resolveEditSourceTargets('Change navbar across all pages', analyzeReactSite(sharedFiles), {
+      files: sharedFiles, preferredFile: '/src/pages/Pricing.tsx', pageFiles: Object.keys(sharedFiles), siteScope: true, pinnedFile: '/src/pages/Pricing.tsx',
+    })).toEqual(['/src/pages/Pricing.tsx']);
+  });
   it('prefers the active page reachable component over a stale duplicate', () => {
     const analysis = {
       components: [
