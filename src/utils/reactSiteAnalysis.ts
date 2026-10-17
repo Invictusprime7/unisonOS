@@ -363,6 +363,14 @@ export function resolveEditTarget(
     return false;
   };
   
+  // Named source owners outrank a page classified by nested <nav>/<header> markup.
+  const namedSection = prioritizeRendered(candidates).find(c =>
+    sectionRequested(c.sectionLabel) && SECTION_PATTERNS.some(({ pattern, label }) =>
+      label === c.sectionLabel && pattern.test(c.name)));
+  if (namedSection) {
+    return { file: namedSection.file, component: namedSection.name, section: namedSection.sectionLabel, confidence: 'high' };
+  }
+
   // Section label match (hero, footer, etc.)
   for (const c of prioritizeRendered(candidates)) {
     if (sectionRequested(c.sectionLabel)) {
@@ -406,4 +414,19 @@ export function resolveEditTarget(
   }
 
   return null;
+}
+
+/** Project source owners only; site scope expands a named part, not unrelated pages. */
+export function resolveEditSourceTargets(
+  prompt: string,
+  analysis: SiteAnalysis,
+  options: { files: Record<string, string>; pageFiles: string[]; preferredFile: string; siteScope: boolean; pinnedFile?: string | null },
+): string[] {
+  if (options.pinnedFile) return [options.pinnedFile];
+  const roots = options.siteScope ? options.pageFiles : [options.preferredFile];
+  const targets = roots.flatMap(preferredFile => {
+    const target = resolveEditTarget(prompt, analysis, { files: options.files, preferredFile, restrictToPreferredFile: true });
+    return target ? [target.file] : options.siteScope ? [] : [preferredFile];
+  });
+  return [...new Set(targets)].filter(path => typeof options.files[path] === 'string');
 }

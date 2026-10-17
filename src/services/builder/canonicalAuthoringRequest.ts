@@ -83,6 +83,7 @@ export interface CanonicalAuthoringRequestInput {
 export function resolveCanonicalAuthoringPage(
   files: Record<string, string>,
   targetFile?: string | null,
+  owningPageFile?: string | null,
 ): AIComposerRequest['page'] {
   let pages: Array<{ pageId: string; title?: string; path?: string; filePath?: string; pageType?: string }> = [];
   try {
@@ -95,6 +96,7 @@ export function resolveCanonicalAuthoringPage(
   }
   const normalizedTarget = targetFile ? (targetFile.startsWith('/') ? targetFile : `/${targetFile}`) : null;
   const page = pages.find((item) => item.filePath === normalizedTarget)
+    ?? pages.find((item) => item.filePath === owningPageFile)
     ?? pages.find((item) => item.path === '/')
     ?? pages[0];
   const filePath = normalizedTarget
@@ -252,7 +254,7 @@ export async function assembleCanonicalAuthoringRequest(
     baseRevisionId: input.baseRevisionId ?? null,
     sourceContextHash: await hashText(stableJson(source.files)),
     sourcePaths: Object.keys(source.files).sort(),
-    sourceContextComplete: source.completeTargets && source.unresolvedImports.length === 0,
+    sourceContextComplete: source.completeTargets && source.omitted.length === 0 && source.unresolvedImports.length === 0,
     omittedSourcePaths: source.omitted.map((item) => item.path).sort(),
     unresolvedImports: source.unresolvedImports.map((item) => `${item.path}:${item.specifier}`).sort(),
     registryContextHash: boundedRegistry ? await hashText(boundedRegistry) : null,
