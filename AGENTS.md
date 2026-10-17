@@ -3,9 +3,9 @@
 - Load Unison tokens after base CSS, bridge app roles in `src/styles/unison-theme.css`, and load font links in `main.tsx`; why: vendor values win without vendor edits or saved-site regeneration.
 
 - `LauncherWizard` is selection-only: it captures intent and invokes launch orchestration, but never authors or mutates VFS source.
-- `UnisonAppBuilder` alone authors fresh launches: derive `AppBuildContract`, generate/repair one isolated candidate, promote after site-wide closure.
+- `UnisonAppBuilder` is the sole fresh-launch application author: derive `AppBuildContract`, generate/repair one candidate, promote after site-wide closure.
 - The canonical platform owns topology, routes, capabilities, intents, bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation. It must not generate a competing fresh-launch page implementation after App Builder authorship.
-- `commitMutation` is the sole canonical writer; initial generation accepts one complete passing candidate, never repair attempts or per-page checkpoints as revisions.
+- `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
 - Saved projects hydrate accepted revisions; parsers are compatibility-only. Candidates stay unsanitized/unsplit; upload text/links lead context and images survive Composer repairs. Image routing uses typed Composer transport; signed-in acceptance remains required; why: preserve vision and source.
 - Composer contracts are byte-mirrored at `supabase/functions/_shared/aiComposerContract.ts` and `src/contracts/aiComposerContract.ts`; enforce targets, planned routes, dependency requests/new AST module reads, and declared/new literal intents; edge edits require hunks. Why: canonical authoring vocabulary is not ownership or live readiness.
 - Composer author/repair/edit modes stay in `ai-code-assistant/composerLane.ts`; why: no parallel pipelines.
