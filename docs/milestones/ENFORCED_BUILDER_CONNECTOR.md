@@ -81,3 +81,9 @@ Removed `src/utils/stripComposerTrailer.ts`: repository-wide source, function, s
 | Dependency resolver/extractor | Retain | Classification and accepted inventory assembly are not replaced by Composer import approvals. |
 
 No active fallback or saved-project compatibility path was removed. Remaining fallback consolidation requires caller migration and acceptance evidence, not deletion based on filenames. Verification: 116 tests pass across ten suites, including saved declarative-page hydration, certified defaults, Composer parsing/repair and connector dispatch; fresh-launch authority lint and preview build are OK. No database operations or deployments occurred. Authenticated cross-industry edit/read-back remains blocked by the available session's backend mismatch.
+
+### Phase 4a continuation — Extraction-only parser
+
+Removed unused structured-tag parsing, response-to-VFS generation, component-signature APIs and HTML-import re-exports from `aiResponseParser.ts`. Repository-wide caller searches found only the Builder panel and extraction tests importing this module; both use the retained `extractMultiFileOutput` and `extractStylesheetOutput`. Those implementations are unchanged, including malformed JSON compatibility and explicit deletions. The underlying `aiWebParser.ts` importer remains intact.
+
+The parser's public-export regression test asserts it exposes exactly the two extraction functions. Verification: 74 tests pass across six extraction, legacy isolation/hydration, request assembly, App Builder and import-enforcement suites; authority lint and preview build are OK. This is dead-API retirement, not migration of active fallback mutations. Phase 4b still requires caller migration and authenticated acceptance; no records, endpoints or deployments changed.
