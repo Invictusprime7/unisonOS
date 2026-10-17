@@ -249,3 +249,26 @@ Deno.test("current Gemini wire models survive deployment defaults and blank key 
     }
   }
 });
+
+Deno.test("toAnthropicMessages converts OpenAI image_url parts to Anthropic image blocks", async () => {
+  const { toAnthropicMessages } = await import("./providerClient.ts");
+  const out = toAnthropicMessages([
+    { role: "system", content: "sys" },
+    { role: "user", content: [
+      { type: "text", text: "Place this image" },
+      { type: "image_url", image_url: { url: "data:image/png;base64,aGVs bG8=" } },
+      { type: "image_url", image_url: { url: "https://example.test/remote.png" } },
+    ] },
+    { role: "assistant", content: "done" },
+  ]);
+  assertEquals(out.length, 2);
+  assertEquals(out[0].role, "user");
+  assertEquals(out[0].content, [
+    { type: "text", text: "Place this image" },
+    { type: "image", source: { type: "base64", media_type: "image/png", data: "aGVsbG8=" } },
+  ]);
+  assertEquals(out[1], { role: "assistant", content: "done" });
+  assertEquals(toAnthropicMessages([{ role: "user", content: [
+    { type: "image_url", image_url: { url: "https://example.test/x.png" } },
+  ] }])[0].content, "");
+});
