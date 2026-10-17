@@ -220,6 +220,12 @@ export const aiComposerResponseSchema = z.object({
 }).strict();
 export type AIComposerResponse = z.infer<typeof aiComposerResponseSchema>;
 
+/** Vision references only; durable placement URLs remain in runtimeContext. */
+export const aiComposerImageSchema = z.object({
+  name: z.string().min(1).max(240),
+  data: z.string().max(8_000_000).regex(/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/),
+}).strict();
+
 export const aiComposerRequestSchema = z.object({
   task: z.enum(AI_COMPOSER_TASKS),
   page: z.object({ role: z.string().max(60), title: z.string().max(120), route: z.string().max(200), filePath: pathSchema }),
@@ -236,6 +242,7 @@ export const aiComposerRequestSchema = z.object({
   previousResponse: z.string().max(60000).optional(),
   registryContext: z.string().max(60000).optional(),
   runtimeContext: z.string().max(12000).optional(),
+  images: z.array(aiComposerImageSchema).min(1).max(10).optional(),
   evidence: z.object({
     protocolVersion: z.literal('1.0'),
     baseRevisionId: z.string().nullable(),

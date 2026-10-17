@@ -197,6 +197,7 @@ export function createUnisonAppBuilder(
         registryContext: input.registryContext,
         runtimeContext: [renderUnisonBuilderDirective(connector), input.runtimeContext].filter(Boolean).join('\n'),
         attachmentContext: input.attachmentContext,
+        images: input.images,
         diagnostics: input.diagnostics ? [...input.diagnostics] : undefined,
       });
       const composer = await runComposer({
