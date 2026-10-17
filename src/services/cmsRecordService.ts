@@ -21,6 +21,7 @@ export interface CmsRecordRequest {
   resource: string;
   recordId?: string;
   values?: Record<string, unknown>;
+  expected?: Record<string, unknown>;
 }
 
 interface CmsRecordResponse {
@@ -114,6 +115,7 @@ export async function updateCmsRecord(input: {
   resource: string;
   recordId: string;
   values: Record<string, unknown>;
+  expected?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
   const response = await mutateCmsRecord({ action: 'update', ...input });
   if (!response.record) throw new Error('CMS did not return the updated record');

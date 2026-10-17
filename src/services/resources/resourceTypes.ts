@@ -80,7 +80,7 @@ export interface ResourceContext {
 }
 
 export type ResourceDataOp =
-  | { op: 'update'; ref: ResourceEntityRef; values: Record<string, unknown> }
+  | { op: 'update'; ref: ResourceEntityRef; values: Record<string, unknown>; expected?: Record<string, unknown> }
   | { op: 'create'; resourceKey: string; values: Record<string, unknown> }
   | { op: 'delete'; ref: ResourceEntityRef };
 
@@ -88,7 +88,7 @@ export interface ResourceAdapter {
   query(def: ResourceDefinition, ctx: ResourceContext): Promise<ResourceRecord[]>;
   get(def: ResourceDefinition, ctx: ResourceContext, id: string): Promise<ResourceRecord | null>;
   create(def: ResourceDefinition, ctx: ResourceContext, values: Record<string, unknown>): Promise<ResourceRecord>;
-  update(def: ResourceDefinition, ctx: ResourceContext, id: string, values: Record<string, unknown>): Promise<ResourceRecord>;
+  update(def: ResourceDefinition, ctx: ResourceContext, id: string, values: Record<string, unknown>, expected?: Record<string, unknown>): Promise<ResourceRecord>;
   delete?(def: ResourceDefinition, ctx: ResourceContext, id: string): Promise<void>;
 }
 

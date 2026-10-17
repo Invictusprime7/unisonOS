@@ -35,8 +35,8 @@ export const catalogResourceAdapter: ResourceAdapter = {
   async create(def, ctx, values) {
     return withId(await createCmsRecord({ businessId: ctx.businessId, projectId: ctx.projectId, resource: def.key, values }));
   },
-  async update(def, ctx, id, values) {
-    return withId(await updateCmsRecord({ businessId: ctx.businessId, projectId: ctx.projectId, resource: def.key, recordId: id, values }));
+  async update(def, ctx, id, values, expected) {
+    return withId(await updateCmsRecord({ businessId: ctx.businessId, projectId: ctx.projectId, resource: def.key, recordId: id, values, ...(expected ? { expected } : {}) }));
   },
   async delete(def, ctx, id) {
     await removeCmsRecord({ businessId: ctx.businessId, projectId: ctx.projectId, resource: def.key, recordId: id });

@@ -123,13 +123,14 @@ export async function applyResourceOp(op: ResourceDataOp, ctx: ResourceContext):
     if (dedicated(d, def, ctx.projectId)) {
       const pid = ctx.projectId;
       if (op.op === 'create') return rec(await callProjectBackend({ projectId: pid, action: 'create', resource: def.key, values: filterWritableValues(def, op.values) }));
-      if (op.op === 'update') return rec(await callProjectBackend({ projectId: pid, action: 'update', resource: def.key, recordId: op.ref.recordId, values: filterWritableValues(def, op.values) }));
+      if (op.op === 'update') return rec(await callProjectBackend({ projectId: pid, action: 'update', resource: def.key, recordId: op.ref.recordId, values: filterWritableValues(def, op.values), ...(op.expected ? { expected: op.expected } : {}) }));
       await callProjectBackend({ projectId: pid, action: 'delete', resource: def.key, recordId: op.ref.recordId });
       return null;
     }
     if (op.op === 'create') return adapter.create(def, ctx, filterWritableValues(def, op.values));
-    if (op.op === 'update') return adapter.update(def, ctx, op.ref.recordId, filterWritableValues(def, op.values));
-    await adapter.delete!(def, ctx, op.ref.recordId);
+    if (op.op === 'update') return adapter.update(def, ctx, op.ref.recordId, filterWritableValues(def, op.values), op.expected);
+    if (!adapter.delete) throw new Error(`${def.label} can't be deleted.`);
+    await adapter.delete(def, ctx, op.ref.recordId);
     return null;
     }, ctx.siteId);
   } catch (err) {
