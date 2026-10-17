@@ -102,3 +102,8 @@
 - [x] Hard vs advisory edit policy: relax style/scope blockers, keep safety blockers (plan 2026-10-17)
 - [x] Conversational AI Builder: ask/offer 2–3 Unison options for open-ended requests; tappable choices
 - [ ] Server AI changes go live after the GitHub deploy workflow runs (prompt, scope, whole-file replies)
+- [x] Preview Execution Convergence (plan 2026-10-17): inspector text/asset/intent ops route through executeEditorCommand (source 'inspector'); planInspectorExecution stays the pure planner
+- [x] Restaurant slice acceptance test: menu item name/price/image edit → record write scoped to project → invalidation carries projectId + sourceTables → other project untouched (previewExecutionConvergence.test.ts, 108 tests pass)
+- [x] Resource executor resolves default fields from the resource schema (menu image → image_url), never hardcoded guesses
+- [x] Dedicated-backend gateway contract extended to content entries + site profile (project-backend edge); client resourceRuntime no longer throws for non-catalog adapters — gateway is the authority
+- [ ] Deploy project-backend edge change via GitHub workflow; live signed-in slice check still open

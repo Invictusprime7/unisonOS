@@ -111,13 +111,17 @@ describe('preview execution convergence (restaurant slice)', () => {
     expect(mocks.updateCmsRecord).toHaveBeenCalledTimes(1);
   });
 
-  it('image replacement on a marked menu item writes the image field', async () => {
+  it('image replacement on a marked menu item writes the schema image field', async () => {
     const result = await executeEditorCommand(
       { type: 'replace-asset', url: 'https://x/new-soup.png', target: { pagePath: '/', resourceMark: 'menu#menu-soup' } },
       { source: 'toolbar', resource: ctx },
     );
-    expect(result).toMatchObject({ ok: true, lane: 'resource', changedFields: ['image'] });
-    expect(soup.image).toBe('https://x/new-soup.png');
+    // The menu surface's image field is image_url — resolved from the schema, not guessed.
+    expect(result).toMatchObject({ ok: true, lane: 'resource', changedFields: ['image_url'] });
+    expect(mocks.updateCmsRecord).toHaveBeenCalledWith(expect.objectContaining({
+      recordId: 'menu-soup',
+      values: { image_url: 'https://x/new-soup.png' },
+    }));
   });
 
   it('price edit via update-resource-field persists and offers undo', async () => {
