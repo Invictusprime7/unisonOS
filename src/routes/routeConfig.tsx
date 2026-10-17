@@ -21,6 +21,7 @@ const DesignStudioPage = lazy(() => import("@/pages/DesignStudioPage"));
 const BusinessSettings = lazy(() => import("@/pages/BusinessSettings"));
 const BusinessCatalog = lazy(() => import("@/pages/BusinessCatalog"));
 const BusinessContent = lazy(() => import("@/pages/BusinessContent"));
+const BusinessRecords = lazy(() => import("@/pages/BusinessRecords"));
 const CloudDashboard = lazy(() => import("@/pages/CloudDashboard"));
 const DocsPage = lazy(() => import("@/pages/DocsPage"));
 const Settings = lazy(() => import("@/pages/Settings"));
@@ -340,6 +341,14 @@ export const appRoutes: AppRouteConfig[] = [
       chrome: "legacy",
       requiresAuth: true,
       requiresWorkspace: true,
+    },
+  },
+  {
+    path: "/business/records",
+    element: withAsyncBoundary(<BusinessRecords />),
+    meta: {
+      id: "business-records", title: "Records", section: "workspace", shell: "workspace", chrome: "legacy",
+      requiresAuth: true, requiresWorkspace: true,
     },
   },
   {

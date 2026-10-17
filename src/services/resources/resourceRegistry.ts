@@ -159,3 +159,13 @@ export function getResource(key: string): ResourceDefinition | null {
   const surface = getCatalogSurface(key);
   return surface && surface.editableFields.length > 0 ? catalogSurfaceToResource(surface) : null;
 }
+
+/** Records navigation is derived from the authorities above, not another registry. */
+export function listRecordCollections(): Array<{ kind: CanonicalRecordKind; label: string; resources: ResourceDefinition[] }> {
+  const resources = listResources();
+  return (['testimonials', 'projects', 'case-studies', 'faqs'] as const).map((kind) => ({
+    kind,
+    label: kind === 'case-studies' ? 'Case studies' : kind === 'faqs' ? 'FAQs' : kind === 'projects' ? 'Projects' : 'Testimonials',
+    resources: resources.filter((def) => canonicalRecordKind(def) === kind),
+  }));
+}

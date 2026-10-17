@@ -13,7 +13,7 @@ import { normalizeIndustryKey } from '@/platform/core/industryMatrix';
 import { canonicalContentSlug } from './resourceRegistry';
 
 /** Content types a fresh launch can seed, mapped from CreatorData collections. */
-const SEED_CONTENT_TYPES: Record<string, { displayName: string; fields: { key: string; label: string; type: string }[] }> = {
+export const SEED_CONTENT_TYPES: Record<string, { displayName: string; fields: { key: string; label: string; type: string }[] }> = {
   faq: { displayName: 'FAQs', fields: [
     { key: 'question', label: 'Question', type: 'text' },
     { key: 'answer', label: 'Answer', type: 'textarea' },
