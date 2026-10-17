@@ -1,6 +1,7 @@
 // AI Composer contract (milestone §31). Byte-mirrored at
 // src/contracts/aiComposerContract.ts — edit both together.
 import { z } from 'zod';
+import { parse } from '@babel/parser';
 
 export const AI_COMPOSER_TASKS = ['site_page_author', 'site_page_repair', 'builder_source_edit'] as const;
 export type AIComposerTask = (typeof AI_COMPOSER_TASKS)[number];
@@ -80,6 +81,23 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
   for (const dependency of response.requestedDependencies ?? []) {
     if (!approvedDependencies.has(dependency)) violations.push(`${dependency}: dependency is not approved for this request`);
   }
+  for (const op of response.fileOps) {
+    if (op.type === 'delete' || !/\.[jt]sx?$/.test(op.path)) continue;
+    let imports: Map<string, number>;
+    try { imports = moduleImportCounts(op.content); } catch {
+      violations.push(`${op.path}: imports cannot be verified because source is not parseable`);
+      continue;
+    }
+    let prior = new Map<string, number>();
+    try { prior = moduleImportCounts(req.files[op.path] ?? ''); } catch { /* No unverifiable grandfathering. */ }
+    for (const [specifier, count] of imports) {
+      if (count <= (prior.get(specifier) ?? 0)) continue;
+      const root = importedPackageRoot(specifier);
+      if (root !== null && !approvedDependencies.has(root)) {
+        violations.push(`${op.path}: ${specifier}: imported dependency is not approved for this request`);
+      }
+    }
+  }
   const sameRouteOp = (a: z.infer<typeof aiComposerRouteOpSchema>, b: z.infer<typeof aiComposerRouteOpSchema>) => {
     const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
     return [...keys].every(key => (a as Record<string, unknown>)[key] === (b as Record<string, unknown>)[key]);
@@ -106,6 +124,41 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
   return violations;
 }
 export const AI_AUTHORED_MARKER = '// @unison-ai-authored';
+/** Syntax-backed module reads; comments and ordinary strings are not imports. */
+function moduleImportCounts(source: string): Map<string, number> {
+  const ast = parse(source, { sourceType: 'unambiguous', plugins: ['jsx', 'typescript'], createImportExpressions: true });
+  const counts = new Map<string, number>();
+  const add = (node: any) => {
+    const value = node?.type === 'StringLiteral' ? node.value
+      : node?.type === 'TemplateLiteral' && node.expressions.length === 0 ? node.quasis[0]?.value.cooked
+      : '<computed-module>';
+    const specifier = typeof value === 'string' ? value : '<computed-module>';
+    counts.set(specifier, (counts.get(specifier) ?? 0) + 1);
+  };
+  const visit = (node: any): void => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'ImportDeclaration' || node.type === 'ExportAllDeclaration'
+      || (node.type === 'ExportNamedDeclaration' && node.source)) add(node.source);
+    if (node.type === 'ImportExpression') add(node.source);
+    if (node.type === 'CallExpression' && (node.callee?.type === 'Import'
+      || (node.callee?.type === 'Identifier' && node.callee.name === 'require'))) add(node.arguments[0]);
+    if (node.type === 'TSImportEqualsDeclaration' && node.moduleReference?.type === 'TSExternalModuleReference') add(node.moduleReference.expression);
+    if (node.type === 'TSImportType') add(node.argument);
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === 'object') visit(value);
+    }
+  };
+  visit(ast.program);
+  return counts;
+}
+
+/** Local resolution remains candidate-owned. Protocols/computed loads never match an npm approval. */
+function importedPackageRoot(specifier: string): string | null {
+  if (specifier.startsWith('//') || /^[A-Za-z][\w+.-]*:/.test(specifier) || specifier === '<computed-module>') return specifier;
+  if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('@/') || specifier.startsWith('~/')) return null;
+  return specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+}
 /** Literal bindings only; computed values remain runtime-owned. */
 function literalIntentCounts(source: string): Map<string, number> {
   const counts = new Map<string, number>();
