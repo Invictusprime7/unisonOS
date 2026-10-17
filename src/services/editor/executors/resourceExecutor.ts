@@ -89,7 +89,6 @@ export async function executeResourceCommand(command: EditorCommand, ctx: Resour
   await executeResourceCommandCompatible(ctx, {
     kind: 'resource.mutate', resourceKey: ref.resourceKey, action: 'update', recordId: ref.recordId, values,
   }, () => applyResourceOp({ op: 'update', ref, values }, ctx));
-  const label = getResource(ref.resourceKey)?.label ?? ref.resourceKey;
   const previous = before ? Object.fromEntries(Object.keys(values).map((k) => [k, before[k]])) : null;
   return {
     ok: true, command: command.type, lane: 'resource',
