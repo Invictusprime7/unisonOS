@@ -26,9 +26,35 @@ function defaultFieldFor(command: EditorCommand): string {
     ?? 'name';
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Generated catalog sections stamp marks with the in-memory product id/slug,
+ * while the saved CMS row owns a UUID. Resolve slug marks to the real saved
+ * record (scoped to this project) so WYSIWYG edits reach the CMS row instead
+ * of failing gateway validation.
+ */
+async function resolveRecordId(ref: ResourceEntityRef, ctx: ResourceContext): Promise<string | null> {
+  if (UUID_RE.test(ref.recordId)) return ref.recordId;
+  const records = await executeResourceCommandCompatible<ResourceRecord[]>(ctx, {
+    kind: 'resource.list', resourceKey: ref.resourceKey,
+  }, () => queryResource(ref.resourceKey, ctx)).catch(() => [] as ResourceRecord[]);
+  const wanted = ref.recordId.toLowerCase();
+  const match = records.find((r) => String(r.id).toLowerCase() === wanted)
+    ?? records.find((r) => typeof r.slug === 'string' && r.slug.toLowerCase() === wanted)
+    ?? records.find((r) => typeof r.name === 'string' && r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') === wanted);
+  return match ? String(match.id) : null;
+}
+
 export async function executeResourceCommand(command: EditorCommand, ctx: ResourceContext): Promise<EditorCommandResult> {
-  const ref = (command.type === 'update-resource-field' && command.ref) || parseResourceProvenance(command.target.resourceMark);
-  if (!ref) return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: 'This element is not linked to a saved item.' };
+  const parsed = (command.type === 'update-resource-field' && command.ref) || parseResourceProvenance(command.target.resourceMark);
+  if (!parsed) return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: 'This element is not linked to a saved item.' };
+  const recordId = await resolveRecordId(parsed, ctx);
+  if (!recordId) {
+    const label = getResource(parsed.resourceKey)?.label ?? parsed.resourceKey;
+    return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: `No saved ${label} record matches this element yet. Save the site first, then try again.` };
+  }
+  const ref = { ...parsed, recordId };
   const values = valuesFor(command, ref.field);
   const before = await executeResourceCommandCompatible<ResourceRecord | null>(ctx, {
     kind: 'resource.get', resourceKey: ref.resourceKey, recordId: ref.recordId,
