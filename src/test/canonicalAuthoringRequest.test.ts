@@ -28,22 +28,23 @@ describe('canonical AI authorship request assembly', () => {
     expect(assembled.evidence.omittedSourcePaths).toContain('/src/project-components/Hero.tsx');
     expect(assembled.request.runtimeContext).toContain('Not included for size');
   });
-  it('retries with a targets-only read when optional context crowds a target out of the budget', async () => {
+  it('fits multi-file edit targets that exceed the old 140k transport budget', async () => {
     const crowded = {
       ...files,
-      '/src/index.css': 'x'.repeat(150_000),
-      '/src/pages/Home.tsx': "import Big from '../project-components/Big'; export default function Home(){return <Big/>}",
-      '/src/project-components/Big.tsx': 'y'.repeat(100_000),
+      '/src/index.css': 'x'.repeat(59_000),
+      '/src/pages/Home.tsx': 'h'.repeat(59_000),
+      '/src/pages/Pricing.tsx': 'p'.repeat(59_000),
     };
     const assembled = await assembleCanonicalAuthoringRequest({
       task: 'builder_source_edit', page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' },
-      brief: 'Edit theme and hero', knowledgeQuery: 'hero', baseFiles: crowded, routes: [],
-      sourceTargets: ['/src/pages/Home.tsx', '/src/index.css'],
-      instruction: 'Change the theme colors and the hero headline',
+      brief: 'Edit theme and pages', knowledgeQuery: 'hero', baseFiles: crowded, routes: [],
+      sourceTargets: ['/src/pages/Home.tsx', '/src/pages/Pricing.tsx', '/src/index.css'],
+      instruction: 'Change the theme colors across home and pricing',
     });
     expect(assembled.evidence.sourceContextComplete).toBe(true);
     expect(assembled.evidence.sourcePaths).toContain('/src/index.css');
     expect(assembled.evidence.sourcePaths).toContain('/src/pages/Home.tsx');
+    expect(assembled.evidence.sourcePaths).toContain('/src/pages/Pricing.tsx');
   });
   it('reports incomplete context when the edited file itself exceeds the budget', async () => {
     const assembled = await assembleCanonicalAuthoringRequest({
