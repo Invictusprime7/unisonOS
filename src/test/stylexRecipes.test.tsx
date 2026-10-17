@@ -18,7 +18,7 @@ function loadRecipe(source: string) {
     '@/unison/ui/radix/dialog': Dialog,
     '@/unison/ui/icons': icons,
   };
-  const module = { exports: {} as { default: React.ComponentType<Record<string, unknown>> } };
+  const module = { exports: {} as { default: React.FunctionComponent<Record<string, unknown>> } };
   const code = transform(source, { plugins: ['transform-modules-commonjs'] }).code!;
   new Function('require', 'module', 'exports', code)((name: string) => {
     if (!(name in dependencies)) throw new Error(`Unexpected generated dependency: ${name}`);
@@ -30,6 +30,18 @@ function loadRecipe(source: string) {
 const loadFaq = () => loadRecipe(recipes.faqModule);
 
 describe('precompiled Radix and StyleX recipes', () => {
+  it.each(['centered', 'split', 'unknown', 'toString', undefined])('maps non-variant FAQ layout %s to the registered accordion', layout => {
+    const FAQ = loadFaq();
+    const { container } = render(<FAQ props={{ layout, items: [{ question: 'Question?', answer: 'Answer.' }] }} />);
+    expect(container.querySelector('[data-ut-variant]')?.getAttribute('data-ut-variant')).toBe('faq:accordion');
+    expect(screen.getByRole('button', { name: 'Question?' }).getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('rejects an invalid explicit FAQ identity instead of silently replacing it', () => {
+    const FAQ = loadFaq();
+    expect(() => FAQ({ variantId: 'faq:not-registered', props: { layout: 'cards' } })).toThrow('Unsupported FAQ variant: faq:not-registered');
+  });
+
   it('dismisses an open menu at the desktop breakpoint and releases its listener', async () => {
     const desktop = new EventTarget() as EventTarget & { matches: boolean };
     desktop.matches = false;

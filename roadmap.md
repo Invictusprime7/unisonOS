@@ -1,5 +1,8 @@
 # Roadmap
 
+## Active: Recipe contract corrections
+- [x] Correct FAQ layout-derived IDs and canonical auth bindings; remove unregistered intents from locally handled controls, regenerate portable recipes; 211 regression tests pass
+
 ## Active: AI Builder frontend replacement
 - [x] Replace Builder chrome/composer with minimal borders and reduced hover fills; expose compact feature settings
 - [x] Enforce feature toggles at request dispatch, use the connector for tool actions, and retire legacy source-writing/debug fallback branches

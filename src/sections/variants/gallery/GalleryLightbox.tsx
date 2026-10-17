@@ -62,7 +62,7 @@ export const GalleryLightbox: React.FC<GalleryLightboxProps> = ({ items, index, 
       }}
     >
       <Dialog.Title className="sr-only">{item.alt || item.caption || 'Gallery image'}</Dialog.Title>
-      <Dialog.Close asChild><button data-ut-intent="ui.toggle"
+      <Dialog.Close asChild><button
         type="button"
         aria-label="Close gallery"
         className="absolute right-5 top-5 inline-flex h-11 w-11 items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -72,7 +72,7 @@ export const GalleryLightbox: React.FC<GalleryLightboxProps> = ({ items, index, 
       </button></Dialog.Close>
       {items.length > 1 && (
         <>
-          <button data-ut-intent="ui.toggle"
+          <button
             type="button"
             aria-label="Previous image"
             onClick={() => onNavigate(((index ?? 0) - 1 + items.length) % items.length)}
@@ -81,7 +81,7 @@ export const GalleryLightbox: React.FC<GalleryLightboxProps> = ({ items, index, 
           >
             <ChevronLeft aria-hidden="true" size={20} />
           </button>
-          <button data-ut-intent="ui.toggle"
+          <button
             type="button"
             aria-label="Next image"
             onClick={() => onNavigate(((index ?? 0) + 1) % items.length)}

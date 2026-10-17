@@ -43,7 +43,8 @@ const styles = stylex.create({
 
 export default function FAQ({ props, variantId }) {
   const { headline, subheadline } = props;
-  const selectedVariant = variantId || `faq:${props.layout || 'accordion'}`;
+  const layoutVariants = { accordion: 'faq:accordion', 'two-column': 'faq:two-column', cards: 'faq:cards' };
+  const selectedVariant = variantId || (Object.hasOwn(layoutVariants, props.layout) ? layoutVariants[props.layout] : 'faq:accordion');
   if (!['faq:accordion', 'faq:two-column', 'faq:cards'].includes(selectedVariant)) {
     throw new Error(`Unsupported FAQ variant: ${selectedVariant}`);
   }

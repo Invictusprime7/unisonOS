@@ -60,7 +60,7 @@ export const GalleryCollectionTiles: React.FC<BaseSectionProps<'gallery'>> = ({ 
                 minHeight: '18rem',
               }}
             >
-              <button data-ut-intent="ui.toggle"
+              <button
                 type="button"
                 onClick={() => open(i)}
                 aria-label={item.alt || item.caption || 'Open image'}

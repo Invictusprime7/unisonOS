@@ -67,7 +67,7 @@ export const GalleryFrame: React.FC<GalleryFrameProps> = ({
         {filterable !== false && categories.length > 1 && (
           <div className="mb-10 flex flex-wrap justify-center gap-2">
             {['all', ...categories].map((category) => (
-              <button data-ut-intent="ui.toggle"
+              <button
                 key={category}
                 type="button"
                 aria-pressed={active === category}
@@ -123,7 +123,7 @@ export const GalleryFigure: React.FC<{
       aspectRatio: aspect,
     }}
   >
-    <button data-ut-intent="ui.toggle"
+    <button
       type="button"
       onClick={onOpen}
       aria-label={item.alt || item.caption || 'Open image'}
