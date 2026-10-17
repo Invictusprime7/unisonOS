@@ -8543,9 +8543,13 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   const { refreshDataOperationResources } = await import('@/services/dataOperationRefresh');
                   refreshDataOperationResources({ projectId: projectIdForCommit, businessId, results: outcome.commit.dataOpsApplied });
                 }
-                 recordPendingVfsMutation({
+                absorbPendingVfsOperations(pendingProjectionScope, { throughSequence: absorbedThroughSequence });
+                lastPersistedVfsFilesRef.current = { ...mergedFiles };
+                lastSavedVfsSignatureRef.current = computeBuilderVfsSignature(mergedFiles);
+                lastRecordedPendingVfsSignatureRef.current = '';
+                recordPendingVfsMutation({
                   scope: pendingProjectionScope,
-                  baseRevisionId: currentRevisionIdRef.current || null,
+                  baseRevisionId: baseRevisionForRecord,
                   candidateRevisionId: outcome.revisionId ?? null,
                   beforeFiles,
                   afterFiles: mergedFiles,
