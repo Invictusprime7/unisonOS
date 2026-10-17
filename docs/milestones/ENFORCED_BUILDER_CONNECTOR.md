@@ -55,3 +55,5 @@ Builder request assembly derives `approvedIntents` from the canonical intent reg
 The mirrored proposal check rejects unapproved `intentsUsed` and new literal `data-ut-intent` occurrences even when response metadata omits them. Unchanged existing legacy occurrences survive unrelated edits. Edge repair and client pre-candidate checks share this policy. Launch authoring keeps its existing validation path.
 
 This is request vocabulary enforcement, not server authorization or confirmation that payments, emails or other live handlers are configured. Computed bindings are not covered by the literal scanner; runtime/canonical gates remain authoritative. No migrations, production records or backend deployment changed. Authenticated edit/read-back and canonical workflow deployment remain unverified.
+
+Verification: 84 tests pass across ten suites, including canonical capability derivation, alias/lifecycle rejection, literal bindings without metadata, preservation of old occurrences, duplicate prevention, edge repair and client refusal. Contract byte parity and preview build are OK.

@@ -16,7 +16,7 @@
 - [x] Redesign pass 2: AI rounds (think → draft → check → adjust) narrated live in the Builder activity feed
 - [x] Composer proposal scope enforcement: explicit targets, hunk-only existing-file edits and shared client checks; 60 regression tests pass; canonical workflow deployment and authenticated acceptance remain unverified
 - [x] Builder route/dependency request enforcement: exact planned route operations and existing accepted dependencies; 75 regression tests pass; canonical workflow deployment and signed-in acceptance remain unverified
-- [ ] Builder intent/capability enforcement: derive permitted actions from canonical site capabilities; reject unsupported declared and source-stamped intents before candidate preparation
+- [x] Builder intent/capability authoring enforcement: canonical capability-derived actions; reject unsupported declared and new literal DOM intents before candidate preparation; 84 regression tests pass; computed bindings, deployment and live readiness remain unverified
 - Later: imported-dependency enforcement; audited legacy removal; authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON
 - Audit persistence: evaluate existing telemetry before adding canonical migrations; no new tables or record changes in Phase 1
