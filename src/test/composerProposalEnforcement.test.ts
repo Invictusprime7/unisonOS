@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { composerProposalViolations, type AIComposerRequest } from '@/contracts/aiComposerContract';
 import { applyEditHunks, runComposerLane } from '../../supabase/functions/ai-code-assistant/composerLane';
+import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
+import { runComposerRepairLoop } from '@/services/builder/aiRepairLoop';
 
 const path = '/src/pages/Home.tsx';
 const request: AIComposerRequest = {
@@ -19,6 +21,33 @@ describe('Composer proposal boundary', () => {
     expect(composerProposalViolations({ ...request, files: {} }, {
       summary: '', fileOps: [{ type: 'delete', path }, { type: 'delete', path }],
     })).toHaveLength(3);
+  });
+  it('rejects creates overwriting supplied source', () => {
+    expect(composerProposalViolations(request, {
+      summary: '', fileOps: [{ type: 'create', path, content: 'New' }],
+    }).join()).toContain('cannot overwrite');
+  });
+  it('allows more than three explicitly targeted files', () => {
+    const targets = ['One', 'Two', 'Three', 'Four'].map(name => `/src/pages/${name}.tsx`);
+    expect(composerProposalViolations({ ...request, files: {}, sourceTargets: targets }, {
+      summary: '', fileOps: targets.map(path => ({ type: 'create', path, content: 'New' })),
+    })).toEqual([]);
+  });
+  it('assembles explicit targets separately from source context', async () => {
+    const assembled = await assembleCanonicalAuthoringRequest({
+      task: request.task, page: request.page, brief: request.brief, knowledgeQuery: 'heading',
+      baseFiles: request.files, sourceTargets: [path, path], routes: [],
+    });
+    expect(assembled.request.sourceTargets).toEqual([path]);
+  });
+  it('client repair checks scope before preparing any candidate', async () => {
+    const invoke = vi.fn().mockResolvedValue({ data: { content: JSON.stringify({
+      summary: '', fileOps: [{ type: 'create', path: '/src/pages/Other.tsx', content: 'Other' }],
+    }) }, error: null });
+    const result = await runComposerRepairLoop({ request, baseFiles: request.files, invoke: invoke as never, maxAttempts: 1 });
+    expect(result.ok).toBe(false);
+    expect(result.prepared).toBeUndefined();
+    expect(result.errors.join()).toContain('outside this request');
   });
   it('allows explicitly targeted new source without widening scope', () => {
     expect(composerProposalViolations({ ...request, files: {} }, {
