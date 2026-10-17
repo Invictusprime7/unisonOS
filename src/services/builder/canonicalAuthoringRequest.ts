@@ -211,12 +211,24 @@ function renderComponentRecipes(registry: unknown, pageRole?: string): string {
 export async function assembleCanonicalAuthoringRequest(
   input: CanonicalAuthoringRequestInput,
 ): Promise<{ request: AIComposerRequest; evidence: CanonicalAuthorshipEvidence }> {
-  const source = selectSourceKnowledgeWithReport(
+  const targets = input.sourceTargets?.length ? input.sourceTargets : [input.page.filePath];
+  const scope = input.task === 'builder_source_edit' ? scopeForInstruction(input.instruction) : {};
+  // Edit policy: the files being edited must always reach the Composer. Edit
+  // requests get a larger transport budget, and if optional context (theme,
+  // imports, experience facades) still crowds a target out, retry with a
+  // targets-only read rather than rejecting the edit.
+  let source = selectSourceKnowledgeWithReport(
     input.baseFiles,
-    input.sourceTargets?.length ? input.sourceTargets : [input.page.filePath],
-    140_000,
-    input.task === 'builder_source_edit' ? scopeForInstruction(input.instruction) : {},
+    targets,
+    input.task === 'builder_source_edit' ? 240_000 : 140_000,
+    scope,
   );
+  if (input.task === 'builder_source_edit' && !source.completeTargets) {
+    const targetsOnly = selectSourceKnowledgeWithReport(input.baseFiles, targets, 240_000, { scoped: true });
+    if (targetsOnly.completeTargets || Object.keys(targetsOnly.files).length > Object.keys(source.files).length) {
+      source = targetsOnly;
+    }
+  }
   const rawRegistry = input.registryContext === undefined
     ? input.baseFiles['/.unison/wizard-registry-context.json']
     : input.registryContext;
