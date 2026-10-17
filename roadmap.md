@@ -4,7 +4,8 @@
 - [x] Phase 1: typed context connector integrated with existing App Builder edits and shared transport; ownership, revision and registry validation; 41 related tests pass
 - [x] Phase 2: enforced dispatch over agentOperations (identity, record ownership, source scope, canonical intents/tokens, router protection); 7 tests
 - [x] AI Builder saved-record edits run through the enforced dispatcher
-- Next: route command menu and Catalog panel actions through the dispatcher; edge-side proposal enforcement
+- [x] Command menu and Catalog panel catalog saves run through the enforced dispatcher
+- Next: edge-side proposal enforcement in existing Composer lane
 - Later: edge-side proposal enforcement using existing Composer lanes; audited legacy removal; authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON
 - Audit persistence: evaluate existing telemetry before adding canonical migrations; no new tables or record changes in Phase 1
