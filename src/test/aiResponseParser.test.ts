@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { extractMultiFileOutput, extractStylesheetOutput } from '@/utils/aiResponseParser';
+import * as responseParser from '@/utils/aiResponseParser';
 
 describe('AI response file extraction', () => {
+  it('exposes extraction only, not a parallel response-to-VFS authoring API', () => {
+    expect(Object.keys(responseParser).sort()).toEqual([
+      'extractMultiFileOutput',
+      'extractStylesheetOutput',
+    ]);
+  });
+
   it('extracts a prose-wrapped fenced JSON patch for theme and image edits', () => {
     const response = [
       'I updated the theme and added the requested hero image.',
