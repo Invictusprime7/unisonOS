@@ -56,6 +56,18 @@ function contract(): AppBuildContract {
 }
 
 describe('UnisonAppBuilder facade', () => {
+  it('stops before inference when the requested actual source is missing', async () => {
+    const runComposer = vi.fn();
+    const result = await createUnisonAppBuilder({ runComposer }).edit({
+      operationId: 'missing-source', baseRevisionId: 'r1', currentFiles: baseFiles,
+      instruction: 'Change navbar', page: { title: 'Home', route: '/', role: 'home', filePath: '/src/pages/Home.tsx' },
+      sourceTargets: ['/src/components/MissingNav.tsx'],
+    });
+    expect(result.candidate.status).toBe('rejected');
+    expect(result.candidate.attempts).toBe(0);
+    expect(runComposer).not.toHaveBeenCalled();
+    expect(result.changeSet).toBeUndefined();
+  });
   it('checks page generation connector identity before invoking the page author', async () => {
     const authorSite = vi.fn();
     await expect(createUnisonAppBuilder({ authorSite: authorSite as never }).generatePages({
