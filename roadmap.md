@@ -23,6 +23,7 @@
 - [x] Phase 4b first boundary: prepared Composer candidates bypass response extraction and compatibility sanitization; complete file operations apply together without sequential splitting
 - [x] Phase 4b document context: forward uploaded links and extracted file text to App Builder, ahead of optional runtime context so truncation cannot crowd them out; image vision remains on its existing path
 - [x] Phase 4b image transport preparation: typed references through App Builder and Composer repairs, actual image content parts and payload preservation; 71 regression tests pass; production routing remains unchanged pending provider fallback and signed-in checks
+- [ ] Phase 4b provider boundary: verify real adapters and fallback requests preserve image references with deterministic transport tests; keep attachment routing unchanged until live provider and signed-in acceptance
 - [ ] Phase 4b remainder: migrate attachment/non-React source fallback callers before further removals (requires authenticated acceptance evidence on authoritative backend); compatibility extractors remain intact
 - Later: authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON
