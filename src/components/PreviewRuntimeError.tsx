@@ -6,6 +6,8 @@ interface PreviewRuntimeErrorProps {
   onRetry?: () => void;
   onRelaunch?: () => void;
   onOpenHealth?: () => void;
+  /** Offered when unsaved edits conflict with the saved version. */
+  onResolveConflict?: (choice: 'keep' | 'discard') => void;
 }
 
 const STAGE_LABEL: Record<string, string> = {
@@ -24,7 +26,9 @@ export function PreviewRuntimeError({
   onRetry,
   onRelaunch,
   onOpenHealth,
+  onResolveConflict,
 }: PreviewRuntimeErrorProps) {
+  const conflict = Boolean(error.details.pendingConflict && onResolveConflict);
   const stageLabel = STAGE_LABEL[error.stage] || error.stage;
   const blocked = error.details.blockedFiles || [];
   const recoverable = error.details.recoverableByRelaunch;
@@ -67,6 +71,22 @@ export function PreviewRuntimeError({
         )}
 
         <div className="flex flex-wrap gap-2">
+          {conflict && (
+            <>
+              <button
+                onClick={() => onResolveConflict?.('keep')}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
+              >
+                Keep my edit on the latest version
+              </button>
+              <button
+                onClick={() => onResolveConflict?.('discard')}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+              >
+                Discard my edit
+              </button>
+            </>
+          )}
           {onRetry && (
             <button
               onClick={onRetry}
@@ -75,7 +95,7 @@ export function PreviewRuntimeError({
               <RefreshCw className="h-3.5 w-3.5" /> Retry preview
             </button>
           )}
-          {recoverable && onRelaunch && (
+          {recoverable && !conflict && onRelaunch && (
             <button
               onClick={onRelaunch}
               className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90"

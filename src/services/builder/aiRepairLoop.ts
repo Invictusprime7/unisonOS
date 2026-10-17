@@ -205,7 +205,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       pageCheck: input.pageCheck,
     });
     lastPrepared = prepared;
-    narrate('verification', prepared.ok ? 'Checks passed' : `Found ${prepared.errors.length} problem${prepared.errors.length === 1 ? '' : 's'}; fixing`, prepared.ok ? 'ok' : 'running');
+    narrate('verification', prepared.ok ? 'Draft checks passed' : `Found ${prepared.errors.length} problem${prepared.errors.length === 1 ? '' : 's'}; fixing`, prepared.ok ? 'ok' : 'running');
     if (prepared.ok) {
       return { ok: true, reason: 'accepted', attempts: attempt, response, prepared, errors: [] };
     }
