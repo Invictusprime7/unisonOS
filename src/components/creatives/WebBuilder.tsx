@@ -8508,6 +8508,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   return { success: false, errors: ['Canonical project identity is unavailable.'] };
                 }
                 // P0.3 — same single transaction as the desktop mount.
+                const baseRevisionForRecord = currentRevisionIdRef.current || null;
+                const absorbedThroughSequence = getPendingVfsSequenceWatermark();
                 const outcome = await runBuilderAiMutation(commitCtx, {
                   mirror: (committedFiles) => {
                     try {
