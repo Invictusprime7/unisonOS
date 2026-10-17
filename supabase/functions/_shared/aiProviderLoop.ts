@@ -838,7 +838,7 @@ export async function runProviderLoop(opts: {
         const perModelMs = Math.min(28000, anthropicBudget);
         try {
           const systemMsg = (aiMessages.find((m) => m.role === 'system')?.content as string) || '';
-          const userMsgs = aiMessages.filter((m) => m.role !== 'system');
+          const userMsgs = toAnthropicMessages(aiMessages as ChatMessage[]);
           console.log(`[AI-Hybrid] Trying direct Anthropic claude-sonnet-4-5 (timeout: ${perModelMs / 1000}s)...`);
 
           const attempt = createAttemptSignal(perModelMs);
