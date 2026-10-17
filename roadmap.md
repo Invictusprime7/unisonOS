@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Active: Builder prompted-edit completion
-- [ ] Resolve prompted targets against the visible page and its actual source owners; remove competing scope hints
-- [ ] Preserve selected-element instructions and full conversation context through canonical App Builder edits
-- [ ] Verify targeted source → canonical candidate → save outcomes with regression tests
+- [x] Resolve prompted parts against visible-page source owners; site-wide navigation unions owners without guessing unrelated pages
+- [x] Preserve selected-element instructions and complete conversation context through canonical App Builder edits; interpretation failures close the pending turn and timers clear on every exit
+- [x] Verify source-owner resolution, incomplete-source rejection and canonical candidate/revision boundaries: 57 tests, both authority lints and preview build pass; durable save acceptance remains below
 - [ ] Verify signed-in save → preview → reopen on the designated UNISON project; blocked by unavailable authoritative session
 
 ## Active: Uploaded preview-first architecture merge
