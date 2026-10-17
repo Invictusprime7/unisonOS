@@ -1,3 +1,4 @@
+import { emitAgentEvent } from '@/services/agent-runtime/agentEvents';
 import { updateResolvedCompositionVariants } from '@/sections/compositionToFileSet';
 import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
 import { isCustomizerPageEdit } from '@/services/builder/customizerDraft';
@@ -1028,10 +1029,14 @@ async function commitMutationInner(
           const path = violation.split(' ')[0];
           return previousFiles[path] !== files[path] || !(path in previousFiles);
         });
+        // Advisory only (edit policy): design-language drift is surfaced as a
+        // suggestion and never rejects a requested edit.
         if (input.source === 'ai-builder' && touched.length) {
-          throw new Error(
-            `[VFSCommitService] This edit breaks the site's design language: ${touched[0]}`,
-          );
+          emitAgentEvent({
+            kind: 'verification',
+            status: 'ok',
+            message: `Suggestion: this change departs from the site's shared style (${touched[0]}). Ask me to match it back if you prefer.`,
+          });
         }
       }
     }

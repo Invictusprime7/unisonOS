@@ -25,7 +25,7 @@ import {
   type PublishBlockerSummary,
 } from '@/services/vfsCommitService';
 import { emitAgentEvent, lineDelta } from '@/services/agent-runtime/agentEvents';
-import { findIntentRetargets } from '@/services/agent-runtime/intentInvariant';
+import { findIntentRetargets, isRequestedRetarget } from '@/services/agent-runtime/intentInvariant';
 
 /** Terminal states of a builder mutation transaction. */
 export type BuilderMutationState =
@@ -83,7 +83,8 @@ export async function runBuilderAiMutation(
 
   // Intent invariant: buttons keep their destinations regardless of UI edits.
   emitAgentEvent({ kind: 'verification', message: 'Buttons still go to the same places', status: 'running' });
-  const retargets = findIntentRetargets(ctx.beforeFiles, ctx.nextFiles);
+  const retargets = findIntentRetargets(ctx.beforeFiles, ctx.nextFiles)
+    .filter((violation) => !isRequestedRetarget(ctx.label, violation));
   if (retargets.length > 0) {
     const reason = `This edit would change where ${retargets.map((v) => `"${v.intent}"`).join(', ')} leads (was ${retargets[0].before.join(', ')}). Button destinations stay fixed during design edits.`;
     emitAgentEvent({ kind: 'error', message: reason, status: 'failed' });

@@ -57,3 +57,22 @@ Deno.test('blocks form and input additions in a visual navbar edit', () => {
   assert(result.inScope === false, 'Expected visual navbar side effects to be out of scope.');
   assert(result.blockAutoApply === true, 'Expected auto-apply to be blocked.');
 });
+
+Deno.test('edit policy: extra files and additions are advisory without "only"', () => {
+  const result = checkEditScope({
+    taskType: 'surgical_edit',
+    targetFile: '/src/pages/Home.tsx',
+    existingFiles: ['/src/pages/Home.tsx'],
+    originalFiles: { '/src/pages/Home.tsx': 'export default function Home(){return <main><section><h1>Welcome home to our studio</h1></section></main>}' },
+    patchFiles: {
+      '/src/pages/Home.tsx': 'export default function Home(){return <main><section><h1>Welcome home to our studio</h1><form><input /></form></section></main>}',
+      '/src/project-components/A.tsx': 'export default function A(){return null}',
+      '/src/project-components/B.tsx': 'export default function B(){return null}',
+      '/src/project-components/C.tsx': 'export default function C(){return null}',
+    },
+    userPrompt: 'Make the hero section better.',
+  });
+  assert(result.inScope === true, 'Expected advisory-only scope result.');
+  assert(result.blockAutoApply === false, 'Expected auto-apply to stay allowed.');
+  assert((result.advisories ?? []).length >= 2, 'Expected advisories for files and additions.');
+});

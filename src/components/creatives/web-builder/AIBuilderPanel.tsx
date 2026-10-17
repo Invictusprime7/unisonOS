@@ -1,3 +1,6 @@
+import { clarifyBuilderRequest } from '@/services/builder/conversationalClarifier';
+import { isThemeOnlyRequest } from '@/services/theme/themeEdit';
+import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 import { generateSiteImage, locateImageSource, isImageGenerationRequest, IMAGE_GENERATED_EVENT, SiteImageBusyError, SiteImageRequestError, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 /**
  * AIBuilderPanel - Enhanced AI interface for Web Builder
@@ -199,13 +202,15 @@ function getScopedEditAutoApplyBlockReason(opts: {
       }
     }
 
+    // Edit policy: added elements/components are advisory unless the user
+    // explicitly narrowed the edit ("only", "just").
     const candidatePath = Object.keys(opts.files).find((path) => normalizePath(path) === normTarget);
     const original = opts.originalFiles[normTarget] ?? opts.originalFiles[opts.resolvedTargetFile];
     const candidate = candidatePath ? opts.files[candidatePath] : undefined;
-    if (original && candidate) {
+    if (original && candidate && /\b(only|just)\b/i.test(opts.prompt)) {
       const sideEffects = findUnrequestedScopedSideEffects(original, candidate, opts.prompt);
       if (sideEffects.length > 0) {
-        return `Scoped edit introduced unrequested side effects: ${sideEffects.join(', ')}.`;
+        return `You asked for only this change, but the AI also added: ${sideEffects.join(', ')}.`;
       }
     }
   }
@@ -414,6 +419,8 @@ export interface IframeError {
 }
 
 interface AIBuilderPanelProps {
+  /** Theme lane: commits color/font/token changes as a canonical theme edit. */
+  onRequestThemeEdit?: (prompt: string) => Promise<boolean>;
   currentCode?: string;
   systemType?: BusinessSystemType | null;
   templateName?: string | null;
@@ -539,6 +546,7 @@ function formatTimestamp(date: Date): string {
 // ============================================================================
 
 export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
+  onRequestThemeEdit,
   currentCode,
   systemType,
   templateName,
@@ -1082,6 +1090,46 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       }
     }
 
+    // Conversational first step: open-ended requests get concrete Unison
+    // options instead of a guess; the chosen reply is itself a clear request.
+    const clarification = clarifyBuilderRequest(userContent, {
+      hasSelection: Boolean(selectedTarget),
+      hasAttachments: droppedFiles.length > 0,
+    });
+    if (clarification) {
+      setMessages(prev => [...prev, {
+        id: generateId(), role: 'assistant', content: clarification.question, timestamp: new Date(),
+        ask: { question: 'design-direction', options: clarification.options },
+      }]);
+      setIsLoading(false);
+      return;
+    }
+
+    // Colors, fonts and theme tokens go through the theme lane (the page
+    // authoring lane may not write the stylesheet). Mixed requests apply the
+    // theme part first, then continue with the layout/content part.
+    const themeOnly = isThemeOnlyRequest(userContent);
+    const themeCue = /\b(colou?rs?|palette|primary|accent|font|typeface|typography|headings? font|rounder|corners|darker|lighter)\b/i.test(userContent);
+    let themeApplied = false;
+    if (onRequestThemeEdit && droppedFiles.length === 0 && (themeOnly || themeCue)) {
+      try {
+        emitAgentEvent({ kind: 'tool_call', message: 'Updating theme colors and fonts', status: 'running' });
+        themeApplied = await onRequestThemeEdit(userContent);
+        if (themeApplied) emitAgentEvent({ kind: 'commit', message: 'Theme saved', status: 'ok' });
+      } catch (error) {
+        if (themeOnly) {
+          setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: `I couldn't apply that theme change: ${error instanceof Error ? error.message : 'unknown error'}. Tell me the color or font you want and I'll try again.`, timestamp: new Date() }]);
+          setIsLoading(false);
+          return;
+        }
+      }
+      if (themeOnly && themeApplied) {
+        setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: 'Done — the theme is updated across the site. Want me to adjust contrast or try a matching font pairing next?', timestamp: new Date() }]);
+        setIsLoading(false);
+        return;
+      }
+    }
+
     // Milestone 5 / Step 1: classification is envelope-driven. The interpreter
     // is authoritative; local hints are only used when it is unavailable.
     const capabilityInterpretation = await interpretBuilderRequest(userContent, {
@@ -1463,7 +1511,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             ? `VFS UI runtime: Lucide ${facades.icons}; Framer Motion ${facades.animation}; Zod ${facades.schemas}; React Hook Form + zodResolver ${facades.forms}; styles ${facades.styles}; Radix namespace ${facades.radix}; Radix primitive modules ${facades.radixPrimitives.map((primitive) => `@/unison/ui/radix/${primitive}`).join(', ')}.`
             : 'Prefer VFS imports: @/unison/ui/icons for Lucide, @/unison/ui/zod and @/unison/ui/forms for schemas/forms, @/unison/ui/radix/<primitive> for Radix, @/unison/ui/animation for Framer Motion, and @/unison/ui/styles for typography, colors, component styles, and Tailwind class composition.',
           isThemeEdit
-            ? 'For this requested theme change, update semantic color/font variables in /src/index.css and token-based classes in affected components. Preserve Tailwind directives and stylesheet structure. Never write /src/unison/ui/*.'
+            ? 'Theme colors and fonts are applied by the theme lane, not in source. Use semantic token classes in affected components; never write /src/index.css or /src/unison/ui/*.'
             : 'Use semantic Stage 4b Tailwind tokens. Never write /src/index.css or /src/unison/ui/*.',
           'Preserve accessible labels and data-ut-intent attributes.',
         ].join('\n'));
@@ -1874,6 +1922,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               },
               sourceTargets: Array.from(new Set([
                 ...(resolvedSourceTargets.length ? resolvedSourceTargets : [page.filePath]),
+                // Edit policy: shared parts the page renders (nav, footer,
+                // project components) are editable with the page.
+                ...collectLocalImportClosure(vfsFiles, page.filePath, (path) =>
+                  /^\/src\/(pages|project-components|components\/generated)\/.+\.(t|j)sx?$/.test(path)),
                 ...(isCartWiringRequest
                   ? sourceTargetsForCartWiring(vfsFiles, page.filePath)
                   : []),

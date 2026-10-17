@@ -4,8 +4,9 @@ import { selectSourceKnowledgeWithReport, scopeForInstruction } from '@/services
 
 describe('deterministic scoped edits', () => {
   const files = { '/src/pages/Home.tsx': 'a\nb\nc' };
-  it('rejects whole-file replace of an existing file in strict mode', () => {
-    expect(() => parseFileBlocks('<<<FILE replace /src/pages/Home.tsx\nx\n>>>END', files, true)).toThrow(/EDIT block/);
+  it('accepts a whole-file replace of an existing file (candidate gates verify it)', () => {
+    const parsed = parseFileBlocks('<<<FILE create /src/pages/Home.tsx\nx\n>>>END', files, true) as { fileOps: Array<{ type: string; path: string }> };
+    expect(parsed.fileOps[0]).toMatchObject({ type: 'replace', path: '/src/pages/Home.tsx' });
   });
   it('applies EDIT hunks and allows creating new files', () => {
     const out = parseFileBlocks('<<<EDIT /src/pages/Home.tsx\n<<<<<<< SEARCH\nb\n=======\nB\n>>>>>>> REPLACE\n>>>END\n<<<FILE create /src/pages/New.tsx\nn\n>>>END', files, true) as { fileOps: Array<{ path: string; content: string }> };

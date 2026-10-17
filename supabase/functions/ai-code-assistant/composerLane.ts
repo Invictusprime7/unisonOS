@@ -52,7 +52,7 @@ CANONICAL PIPELINE RULES (validated by deterministic gates; violations are rejec
 ${buildComposerCanonicalRules()}
 
 OUTPUT (file-block format — raw source, NO JSON escaping, NO markdown fences)
-SUMMARY: <one line describing the change>
+SUMMARY: <one line describing the change, then optionally " Next: <one grounded Unison suggestion>">
 <<<FILE create /src/path/File.tsx
 <complete raw file contents>
 >>>END
@@ -64,7 +64,7 @@ Optional lines: DEPENDENCIES: a,b   INTENTS: x,y
 Optional typed topology line (single-line JSON): ROUTE_OPS: [{"type":"add_page","pageId":"pricing","title":"Pricing","route":"/pricing","pageType":"pricing","showInNav":true}]
 Every create/replace carries the COMPLETE file contents. Output nothing else.
 
-TASK builder_source_edit: for an EXISTING file in FILES you MUST use an EDIT block — FILE replace (or FILE create) on an existing file is rejected. Return only the changed regions, never the whole file:
+TASK builder_source_edit: for an EXISTING file in FILES prefer an EDIT block with only the changed regions. For large restructures (layout rework, component swap) a complete <<<FILE replace is accepted:
 <<<EDIT /src/path/File.tsx
 <<<<<<< SEARCH
 <exact lines copied verbatim from FILES, unique in that file>
@@ -123,10 +123,10 @@ export function parseFileBlocks(raw: string, files: Record<string, string> = {},
   const text = raw ?? '';
   const fileOps: Array<Record<string, string>> = [];
   for (const m of text.matchAll(FILE_BLOCK)) {
-    if (strictEdits && files[m[2]] !== undefined) {
-      throw new Error(`EDIT ${m[2]}: this file already exists — return only its changed lines in an EDIT block, not FILE ${m[1]}`);
-    }
-    fileOps.push({ type: m[1], path: m[2], content: stripFence(m[3]) });
+    // Edit policy: EDIT hunks are preferred, but a complete FILE for an
+    // existing path is accepted as a replace; candidate gates still verify it.
+    const type = strictEdits && files[m[2]] !== undefined && m[1] === 'create' ? 'replace' : m[1];
+    fileOps.push({ type, path: m[2], content: stripFence(m[3]) });
   }
   for (const m of text.matchAll(EDIT_BLOCK)) {
     const path = m[1];
@@ -187,7 +187,6 @@ function renderUser(req: AIComposerRequest): string {
 
 function extractJson(raw: string, files: Record<string, string> = {}, strictEdits = false): unknown {
   if (/<<<(FILE|DELETE|EDIT)/.test(raw ?? '')) return parseFileBlocks(raw, files, strictEdits);
-  if (strictEdits) throw new Error('EDIT output required: use SEARCH/REPLACE blocks, not JSON whole-file replacements');
   const text = (raw ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   try { return JSON.parse(text); } catch { /* fall through */ }
   const start = text.indexOf('{'), end = text.lastIndexOf('}');
@@ -229,7 +228,7 @@ export async function runComposerLane(context: string, headers: Record<string, s
       const why = err instanceof Error && err.message.startsWith('EDIT ') ? err.message : '';
       lastError = why || 'Composer response was not JSON';
       messages.push({ role: 'assistant', content: (result.content ?? '').slice(0, 4000) },
-        { role: 'user', content: why ? `${why}. Copy SEARCH lines exactly from FILES and return only the changed lines in EDIT blocks.` : 'That output could not be parsed. Return ONLY the file-block format (SUMMARY line, then <<<FILE ... >>>END blocks with complete raw files).' });
+        { role: 'user', content: why ? `${why}. Copy SEARCH lines exactly from FILES, or return the complete updated file in a <<<FILE replace block.` : 'That output could not be parsed. Return ONLY the file-block format (SUMMARY line, then <<<FILE ... >>>END blocks with complete raw files).' });
       continue;
     }
     const checked = aiComposerResponseSchema.safeParse(value);
@@ -244,7 +243,11 @@ export async function runComposerLane(context: string, headers: Record<string, s
     const scope = composerProposalViolations(req, checked.data);
     if (req.task === 'builder_source_edit' && isPageCreationRequest(req.instruction)) {
       for (const op of checked.data.fileOps) {
-        if (op.type !== 'create' && op.path.startsWith('/src/pages/') && req.files[op.path] !== undefined) {
+        // Adding a nav/footer link to the new page keeps every original line.
+        const prior = req.files[op.path];
+        const additive = op.type === 'replace' && typeof prior === 'string'
+          && prior.split('\n').every((line) => op.content.includes(line));
+        if (op.type !== 'create' && op.path.startsWith('/src/pages/') && prior !== undefined && !additive) {
           scope.push(`${op.path}: existing page — page creation must not modify other pages`);
         }
       }

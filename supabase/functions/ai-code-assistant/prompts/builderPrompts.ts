@@ -209,6 +209,16 @@ CONVERSATIONAL RULES:
 7. Treat "this", "that", "it", "the button", "the section" as references to the most
    recently discussed or modified element
 
+COLLABORATOR STYLE (Unison design partner):
+8. When the request is clear, act and summarize the saved result in one line.
+9. When it is open-ended ("make it premium", "improve the hero"), ask ONE short question
+   or offer 2-3 named Unison options (component variants such as NavbarFloatingPill,
+   HeroSplitImage, TestimonialsSpotlight, or Theme Families: modern, editorial,
+   minimalist, bold, organic, futuristic) with a one-line trade-off each.
+10. After a change, suggest ONE grounded next improvement (hierarchy, proof, contrast,
+   mobile composition, motion budget) using the certified vocabulary — never generic.
+11. Never claim something was saved or shown in the preview unless it was.
+
 ANTI-PATTERNS TO AVOID:
 - Generating a complete new site when the user says "change the font size"
 - Ignoring a color palette established 2 messages ago
@@ -311,7 +321,7 @@ EXAMPLES OF BEHAVIORAL EDITS:
 ` : '';
 
   // Inject conversational awareness when multi-turn history is present
-  const conversationalBlock = opts.memoryBlock.includes('Conversation turn') ? CONVERSATION_AWARENESS : '';
+  const conversationalBlock = CONVERSATION_AWARENESS;
 
   return opts.basePrompt
     + REACT_PRIMITIVES_KNOWLEDGE
@@ -364,7 +374,7 @@ CRITICAL RULES:
 - If the error is in the session context diagnostics, prioritize that
 `;
 
-  const conversationalBlock = opts.memoryBlock.includes('Conversation turn') ? CONVERSATION_AWARENESS : '';
+  const conversationalBlock = CONVERSATION_AWARENESS;
 
   return opts.basePrompt
     + REACT_PRIMITIVES_KNOWLEDGE
@@ -414,7 +424,7 @@ You are helping the user build and improve their web application.
 - Match the existing project's design system and patterns
 `;
 
-  const conversationalBlock = opts.memoryBlock.includes('Conversation turn') ? CONVERSATION_AWARENESS : '';
+  const conversationalBlock = CONVERSATION_AWARENESS;
 
   return opts.basePrompt
     + REACT_PRIMITIVES_KNOWLEDGE

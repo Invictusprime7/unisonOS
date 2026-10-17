@@ -65,9 +65,9 @@ describe('Composer proposal boundary', () => {
     expect(response.status).toBe(400);
     expect(generate).not.toHaveBeenCalled();
   });
-  it('rejects JSON whole-file bypasses at the edge', async () => {
-    const generate = vi.fn().mockResolvedValue({ content: JSON.stringify({ summary: '', fileOps: [{ type: 'replace', path, content: 'New' }] }) });
-    expect((await runComposerLane(JSON.stringify(request), {}, generate)).status).toBe(502);
+  it('accepts a JSON whole-file replace at the edge (candidate gates verify it)', async () => {
+    const generate = vi.fn().mockResolvedValue({ content: JSON.stringify({ summary: 'Updated', fileOps: [{ type: 'replace', path, content: 'New' }] }) });
+    expect((await runComposerLane(JSON.stringify(request), {}, generate)).status).toBe(200);
   });
   it('repairs an out-of-target proposal and returns only the valid hunk', async () => {
     const generate = vi.fn().mockResolvedValueOnce({ content: '<<<FILE create /src/pages/Other.tsx\nOther\n>>>END' })

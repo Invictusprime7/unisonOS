@@ -19,13 +19,21 @@ const files = {
 };
 
 describe('canonical AI authorship request assembly', () => {
-  it('does not report complete context when a direct import exceeds the source budget', async () => {
+  it('proceeds with a note when a supporting import exceeds the source budget', async () => {
     const assembled = await assembleCanonicalAuthoringRequest({
       task: 'builder_source_edit', page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' },
       brief: 'Edit hero', knowledgeQuery: 'hero', baseFiles: { ...files, '/src/project-components/Hero.tsx': 'x'.repeat(60001) }, routes: [],
     });
-    expect(assembled.evidence.sourceContextComplete).toBe(false);
+    expect(assembled.evidence.sourceContextComplete).toBe(true);
     expect(assembled.evidence.omittedSourcePaths).toContain('/src/project-components/Hero.tsx');
+    expect(assembled.request.runtimeContext).toContain('Not included for size');
+  });
+  it('reports incomplete context when the edited file itself exceeds the budget', async () => {
+    const assembled = await assembleCanonicalAuthoringRequest({
+      task: 'builder_source_edit', page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' },
+      brief: 'Edit hero', knowledgeQuery: 'hero', baseFiles: { ...files, '/src/pages/Home.tsx': 'x'.repeat(150001) }, routes: [],
+    });
+    expect(assembled.evidence.sourceContextComplete).toBe(false);
   });
   it('keeps uploaded document links and extracted text ahead of optional runtime context', async () => {
     const attachmentContext = '[Attached file: brief.md]\nOwner-written brief\nurl: https://example.test/brief.md';

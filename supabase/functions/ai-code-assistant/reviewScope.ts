@@ -14,6 +14,8 @@ export interface ScopeCheckResult {
   outOfScopeFiles: string[];
   /** Whether auto-apply should be blocked */
   blockAutoApply: boolean;
+  /** Edit-policy advisories: reported to the user, never blocking. */
+  advisories?: string[];
 }
 
 function normalizeVfsPath(p: string): string {
@@ -108,6 +110,10 @@ export function checkEditScope(opts: {
   }
 
   const patchPaths = Object.keys(patchFiles).map(normalizeVfsPath);
+  // Edit policy: file counts and unrequested-looking additions are advisory.
+  // Only missing targets, stubs, locked-binding removal and editable-range
+  // violations (data-loss risks) block auto-apply.
+  const advisories: string[] = [];
 
   // Rule 1: If we have a resolved target file, patch MUST include it
   if (targetFile) {
@@ -122,29 +128,18 @@ export function checkEditScope(opts: {
     }
   }
 
-  // Rule 2: Scoped edits should not touch more than 3 files
+  // Rule 2 (advisory): many touched files
   const MAX_SCOPED_FILES = 3;
   if (patchPaths.length > MAX_SCOPED_FILES) {
-    return {
-      inScope: false,
-      reason: `Scoped edit produced ${patchPaths.length} files (max ${MAX_SCOPED_FILES}) — likely a full regeneration.`,
-      outOfScopeFiles: patchPaths.slice(MAX_SCOPED_FILES),
-      blockAutoApply: true,
-    };
+    advisories.push(`Edit touched ${patchPaths.length} files.`);
   }
 
-  // Rule 3: Scoped edits should not create brand-new files that don't already exist
-  // (allowance: 1 new file for extracted components)
+  // Rule 3 (advisory): new files
   const newFiles = patchPaths.filter(
     (p) => !existingFiles.map(normalizeVfsPath).includes(p)
   );
   if (newFiles.length > 1) {
-    return {
-      inScope: false,
-      reason: `Scoped edit created ${newFiles.length} new files — expected at most 1.`,
-      outOfScopeFiles: newFiles,
-      blockAutoApply: true,
-    };
+    advisories.push(`Edit created ${newFiles.length} new files.`);
   }
 
   // Rule 4: If target file exists, check that AI didn't replace it with a stub
@@ -171,13 +166,19 @@ export function checkEditScope(opts: {
     const origContent = origKey ? originalFiles[origKey] : null;
     if (newContent && origContent) {
       const sideEffects = findUnrequestedScopedSideEffects(origContent, newContent, userPrompt);
-      if (sideEffects.length > 0) {
+      // Additions are advisory unless the user explicitly narrowed the edit
+      // ("only", "just"), which makes them a real scope breach.
+      if (sideEffects.length > 0 && /\b(only|just)\b/i.test(userPrompt)) {
         return {
           inScope: false,
           reason: `Scoped edit introduced unrequested side effects: ${sideEffects.join(", ")}.`,
           outOfScopeFiles: [normTarget],
           blockAutoApply: true,
+          advisories,
         };
+      }
+      if (sideEffects.length > 0) {
+        advisories.push(`Edit also added: ${sideEffects.join(", ")}.`);
       }
     }
   }
@@ -194,7 +195,10 @@ export function checkEditScope(opts: {
     if (newContent && origContent && editScope.lockedBindings?.length) {
       const missing = editScope.lockedBindings.filter((b) => {
         const needle = `data-ut-intent="${b}"`;
-        return origContent.includes(needle) && !newContent.includes(needle);
+        if (!origContent.includes(needle) || newContent.includes(needle)) return false;
+        // Removing a control the user explicitly asked about is intended.
+        const label = b.split(".").pop() ?? b;
+        return !(userPrompt.toLowerCase().includes(b.toLowerCase()) || (label.length > 3 && /\b(remove|delete|drop)\b/i.test(userPrompt) && userPrompt.toLowerCase().includes(label.toLowerCase())));
       });
       if (missing.length) {
         return {
@@ -238,5 +242,5 @@ export function checkEditScope(opts: {
     }
   }
 
-  return { inScope: true, reason: null, outOfScopeFiles: [], blockAutoApply: false };
+  return { inScope: true, reason: null, outOfScopeFiles: [], blockAutoApply: false, advisories };
 }
