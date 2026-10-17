@@ -55,4 +55,23 @@ describe('RecordFieldsEditor image upload', () => {
     expect(mocks.applyResourceOp).toHaveBeenCalledTimes(1);
     expect(mocks.applyResourceOp.mock.calls[0][0].values).not.toHaveProperty('tagline');
   });
+  it('applies a field automatically on blur with the value loaded before editing', async () => {
+    render(<RecordFieldsEditor defaultOpen mark="business-profile#business-1" businessId="business-1" projectId="project-1" />);
+    const tagline = await screen.findByLabelText('Tagline');
+    fireEvent.change(tagline, { target: { value: 'New tagline' } });
+    fireEvent.blur(tagline);
+    await waitFor(() => expect(mocks.applyResourceOp).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      values: { tagline: 'New tagline' }, expected: { tagline: 'Original' },
+    }), { businessId: 'business-1', projectId: 'project-1', mode: 'builder' }));
+  });
+  it('retains a stale draft rather than overwriting a newer record', async () => {
+    render(<RecordFieldsEditor defaultOpen mark="business-profile#business-1" businessId="business-1" projectId="project-1" />);
+    const tagline = await screen.findByLabelText('Tagline');
+    fireEvent.change(tagline, { target: { value: 'My draft' } });
+    mocks.getResourceRecord.mockResolvedValue({ id: 'business-1', tagline: 'Changed elsewhere' });
+    fireEvent.blur(tagline);
+    await waitFor(() => expect(mocks.getResourceRecord).toHaveBeenCalledTimes(2));
+    expect(mocks.applyResourceOp).not.toHaveBeenCalled();
+    expect(tagline).toHaveValue('My draft');
+  });
 });
