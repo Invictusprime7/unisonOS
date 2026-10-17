@@ -69,9 +69,10 @@ export const contentResourceAdapter: ResourceAdapter = {
     return r;
   },
   async create(def, ctx, values) {
+    const { title, ...data } = values;
     return flattenContentEntry(await createContentRecord({
       businessId: ctx.businessId, projectId: ctx.projectId, siteId: ctx.siteId,
-      contentTypeId: def.storage.contentTypeId, status: 'draft', values: { data: values },
+      contentTypeId: def.storage.contentTypeId, status: 'draft', values: { title: String(title ?? values.name ?? values.question ?? ''), data },
     }));
   },
   async update(def, ctx, id, values, expected) {
@@ -80,7 +81,8 @@ export const contentResourceAdapter: ResourceAdapter = {
     if (expected && Object.entries(expected).some(([key, seen]) => JSON.stringify(flat[key] ?? null) !== JSON.stringify(seen ?? null))) {
       throw new Error('Conflict: this content changed elsewhere. Reload the item and try again.');
     }
-    const data = { ...((current.data as Record<string, unknown>) ?? {}), ...values };
+    const { title: _title, ...dataValues } = values;
+    const data = { ...((current.data as Record<string, unknown>) ?? {}), ...dataValues };
     return flattenContentEntry(await updateContentRecord({
       businessId: ctx.businessId, projectId: ctx.projectId, recordId: id,
       // The content command requires the title on every update.

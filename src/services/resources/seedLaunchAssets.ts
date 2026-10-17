@@ -238,7 +238,7 @@ export async function adoptLongformFromSite(input: { businessId: string; project
     if (!items.length) continue;
     if (!typeIdByKey.has(key)) {
       const def = SEED_CONTENT_TYPES[key];
-      const res = await mutateContentRecord({ action: 'content-type-create', businessId: input.businessId, projectId: input.projectId, values: { apiKey: key, displayName: def.displayName, fieldSchema: { fields: def.fields } } }).catch(() => null);
+      const res = await mutateContentRecord({ action: 'content-type-create', businessId: input.businessId, projectId: input.projectId, values: { apiKey: key.replace(/-/g, '_'), displayName: def.displayName, fieldSchema: { fields: def.fields } } }).catch(() => null);
       if (res?.record?.id) typeIdByKey.set(key, String(res.record.id));
     }
     const typeId = typeIdByKey.get(key);
