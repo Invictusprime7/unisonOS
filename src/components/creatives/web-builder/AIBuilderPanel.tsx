@@ -1161,7 +1161,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           const connector = createUnisonBuilderContext({
             projectId: projectId ?? null,
             businessId,
-            selection: { resourceMark, componentPath: selectedTarget?.provenance?.componentPath ?? undefined } as never,
+            selection: { resourceMark, componentPath: defaultTargetFile ?? undefined } as never,
           });
           const { summary } = await dispatchBuilderOperation(connector, agentCtx, 'update_resource_field', resourceMark, value);
           setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: `${summary}. The page shows the saved record, so its layout and buttons are unchanged.`, timestamp: new Date() }]);
