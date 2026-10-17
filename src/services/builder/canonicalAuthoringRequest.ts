@@ -282,6 +282,9 @@ export async function assembleCanonicalAuthoringRequest(
       brief,
       instruction: input.instruction,
       files: source.files,
+      sourceTargets: input.task === 'builder_source_edit'
+        ? [...new Set(input.sourceTargets?.length ? input.sourceTargets : [input.page.filePath])]
+        : undefined,
       routes,
       priorPages: input.priorPages,
       diagnostics: input.diagnostics?.map((item) => item.slice(0, 1000)).slice(0, 30),

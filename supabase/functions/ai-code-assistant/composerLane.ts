@@ -4,7 +4,7 @@
 import {
   aiComposerRequestSchema,
   aiComposerResponseSchema,
-  composerScopeViolations,
+  composerProposalViolations,
   type AIComposerRequest,
 } from '../_shared/aiComposerContract.ts';
 import { buildComposerCanonicalRules } from '../_shared/canonicalPipelinePrompt.ts';
@@ -95,13 +95,16 @@ export function applyEditHunks(path: string, source: string, body: string): stri
   for (const h of body.matchAll(EDIT_HUNK)) {
     count++;
     const search = h[1], replace = h[2];
+    if (!search.trim()) throw new Error(`EDIT ${path}: SEARCH block ${count} must not be empty`);
     let at = next.indexOf(search);
     if (at < 0) {
       // Tolerate trailing-whitespace drift only.
       const norm = (s: string) => s.split('\n').map((l) => l.replace(/\s+$/, '')).join('\n');
       const n = norm(next), ns = norm(search);
       if (n.indexOf(ns) < 0) throw new Error(`EDIT ${path}: SEARCH block ${count} not found verbatim`);
-      next = n; at = n.indexOf(ns);
+      at = n.indexOf(ns);
+      if (n.indexOf(ns, at + 1) >= 0) throw new Error(`EDIT ${path}: SEARCH block ${count} matches more than once; include more context`);
+      next = n;
       next = next.slice(0, at) + replace + next.slice(at + ns.length);
       continue;
     }
@@ -159,6 +162,7 @@ function renderUser(req: AIComposerRequest): string {
   const parts = [
     `TASK: ${req.task}`,
     `TARGET PAGE: ${req.page.title} (${req.page.role}) route=${req.page.route} file=${req.page.filePath}`,
+    req.sourceTargets ? `WRITABLE SOURCE TARGETS (all other FILES are read-only):\n${req.sourceTargets.join('\n')}` : '',
     `BRIEF:\n${req.brief}`,
     req.instruction ? `USER REQUEST:\n${req.instruction}` : '',
     `ROUTES:\n${req.routes.map((r) => `${r.title} -> ${r.route}`).join('\n')}`,
@@ -177,6 +181,7 @@ function renderUser(req: AIComposerRequest): string {
 
 function extractJson(raw: string, files: Record<string, string> = {}, strictEdits = false): unknown {
   if (/<<<(FILE|DELETE|EDIT)/.test(raw ?? '')) return parseFileBlocks(raw, files, strictEdits);
+  if (strictEdits) throw new Error('EDIT output required: use SEARCH/REPLACE blocks, not JSON whole-file replacements');
   const text = (raw ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   try { return JSON.parse(text); } catch { /* fall through */ }
   const start = text.indexOf('{'), end = text.lastIndexOf('}');
@@ -194,6 +199,9 @@ export async function runComposerLane(context: string, headers: Record<string, s
   }
   if (!parsed.success) return respond({ error: 'Invalid composer request', errorType: 'composer_request' }, 400);
   const req = parsed.data;
+  if (req.task === 'builder_source_edit' && !req.sourceTargets?.length) {
+    return respond({ error: 'Builder source edits require explicit source targets', errorType: 'composer_request' }, 400);
+  }
 
   const messages = [{ role: 'system', content: BASE_PROMPT }, { role: 'user', content: renderUser(req) }];
   let lastError = 'Invalid composer response';
@@ -219,7 +227,7 @@ export async function runComposerLane(context: string, headers: Record<string, s
       });
       continue;
     }
-    const scope = composerScopeViolations(req.task, req.page.filePath, checked.data.fileOps);
+    const scope = composerProposalViolations(req, checked.data);
     if (req.task === 'builder_source_edit' && isPageCreationRequest(req.instruction)) {
       for (const op of checked.data.fileOps) {
         if (op.type !== 'create' && op.path.startsWith('/src/pages/') && req.files[op.path] !== undefined) {

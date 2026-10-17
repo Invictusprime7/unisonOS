@@ -30,3 +30,10 @@ Phase 1 needs no schema migration and changes no production records. Persistent 
 ## Verification
 
 `unisonBuilderConnector.test.ts` tests ownership, revision, path, certification and context rules. `builderBrainSession.test.ts` tests the connector's actual transport boundary, including pre-auth rejection and avoiding duplicate source payloads. Existing App Builder and AI candidate tests cover the retained authoring and acceptance flow. An authenticated live-site edit remains unverified; these tests do not establish production readiness or guarantee repair-free generation.
+## Phase 3a — Composer proposal scope
+
+Builder requests carry explicit `sourceTargets`, separate from read-only `files`. The mirrored contract rejects out-of-target and duplicate operations, creates overwriting supplied source, and edits/deletes without supplied source. The existing edge lane and client repair loop apply the same policy; repairs retain original targets and rejected operations never accumulate.
+
+Existing-file edits require SEARCH/REPLACE blocks at the edge; JSON cannot bypass the hunk policy. Empty searches and ambiguous whitespace-normalized matches are rejected. Builder requests without targets fail before provider invocation; launch scope is unchanged.
+
+This validates proposals against the supplied request, not authenticated ownership, capabilities or server revision freshness. Canonical acceptance and `commitMutation` remain authoritative. Route/dependency/capability enforcement and authenticated cross-industry acceptance remain pending. No endpoint, database or production records change; deployment uses the existing GitHub workflow.

@@ -56,6 +56,23 @@ export function composerScopeViolations(
   }
   return violations;
 }
+/** Proposal scope only; not proof of ownership or revision freshness. */
+export function composerProposalViolations(req: AIComposerRequest, response: AIComposerResponse): string[] {
+  const violations = composerScopeViolations(req.task, req.page.filePath, response.fileOps);
+  if (req.task !== 'builder_source_edit') return violations;
+  const targets = new Set(req.sourceTargets ?? []);
+  if (!targets.size) violations.push('Builder source edits require explicit source targets');
+  const seen = new Set<string>();
+  for (const op of response.fileOps) {
+    if (!targets.has(op.path)) violations.push(`${op.path}: outside this request's source targets`);
+    if (seen.has(op.path)) violations.push(`${op.path}: duplicate file operation`);
+    seen.add(op.path);
+    const exists = Object.prototype.hasOwnProperty.call(req.files, op.path);
+    if (op.type === 'create' && exists) violations.push(`${op.path}: create cannot overwrite supplied source`);
+    if (op.type !== 'create' && !exists) violations.push(`${op.path}: existing source must be supplied before editing or deleting`);
+  }
+  return violations;
+}
 export const AI_AUTHORED_MARKER = '// @unison-ai-authored';
 
 const pathSchema = z.string().regex(/^\/(?:src|public)\/[A-Za-z0-9_\-./]+\.(tsx|ts|jsx|js|css|json)$/).refine((p) => !p.includes('..'));
@@ -114,6 +131,7 @@ export const aiComposerRequestSchema = z.object({
   brief: z.string().max(12000),
   instruction: z.string().max(4000).optional(),
   files: z.record(z.string(), z.string().max(60000)),
+  sourceTargets: z.array(pathSchema).min(1).max(80).optional(),
   routes: z.array(z.object({ title: z.string().max(120), route: z.string().max(200) })).max(40),
   priorPages: z.array(z.object({ role: z.string().max(60), summary: z.string().max(2000) })).max(20).optional(),
   diagnostics: z.array(z.string().max(1000)).max(30).optional(),
