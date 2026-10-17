@@ -64,6 +64,7 @@ import { AgentCommandPalette } from './ai-chat/AgentCommandPalette';
 import { CatalogPanel } from './ai-chat/CatalogPanel';
 import { agentOperations } from '@/services/agent-runtime/operations';
 import { dispatchBuilderOperation } from '@/services/unisonBuilderToolDispatch';
+import { createUnisonBuilderContext } from '@/services/unisonBuilderConnector';
 import { renderCatalogForPrompt } from '@/services/agent-runtime/catalogOps';
 import { parseResourceValueRequest } from '@/services/agent-runtime/resourceValueRequest';
 import { parseResourceProvenance } from '@/services/resources/resourceRuntime';
