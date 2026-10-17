@@ -1,5 +1,8 @@
 # Roadmap
 
+## Active: Recipe contract corrections
+- [ ] Correct invalid section identities and non-canonical component/portable recipe intents; regenerate derived recipes and verify regression guards
+
 ## Active: AI Builder frontend replacement
 - [x] Replace Builder chrome/composer with minimal borders and reduced hover fills; expose compact feature settings
 - [x] Enforce feature toggles at request dispatch, use the connector for tool actions, and retire legacy source-writing/debug fallback branches
