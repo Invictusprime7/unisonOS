@@ -1,6 +1,7 @@
 import React from 'react';
 import type { BaseSectionProps } from '../../types';
 import { hsl } from '../../themeUtils';
+import { tableCellBinding, tableCellValue } from './tableData';
 
 const DEFAULT_STATS = [
   { label: 'Active projects', value: '12', change: '+2 this week' },
@@ -59,7 +60,7 @@ export const DashboardOverview: React.FC<BaseSectionProps<'data-table'>> = ({ se
           ))}
         </ul>
         <div className="overflow-x-auto" style={{ borderRadius: theme.radius, border: `1px solid ${hsl(theme.colors.border)}` }}>
-          <table className="w-full min-w-[32rem] text-left text-sm" data-ut-slot="dashboard.table">
+          <table className="w-full text-left text-sm" data-ut-slot="dashboard.table">
             <thead style={{ background: hsl(theme.colors.muted) }}>
               <tr>
                 {columns.map((c) => (
@@ -72,9 +73,9 @@ export const DashboardOverview: React.FC<BaseSectionProps<'data-table'>> = ({ se
                 <tr><td colSpan={columns.length} className="px-4 py-8 text-center" style={{ color: hsl(theme.colors.mutedForeground) }}>{emptyMessage}</td></tr>
               ) : (
                 rows.map((r, i) => (
-                  <tr key={i} style={{ borderTop: `1px solid ${hsl(theme.colors.border)}` }}>
+                  <tr key={typeof r.id === 'string' || typeof r.id === 'number' ? r.id : i} style={{ borderTop: `1px solid ${hsl(theme.colors.border)}` }}>
                     {columns.map((c) => (
-                      <td key={c.key} className="px-4 py-3" style={{ color: hsl(theme.colors.foreground) }}>{r[c.key] ?? ''}</td>
+                      <td key={c.key} className="px-4 py-3" style={{ color: hsl(theme.colors.foreground) }} {...tableCellBinding(p.sourceTable, r, c.key)}>{tableCellValue(r[c.key])}</td>
                     ))}
                   </tr>
                 ))

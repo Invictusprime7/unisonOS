@@ -419,10 +419,6 @@ interface AIBuilderPanelProps {
   templateName?: string | null;
   defaultTargetFile?: string | null;
   pageTargets?: PageSourceTarget[];
-  /** @deprecated Ignored. AI output must go through onApplyToVFS. */
-  onCodeGenerated?: (code: string) => void;
-  /** @deprecated Ignored. AI output must go through onApplyToVFS. */
-  onFilesPatch?: (files: Record<string, string>) => boolean;
   onViewEdits?: (edits: VFSEdit[]) => void;
   /** Opens a project file in the code editor (used by the live file ribbon). */
   onOpenFile?: (path: string) => void;
@@ -1966,35 +1962,20 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               canonicalCandidate = generation.changeSet;
               canonicalRouteOps = [...generation.routeOps];
               dedicatedPageGeneration = true;
-              const files = Object.fromEntries(Object.entries(generation.candidateFiles)
-                .filter(([path, content]) => vfsFiles[path] !== content));
               response = {
                 data: {
-                  content: JSON.stringify({
-                    files,
-                    explanation: `Unison App Builder prepared ${generation.outcomes.length} new page${generation.outcomes.length === 1 ? '' : 's'}.`,
-                  }),
+                  content: `Unison App Builder prepared ${generation.outcomes.length} new page${generation.outcomes.length === 1 ? '' : 's'}.`,
                   actionType: 'canonical-page-generation',
-                  filesDetected: Object.keys(files),
+                  filesDetected: canonicalCandidate.fileOps.map(operation => operation.path),
                 },
                 error: null,
               };
             } else {
-              const files = Object.fromEntries(candidate.fileOps
-                .filter((operation) => operation.type !== 'delete')
-                .map((operation) => [operation.path, operation.content]));
-              const deletions = candidate.fileOps
-                .filter((operation) => operation.type === 'delete')
-                .map((operation) => operation.path);
               response = {
                 data: {
-                  content: JSON.stringify({
-                    files,
-                    deletions,
-                    explanation: editResult.summary ?? 'Unison App Builder prepared this source candidate.',
-                  }),
+                  content: editResult.summary ?? 'Unison App Builder prepared this source candidate.',
                   actionType: 'canonical-source-edit',
-                  filesDetected: Object.keys(files),
+                  filesDetected: candidate.fileOps.map(operation => operation.path),
                 },
                 error: null,
               };
