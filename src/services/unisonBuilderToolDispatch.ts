@@ -7,6 +7,7 @@
 import { agentOperations, type AgentContext, type AgentOperationName } from '@/services/agent-runtime/operations';
 import { isCoreIntent } from '@/platform/core/coreIntents';
 import { permittedBuilderIntents } from '@/services/builder/canonicalAuthoringRequest';
+import { requireBuilderFeature, type BuilderFeatures } from '@/services/builder/builderFeatures';
 import type { UnisonBuilderTurnContext } from '@/types/unisonBuilderConnector';
 
 type Ops = typeof agentOperations;
@@ -35,12 +36,17 @@ const recordOf = (mark: string) => mark.split('#')[0];
 
 export function preflightBuilderOperation<N extends AgentOperationName>(
   context: UnisonBuilderTurnContext,
-  agentCtx: AgentContext,
+  agentCtx: AgentContext & { features?: BuilderFeatures },
   name: N,
   args: OpArgs<N>,
 ): void {
   const refuse = (msg: string) => { throw new BuilderToolRefusal(name, msg); };
   if (!(name in agentOperations)) refuse(`Unknown Builder operation: ${String(name)}`);
+  if (agentCtx.features) {
+    if (['update_resource_field', 'update_catalog_item', 'create_catalog_item', 'hide_catalog_item', 'delete_catalog_item'].includes(name)) requireBuilderFeature(agentCtx.features, 'catalog');
+    if (name === 'propose_bind_intent') requireBuilderFeature(agentCtx.features, 'capabilities');
+    if (name === 'set_font' || name === 'set_theme_tokens') requireBuilderFeature(agentCtx.features, 'tools');
+  }
   const { projectId, businessId, revisionId } = context.identity;
   if (projectId && agentCtx.projectId && projectId !== agentCtx.projectId) refuse('Operation context belongs to another project.');
   if (businessId && agentCtx.businessId && businessId !== agentCtx.businessId) refuse('Operation context belongs to another business.');
@@ -116,7 +122,7 @@ export function assertProposalScope(context: UnisonBuilderTurnContext, name: Age
 
 export async function dispatchBuilderOperation<N extends AgentOperationName>(
   context: UnisonBuilderTurnContext,
-  agentCtx: AgentContext,
+  agentCtx: AgentContext & { features?: BuilderFeatures },
   name: N,
   ...args: OpArgs<N>
 ): Promise<Awaited<OpResult<N>>> {

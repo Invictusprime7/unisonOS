@@ -80,3 +80,17 @@ describe('stale-session edits', () => {
     await expect(dispatchOnLatestRevision(selected, base, latest, 'swap_image', ['/src/pages/Home.tsx', 'a.jpg', 'b.jpg'])).rejects.toThrow('Re-select');
   });
 });
+
+
+describe('connector feature enforcement', () => {
+  const features = { images: true, catalog: false, capabilities: false, repairs: true, tools: false };
+  it('refuses disabled catalog writes before accessing records', async () => {
+    await expect(dispatchBuilderOperation(ctx(), { ...agent, features }, 'update_catalog_item', 'services', '1', { name: 'Changed' })).rejects.toThrow('AI settings');
+  });
+  it('refuses disabled command tools before producing source', async () => {
+    await expect(dispatchBuilderOperation(ctx(), { ...agent, features }, 'set_font', 'Inter')).rejects.toThrow('AI settings');
+  });
+  it('refuses disabled business bindings before proposing an intent', async () => {
+    await expect(dispatchBuilderOperation(ctx(), { ...agent, features }, 'propose_bind_intent', {}, 'nav.goto')).rejects.toThrow('AI settings');
+  });
+});

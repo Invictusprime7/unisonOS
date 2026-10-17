@@ -57,6 +57,9 @@ import { AIConversationWelcome } from './ai-chat/AIConversationWelcome';
 import { LaunchReadinessCard } from './ai-chat/LaunchReadinessCard';
 import { AIConversationInput } from './ai-chat/AIConversationInput';
 import { AgentActivityFeed } from './ai-chat/AgentActivityFeed';
+import { BuilderSettings } from './ai-chat/BuilderSettings';
+import './ai-chat/builder-interface.css';
+import { BUILDER_FEATURE_KEY, BUILDER_FEATURE_DEFAULTS, readBuilderFeatures, requireBuilderFeature, builderAuthoringLane } from '@/services/builder/builderFeatures';
 import { FileActivityRibbon } from './ai-chat/FileActivityRibbon';
 import { emitAgentEvent, lineDelta } from '@/services/agent-runtime/agentEvents';
 import { buildSystemGraph, renderSystemGraphForPrompt } from '@/services/agent-runtime/systemGraph';
@@ -81,7 +84,6 @@ import { generateCanonicalDesignPrompt } from '@/sections/promptContext/canonica
 import { analyzeReactSite, resolveEditTarget } from '@/utils/reactSiteAnalysis';
 import { resolveExplicitPageTarget, resolveRouteSourceFile, resolveLocalImports, type PageSourceTarget } from './previewRouteTabs';
 import { buildComponentBehaviorMap, formatBehaviorMapForPrompt } from '@/services/aiVFSOrchestrator';
-import { htmlDocToReactComponent as htmlDocToReactComponentFn } from '@/utils/htmlToJsx';
 import { AIGatewayOptions, type GatewayConfig } from './AIGatewayOptions';
 import { vfsEventBus } from '@/services/vfsEventBus';
 import { diagnosticsAggregator } from '@/services/diagnosticsAggregator';
@@ -96,14 +98,7 @@ import {
   setMessages as persistMessages,
   type PersistedMessage,
 } from '@/services/aiHistoryStore';
-import { parseLayoutIntent } from '@/utils/layoutIntentEngine';
-import { executeLayoutIntent } from '@/utils/layoutIntentExecutor';
-import { parseGhlWireIntent } from '@/utils/ghlWireIntent';
-import { parseIconWireIntent, stampIconIntentInSource } from '@/utils/iconWireIntent';
 // Side-effect import: registers GHL skill pack with global registry
-import { wireGhlBinding } from '@/services/skills/ghlSkillPack';
-import { detectSections } from '@/utils/sectionSwapper';
-import { isThemeOnlyRequest } from '@/services/theme/themeEdit';
 import { isBuilderProviderUnavailable, isBuilderSessionError, runBuilderTurn, shouldOfferBuilderProviderRetry } from '@/services/builderBrainClient';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
 import {
@@ -114,7 +109,6 @@ import { buildCatalogContext, renderCatalogContextForPrompt } from '@/utils/cata
 import { compileCatalogToolCalls, type RawToolCall } from '@/services/catalogToolExecutor';
 import type { GeneratedUiManifest } from '@/platform/core/generatedUiFoundation';
 import type { WizardDesignIntervention } from '@/services/wizardDesignIntervention';
-import { sanitizeGeneratedFiles, sanitizeTsxFile } from '@/utils/tsxSanitizer';
 import {
   applyAIBuilderFiles,
   type AIBuilderApplyCallback,
@@ -122,8 +116,6 @@ import {
 } from '@/services/aiBuilderApply';
 import {
   CANDIDATE_GENERATED_NOTICE,
-  CANDIDATE_STYLESHEET_NOTICE,
-  CANDIDATE_COMPONENT_NOTICE,
   CANDIDATE_PAGE_NOTICE,
   neutralizeModelSuccessClaim,
   transactionVerdictLine,
@@ -132,14 +124,12 @@ import {
 import { awaitPreviewVerification, markPreviewPending } from '@/services/builder/previewVerification';
 import {
   resolveCanonicalAuthoringPage,
-  shouldUseCanonicalComposer,
 } from '@/services/builder/canonicalAuthoringRequest';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { buildAICandidateChangeSet, type AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { deriveFilePath } from '@/services/routeNavigationService';
 import { createBuilderPage } from '@/types/pageRegistry';
-import { buildSequentialAiTasks } from '@/services/builder/sequentialAiTasks';
 import { canonicalCandidateOutput } from '@/services/builder/canonicalCandidateOutput';
 import { findUnrequestedCopyChanges, findUnrequestedScopedSideEffects } from '@/services/builder/scopedEditContentGuard';
 
@@ -155,9 +145,7 @@ import {
   requiresRenderableUiPatch,
 } from '@/services/builderRequestInterpreter';
 import { uploadForPlacement, buildUploadPlacementBlock, CERTIFIED_VOCABULARY_NOTE, type PlacedUpload } from '@/services/assets/uploadPlacement';
-import { extractMultiFileOutput, extractStylesheetOutput } from '@/utils/aiResponseParser';
 import {
-  AIPermissionControl,
   AI_EDIT_PERMISSION_STORAGE_KEY,
   loadAIEditPermissions,
   type AIEditPermissionCategory,
@@ -170,102 +158,6 @@ import {
 } from '@/services/capabilityIntentBindingResolver';
 
 // ============================================================================
-/**
- * Strip module.exports blocks using brace-counting so nested objects are fully removed.
- * Also strips leading comment lines (e.g. "// tailwind.config.js") before the block.
- */
-function stripModuleExportsBlocks(code: string): string {
-  // First strip comment-prefixed config sections
-  code = code.replace(/(?:\/\/[^\n]*(?:tailwind|config)[^\n]*\n)+/gi, (match, offset) => {
-    // Only strip if followed by module.exports
-    const after = code.slice(offset + match.length).trimStart();
-    return after.startsWith('module.exports') ? '' : match;
-  });
-
-  let result = code;
-  let safetyCounter = 0;
-  while (safetyCounter++ < 5) {
-    const idx = result.indexOf('module.exports');
-    if (idx === -1) break;
-
-    // Find the opening brace
-    const braceStart = result.indexOf('{', idx);
-    if (braceStart === -1) {
-      result = result.slice(0, idx) + result.slice(result.indexOf('\n', idx) + 1);
-      continue;
-    }
-
-    // Count braces to find matching close
-    let depth = 0;
-    let end = braceStart;
-    for (; end < result.length; end++) {
-      if (result[end] === '{') depth++;
-      else if (result[end] === '}') { depth--; if (depth === 0) break; }
-    }
-
-    let removeEnd = end + 1;
-    if (result[removeEnd] === ';') removeEnd++;
-    while (result[removeEnd] === '\n' || result[removeEnd] === '\r') removeEnd++;
-
-    result = result.slice(0, idx) + result.slice(removeEnd);
-  }
-
-  return result.trim();
-}
-
-/**
- * Strip inline backtick code references from AI reasoning text.
- * Converts "`<style>`" → "STYLE_TAG" etc. to prevent HTML tag matching in reasoning.
- */
-function stripInlineCodeRefs(content: string): string {
-  return content.replace(/`[^`]*`/g, 'CODE_REF');
-}
-
-/**
- * Extract HTML from AI response that mixes reasoning text with raw HTML.
- * Handles cases like: "I will generate...<!DOCTYPE html><html>...</html>"
- * Returns the extracted HTML or null if no HTML found.
- * 
- * IMPORTANT: Ignores HTML tags mentioned inside backtick code references
- * in reasoning text (e.g. "`<html>`", "`<style>`").
- */
-function extractRawHtmlFromMixed(content: string): string | null {
-  // Strip inline code refs so `<html>` in reasoning doesn't trigger false match
-  const cleaned = stripInlineCodeRefs(content);
-
-  // Case 1: Content contains <!DOCTYPE html> — extract everything from there
-  const doctypeIdx = cleaned.indexOf('<!DOCTYPE');
-  if (doctypeIdx >= 0) {
-    // Use the index from cleaned to slice from the ORIGINAL content
-    const originalDoctypeIdx = content.indexOf('<!DOCTYPE', Math.max(0, doctypeIdx - 50));
-    if (originalDoctypeIdx >= 0) {
-      return content.slice(originalDoctypeIdx).trim();
-    }
-  }
-  
-  // Case 2: Content contains <html — but only if it looks like an actual tag (not inside prose)
-  // Match <html followed by > or whitespace+attributes, NOT inside backticks
-  const htmlTagRegex = /<html[\s>]/gi;
-  let match: RegExpExecArray | null;
-  while ((match = htmlTagRegex.exec(cleaned)) !== null) {
-    // Find the corresponding position in original content
-    const originalIdx = content.indexOf('<html', Math.max(0, match.index - 50));
-    if (originalIdx >= 0) {
-      const extracted = content.slice(originalIdx).trim();
-      if (extracted.includes('</html>')) return extracted;
-    }
-  }
-  
-  return null;
-}
-
-/**
- * Convert raw HTML into a proper React component with native JSX.
- */
-function wrapHtmlInReactComponent(html: string): string {
-  return htmlDocToReactComponentFn(html, 'App');
-}
-
 // Types
 // ============================================================================
 
@@ -677,7 +569,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   vfsContext,
   vfsFiles,
   onApplyToVFS,
-  onThemeEdit,
   previewRef,
   projectId,
   revisionId,
@@ -723,6 +614,11 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   const [isApplyingHeld, setIsApplyingHeld] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [features, setFeatures] = useState(() => { try { return readBuilderFeatures(localStorage.getItem(BUILDER_FEATURE_KEY)); } catch { return { ...BUILDER_FEATURE_DEFAULTS }; } });
+  const featuresRef = useRef(features);
+  featuresRef.current = features;
+  useEffect(() => { try { localStorage.setItem(BUILDER_FEATURE_KEY, JSON.stringify(features)); } catch { /* optional cache */ } }, [features]);
   const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig | undefined>(undefined);
   const [pendingCapabilityProposal, setPendingCapabilityProposal] = useState<{
     plan: CapabilityPlan;
@@ -797,18 +693,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     }
   }, [isApplyingPermissionAction, pendingPermissionAction]);
 
-  const queueDebugPatchReview = useCallback((files: Record<string, string>, meta: AIBuilderApplyMeta) => {
-    queuePermissionReview({
-      category: 'behavioral',
-      title: 'Debug patch',
-      description: meta.summary || 'A debug patch is ready to apply to the project.',
-      apply: async () => (await applyAIBuilderFiles(onApplyToVFS, files, {
-        ...meta,
-        origin: 'debug-patch-reviewed',
-      })).success,
-    });
-  }, [onApplyToVFS, queuePermissionReview]);
-
   // Auto-send when a welcome prompt is selected
   useEffect(() => {
     if (pendingPromptRef.current && input === pendingPromptRef.current && !isLoading) {
@@ -862,6 +746,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       // Image extension: a picture request on an image runs through the AI Builder's
       // site-aware image step, then saves via the canonical image-replace path.
       if (t?.imageKind && (t.imageSelector || t.selector) && (t.forceImage || isImageGenerationRequest(prompt))) {
+        if (!featuresRef.current.images) { toast.error('Turn on image generation in AI settings to continue.'); return; }
         const ctx = imageContextRef.current;
         const runId = `img-${Date.now().toString(36)}`;
         const idx = Number(t.descriptor?.instanceId);
@@ -1094,6 +979,12 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   // Send message to AI
   const handleSend = async () => {
     if ((!input.trim() && droppedFiles.length === 0) || isLoading) return;
+    try {
+      if (isCatalogMutationRequest(input)) requireBuilderFeature(featuresRef.current, 'catalog');
+      if (isImageGenerationRequest(input)) requireBuilderFeature(featuresRef.current, 'images');
+      if (/\b(fix|repair|debug)\b/i.test(input)) requireBuilderFeature(featuresRef.current, 'repairs');
+      if (/\b(wire|workflow|set it up for real|enable)\b/i.test(input)) requireBuilderFeature(featuresRef.current, 'capabilities');
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'This AI feature is off.'); return; }
     queueMicrotask(() => emitAgentEvent({ kind: 'understanding', message: input.trim().slice(0, 140) || 'Reading your attached files' }));
 
     // Capture the selected entity before clearing the UI chip; the AI turn
@@ -1149,7 +1040,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     // Build attachments for the edge function
     const attachments = droppedFiles
       .filter(f => f.type === 'image' && f.preview)
-      .map(f => ({ name: f.name, type: 'image', data: f.preview! }));
+      .flatMap(f => f.preview ? [{ name: f.name, type: 'image', data: f.preview }] : []);
 
     const userContent = input.trim() || `Analyse the attached file${droppedFiles.length > 1 ? 's' : ''} and incorporate them into the design.`;
     const isLaunchPlanningRequest = droppedFiles.length === 0 && detectLaunchPlanningIntent(userContent);
@@ -1166,32 +1057,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     setInput('');
     setDroppedFiles([]);
     setIsLoading(true);
-    if (!isLaunchPlanningRequest && droppedFiles.length === 0 && onThemeEdit && isThemeOnlyRequest(userContent)) {
-      if (!canAutoApply('ui')) {
-        queuePermissionReview({
-          category: 'ui',
-          title: 'Theme edit',
-          description: userContent,
-          apply: async () => onThemeEdit(userContent),
-        });
-        setMessages(prev => [...prev, {
-          id: generateId(),
-          role: 'assistant',
-          content: 'Theme edit prepared. Review it below before it changes the project.',
-          timestamp: new Date(),
-        }]);
-        setIsLoading(false);
-        return;
-      }
-      try {
-        if (!await onThemeEdit(userContent)) throw new Error('The theme could not be saved. Your current site is unchanged.');
-        setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: 'Updated the theme while preserving your content and composition.', timestamp: new Date() }]);
-      } catch (error) {
-        setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: error instanceof Error ? error.message : 'Theme update failed.', timestamp: new Date() }]);
-      } finally { setIsLoading(false); }
-      return;
-    }
-
     // Record-backed value: a clicked price/name carrying a data-ut-resource mark
     // is changed on the saved record (ResourceRuntime), never in page code.
     const resourceMark = selectedTarget?.provenance?.resource;
@@ -1200,8 +1065,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       const value = ref ? parseResourceValueRequest(userContent, ref.field) : null;
       if (ref && value !== null) {
         try {
+          requireBuilderFeature(featuresRef.current, 'catalog');
           ensureCurrentRequest();
-          const agentCtx = { files: vfsFiles ?? {}, businessId, projectId: projectId ?? undefined, revisionId };
+          const agentCtx = { features: featuresRef.current, files: vfsFiles ?? {}, businessId, projectId: projectId ?? undefined, revisionId };
           const connector = createUnisonBuilderContext({
             projectId: projectId ?? null,
             businessId, revisionId,
@@ -1266,7 +1132,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     const setupConfidence = capabilityInterpretation.degraded ? 0 : (capabilityInterpretation.envelope?.confidence ?? 0);
     const setupConfirmed = confirmedSetupRef.current;
     confirmedSetupRef.current = false;
-    if (capabilityPlan.requestedCapabilities.length > 0 && !setupConfirmed && setupConfidence < 0.7) {
+    if (features.capabilities && capabilityPlan.requestedCapabilities.length > 0 && !setupConfirmed && setupConfidence < 0.7) {
       const what = capabilityPlan.packs.map((pack) => pack.name).join(', ') || 'this feature';
       setMessages((prev) => [...prev, {
         id: generateId(),
@@ -1285,7 +1151,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       return;
     }
     const designOnly = /^Design only, no business setup:/i.test(userContent);
-    if (capabilityPlan.requestedCapabilities.length > 0 && !designOnly) {
+    if (features.capabilities && capabilityPlan.requestedCapabilities.length > 0 && !designOnly) {
       const resolution = resolveCapabilityIntentBindings(
         capabilityPlan.proposal.intentBindings,
         vfsFiles ?? {},
@@ -1295,7 +1161,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         && !!onApproveCapabilityPlan;
       if (canApplyBackend) {
         setPendingCapabilityProposal({ plan: capabilityPlan, resolution, isApplying: true });
-        const outcome = await onApproveCapabilityPlan!(capabilityPlan, resolution);
+        ensureCurrentRequest();
+        const outcome = await onApproveCapabilityPlan?.(capabilityPlan, resolution);
+        if (!outcome) throw new Error('Capability approval is unavailable.');
         if (outcome.success) {
           backendAutoApplied = true;
           toast.success('Backend capability applied automatically');
@@ -1325,249 +1193,12 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       }
     }
 
-    // ── Icon Wire Fast Path ──────────────────────────────────────────────
-    // Deterministic NL → data-ut-* stamp on the named Lucide icon in the
-    // current preview file. Skips the LLM. Also handles workflow-ref prompts
-    // ("wire the Bell icon to workflow <uuid>") by delegating to the GHL path.
-    if (!isLaunchPlanningRequest && droppedFiles.length === 0 && layoutOps) {
-      try {
-        const iconIntent = parseIconWireIntent(userContent);
-        if (iconIntent && iconIntent.confidence >= 0.7) {
-          // Workflow refs — delegate to the existing GHL wire fast path below.
-          if (!iconIntent.workflowRef && iconIntent.coreIntent) {
-            const previewSrc = layoutOps.getPreviewCode();
-            const stamp = stampIconIntentInSource({
-              source: previewSrc,
-              iconName: iconIntent.iconName,
-              coreIntent: iconIntent.coreIntent,
-              iconKey: iconIntent.iconKey,
-              placement: iconIntent.placement,
-              sectionHint: iconIntent.sectionHint,
-            });
-
-            if (stamp.ok) {
-              const summary = `Wire <${iconIntent.iconName}/> → ${iconIntent.coreIntent}` +
-                (iconIntent.placement ? ` (${iconIntent.placement})` : '');
-              if (!canAutoApply('ui')) {
-                queuePermissionReview({
-                  category: 'ui',
-                  title: 'Icon interaction edit',
-                  description: summary,
-                  apply: async () => layoutOps.applyLayoutCode(stamp.nextSource, summary),
-                });
-                setMessages((prev) => [...prev, {
-                  id: generateId(),
-                  role: 'assistant',
-                  content: `${summary}\n\nReady for review. No source was changed.`,
-                  timestamp: new Date(),
-                }]);
-                setIsLoading(false);
-                return;
-              }
-              const applied = layoutOps.applyLayoutCode(stamp.nextSource, summary);
-              const badge = applied ? '✓' : '⚠';
-              const details = [
-                `${badge} Stamped **${stamp.matches}** \`<${iconIntent.iconName}/>\` element${stamp.matches === 1 ? '' : 's'} in the current file`,
-                `→ \`data-ut-intent="${iconIntent.coreIntent}"\`` +
-                  (iconIntent.iconKey ? `, \`data-ut-icon-key="${iconIntent.iconKey}"\`` : '') +
-                  (iconIntent.placement ? `, \`data-ut-placement="${iconIntent.placement}"\`` : ''),
-                '',
-                applied
-                  ? '_Runtime autoBinder + TemplateRuntimeProvider will now handle clicks on this icon end-to-end._'
-                  : '_Preview refused the patch — revert from history if unexpected._',
-              ].join('\n');
-              setMessages((prev) => [
-                ...prev,
-                { id: generateId(), role: 'assistant', content: details, timestamp: new Date() },
-              ]);
-              setIsLoading(false);
-              return;
-            }
-
-            // Fall through with an explanatory assistant message so the LLM
-            // doesn't get a second bite — the icon just wasn't in this file.
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: generateId(),
-                role: 'assistant',
-                content: `⚠ Couldn't find a \`<${iconIntent.iconName}/>\` element in the current preview file. Open the page/section that contains this icon and try again, or specify the section (e.g. "…in navbar").`,
-                timestamp: new Date(),
-              },
-            ]);
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (err) {
-        console.error('[AIBuilderPanel] Icon wire fast-path error:', err);
-      }
-    }
-
-    // ── GHL Wire Fast Path ───────────────────────────────────────────────
-    // Deterministic NL → site_intent_bindings write for GoHighLevel workflows.
-    if (!isLaunchPlanningRequest && droppedFiles.length === 0 && projectId && businessId) {
-      try {
-        const wire = parseGhlWireIntent(userContent);
-        if (wire && wire.confidence >= 0.75) {
-          const elementKey =
-            (layoutOps?.selectionSelector as string | undefined) ||
-            (wire.elementHint ? `hint:${wire.elementHint}` : null);
-          if (elementKey) {
-            const reviewSummary = `Wire ${wire.elementHint ?? 'selected element'} to the GHL workflow.`;
-            if (!canAutoApply('backend')) {
-              queuePermissionReview({
-                category: 'backend',
-                title: 'Backend workflow binding',
-                description: reviewSummary,
-                apply: async () => Boolean(await wireGhlBinding({
-                  businessId,
-                  projectId,
-                  pagePath: '/',
-                  elementKey,
-                  elementLabel: wire.elementHint ?? layoutOps?.selectionSection ?? null,
-                  intent: 'button.click',
-                  workflowId: wire.workflowRef,
-                })),
-              });
-              setMessages((prev) => [...prev, {
-                id: generateId(),
-                role: 'assistant',
-                content: `${reviewSummary}\n\nReady for review. No backend binding was written.`,
-                timestamp: new Date(),
-              }]);
-              setIsLoading(false);
-              return;
-            }
-            const binding = await wireGhlBinding({
-              businessId,
-              projectId,
-              pagePath: '/',
-              elementKey,
-              elementLabel: wire.elementHint ?? layoutOps?.selectionSection ?? null,
-              intent: 'button.click',
-              workflowId: wire.workflowRef,
-            });
-            const summary = binding
-              ? `✓ Wired **${wire.elementHint ?? 'selected element'}** to GHL workflow \`${wire.workflowRef}\`. It will fire on click via the runtime intent executor.`
-              : `⚠ Could not persist GHL binding — check business membership and try again.`;
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: generateId(),
-                role: 'assistant',
-                content: `${summary}\n\n_Applied instantly — no model call. Manage from the Intent Inspector._`,
-                timestamp: new Date(),
-              },
-            ]);
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (err) {
-        console.error('[AIBuilderPanel] GHL wire fast-path error:', err);
-      }
-    }
-
-    // ── Layout-Intent Fast Path ──────────────────────────────────────────
-    // Deterministic NL → layout-op (center / move / align / reorder).
-    // Skips the LLM round-trip entirely on a confident match.
-    if (!isLaunchPlanningRequest && layoutOps && droppedFiles.length === 0) {
-      try {
-        const previewSrc = layoutOps.getPreviewCode();
-        const detected = previewSrc ? detectSections(previewSrc) : [];
-        const intent = parseLayoutIntent({
-          prompt: userContent,
-          selectionSelector: layoutOps.selectionSelector,
-          selectionSection: layoutOps.selectionSection,
-          detectedSections: detected,
-        });
-
-        // Auto-apply class edits (high confidence). Structural reorders also
-        // execute (the user already chose to send), but we surface a richer
-        // summary so they can revert from history.
-        if (intent && intent.confidence >= 0.75) {
-          let summary = intent.operation.describe;
-          if (!canAutoApply('ui')) {
-            queuePermissionReview({
-              category: 'ui',
-              title: 'Layout edit',
-              description: summary,
-              apply: async () => {
-                if (intent.operation.kind === 'element-move') {
-                  if (intent.operation.direction === 'up') layoutOps.moveElementUp();
-                  else layoutOps.moveElementDown();
-                  return true;
-                }
-                const reviewResult = executeLayoutIntent(intent, {
-                  previewCode: layoutOps.getPreviewCode(),
-                  findBounds: layoutOps.findBounds,
-                  selectionSelector: layoutOps.selectionSelector,
-                });
-                if (!reviewResult.ok || !reviewResult.nextCode) return false;
-                return layoutOps.applyLayoutCode(reviewResult.nextCode, reviewResult.summary);
-              },
-            });
-            setMessages((prev) => [...prev, {
-              id: generateId(),
-              role: 'assistant',
-              content: `${summary}\n\nReady for review. No layout was changed.`,
-              timestamp: new Date(),
-            }]);
-            setIsLoading(false);
-            return;
-          }
-          let success = false;
-
-          if (intent.operation.kind === 'element-move') {
-            if (intent.operation.direction === 'up') layoutOps.moveElementUp();
-            else layoutOps.moveElementDown();
-            success = true;
-          } else {
-            const result = executeLayoutIntent(intent, {
-              previewCode: previewSrc,
-              findBounds: layoutOps.findBounds,
-              selectionSelector: layoutOps.selectionSelector,
-            });
-            if (result.ok && result.nextCode) {
-              success = layoutOps.applyLayoutCode(result.nextCode, result.summary);
-              summary = result.summary;
-            } else if (!result.ok) {
-              console.warn('[AIBuilderPanel] Layout intent matched but executor failed:', result.reason);
-            }
-          }
-
-          if (success) {
-            const assistantMsg: Message = {
-              id: generateId(),
-              role: 'assistant',
-              content: `✓ ${summary}\n\n_Applied instantly via the layout engine — no model call. Revert anytime from the edit history._`,
-              timestamp: new Date(),
-            };
-            setMessages(prev => [...prev, assistantMsg]);
-            setIsLoading(false);
-            return;
-          }
-          // If we matched but couldn't execute, fall through to the LLM with
-          // a hint added to the prompt for better targeting.
-        }
-      } catch (err) {
-        console.error('[AIBuilderPanel] Layout intent fast path error:', err);
-        // Non-fatal — fall through to the LLM.
-      }
-    }
-
-
-    // Keep fileContext & attachments in closure for the rest of handleSend
     const _fileContext = fileContext + placementContext;
     const _attachments = attachments;
     const _userContent = userContent;
     const launchBrief = isLaunchPlanningRequest ? extractLaunchBriefFromPrompt(_userContent) : undefined;
-
     let streamingId: string | null = null;
-
     try {
-      // Initialize live thinking cascade
       const thinkingSteps: ThinkingStep[] = [];
       streamingId = generateId();
       
@@ -1597,6 +1228,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
       const rawInput = _userContent;
       const { enhancedPrompt: intelligentPrompt, analysis: promptAnalysis, isSurgical: detectedSurgical, isBehavioral: detectedBehavioral, isFullGen: isFullGeneration, isDebug: detectedDebug } = enhancePromptForAI(rawInput);
+      if (detectedDebug) requireBuilderFeature(featuresRef.current, 'repairs');
       const isSurgicalEdit = detectedSurgical && !!currentCode;
       const isRouteWiringRequest = /\b(?:route|routing|router|navigate|redirect|href|active\s+(?:nav|menu|link)|nav(?:bar)?\s+(?:link|item)s?|menu\s+(?:link|item)s?)\b/i.test(rawInput);
       const isBehavioralEdit = (detectedBehavioral || isRouteWiringRequest) && !!currentCode;
@@ -2110,7 +1742,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             || Boolean(selectedTarget?.provenance?.sourceTable);
           if (businessId && needsCatalog) {
             try {
-              const agentCtx = { files: vfsFiles ?? {}, businessId, projectId, revisionId };
+              const agentCtx = { features: featuresRef.current, files: vfsFiles ?? {}, businessId, projectId, revisionId };
               const connector = createUnisonBuilderContext({ ...agentCtx });
               const catalog = await dispatchBuilderOperation(connector, agentCtx, 'inspect_catalog');
               previewSnapshot = `${previewSnapshot ?? ''}\n\n${renderCatalogForPrompt(catalog)}`.trim();
@@ -2146,7 +1778,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           // V4 M8: the in-Builder lane receives the SAME bounded canonical
           // registry projection the Wizard composer and Lane B already get.
           ensureCurrentRequest();
-          const canonicalPageContext = isReactProject && vfsFiles
+          const canonicalPageContext = vfsFiles
             ? resolveCanonicalAuthoringPage(vfsFiles, resolvedTargetFile || defaultTargetFile)
             : null;
           const builderRegistryContext = resolveBuilderRegistryContext({
@@ -2160,13 +1792,8 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           });
 
           const isCartWiringRequest = /\b(?:cart|bag|checkout)\b/i.test(_userContent);
-          const useCanonicalComposer = shouldUseCanonicalComposer({
-            isReactProject,
-            isLaunchPlanningRequest,
-            isCatalogMutationRequest: isCatalogMutationRequest(_userContent),
-            hasVfs: !!vfsFiles,
-            isScopedEdit: isSurgicalEdit || isBehavioralEdit,
-          });
+          const authoringLane = builderAuthoringLane(isLaunchPlanningRequest, isCatalogMutationRequest(_userContent), vfsFiles);
+          const useCanonicalComposer = authoringLane === 'composer';
           if (useCanonicalComposer) {
             if (!canonicalPageContext) throw new Error('Select an existing page before editing.');
             const page = canonicalPageContext;
@@ -2405,15 +2032,13 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             },
             requestEnvelope: capabilityInterpretation.envelope,
             unisonContext,
-            // Specialized non-source and non-React lanes keep
-            // their established transport. Ordinary React source authorship is
-            // handled above by the canonical Composer protocol.
-            mode: isLaunchPlanningRequest ? 'launch-desk' : (isSurgicalEdit && !isReactProject ? 'code' : 'template-react'),
-            currentCode: isLaunchPlanningRequest ? undefined : scopedCurrentCode,
-            editMode: isLaunchPlanningRequest ? false : !!currentCode,
-            debugMode: isLaunchPlanningRequest ? false : isDebugMode,
-            surgicalEdit: isLaunchPlanningRequest ? false : isSurgicalEdit,
-            behavioralEdit: isLaunchPlanningRequest ? false : isBehavioralEdit,
+            // Launch planning and catalog proposals retain chat transport; source is candidate-only.
+            mode: isLaunchPlanningRequest ? 'launch-desk' : 'template-react',
+            currentCode: undefined,
+            editMode: false,
+            debugMode: false,
+            surgicalEdit: false,
+            behavioralEdit: false,
             targetFile: resolvedTargetFile || undefined,
             componentBehaviorContext: behaviorContext || undefined,
             systemType,
@@ -2608,190 +2233,17 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         return;
       }
       
-      // ── Phase 5: Code Extraction ──
-      liveStep('validating', 'Extracting code from response...');
-      // ====== ROBUST CODE EXTRACTION (React/TSX Mode) ======
-      // Extract React component code from AI response
-      let generatedCode: string | null = null;
-      let explanationText = '';
+      // Only validated candidates carry source. Chat/catalog text cannot write files.
+      let explanationText = neutralizeModelSuccessClaim(aiContent) || CANDIDATE_GENERATED_NOTICE;
       let multiFileOutput: Record<string, string> | null = null;
       let multiFileDeletions: string[] = [];
-      let structuredContractExtractionFailed = false;
-      // P0.5: the authoritative verdict line, set only by the transaction layer.
+      const structuredContractExtractionFailed = false;
       let transactionVerdict: string | null = null;
-
       if (canonicalCandidate?.fileOps.length) {
         const preparedOutput = canonicalCandidateOutput(canonicalCandidate);
         multiFileOutput = preparedOutput.files;
         multiFileDeletions = preparedOutput.deletions;
         explanationText = CANDIDATE_GENERATED_NOTICE;
-      } else if (aiContent && !canonicalCandidate) {
-        const trimmed = aiContent.trim();
-
-        const structuredOutput = extractMultiFileOutput(trimmed);
-        if (structuredOutput) {
-          multiFileOutput = structuredOutput.files;
-          multiFileDeletions = structuredOutput.deletions ?? [];
-          explanationText = neutralizeModelSuccessClaim(structuredOutput.explanation) || CANDIDATE_GENERATED_NOTICE;
-          console.log('[AIBuilderPanel] Parsed multi-file output:', Object.keys(multiFileOutput));
-        }
-        if (!multiFileOutput) {
-          const stylesheetOutput = extractStylesheetOutput(trimmed);
-          if (stylesheetOutput) {
-            multiFileOutput = stylesheetOutput;
-            explanationText = CANDIDATE_STYLESHEET_NOTICE;
-            console.log('[AIBuilderPanel] Parsed stylesheet output for /src/index.css');
-          }
-        }
-
-
-      // Pre-processing: Detect if content is AI reasoning/prose with no usable code
-      // AI sometimes outputs planning text with inline HTML tag refs like `<style>`, `<nav>`
-      // For surgical edits, we're stricter — if there are code fences OR JSON, always try extraction
-      const isLikelyPureReasoning = (() => {
-        if (isSurgicalEdit) {
-          // In surgical edit mode, only skip if there's truly zero code anywhere
-          const hasAnyCode = /```\w*\s*\n/m.test(trimmed) || 
-            (trimmed.includes('"files"') && trimmed.includes('{')) ||
-            trimmed.includes('import ') ||
-            trimmed.includes('export ');
-          return !hasAnyCode && !trimmed.includes('className') && !trimmed.includes('function ');
-        }
-        const stripped = stripInlineCodeRefs(trimmed);
-        const hasNoCodeStructure = !stripped.includes('import ') && 
-          !stripped.includes('export ') && 
-          !stripped.includes('function ') &&
-          !/<!DOCTYPE/i.test(stripped) &&
-          !/<html[\s>]/i.test(stripped);
-        const hasProseIndicators = /\b(I will|I need to|I'll|Let me|Here's|inspired|simplified)\b/i.test(trimmed);
-        const hasNoCodeFences = !/```\w*\s*\n/m.test(trimmed);
-        return hasNoCodeStructure && hasProseIndicators && hasNoCodeFences;
-      })();
-
-      if (isLikelyPureReasoning) {
-        console.warn('[AIBuilderPanel] Content appears to be pure AI reasoning — skipping code extraction');
-        explanationText = trimmed;
-      }
-
-        // Strategy 2: Check if content IS a React component (starts with import/export/function)
-        if (!multiFileOutput && !generatedCode) {
-          // Skip if content has markdown fences — let Strategy 3 handle it
-          const hasMarkdownFences = /```\w*\s*\n/m.test(trimmed);
-          
-          const isReactComponent = !hasMarkdownFences && (
-            /^import\s+/m.test(trimmed) ||
-            /^export\s+default\s+function/m.test(trimmed) ||
-            /^(?:const|function)\s+\w+.*=.*(?:=>|\{)/m.test(trimmed)
-          );
-
-          // Reject if it contains config file content (module.exports, tailwind.config)
-          const hasConfigContent = /module\.exports\s*=/.test(trimmed) || 
-            /tailwind\.config\s*=/.test(trimmed);
-          // Reject if it contains raw HTML (should be wrapped first)
-          const hasRawHtml = /<!DOCTYPE/i.test(trimmed) || /^<html[\s>]/im.test(trimmed);
-
-          if (isReactComponent && trimmed.includes('return') && trimmed.includes('<') && !hasConfigContent && !hasRawHtml) {
-            generatedCode = trimmed;
-            explanationText = CANDIDATE_COMPONENT_NOTICE;
-          }
-        }
-
-        // Strategy 3: Extract from markdown code fences (```tsx ... ``` or ```jsx ... ```)
-        if (!multiFileOutput && !generatedCode) {
-          const fenceRegex = /```(?:tsx|jsx|typescript|javascript|ts|js|html|htm|css)?\s*\n([\s\S]*?)```/gi;
-          const fenceMatches = [...aiContent.matchAll(fenceRegex)];
-
-          if (fenceMatches.length > 0) {
-            // Find the largest code block
-            let bestBlock = '';
-            for (const m of fenceMatches) {
-              const block = m[1].trim();
-              if (block.length > bestBlock.length) bestBlock = block;
-            }
-            // Check if it has React/JSX structure OR valid HTML structure
-            const hasReactStructure = bestBlock.includes('import ') ||
-              bestBlock.includes('export ') ||
-              bestBlock.includes('function ') ||
-              bestBlock.includes('return (') ||
-              (bestBlock.includes('<') && bestBlock.includes('className'));
-            // Also accept HTML output (has tags but uses class= instead of className)
-            const hasHtmlStructure = bestBlock.includes('<') && (
-              bestBlock.includes('class=') || 
-              bestBlock.includes('<!DOCTYPE') ||
-              bestBlock.includes('<html') ||
-              bestBlock.includes('<body') ||
-              bestBlock.includes('<section') ||
-              bestBlock.includes('<div')
-            );
-            // Check if it's pure CSS (e.g. :root { ... })
-            const isCssOnly = /^\s*(?::root|body|html|\*|@import|@font-face|@media|\/\*)/m.test(bestBlock) &&
-              !bestBlock.includes('import ') && !bestBlock.includes('export ');
-            
-            if (hasReactStructure) {
-              generatedCode = bestBlock;
-              console.log('[AIBuilderPanel] Extracted React code from fence');
-            } else if (isCssOnly) {
-              multiFileOutput = { '/src/index.css': bestBlock };
-              explanationText = CANDIDATE_STYLESHEET_NOTICE;
-              console.log('[AIBuilderPanel] Extracted CSS fence for /src/index.css');
-            } else if (hasHtmlStructure) {
-              generatedCode = wrapHtmlInReactComponent(bestBlock);
-              console.log('[AIBuilderPanel] Extracted HTML from fence, wrapped in React component');
-            }
-          }
-        }
-
-        // Strategy 4: Raw HTML mixed with reasoning text (e.g. "I will generate...<!DOCTYPE html>...")
-        if (!multiFileOutput && !generatedCode) {
-          const rawHtml = extractRawHtmlFromMixed(trimmed);
-          if (rawHtml) {
-            console.log('[AIBuilderPanel] Extracted raw HTML from mixed content, wrapping in React component');
-            generatedCode = wrapHtmlInReactComponent(rawHtml);
-            // Extract explanation from the text before the HTML
-            const doctypeIdx = trimmed.indexOf('<!DOCTYPE');
-            const htmlIdx = doctypeIdx >= 0 ? doctypeIdx : trimmed.indexOf('<html');
-            if (htmlIdx > 0) {
-              explanationText = trimmed.slice(0, htmlIdx).trim();
-            }
-            if (!explanationText) {
-              explanationText = CANDIDATE_PAGE_NOTICE;
-            }
-          }
-        }
-
-        // Strategy 5: Content is purely raw HTML (starts with <!DOCTYPE or <html)
-        if (!multiFileOutput && !generatedCode) {
-          if (/^\s*<!DOCTYPE/i.test(trimmed) || /^\s*<html[\s>]/i.test(trimmed)) {
-            console.log('[AIBuilderPanel] Content is raw HTML, wrapping in React component');
-            generatedCode = wrapHtmlInReactComponent(trimmed);
-            explanationText = CANDIDATE_PAGE_NOTICE;
-          }
-        }
-
-        // Extract explanation: everything that's NOT inside code fences
-        if (!explanationText) {
-          explanationText = neutralizeModelSuccessClaim(
-            aiContent
-              .replace(/```[\s\S]*?```/g, '')
-              .replace(/^\s*\n/gm, '\n'),
-          );
-
-          if (!explanationText && (generatedCode || multiFileOutput)) {
-            explanationText = CANDIDATE_GENERATED_NOTICE;
-          }
-        }
-
-        structuredContractExtractionFailed = !multiFileOutput && !generatedCode &&
-          /(?:```json\s*)?\{[\s\S]*["']files["']\s*:/i.test(trimmed);
-        if (structuredContractExtractionFailed) {
-          const extractionError = 'The AI returned an invalid or incomplete file contract. No changes were applied.';
-          explanationText = extractionError;
-          liveStep('error', 'Generated files could not be extracted', extractionError);
-          toast.error('AI response could not be applied', {
-            description: 'The generated file contract was malformed. Retry the request.',
-            duration: 8000,
-          });
-        }
       }
 
       // Prepared Composer candidates bypass compatibility response extraction.
@@ -2799,32 +2251,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         liveStep('validating', `Multi-file output: ${Object.keys(multiFileOutput).length} files detected`, Object.keys(multiFileOutput).join(', '));
         console.log('[AIBuilderPanel] Multi-file output detected:', Object.keys(multiFileOutput));
         
-        // Normalize paths, filter config files, and strip module.exports from component content
-        const BLOCKED_FILES = /\/(tailwind\.config|postcss\.config|vite\.config|tsconfig|package\.json|package-lock)/i;
-        let normalizedFiles: Record<string, string> = {};
-        if (canonicalCandidate) {
-          normalizedFiles = multiFileOutput;
-        } else {
-        for (const [path, content] of Object.entries(multiFileOutput)) {
-          const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-          if (BLOCKED_FILES.test(normalizedPath)) {
-            console.warn('[AIBuilderPanel] Filtered out config file from AI output:', normalizedPath);
-            continue;
-          }
-          // Strip module.exports blocks from .tsx/.jsx files
-          let fileContent = content;
-          if (/\.(tsx|jsx)$/.test(normalizedPath) && content.includes('module.exports')) {
-            fileContent = stripModuleExportsBlocks(content);
-          }
-          normalizedFiles[normalizedPath] = fileContent;
-        }
-        const sanitizedFiles = sanitizeGeneratedFiles(normalizedFiles);
-        normalizedFiles = sanitizedFiles.files;
-        if (sanitizedFiles.invalidFiles.length > 0) {
-          console.warn('[AIBuilderPanel] Sanitized structurally incomplete AI files:', sanitizedFiles.invalidFiles);
-        }
-        }
-
+        const normalizedFiles = multiFileOutput;
         // Check if approval is recommended before auto-applying
         const shouldBlock = !isFullAuto && responseMeta?.requiresApproval &&
           responseMeta.warnings?.some(w => w.severity === 'error');
@@ -2870,18 +2297,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             console.log('[AIBuilderPanel] Applying candidate to VFS:', Object.keys(normalizedFiles));
             vfsEventBus.emit('ai:apply:start', { source: 'multi-file' });
             markPreviewPending();
-            const sequentialTasks = canonicalCandidate || dedicatedPageGeneration
-              ? [{
-                  id: `${canonicalCandidate?.id ?? 'builder-pages'}:1`,
-                  files: normalizedFiles,
-                  deletions: multiFileDeletions,
-                  paths: [...Object.keys(normalizedFiles), ...multiFileDeletions],
-                }]
-              : buildSequentialAiTasks(
-                  normalizedFiles,
-                  multiFileDeletions,
-                  canonicalCandidate,
-                );
+            const sequentialTasks = [{ id: `${canonicalCandidate?.id ?? 'builder-pages'}:1`, files: normalizedFiles, deletions: multiFileDeletions, paths: [...Object.keys(normalizedFiles), ...multiFileDeletions] }];
             let applyOutcome: Awaited<ReturnType<AIBuilderApplyCallback>> = {
               success: false,
               errors: ['The AI candidate did not produce an executable task.'],
@@ -2956,46 +2372,8 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         }
       }
 
-      // SAFETY NET 1: If generatedCode is still raw HTML (not wrapped in React), wrap it now
-      if (generatedCode && (/^\s*<!DOCTYPE/i.test(generatedCode) || /^\s*<html[\s>]/i.test(generatedCode))) {
-        console.warn('[AIBuilderPanel] Safety net: wrapping raw HTML that escaped extraction strategies');
-        generatedCode = wrapHtmlInReactComponent(generatedCode);
-      }
-
-      // SAFETY NET 2: CSS should have been routed to /src/index.css above.
-      if (generatedCode && /^\s*(?::root|body|html|\*|@import|@font-face|@media|\/\*)\s*[{/(]/m.test(generatedCode.trim()) && !generatedCode.includes('import ') && !generatedCode.includes('export ')) {
-        console.warn('[AIBuilderPanel] Ignoring raw CSS that escaped stylesheet extraction');
-        generatedCode = null;
-      }
-
-      // Determine the target file path for single-file output.
-      // If site analysis resolved a specific component file, use that path
-      // to avoid overwriting the entire App.tsx with a single component's code.
-      const singleFilePath = resolvedTargetFile || defaultTargetFile || '/src/App.tsx';
-
-      // Determine VFS edits from response
-      const edits: VFSEdit[] = [];
-      if (multiFileOutput) {
-        Object.keys(multiFileOutput).forEach(path => {
-          edits.push({
-            path,
-            type: 'create',
-            linesChanged: multiFileOutput![path].split('\n').length,
-            preview: multiFileOutput![path].substring(0, 200),
-          });
-        });
-        multiFileDeletions.forEach(path => {
-          edits.push({ path, type: 'delete' });
-        });
-      } else if (generatedCode) {
-        edits.push({
-          path: singleFilePath,
-          type: currentCode ? 'modify' : 'create',
-          linesChanged: generatedCode.split('\n').length,
-          preview: generatedCode.substring(0, 200),
-        });
-      }
-
+      const edits: VFSEdit[] = Object.entries(multiFileOutput ?? {}).map(([path, content]) => ({ path, type: vfsFiles[path] === undefined ? 'create' : 'modify', linesChanged: content.split('\n').length, preview: content.substring(0, 200) }));
+      multiFileDeletions.forEach(path => edits.push({ path, type: 'delete' }));
       // Preserve a failed apply/preview verdict instead of appending a success step.
       const executionFailed = thinkingSteps.some(step => step.type === 'error');
       if (!executionFailed) thinkingSteps.push({
@@ -3023,7 +2401,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       if (structuredContractExtractionFailed || executionFailed) {
         advancePlanStep(taskPlan, 'patch', 'failed');
         advancePlanStep(taskPlan, 'refresh_preview', 'failed');
-      } else if (!multiFileOutput && !generatedCode) {
+      } else if (!multiFileOutput) {
         advancePlanStep(taskPlan, 'patch', 'failed');
         advancePlanStep(taskPlan, 'refresh_preview', 'failed');
       }
@@ -3052,7 +2430,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       ));
 
       // AUTO-APPLY: Push generated code to VFS — prefer orchestrator for dep resolution
-      if (!multiFileOutput && !generatedCode && canonicalCandidate?.dataOps?.length) {
+      if (!multiFileOutput && canonicalCandidate?.dataOps?.length) {
+        requireBuilderFeature(featuresRef.current, 'catalog');
+        if (!canAutoApply('backend')) { setHeldFiles({ files: {}, candidate: canonicalCandidate, reason: 'Review catalog changes before applying.' }); return; }
         markPreviewPending();
         const dataOutcome = await applyAIBuilderFiles(onApplyToVFS, {}, {
           prompt: userContent,
@@ -3063,121 +2443,12 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           actionType: responseMeta?.actionType,
         });
         if (dataOutcome.success) {
-          toast.success('Catalog changes saved and synchronized to the live preview');
+          const verification = await awaitPreviewVerification();
+          if (verification.verified) toast.success('Catalog changes saved and confirmed in preview');
+          else toast.warning('Catalog changes saved; preview confirmation is still pending');
           vfsEventBus.emit('ai:apply:complete', { filesWritten: [], source: 'catalog-data' });
         } else {
           toast.error('Catalog changes were not applied', { description: dataOutcome.errors?.[0] });
-        }
-      }
-      if (generatedCode) {
-        // Strip any module.exports / tailwind.config blocks that AI embedded in component code
-        generatedCode = stripModuleExportsBlocks(generatedCode);
-        generatedCode = sanitizeTsxFile(singleFilePath, generatedCode).code || generatedCode;
-        
-        // FINAL VALIDATION: Reject code that looks like AI reasoning/prose, not actual code
-        const looksLikeCode = generatedCode.includes('import ') || 
-          generatedCode.includes('export ') || 
-          generatedCode.includes('function ') ||
-          generatedCode.includes('dangerouslySetInnerHTML') ||
-          generatedCode.includes('return (') ||
-          /^\s*<!DOCTYPE/i.test(generatedCode) ||
-          /^\s*<html[\s>]/i.test(generatedCode);
-        
-        const looksLikeProse = /\b(I will|I need to|I'll|Let me|inspired|simplified|Here's my|I'm going to)\b/i.test(generatedCode.slice(0, 300));
-        
-        if (!looksLikeCode || (looksLikeProse && !generatedCode.includes('dangerouslySetInnerHTML'))) {
-          console.warn('[AIBuilderPanel] REJECTED: Generated code looks like AI reasoning, not actual code');
-          console.warn('[AIBuilderPanel] First 200 chars:', generatedCode.slice(0, 200));
-          generatedCode = null;
-        }
-
-        if (generatedCode) {
-          // Check approval gate for single-file too
-          const hasBlockingWarning = !isFullAuto && responseMeta?.requiresApproval &&
-            responseMeta.warnings?.some(w => w.severity === 'error');
-
-          if (hasBlockingWarning) {
-            void recordRunOutcome(envelopeRunId, 'rejected', { note: 'single-file requires-approval' });
-            console.warn('[AIBuilderPanel] Single-file patch flagged — not auto-applying');
-            toast.warning('⚠️ Patch flagged for review — check warnings');
-          } else if (!multiFileOutput && canAutoApply(isBehavioralEdit ? 'behavioral' : isSurgicalEdit ? 'surgical' : 'ui')) {
-            console.log('[AIBuilderPanel] Auto-applying to VFS:', { targetPath: singleFilePath, codeLength: generatedCode.length });
-            vfsEventBus.emit('ai:apply:start', { source: 'single-file' });
-            markPreviewPending();
-            const applyOutcome = await applyAIBuilderFiles(onApplyToVFS, { [singleFilePath]: generatedCode }, {
-              prompt: userContent,
-              model: modelUsed,
-              summary: responseMeta?.reviewSummary,
-              actionType: responseMeta?.actionType,
-              origin: 'single-file',
-              requiresApproval: responseMeta?.requiresApproval,
-              warnings: responseMeta?.warnings,
-            });
-            void recordRunOutcome(
-              envelopeRunId,
-              applyOutcome.success ? 'applied' : 'failed',
-              {
-                appliedPaths: [singleFilePath],
-                error: applyOutcome.success ? undefined : applyOutcome.errors?.[0],
-                note: 'single-file',
-              },
-            );
-            if (applyOutcome.success) {
-              vfsEventBus.emit('ai:apply:complete', { filesWritten: [singleFilePath], source: 'single-file' });
-              // P0.4: the preview — not the commit — decides the verdict.
-              const verification = await awaitPreviewVerification();
-              if (verification.verified) {
-                advancePlanStep(taskPlan, 'patch', 'done');
-                advancePlanStep(taskPlan, 'refresh_preview', 'done');
-                advancePlanStep(taskPlan, 'validate', 'done');
-                advancePlanStep(taskPlan, 'report', 'done');
-                liveStep('complete', `✓ Applied to ${singleFilePath}`);
-                const approvalNote = responseMeta?.requiresApproval ? ' — review recommended' : '';
-                toast.success(isSurgicalEdit ? `✓ Edit applied${approvalNote}` : `✓ Code applied${approvalNote}`);
-                setMessages(prev => prev.map(m => m.id === streamingId
-                  ? { ...m, content: `${m.content}\n\n${transactionVerdictLine('verified')}` }
-                  : m));
-              } else {
-                advancePlanStep(taskPlan, 'patch', 'failed');
-                advancePlanStep(taskPlan, 'refresh_preview', 'failed');
-                liveStep('error', 'Saved, but the preview did not confirm the change', verification.reason);
-                toast.warning('Saved, but the preview did not confirm the change', {
-                  description: verification.reason,
-                  duration: 8000,
-                });
-                setMessages(prev => prev.map(m => m.id === streamingId
-                  ? { ...m, content: `${m.content}\n\n${savedUnconfirmedVerdictLine(verification.reason)}` }
-                  : m));
-              }
-            } else {
-              const applyError = applyOutcome.errors?.[0] ?? 'The VFS rejected the generated file.';
-              advancePlanStep(taskPlan, 'patch', 'failed');
-              advancePlanStep(taskPlan, 'refresh_preview', 'failed');
-              liveStep('error', 'AI edit was not applied', applyError);
-              vfsEventBus.emit('ai:apply:error', { message: applyError, source: 'single-file' });
-              toast.error('AI edit was not applied', { description: applyError, duration: 8000 });
-              setMessages(prev => prev.map(m => m.id === streamingId
-                ? { ...m, content: `${m.content}\n\n${transactionVerdictLine('failed', applyError)}` }
-                : m));
-            }
-          } else if (!multiFileOutput) {
-            const permissionCategory: AIEditPermissionCategory = isBehavioralEdit
-              ? 'behavioral'
-              : isSurgicalEdit
-                ? 'surgical'
-                : 'ui';
-            const permissionReason = `${permissionCategory[0].toUpperCase()}${permissionCategory.slice(1)} edits are set to review before apply.`;
-            setHeldFiles({ files: { [singleFilePath]: generatedCode }, reason: permissionReason });
-            toast.info('AI edit held for review', { description: permissionReason });
-            setMessages(prev => prev.map(m => m.id === streamingId
-              ? { ...m, content: `${m.content}\n\n${transactionVerdictLine('held-for-review', permissionReason)}` }
-              : m));
-          }
-
-          // Notify about removed/blocked files from review
-          if (responseMeta?.removedFiles && responseMeta.removedFiles.length > 0) {
-            toast.info(`🛡️ ${responseMeta.removedFiles.length} file(s) blocked by safety review`);
-          }
         }
       }
 
@@ -3307,6 +2578,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
   // Fix iframe error with AI
   const handleFixError = async (error: IframeError) => {
+    if (!featuresRef.current.repairs) { toast.error('Turn on error repairs in AI settings to continue.'); return; }
     setIsFixing(true);
     setActiveTab('code'); // Switch to code tab to show the fix
 
@@ -3346,272 +2618,13 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: 'Repair prepared for review. Your saved site is unchanged.', timestamp: new Date() }]);
           return;
         }
+        assertBuilderRequestState(state, getCurrentRequestState?.() ?? state);
         const outcome = await applyAIBuilderFiles(onApplyToVFS, output.files, { origin: 'debug-fix', prompt: errorPrompt, summary: result.summary, deletions: output.deletions, routeOps: candidate.routeOps, candidate });
         if (!outcome.success) throw new Error(outcome.errors?.[0] ?? 'The repair could not be saved.');
         setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: result.summary ?? 'Saved the validated repair.', timestamp: new Date() }]);
         return;
       }
-      // Retain non-React/legacy compatibility until authenticated replacement acceptance.
-      // Build a compact VFS snapshot for debug context (max 5 files, truncated)
-      const debugVfs: Record<string, string> = {};
-      if (vfsFiles) {
-        // Prioritize the error file if available
-        const errorFile = error.file;
-        const entries = Object.entries(vfsFiles);
-        const prioritized = errorFile
-          ? [
-              ...entries.filter(([p]) => p.includes(errorFile)),
-              ...entries.filter(([p]) => !p.includes(errorFile)),
-            ]
-          : entries;
-        for (const [path, content] of prioritized.slice(0, 5)) {
-          debugVfs[path] = content.slice(0, 20_000);
-        }
-      }
-
-      const diagnostics = `${error.type}: ${error.message}${error.stack ? `\nStack: ${error.stack}` : ''}${error.file ? `\nFile: ${error.file}:${error.line}:${error.column}` : ''}`;
-
-      const hasVfsContext = Object.keys(debugVfs).length > 0;
-      // Build conversation history for debug context too
-      const debugHistory: Array<{ role: string; content: string }> = [];
-      const recentMsgs = messages.filter(m => 
-        (m.role === 'user' || m.role === 'assistant') && m.content?.trim() && !m.isStreaming
-      ).slice(-6);
-      for (const m of recentMsgs) {
-        debugHistory.push({ role: m.role, content: (m.content || '').slice(0, 1500) });
-      }
-      debugHistory.push({ role: 'user', content: errorPrompt });
-
-      const debugInterpretation = await interpretBuilderRequest(errorPrompt, {
-        vertical: systemType ?? undefined,
-        filePaths: Object.keys(debugVfs),
-        pageTargets,
-        currentPageId: agentTarget?.scopeAncestors?.pageId
-          ?? pageTargets?.find((page) => page.filePath === defaultTargetFile)?.pageId,
-        currentPagePath: agentTarget?.scopeAncestors?.pagePath
-          ?? pageTargets?.find((page) => page.filePath === defaultTargetFile)?.route,
-        selectedElement: agentTarget ? {
-          selector: agentTarget.selector,
-          text: agentTarget.text,
-          tagName: agentTarget.tagName,
-          pageId: agentTarget.scopeAncestors?.pageId,
-          pagePath: agentTarget.scopeAncestors?.pagePath,
-          sectionId: agentTarget.scopeAncestors?.sectionId,
-          sectionType: agentTarget.scopeAncestors?.sectionType,
-          blockId: agentTarget.scopeAncestors?.blockId,
-          slotId: agentTarget.scopeAncestors?.slotId,
-          sourceLocator: agentTarget.scopeAncestors?.sourceLocator,
-          resourceMark: agentTarget.provenance?.resource,
-          targetPath: agentTarget.scopeAncestors?.targetPath,
-          intent: agentTarget.intent,
-        } : null,
-        selectedEditScope: agentTarget?.editScope ?? null,
-        hasExistingTemplate: hasVfsContext,
-      });
-      const { plan: debugTaskPlan } = interpretPrompt(errorPrompt, {
-        provisionedCapabilities: [],
-        existingFiles: Object.keys(debugVfs),
-        existingPages: [],
-        builderMode: 'edit',
-        hasBusinessId: !!systemsBuildContext?.brand?.business_name,
-        installedWorkflows: [],
-      });
-
-      const response = await runBuilderTurn<any>({
-        connectorContext: { projectId: state.projectId, businessId: state.businessId, revisionId: state.revisionId },
-        messages: debugHistory,
-        requestEnvelope: debugInterpretation.envelope,
-        unisonContext: buildUnisonAIContext(debugTaskPlan),
-        mode: 'code',
-        currentCode: hasVfsContext ? undefined : currentCode,
-        editMode: true,
-        debugMode: true,
-        systemType,
-        templateName,
-        targetFile: error.file || defaultTargetFile || undefined,
-        runContext: {
-          draftId: projectId ?? null,
-          projectId: projectId ?? null,
-          businessId: businessId ?? null,
-          prompt: errorPrompt.slice(0, 8000),
-        },
-        backendStateContext: backendStateContext ?? undefined,
-        businessDataContext: businessDataContext ?? undefined,
-        systemsBuildContext: systemsBuildContext ?? undefined,
-        wizardSeed: uiFoundation || designIntervention
-          ? { ...(wizardSeed ?? {}), ...(uiFoundation ? { uiFoundation } : {}), ...(designIntervention ? { designIntervention } : {}) }
-          : wizardSeed ?? undefined,
-        previewDiagnostics: diagnostics,
-        vfsFiles: Object.keys(debugVfs).length > 0 ? debugVfs : undefined,
-        gatewayOptions: gatewayConfig ? {
-          selectedModelId: gatewayConfig.selectedModelId,
-          reasoningEffort: gatewayConfig.reasoningEffort,
-          timeoutMs: gatewayConfig.timeoutMs,
-          autoModelSelection: gatewayConfig.autoModelSelection,
-          maxTokens: gatewayConfig.maxTokens,
-        } : undefined,
-      });
-
-      // Handle non-2xx: response.error is set by supabase-js
-      if (response.error) {
-        let errorMsg = 'AI service returned an error';
-        const errBody = response.error;
-        // Try reading FunctionsHttpError context (Response object)
-        try {
-          const ctx = (errBody as any)?.context;
-          if (ctx && typeof ctx?.json === 'function') {
-            const body = await ctx.json().catch(() => null);
-            if (body?.error) errorMsg = body.error;
-            else if (body?.message) errorMsg = body.message;
-          } else if (ctx?.body && typeof ctx.body === 'string') {
-            const parsed = JSON.parse(ctx.body);
-            errorMsg = parsed.error || parsed.message || errorMsg;
-          }
-        } catch { /* swallow */ }
-        // Fallback to .message
-        if (errorMsg === 'AI service returned an error' && (errBody as Error)?.message) {
-          const msg = (errBody as Error).message;
-          if (msg.includes('non-2xx')) {
-            errorMsg = 'AI service temporarily unavailable. Please try again.';
-          } else {
-            errorMsg = msg;
-          }
-        }
-        throw new Error(errorMsg);
-      }
-
-      // Extract fix content — edge function returns in 'content' field (JSON or code)
-      const rawContent = response.data?.content || response.data?.code || response.data?.response || '';
-      
-      // Extract metadata for debug fix too
-      const debugMeta: Message['meta'] = {
-        actionType: response.data?.actionType || 'debug',
-        modelUsed: response.data?.modelUsed,
-        filesDetected: response.data?.filesDetected,
-        warnings: response.data?.warnings,
-        requiresApproval: response.data?.requiresApproval,
-        removedFiles: response.data?.removedFiles,
-        reviewSummary: response.data?.reviewSummary,
-      };
-
-      // Try to extract code from the content (same strategies as main flow)
-      let fixFiles: Record<string, string> | null = null;
-      let fixCode: string | null = null;
-      let fixExplanation = '';
-
-      if (rawContent) {
-        // Strategy 1: JSON multi-file output
-        try {
-          const jsonStr = rawContent.trim().replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
-          const parsed = JSON.parse(jsonStr);
-          if (parsed.files && typeof parsed.files === 'object') {
-            fixFiles = parsed.files;
-            fixExplanation = parsed.explanation || 'Proposed a debug fix.';
-          }
-        } catch { /* not JSON */ }
-
-        // Strategy 2: Code fence extraction
-        if (!fixFiles) {
-          const fenceMatch = rawContent.match(/```(?:tsx|jsx|ts|js)?\s*\n([\s\S]*?)```/);
-          if (fenceMatch) {
-            fixCode = fenceMatch[1].trim();
-            fixExplanation = rawContent.replace(/```[\s\S]*?```/g, '').trim() || 'Proposed a fix.';
-          }
-        }
-
-        // Strategy 3: Direct code (starts with import/export)
-        if (!fixFiles && !fixCode && /^(?:import |export )/.test(rawContent.trim())) {
-          fixCode = rawContent.trim();
-          fixExplanation = 'Proposed a fix.';
-        }
-
-        // Fallback: treat entire content as explanation
-        if (!fixFiles && !fixCode) {
-          fixExplanation = rawContent;
-        }
-      }
-
-      const debugPermissionCategory: AIEditPermissionCategory = error.type === 'supabase' ? 'backend' : 'behavioral';
-      const debugCanAutoApply = canAutoApply(debugPermissionCategory);
-      const debugTargetPath = error.file
-        ? (error.file.startsWith('/') ? error.file : `/${error.file}`)
-        : (defaultTargetFile || '/src/App.tsx');
-      const debugNeedsReview = !debugCanAutoApply && Boolean(fixFiles || fixCode);
-
-      // Auto-apply fix to VFS only when this error category is permitted.
-      if (onApplyToVFS && debugCanAutoApply) {
-        if (fixFiles) {
-          const normalized: Record<string, string> = {};
-          for (const [p, c] of Object.entries(fixFiles)) {
-            normalized[p.startsWith('/') ? p : `/${p}`] = c;
-          }
-          const sanitized = sanitizeGeneratedFiles(normalized);
-          vfsEventBus.emit('ai:apply:start', { source: 'debug-fix' });
-          const applyOutcome = await applyAIBuilderFiles(onApplyToVFS, sanitized.files, {
-            prompt: `Auto-fix: ${error.message || 'runtime error'}`,
-            origin: 'debug-fix',
-            summary: fixExplanation,
-          });
-          if (applyOutcome.success) {
-            vfsEventBus.emit('ai:apply:complete', { filesWritten: Object.keys(sanitized.files), source: 'debug-fix' });
-            toast.success(`✅ Debug fix applied (${Object.keys(sanitized.files).length} files)`);
-          } else {
-            const applyError = applyOutcome.errors?.[0] ?? 'The VFS rejected the debug fix.';
-            vfsEventBus.emit('ai:apply:error', { message: applyError, source: 'debug-fix' });
-            toast.error('Debug fix was not applied', { description: applyError, duration: 8000 });
-          }
-        } else if (fixCode) {
-          const targetPath = debugTargetPath;
-          fixCode = sanitizeTsxFile(targetPath, fixCode).code || fixCode;
-          vfsEventBus.emit('ai:apply:start', { source: 'debug-fix' });
-          const applyOutcome = await applyAIBuilderFiles(onApplyToVFS, { [targetPath]: fixCode }, {
-            prompt: `Auto-fix: ${error.message || 'runtime error'}`,
-            origin: 'debug-fix',
-            summary: fixExplanation,
-          });
-          if (applyOutcome.success) {
-            vfsEventBus.emit('ai:apply:complete', { filesWritten: [targetPath], source: 'debug-fix' });
-            toast.success('✅ Debug fix applied');
-          } else {
-            const applyError = applyOutcome.errors?.[0] ?? 'The VFS rejected the debug fix.';
-            vfsEventBus.emit('ai:apply:error', { message: applyError, source: 'debug-fix' });
-            toast.error('Debug fix was not applied', { description: applyError, duration: 8000 });
-          }
-        }
-      } else if (debugNeedsReview) {
-        const reviewFiles: Record<string, string> = {};
-        if (fixFiles) {
-          const normalized: Record<string, string> = {};
-          for (const [p, c] of Object.entries(fixFiles)) {
-            normalized[p.startsWith('/') ? p : `/${p}`] = c;
-          }
-          Object.assign(reviewFiles, sanitizeGeneratedFiles(normalized).files);
-        } else if (fixCode) {
-          reviewFiles[debugTargetPath] = sanitizeTsxFile(debugTargetPath, fixCode).code || fixCode;
-        }
-        const permissionReason = `${debugPermissionCategory[0].toUpperCase()}${debugPermissionCategory.slice(1)} debug fixes are set to review before apply.`;
-        setHeldFiles({ files: reviewFiles, reason: permissionReason });
-        toast.info('Debug fix held for review', { description: permissionReason });
-      }
-
-      setMessages(prev => [...prev, {
-        id: generateId(),
-        role: 'assistant',
-        content: fixExplanation || (debugNeedsReview
-          ? 'Fix prepared. Review the candidate below before changing the project.'
-          : 'Fix applied. Check the preview for changes.'),
-        timestamp: new Date(),
-        code: fixCode || undefined,
-        error,
-        meta: debugMeta,
-        thinking: [
-          { id: '1', type: 'analyzing', message: 'Analyzing error...', timestamp: new Date() },
-          { id: '2', type: 'planning', message: 'Determining fix strategy...', timestamp: new Date() },
-          { id: '3', type: 'generating', message: 'Generating fix...', timestamp: new Date() },
-          { id: '4', type: 'validating', message: 'Validating solution...', timestamp: new Date() },
-          { id: '5', type: 'complete', message: 'Fix ready', timestamp: new Date() },
-        ],
-      }]);
+      throw new Error('Select an editable source page to repair. Legacy auto-fix is no longer available.');
 
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -3643,44 +2656,20 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
   return (
     <div className={cn(
-      "flex flex-col h-full bg-background border-r border-border",
+      "unison-builder flex flex-col h-full bg-background",
       className
     )}>
-      {/* Header */}
-      <div className="border-b border-border">
-        <div className="flex items-center gap-2 px-3 py-2.5">
-        <div className="flex h-7 w-7 items-center justify-center text-primary">
-          <Sparkles className="w-4 h-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <h2 className="text-xs font-semibold text-foreground">AI Builder</h2>
-            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <CircleDot className={cn('h-2.5 w-2.5', isLoading ? 'text-primary' : 'text-emerald-500')} /> {isLoading ? 'Thinking' : pendingPermissionAction ? 'Review needed' : 'Ready'}
-            </span>
-          </div>
-          <p className="truncate text-[10px] text-muted-foreground/70">
-            {templateName || 'New Project'}{systemType ? ` / ${systemType}` : ''}
-          </p>
-        </div>
-        <AIPermissionControl permissions={aiPermissions} onChange={setAIPermissions} />
-        {onClose && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            title="Close"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-        )}
-        </div>
-      </div>
+      <header className="builder-header flex-wrap">
+        <Sparkles className="text-primary" aria-hidden="true" />
+        <div className="builder-header-title"><h2>AI Builder</h2><p>{templateName || 'Your project'}</p></div>
+        <span role="status" className="text-muted-foreground">{isLoading || isFixing ? 'Thinking' : heldFiles || pendingPermissionAction ? 'Review' : 'Ready'}</span>
+        <BuilderSettings open={settingsOpen} onToggle={() => setSettingsOpen(value => !value)} features={features} onChange={setFeatures} permissions={aiPermissions} onPermissionsChange={setAIPermissions} busy={isLoading || isFixing} />
+        {onClose && <Button variant="link" size="icon" onClick={onClose} title="Close Builder" aria-label="Close Builder"><ChevronLeft /></Button>}
+      </header>
 
       {/* Tab bar */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col min-h-0">
-        <TabsList className={cn('w-full grid rounded-none h-9 bg-transparent border-b border-border px-1', customizerAvailable ? 'grid-cols-5' : 'grid-cols-4')}>
+        <TabsList className={cn('builder-nav w-full grid rounded-none h-9 bg-transparent px-1', customizerAvailable ? 'grid-cols-5' : 'grid-cols-4')}>
           <TabsTrigger
             value="code"
             className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
@@ -3690,6 +2679,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           </TabsTrigger>
           <TabsTrigger
             value="tools"
+            disabled={!features.tools}
             className="text-[10px] gap-1 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
           >
             <Layers className="h-3.5 w-3.5" />
@@ -3706,6 +2696,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           )}
           <TabsTrigger
             value="debug"
+            disabled={!features.repairs}
             className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
           >
             <Bug className="w-3.5 h-3.5" />
@@ -3718,6 +2709,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           </TabsTrigger>
           <TabsTrigger
             value="backend"
+            disabled={!features.capabilities}
             className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
           >
             <Database className="w-3.5 h-3.5" />
@@ -3725,7 +2717,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           </TabsTrigger>
         </TabsList>
 
-        <div role="tabpanel" aria-hidden={activeTab !== 'tools'} hidden={activeTab !== 'tools'} className="min-h-0 flex-1 overflow-hidden">
+        <div role="tabpanel" aria-hidden={activeTab !== 'tools' || !features.tools} hidden={activeTab !== 'tools' || !features.tools} className="min-h-0 flex-1 overflow-hidden">
           <div ref={onToolsHostChange} className="h-full min-h-0 overflow-hidden" />
         </div>
         {onCustomizerHostChange && customizerAvailable && (
@@ -3764,8 +2756,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   </div>
                 </div>
               )}
-              <LaunchReadinessCard vfsFiles={vfsFiles} className="-mx-3" />
-              <LayoutSnapshotCard vfsFiles={vfsFiles} />
+              <details><summary className="text-muted-foreground cursor-pointer">Project checks</summary><LaunchReadinessCard vfsFiles={vfsFiles} /><LayoutSnapshotCard vfsFiles={vfsFiles} /></details>
               {pendingCapabilityProposal && (
                 <div className="mb-3 min-w-0 max-w-full overflow-hidden py-1 text-xs text-muted-foreground" role="status" aria-live="polite">
                   <p className="break-words text-foreground">
@@ -3819,9 +2810,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   <div className="mt-2 flex items-baseline gap-3">
                     <button
                       type="button"
-                      disabled={pendingCapabilityProposal.isApplying || pendingCapabilityProposal.resolution.unresolved.length > 0 || !onApproveCapabilityPlan}
+                      disabled={!features.capabilities || pendingCapabilityProposal.isApplying || pendingCapabilityProposal.resolution.unresolved.length > 0 || !onApproveCapabilityPlan}
                       onClick={async () => {
-                        if (!onApproveCapabilityPlan) return;
+                        if (!onApproveCapabilityPlan || !featuresRef.current.capabilities) return;
                         setPendingCapabilityProposal((current) => current ? { ...current, isApplying: true } : current);
                         const outcome = await onApproveCapabilityPlan(
                           pendingCapabilityProposal.plan,
@@ -3892,9 +2883,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             </div>
           </ScrollArea>
 
-          <AgentCommandPalette files={vfsFiles ?? {}} onApply={onApplyToVFS} onAsk={setInput} businessId={businessId} revisionId={revisionId} />
+          {features.tools && <AgentCommandPalette files={vfsFiles ?? {}} onApply={onApplyToVFS} onAsk={setInput} businessId={businessId} revisionId={revisionId} projectId={projectId} getCurrentRequestState={getCurrentRequestState} features={features} />}
           {agentTarget && (
-            <div className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+            <div className="builder-context" role="status" aria-live="polite">
               <span className="truncate">
                 Editing: <span className="text-foreground">&lt;{agentTarget.tagName}&gt;{agentTarget.text ? ` “${agentTarget.text}”` : ''}</span>
               </span>
@@ -3910,7 +2901,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           )}
           {heldFiles && (
             <div
-              className="flex items-baseline gap-3 border-t border-border px-3 py-2 text-xs text-muted-foreground"
+              className="builder-context"
               role="status"
               aria-live="polite"
             >
@@ -3928,6 +2919,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   disabled={isApplyingHeld}
                   className="text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={async () => {
+                    if (heldFiles.candidate?.dataOps?.length && !featuresRef.current.catalog) { toast.error('Turn on catalog edits in AI settings before applying.'); return; }
                     const pending = heldFiles.files;
                     const deletions = heldFiles.deletions;
                     const routeOps = heldFiles.routeOps;
@@ -3969,37 +2961,37 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             onRemoveFile={removeFile}
             previewRef={previewRef}
           />
-          {/* Secondary controls sit below the input so the composer stays the primary target */}
-          <div className="flex items-center gap-2 border-t border-border px-2 py-1">
-            <AIGatewayOptions config={gatewayConfig} onChange={setGatewayConfig} className="min-w-0 flex-1" />
-            <CatalogPanel files={vfsFiles ?? {}} businessId={businessId} onApply={onApplyToVFS} />
+          <div className="builder-actions">
+            {features.tools && <Button variant="link" onClick={() => window.dispatchEvent(new Event('unison:open-command-tools'))}>Tools</Button>}
+            {features.catalog && <CatalogPanel files={vfsFiles ?? {}} businessId={businessId} onApply={onApplyToVFS} />}
+            <details><summary className="text-muted-foreground cursor-pointer">Model</summary><AIGatewayOptions config={gatewayConfig} onChange={setGatewayConfig} /></details>
           </div>
         </TabsContent>
 
         {/* Backend Tab — full-stack proposal review + approval surface */}
         <TabsContent value="backend" className="flex-1 flex flex-col m-0 min-h-0 data-[state=inactive]:hidden">
-          <MigrationProposalPanel
+          {features.capabilities && <MigrationProposalPanel
             projectId={projectId ?? undefined}
             businessId={businessId ?? undefined}
             className="flex-1 min-h-0"
-          />
+          />}
         </TabsContent>
 
         {/* Debug Tab */}
         <TabsContent value="debug" className="flex-1 flex flex-col m-0 min-h-0 data-[state=inactive]:hidden">
-          <DebugAgentPanel
+          {features.repairs && <DebugAgentPanel
             iframeErrors={iframeErrors}
             onFixError={handleFixError}
             onDebugRequest={(prompt) => {
               void handleFixError({ type: 'runtime', message: prompt, timestamp: new Date() });
             }}
             onClearErrors={onClearErrors}
-            onApplyPatch={onApplyToVFS}
-            canAutoApplyPatch={canAutoApply('behavioral')}
-            onReviewPatch={queueDebugPatchReview}
+            onApplyPatch={async () => ({ success: false, errors: ['Request a validated repair through AI Builder.'] })}
+            canAutoApplyPatch={false}
+            onReviewPatch={() => toast.info('Describe the repair in Builder chat to prepare a validated candidate.')}
             vfsFiles={vfsFiles}
             isFixing={isFixing}
-          />
+          />}
         </TabsContent>
       </Tabs>
     </div>
