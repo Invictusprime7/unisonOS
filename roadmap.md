@@ -2,6 +2,8 @@
 
 ## Active: Recipe contract corrections
 - [x] Correct FAQ layout-derived IDs and canonical auth bindings; remove unregistered intents from locally handled controls, regenerate portable recipes; 211 regression tests pass
+- [ ] Resolve auth submit ownership and local toggle behavior in portable recipes
+- [ ] Ground generated component identities and AI context in App Builder's canonical recipe compilation; add focused regression coverage
 
 ## Active: AI Builder frontend replacement
 - [x] Replace Builder chrome/composer with minimal borders and reduced hover fills; expose compact feature settings
