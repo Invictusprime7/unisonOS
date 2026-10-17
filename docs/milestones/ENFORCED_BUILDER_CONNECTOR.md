@@ -65,3 +65,5 @@ The mirrored proposal check now parses changed TypeScript/JSX with Babel and ins
 Existing specifier occurrences survive unrelated edits, but adding occurrences requires approval. Comments and ordinary strings are ignored. This is an inventory check, not a replacement for dependencyResolver classification/certification or runtime authorization. Direct require calls are conservatively checked, including locally shadowed require identifiers. Launch intake remains unchanged.
 
 The existing Composer endpoint, repair loop and sole commit writer are preserved. No migrations or production records changed; canonical workflow deployment and authenticated edit/read-back remain pending.
+
+Verification: 107 tests pass across eleven suites, including nine module syntax forms, scoped subpaths, local imports, remote/protocol rejection, computed loads, comment/string handling, existing-import preservation, edge repair and pre-candidate client refusal. Mirrored contracts match and preview build is OK. Edge import maps pin the explicit parser version; deployed edge execution is not verified.
