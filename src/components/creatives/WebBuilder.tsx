@@ -3789,6 +3789,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       toast.error(execution.reason);
       return false;
     }
+
+    const applyExecution = async (): Promise<boolean> => {
     if (execution.kind === 'presentation') {
       if (execution.ops.every((op) => op.type === 'setSectionCopy')) {
         const identity = buildCommitIdentity({
