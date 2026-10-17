@@ -37,7 +37,7 @@ export function GalleryCaseStudy({ section, theme }: BaseSectionProps<'gallery'>
                 >
                   {item.caption || item.alt}
                 </h3>
-                <button data-ut-intent="ui.toggle"
+                <button
                   type="button"
                   onClick={() => open(index)}
                   className="mt-6 min-h-11 text-sm underline underline-offset-4"

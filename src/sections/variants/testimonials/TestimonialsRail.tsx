@@ -48,10 +48,10 @@ export const TestimonialsRail: React.FC<BaseSectionProps<'testimonials'>> = ({ s
       </div>
       {items.length > 1 && (
         <div className="mt-6 flex justify-end gap-2">
-          <button data-ut-intent="ui.toggle" type="button" onClick={() => scrollBy(-1)} aria-label="Previous testimonials" className="px-3 py-2 text-sm" style={controlStyle}>
+          <button type="button" onClick={() => scrollBy(-1)} aria-label="Previous testimonials" className="px-3 py-2 text-sm" style={controlStyle}>
             ←
           </button>
-          <button data-ut-intent="ui.toggle" type="button" onClick={() => scrollBy(1)} aria-label="Next testimonials" className="px-3 py-2 text-sm" style={controlStyle}>
+          <button type="button" onClick={() => scrollBy(1)} aria-label="Next testimonials" className="px-3 py-2 text-sm" style={controlStyle}>
             →
           </button>
         </div>

@@ -35,7 +35,7 @@ export const PricingAccordion: React.FC<BaseSectionProps<'pricing'>> = ({ sectio
               }}
             >
               <h3 className="m-0">
-                <button data-ut-intent="ui.toggle"
+                <button
                   type="button"
                   aria-expanded={expanded}
                   onClick={() => setOpen(expanded ? -1 : i)}

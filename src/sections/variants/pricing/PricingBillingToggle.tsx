@@ -152,7 +152,7 @@ export const PricingBillingToggle: React.FC<BaseSectionProps<'pricing'>> = ({ se
           className="inline-flex gap-1 p-1"
           style={{ background: hsl(theme.colors.card), border: `1px solid ${hsla(theme.colors.border, 0.7)}`, borderRadius: '9999px' }}
         >
-          <button data-ut-intent="ui.toggle"
+          <button
             type="button"
             aria-pressed={!yearly}
             onClick={() => setYearly(false)}
@@ -161,7 +161,7 @@ export const PricingBillingToggle: React.FC<BaseSectionProps<'pricing'>> = ({ se
           >
             Monthly
           </button>
-          <button data-ut-intent="ui.toggle"
+          <button
             type="button"
             aria-pressed={yearly}
             onClick={() => setYearly(true)}
