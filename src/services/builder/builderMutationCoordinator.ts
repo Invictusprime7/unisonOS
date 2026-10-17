@@ -37,7 +37,7 @@ export function runExclusive<T>(surface: MutationSurface, task: () => Promise<T>
       throw err;
     },
   );
-  const settled = run.catch(() => undefined).finally(() => { if (isAi) activeAiEdits -= 1; });
+  const settled = run.catch(() => undefined).finally(() => { if (isAi) releaseAiEdit(); });
   // A save that never settles must not block every later save (and with it
   // every checkpoint). After the stall budget the queue moves on; the slow
   // task keeps running and its own stale-revision checks still apply.
@@ -56,7 +56,66 @@ export function runExclusive<T>(surface: MutationSurface, task: () => Promise<T>
 
 /** Mark an AI generation as in progress (from request start, not just commit). */
 export function setAiGenerationActive(active: boolean): void {
-  activeAiEdits = Math.max(0, activeAiEdits + (active ? 1 : -1));
+  if (active) activeAiEdits += 1;
+  else releaseAiEdit();
+}
+
+function releaseAiEdit(): void {
+  activeAiEdits = Math.max(0, activeAiEdits - 1);
+  if (activeAiEdits === 0 && heldEdits.length > 0) {
+    for (const listener of [...aiIdleListeners]) {
+      try { listener(); } catch (err) { console.warn('[BuilderMutationCoordinator] held-edit listener failed:', err); }
+    }
+  }
+}
+
+/** True while an AI edit is generating or saving. */
+export function isAiEditActive(): boolean {
+  return activeAiEdits > 0;
+}
+
+/**
+ * A direct edit (typing, toolbar) made while the AI is generating or saving.
+ * Its save would race the AI's whole-file write, so it is held and replayed on
+ * top of the AI's result once the AI goes idle.
+ */
+export interface HeldEdit {
+  path: string;
+  /** File source the user edited from. */
+  before: string;
+  /** File source with the user's edit. */
+  after: string;
+  summary: string;
+  heldAt: number;
+}
+
+const heldEdits: HeldEdit[] = [];
+const aiIdleListeners = new Set<() => void>();
+
+/** Hold an edit; repeated edits to one file collapse to first-before → last-after. */
+export function holdEditUntilAiIdle(edit: Omit<HeldEdit, 'heldAt'>): void {
+  const existing = heldEdits.find((item) => item.path === edit.path);
+  if (existing) {
+    existing.after = edit.after;
+    existing.summary = edit.summary;
+    return;
+  }
+  heldEdits.push({ ...edit, heldAt: Date.now() });
+}
+
+export function getHeldEdits(): HeldEdit[] {
+  return heldEdits.map((edit) => ({ ...edit }));
+}
+
+/** Remove and return every held edit, oldest first. */
+export function takeHeldEdits(): HeldEdit[] {
+  return heldEdits.splice(0, heldEdits.length);
+}
+
+/** Called when the last AI edit settles and edits are waiting. */
+export function onAiIdleWithHeldEdits(listener: () => void): () => void {
+  aiIdleListeners.add(listener);
+  return () => { aiIdleListeners.delete(listener); };
 }
 
 /** Autosave must skip while an AI edit is generating or committing. */
