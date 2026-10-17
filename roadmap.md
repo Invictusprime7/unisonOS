@@ -19,6 +19,7 @@
 - [x] Builder intent/capability authoring enforcement: canonical capability-derived actions; reject unsupported declared and new literal DOM intents before candidate preparation; 84 regression tests pass; computed bindings, deployment and live readiness remain unverified
 - [x] Actual-import dependency enforcement: AST inspection at the shared proposal boundary for undeclared packages, remote/computed imports; 107 regression tests pass; deployment and signed-in acceptance remain unverified
 - [x] Phase 4a: audited Builder consumers; removed unused Composer trailer helper, retained active parser/repair/compatibility paths; 116 tests and authority lint pass
+- [x] Phase 4a continuation: retired unused response-to-VFS authoring exports; active fallback extraction preserved; 74 tests and authority lint pass
 - [ ] Phase 4b: migrate active non-Composer fallback callers before further removals (requires authenticated acceptance evidence on authoritative backend)
 - Later: authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON
