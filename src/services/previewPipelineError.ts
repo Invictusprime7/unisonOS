@@ -23,6 +23,8 @@ export interface PreviewPipelineErrorDetails {
   cause?: unknown;
   /** Whether the failure is recoverable by re-running the System Launcher. */
   recoverableByRelaunch?: boolean;
+  /** Set when unsaved edits conflict with the accepted revision. */
+  pendingConflict?: { scope: string | null; acceptedRevisionId: string | null };
 }
 
 export class PreviewPipelineError extends Error {

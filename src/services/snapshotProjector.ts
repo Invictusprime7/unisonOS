@@ -12,6 +12,7 @@
  *   • Blank draft (no launchState, no wizard/sitebundle evidence)
  *       → allow only Tailwind boilerplate CSS. No App/template is fabricated.
  */
+import { rebaseTextEdit } from '@/services/builder/textEditRebase';
 import type { LaunchState } from '@/types/launchState';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import {
@@ -701,6 +702,49 @@ export function clearPendingVfsOperations(scope?: string | null): void {
   }
 }
 
+/**
+ * Recovery for a genuine pending-source conflict. `discard` drops the
+ * conflicted edits; `keep` replays each one onto the accepted revision (the
+ * changed span when it still matches exactly once, otherwise the edit's own
+ * file version) so the next projection applies it without reloading.
+ */
+export function resolvePendingVfsConflicts(
+  scope: string | null | undefined,
+  acceptedRevisionId: string | null | undefined,
+  choice: 'keep' | 'discard',
+): { resolvedOperationIds: string[] } {
+  const resolvedOperationIds: string[] = [];
+  for (const [operationId, operation] of pendingVfsOperations) {
+    if (operationScopeKey(operation.scope) !== operationScopeKey(scope)) continue;
+    if (operation.acknowledgementState !== 'conflicted') continue;
+    resolvedOperationIds.push(operationId);
+    if (choice === 'discard') {
+      pendingVfsOperations.delete(operationId);
+      continue;
+    }
+    const conflictByPath = new Map(operation.conflicts.map((conflict) => [conflict.path, conflict]));
+    const changes = operation.changes.map((change): PendingVfsChange => {
+      const conflict = conflictByPath.get(change.path);
+      if (!conflict) return change;
+      if (change.type === 'delete') return { type: 'delete', path: change.path, baseContents: conflict.acceptedContents };
+      let contents = change.contents;
+      if (typeof conflict.baseContents === 'string' && typeof conflict.acceptedContents === 'string') {
+        const rebased = rebaseTextEdit(conflict.baseContents, change.contents, conflict.acceptedContents);
+        if (rebased.status !== 'conflict') contents = rebased.code;
+      }
+      return { type: change.type, path: change.path, contents, baseContents: conflict.acceptedContents };
+    });
+    pendingVfsOperations.set(operationId, {
+      ...operation,
+      baseRevisionId: acceptedRevisionId ?? operation.baseRevisionId,
+      acknowledgementState: 'pending',
+      conflicts: [],
+      changes,
+    });
+  }
+  return { resolvedOperationIds };
+}
+
 export function getPendingVfsOperations(scope?: string | null): PendingVfsOperation[] {
   return [...pendingVfsOperations.values()]
     .filter((operation) => operationScopeKey(operation.scope) === operationScopeKey(scope))
@@ -921,7 +965,14 @@ export function projectSnapshotVfsFiles(
       throw new PreviewPipelineError(
         'vfs',
         `Pending source conflicts with accepted revision ${resolution.acceptedRevisionId ?? '(unknown)'} at ${paths.join(', ')}. Reload or re-author the pending change from the accepted revision.`,
-        { blockedFiles: paths, recoverableByRelaunch: true },
+        {
+          blockedFiles: paths,
+          recoverableByRelaunch: true,
+          pendingConflict: {
+            scope: resolution.projectionScope ?? null,
+            acceptedRevisionId: resolution.acceptedRevisionId ?? null,
+          },
+        },
       );
     }
   }
