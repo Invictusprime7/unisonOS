@@ -56,6 +56,18 @@ function contract(): AppBuildContract {
 }
 
 describe('UnisonAppBuilder facade', () => {
+  it('rejects stale connector ownership before source authoring', async () => {
+    const runComposer = vi.fn();
+    const builder = createUnisonAppBuilder({ runComposer: runComposer as never });
+    await expect(builder.edit({
+      operationId: 'stale-connector', baseRevisionId: 'revision-2',
+      currentFiles: baseFiles, instruction: 'Change this heading',
+      page: { title: 'Home', route: '/', role: 'home', filePath: '/src/pages/Home.tsx' },
+      sourceTargets: ['/src/pages/Home.tsx'],
+      connectorContext: { projectId: 'project-1', selection: { revisionId: 'revision-1' } },
+    })).rejects.toThrow('older revision');
+    expect(runComposer).not.toHaveBeenCalled();
+  });
   it('is the shared product boundary for Launcher generation and Builder source edits', () => {
     const launcher = readFileSync('src/services/launch/launchOrchestrator.ts', 'utf8');
     const builder = readFileSync('src/components/creatives/web-builder/AIBuilderPanel.tsx', 'utf8');
