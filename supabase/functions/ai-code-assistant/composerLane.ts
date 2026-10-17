@@ -163,6 +163,7 @@ function renderUser(req: AIComposerRequest): string {
     `TASK: ${req.task}`,
     `TARGET PAGE: ${req.page.title} (${req.page.role}) route=${req.page.route} file=${req.page.filePath}`,
     req.sourceTargets ? `WRITABLE SOURCE TARGETS (all other FILES are read-only):\n${req.sourceTargets.join('\n')}` : '',
+    req.task === 'builder_source_edit' ? `APPROVED ROUTE OPERATIONS (emit only these exact operations):\n${JSON.stringify(req.approvedRouteOps ?? [])}\nAPPROVED EXISTING DEPENDENCIES (no new installs):\n${(req.approvedDependencies ?? []).join(', ')}` : '',
     `BRIEF:\n${req.brief}`,
     req.instruction ? `USER REQUEST:\n${req.instruction}` : '',
     `ROUTES:\n${req.routes.map((r) => `${r.title} -> ${r.route}`).join('\n')}`,

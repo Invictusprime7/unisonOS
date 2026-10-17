@@ -61,6 +61,23 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
   const violations = composerScopeViolations(req.task, req.page.filePath, response.fileOps);
   if (req.task !== 'builder_source_edit') return violations;
   const targets = new Set(req.sourceTargets ?? []);
+  const approvedDependencies = new Set(req.approvedDependencies ?? []);
+  for (const dependency of response.requestedDependencies ?? []) {
+    if (!approvedDependencies.has(dependency)) violations.push(`${dependency}: dependency is not approved for this request`);
+  }
+  const sameRouteOp = (a: z.infer<typeof aiComposerRouteOpSchema>, b: z.infer<typeof aiComposerRouteOpSchema>) => {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return [...keys].every(key => (a as Record<string, unknown>)[key] === (b as Record<string, unknown>)[key]);
+  };
+  const routeKeys = new Set<string>();
+  for (const op of response.routeOps ?? []) {
+    if (!(req.approvedRouteOps ?? []).some(approved => sameRouteOp(op, approved))) {
+      violations.push(`${op.type}:${op.pageId}: route operation is not approved for this request`);
+    }
+    const key = `${op.type}:${op.pageId}`;
+    if (routeKeys.has(key)) violations.push(`${key}: duplicate route operation`);
+    routeKeys.add(key);
+  }
   if (!targets.size) violations.push('Builder source edits require explicit source targets');
   const seen = new Set<string>();
   for (const op of response.fileOps) {
@@ -132,6 +149,8 @@ export const aiComposerRequestSchema = z.object({
   instruction: z.string().max(4000).optional(),
   files: z.record(z.string(), z.string().max(60000)),
   sourceTargets: z.array(pathSchema).min(1).max(80).optional(),
+  approvedRouteOps: z.array(aiComposerRouteOpSchema).max(12).optional(),
+  approvedDependencies: z.array(z.string().min(1).max(120)).max(300).optional(),
   routes: z.array(z.object({ title: z.string().max(120), route: z.string().max(200) })).max(40),
   priorPages: z.array(z.object({ role: z.string().max(60), summary: z.string().max(2000) })).max(20).optional(),
   diagnostics: z.array(z.string().max(1000)).max(30).optional(),

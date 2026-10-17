@@ -1,4 +1,5 @@
-import type { AIComposerRequest, AIComposerTask } from '@/contracts/aiComposerContract';
+import { aiComposerRouteOpSchema, type AIComposerRequest, type AIComposerTask } from '@/contracts/aiComposerContract';
+import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import {
   designKnowledgeManifest,
   selectDesignKnowledge,
@@ -72,6 +73,7 @@ export interface CanonicalAuthoringRequestInput {
   registryContext?: unknown;
   runtimeContext?: string;
   sourceTargets?: string[];
+  approvedRouteOps?: readonly TopologyChange[];
 }
 
 /** Resolve a Builder target against accepted topology without authoring it. */
@@ -285,6 +287,11 @@ export async function assembleCanonicalAuthoringRequest(
       sourceTargets: input.task === 'builder_source_edit'
         ? [...new Set(input.sourceTargets?.length ? input.sourceTargets : [input.page.filePath])]
         : undefined,
+      approvedRouteOps: input.task === 'builder_source_edit' ? (input.approvedRouteOps ?? []).map(op => {
+        const { createdBy: _createdBy, ...wireOp } = op;
+        return aiComposerRouteOpSchema.parse(wireOp);
+      }) : undefined,
+      approvedDependencies: input.task === 'builder_source_edit' ? existingDependencies(input.baseFiles) : undefined,
       routes,
       priorPages: input.priorPages,
       diagnostics: input.diagnostics?.map((item) => item.slice(0, 1000)).slice(0, 30),
@@ -295,4 +302,15 @@ export async function assembleCanonicalAuthoringRequest(
     },
     evidence,
   };
+}
+
+/** Existing accepted package inventory only; this does not approve new installs. */
+function existingDependencies(files: Record<string, string>): string[] {
+  try {
+    const pkg: unknown = JSON.parse(files['/package.json'] ?? '{}');
+    if (!pkg || typeof pkg !== 'object' || !('dependencies' in pkg)) return [];
+    const dependencies = pkg.dependencies;
+    if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) return [];
+    return Object.entries(dependencies).filter(([, version]) => typeof version === 'string').map(([name]) => name).sort();
+  } catch { return []; }
 }

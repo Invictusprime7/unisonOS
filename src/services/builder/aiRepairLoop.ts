@@ -260,6 +260,7 @@ export async function repairBuilderCandidate(input: {
     baseFiles: candidateFiles,
     baseRevisionId: input.baseRevisionId,
     sourceTargets: [target, ...Object.keys(input.rawFiles)],
+    approvedRouteOps: input.routeOps,
     routes: [],
     diagnostics: input.failed.errors.slice(0, 30),
   });
