@@ -8,6 +8,10 @@ import {
   hasUIIntentProfile,
   resolveUIIntentPlacements,
 } from '@/platform/core/uiIntentProfile';
+import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
+
+/** Authored component paths a page may render as part of its own surface. */
+const SHARED_SURFACE_PATH = /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/;
 
 export interface WizardBindingApplicationResult {
   files: Record<string, string>;
@@ -636,6 +640,25 @@ export function applyWizardBindingsToVfs(
 
     const attrs = getBindingAttrs(binding, snapshot);
     let result = applyBindingToContent(nextFiles[filePath], markers, attrs);
+
+    if (!result.applied) {
+      // Exact markers inside the authored components this page renders
+      // (shared nav, footer, newsletter band) are the same page surface.
+      const shared = collectLocalImportClosure(nextFiles, filePath, (path) => SHARED_SURFACE_PATH.test(path))
+        .filter((path) => path !== filePath);
+      let sharedApplied = false;
+      for (const sharedPath of shared) {
+        const sharedResult = applyBindingToContent(nextFiles[sharedPath], markers, attrs);
+        if (!sharedResult.applied) continue;
+        nextFiles[sharedPath] = sharedResult.content;
+        sharedApplied = true;
+        break;
+      }
+      if (sharedApplied) {
+        appliedBindings += 1;
+        continue;
+      }
+    }
 
     if (!result.applied) {
       result = applyBindingByJsxAst(result.content, filePath, binding, attrs);
