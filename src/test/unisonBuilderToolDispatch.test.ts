@@ -67,4 +67,9 @@ describe('stale-session edits', () => {
     const out = await dispatchOnLatestRevision(stale(), base, latest, 'swap_image', ['/src/pages/Home.tsx', 'a.jpg', 'b.jpg'], { confirmOverlap: true });
     expect(out.status).toBe('needs-confirmation');
   });
+  it('does not relabel a stale selected element during a non-overlapping rebase', async () => {
+    const selected = createUnisonBuilderContext({ files, projectId: 'p1', revisionId: 'r1', sourceTargets: ['/src/pages/Home.tsx'], selection: { revisionId: 'r1', componentPath: '/src/pages/Home.tsx' } });
+    const latest = { files: { ...files, '/src/pages/About.tsx': 'new work' }, projectId: 'p1', revisionId: 'r2' };
+    await expect(dispatchOnLatestRevision(selected, base, latest, 'swap_image', ['/src/pages/Home.tsx', 'a.jpg', 'b.jpg'])).rejects.toThrow('Re-select');
+  });
 });

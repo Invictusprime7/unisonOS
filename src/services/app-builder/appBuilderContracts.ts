@@ -226,6 +226,7 @@ export interface AppBuilderNewPageTarget extends AppBuilderPageTarget {
 
 export interface AppBuilderPageGenerationRequest {
   operationId: string;
+  connectorContext?: import('@/types/unisonBuilderConnector').UnisonBuilderConnectorInput;
   baseRevisionId?: string | null;
   currentFiles: Readonly<Record<string, string>>;
   pages: readonly AppBuilderNewPageTarget[];

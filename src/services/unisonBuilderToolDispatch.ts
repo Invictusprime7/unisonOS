@@ -47,6 +47,13 @@ export function preflightBuilderOperation<N extends AgentOperationName>(
   if (!VERSION_INDEPENDENT.has(name) && revisionId && agentCtx.revisionId && revisionId !== agentCtx.revisionId) {
     refuse('This edit was prepared on an older saved version of the site.');
   }
+  const selection = context.element?.selection;
+  if (!VERSION_INDEPENDENT.has(name) && selection?.revisionId && selection.revisionId !== agentCtx.revisionId) {
+    refuse('The selected element belongs to an older revision. Re-select it before editing.');
+  }
+  if (selection?.projectId && selection.projectId !== agentCtx.projectId) {
+    refuse('The selected element belongs to another project.');
+  }
 
   const a = args as unknown[];
   if (FILE_ARG_OPS.has(name)) {
