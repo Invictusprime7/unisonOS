@@ -1,5 +1,9 @@
 # Roadmap
 
+## Sign-in recovery
+- [x] Release auth listener locks before onboarding lookups and audit logging; reset loading on thrown sign-in errors; 11 regression tests pass
+- [ ] Confirm real-account sign-in reaches the workspace (available managed session targets a different backend; requires user sign-in)
+
 ## Active: Enforced AI Builder Connector
 - [x] Phase 1: typed context connector integrated with existing App Builder edits and shared transport; ownership, revision and registry validation; 41 related tests pass
 - [x] Phase 2: enforced dispatch over agentOperations (identity, record ownership, source scope, canonical intents/tokens, router protection); 7 tests

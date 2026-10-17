@@ -21,3 +21,4 @@
 
 - Save queue, terminal, resource, project-list, preflight, scoped-edit, preview, site-backend and editor-command rules: `src/services/AGENTS.md`; AI provider order: `supabase/functions/_shared/AGENTS.md`.
 - UNISON is the only backend: `src/integrations/supabase/env.ts` ignores other injected refs, `main.tsx` fails closed on identity mismatch, and backend changes deploy only via `.github/workflows/supabase-auto-update.yml`, so every schema change needs a timestamped `supabase/migrations` file (drizzle alone fails CI); why: Lovable tooling targets its built-in database.
+- Auth state listeners stay synchronous and defer auth-backed queries/audits to a later task; why: awaiting SDK calls inside its session lock deadlocks successful sign-in.
