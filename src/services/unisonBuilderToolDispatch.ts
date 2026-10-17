@@ -14,6 +14,10 @@ type OpResult<N extends AgentOperationName> = Ops[N] extends (...args: never[]) 
 
 const RESOURCE_OPS = new Set<AgentOperationName>(['read_resource', 'update_resource_field']);
 const FILE_ARG_OPS = new Set<AgentOperationName>(['inspect_file', 'swap_image']);
+const VERSION_INDEPENDENT = new Set<AgentOperationName>([
+  'read_resource', 'update_resource_field', 'inspect_catalog', 'inspect_data',
+  'create_catalog_item', 'hide_catalog_item', 'delete_catalog_item', 'list_resources',
+]);
 const ROUTER_FILE = '/src/App.tsx';
 const THEME_FILE = '/src/index.css';
 const FONT_ALIASES = ['--font-display', '--font-sans'];
@@ -39,7 +43,10 @@ export function preflightBuilderOperation<N extends AgentOperationName>(
   const { projectId, businessId, revisionId } = context.identity;
   if (projectId && agentCtx.projectId && projectId !== agentCtx.projectId) refuse('Operation context belongs to another project.');
   if (businessId && agentCtx.businessId && businessId !== agentCtx.businessId) refuse('Operation context belongs to another business.');
-  if (revisionId && agentCtx.revisionId && revisionId !== agentCtx.revisionId) refuse('Operation context is from an older revision. Reload before editing.');
+  // Saved records live apart from page source, so the page version is irrelevant to them.
+  if (!VERSION_INDEPENDENT.has(name) && revisionId && agentCtx.revisionId && revisionId !== agentCtx.revisionId) {
+    refuse('This edit was prepared on an older saved version of the site.');
+  }
 
   const a = args as unknown[];
   if (FILE_ARG_OPS.has(name)) {
@@ -103,4 +110,41 @@ export async function dispatchBuilderOperation<N extends AgentOperationName>(
   const result = await op(agentCtx, ...(args as unknown[]));
   assertProposalScope(context, name, result);
   return result as Awaited<OpResult<N>>;
+}
+
+export type StaleEditOutcome<R> =
+  | { status: 'applied'; result: R; rebased: boolean; revisionId: string | null }
+  | { status: 'needs-confirmation'; reason: string; changedPaths: string[] };
+
+/**
+ * Stale-session edits move forward instead of failing: the operation is
+ * replayed on the newest saved files (operations are pure over files, so
+ * the result is computed from the newest content). If a target file changed
+ * since the session's version, the user decides — newer work is never
+ * overwritten silently. Callers still save through the canonical writer.
+ */
+export async function dispatchOnLatestRevision<N extends AgentOperationName>(
+  context: UnisonBuilderTurnContext,
+  base: AgentContext,
+  latest: AgentContext,
+  name: N,
+  args: OpArgs<N>,
+  opts: { confirmOverlap?: boolean } = {},
+): Promise<StaleEditOutcome<Awaited<OpResult<N>>>> {
+  const stale = !!(context.identity.revisionId && latest.revisionId && context.identity.revisionId !== latest.revisionId);
+  if (!stale || VERSION_INDEPENDENT.has(name)) {
+    const result = await dispatchBuilderOperation({ ...context, identity: { ...context.identity, revisionId: latest.revisionId ?? context.identity.revisionId } }, latest, name, ...args);
+    return { status: 'applied', result, rebased: false, revisionId: latest.revisionId ?? null };
+  }
+  const targets = context.sourceTargets.length ? context.sourceTargets : Object.keys(base.files);
+  const changedPaths = targets.filter((p) => base.files[p] !== latest.files[p]);
+  if (changedPaths.length && !opts.confirmOverlap) {
+    return { status: 'needs-confirmation', reason: 'This part of the site changed since you started. Apply on the latest version or cancel?', changedPaths };
+  }
+  const rebasedContext = { ...context, identity: { ...context.identity, revisionId: latest.revisionId ?? null } };
+  const result = await dispatchBuilderOperation(rebasedContext, latest, name, ...args);
+  if (result == null && name !== 'inspect_file') {
+    return { status: 'needs-confirmation', reason: 'The selected element is no longer on the latest version. Select it again.', changedPaths };
+  }
+  return { status: 'applied', result, rebased: true, revisionId: latest.revisionId ?? null };
 }
