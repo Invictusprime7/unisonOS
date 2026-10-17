@@ -79,7 +79,7 @@ serve(async (req) => {
   const resource = String(body?.resource ?? "");
   if (!isValidUUID(projectId)) return json({ success: false, error: "A site is required." }, 400);
   if (!ACTIONS.includes(action)) return json({ success: false, error: "Unknown action." }, 400);
-  const contract = getCmsResourceContract(resource);
+  const contract = contractFor(resource);
   if (!contract) return json({ success: false, error: "Unknown kind of saved item." }, 400);
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
