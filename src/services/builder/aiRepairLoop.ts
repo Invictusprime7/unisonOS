@@ -11,7 +11,7 @@ import { runBuilderTurn } from '@/services/builderBrainClient';
 import {
   AI_COMPOSER_MODES,
   aiComposerResponseSchema,
-  composerScopeViolations,
+  composerProposalViolations,
   type AIComposerRequest,
   type AIComposerResponse,
 } from '@/contracts/aiComposerContract';
@@ -155,7 +155,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
     }
     lastResponse = response;
     narrate('file_change', `Drafted changes to ${response.fileOps.length} file${response.fileOps.length === 1 ? '' : 's'}`, 'ok');
-    const scope = composerScopeViolations(request.task, request.page.filePath, response.fileOps);
+    const scope = composerProposalViolations(request, response);
     if (scope.length) {
       narrate('verification', 'The draft reached outside the requested area; narrowing it', 'running');
       lastErrors = scope;
