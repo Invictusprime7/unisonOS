@@ -5,7 +5,9 @@ vi.mock('@/services/cmsRecordService', () => ({
   listContentRecords: vi.fn(), getContentRecord: vi.fn(), createContentRecord: vi.fn(), updateContentRecord: vi.fn(),
 }));
 vi.mock('@/services/project-backend/projectBackendResolver', () => ({
-  projectBackendResolver: { resolve: vi.fn(async () => null), invalidate: vi.fn() },
+  projectBackendResolver: { resolve: vi.fn(async () => ({
+    projectId: 'project-1', siteId: 'site-1', mode: 'shared-legacy', status: 'ready',
+  })), invalidate: vi.fn() },
 }));
 import { agentOperations } from '@/services/agent-runtime/operations';
 import { onResourceInvalidated } from '@/services/resources/resourceRuntime';
