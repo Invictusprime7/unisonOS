@@ -88,8 +88,8 @@
 - [ ] M2 (PR2/3): Preview as sole primary edit UI — [x] inspector routes data-bound text/media to resource commands (replace "Edit it from the content panel" dead-end), [x] fill missing lane executors (binding), [x] upload picker from preview context (site storage, no inline data); [x] pending/saved/error + undo states; [ ] six-fixture reload exit check (needs signed-in browser run)
 - [ ] M3 (PR4): unified Resources UX (Records/Collections), one canonical record type per use case (testimonials/projects/FAQ collisions); [x] catalogOperations → agentOperations → Resource Runtime
 - [ ] M4 (PR5): remaining mounted Creator Playground UX consolidation; [x] unused duplicate panel retired and PlaygroundSyncController hydration-only
-- [ ] M5: tenant scoping/RLS verification (open); [x] dedicated-backend content/profile adapters; [x] expected-revision check on record updates (`expected` on update-resource-field)
-- [ ] M6: AI edits ride the same EditorCommand/ResourceRuntime plane
+- [ ] M5 live tenant/RLS verification: needs authoritative sign-in; [x] AI reads scoped via Resource Runtime; [x] cross-project edit rejection and live-event filtering tested; [x] catalog conditional updates implemented in existing handlers; [x] content/profile observed-value checks wired; [ ] atomic shared content/profile commands require canonical migration tooling (available migration target is the wrong backend; no schema applied)
+- [x] M6 source wiring: AI catalog and generic resource field updates issue EditorCommand with observed fields and return the actual saved record; hide uses the same update path; creation/deletion retain Resource Runtime; authenticated preview/reopen evidence remains below
 - [ ] M7: cross-industry E2E beta gate (10 cases in guidebook)
 
 ## Blocked
@@ -108,3 +108,8 @@
 - [x] Dedicated-backend gateway contract extended to content entries + site profile (project-backend edge); client resourceRuntime no longer throws for non-catalog adapters — gateway is the authority
 - [ ] Deploy project-backend edge change via GitHub workflow; live signed-in slice check still open
 - [x] WYSIWYG never gated on manual save: unmatched slug marks auto-create the record in one write (seeded name from the mark), "Save the site first" dead-end removed; 30 resource tests pass
+- [x] Finish click/AI conflict wiring: inline original text, loaded inspector fields, guarded undo, failed reads never auto-create duplicate records; record fields auto-apply on blur/toggle
+- [x] Cross-industry service integration: second product image, menu price/category, service duration, concurrent edits, unbound edits, safe undo and failed-write invalidation; persistent adapter fixtures, not live database proof
+- [ ] Full ten-case M7 browser acceptance (booking availability, case-study publish, mounted save concurrency included): needs authoritative signed-in session and approved test projects
+- [ ] M3 data collisions: scoped live audit and approved migration needed before choosing/merging testimonial/project/FAQ record owners; no existing records moved or deleted
+- [ ] M4 safe removal of mounted Playground editing: replacement equivalence requires the signed-in acceptance above; useful operations stay mounted

@@ -12,7 +12,9 @@ import { Button } from '@/components/ui/button';
 import { Database, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { getResource } from '@/services/resources/resourceRegistry';
-import { applyResourceOp, getResourceRecord, parseResourceProvenance } from '@/services/resources/resourceRuntime';
+import { parseResourceProvenance } from '@/services/resources/resourceRuntime';
+import { executeEditorCommand } from '@/services/editor/editorCommandService';
+import { readEditorResource } from '@/services/editor/executors/resourceExecutor';
 import { uploadForPlacement } from '@/services/assets/uploadPlacement';
 import type { ResourceFieldDefinition, ResourceRecord } from '@/services/resources/resourceTypes';
 
@@ -54,7 +56,7 @@ export function RecordFieldsEditor({ mark, businessId, projectId, defaultOpen = 
     if (!open || !ref || !def || !businessId) return;
     let alive = true;
     setLoading(true);
-    getResourceRecord(ref.resourceKey, { businessId, projectId, mode: 'builder' }, ref.recordId)
+    readEditorResource(ref, { businessId, projectId, mode: 'builder' })
       .then((r) => {
         if (!alive) return;
         setRecord(r);
@@ -83,8 +85,12 @@ export function RecordFieldsEditor({ mark, businessId, projectId, defaultOpen = 
     setSaving(true);
     try {
       const values = Object.fromEntries(changed.map((f) => [f.key, fromDraft(f, nextDraft[f.key])]));
-      const next = await applyResourceOp({ op: 'update', ref, values }, { businessId, projectId, mode: 'builder' });
       const previous = Object.fromEntries(changed.map((f) => [f.key, record?.[f.key] ?? null]));
+      const result = await executeEditorCommand({ type: 'update-resource-field', target: { resourceMark: mark, projectId }, ref, values, expected: previous }, {
+        source: 'inspector', resource: { businessId, projectId, mode: 'builder' },
+      });
+      if (!result.ok) throw new Error(result.error ?? 'Could not save this item.');
+      const next = result.record;
       const applied = next ?? (record ? { ...record, ...values } : null);
       setRecord(applied);
       setDraft(nextDraft);
@@ -93,7 +99,8 @@ export function RecordFieldsEditor({ mark, businessId, projectId, defaultOpen = 
           label: 'Undo',
           onClick: async () => {
             try {
-              const back = await applyResourceOp({ op: 'update', ref, values: previous }, { businessId, projectId, mode: 'builder' });
+              await result.undo?.();
+              const back = await readEditorResource(ref, { businessId, projectId, mode: 'builder' });
               const restored = back ?? (applied ? { ...applied, ...previous } : null);
               setRecord(restored);
               setDraft(Object.fromEntries(fields.map((f) => [f.key, toDraft(restored?.[f.key])])));
@@ -148,15 +155,16 @@ export function RecordFieldsEditor({ mark, businessId, projectId, defaultOpen = 
                   <div key={f.key} className="flex flex-col gap-0.5 text-[10px] text-white/60">
                     <label htmlFor={fieldId}>{f.label}</label>
                     {f.type === 'boolean' ? (
-                      <input id={fieldId} type="checkbox" checked={draft[f.key] === 'true'} onChange={(e) => setDraft((d) => ({ ...d, [f.key]: String(e.target.checked) }))} />
+                      <input id={fieldId} type="checkbox" checked={draft[f.key] === 'true'} onChange={(e) => { const value = String(e.target.checked); setDraft((d) => ({ ...d, [f.key]: value })); void save({ key: f.key, value }, true); }} />
                     ) : f.type === 'textarea' || f.type === 'richtext' ? (
-                      <Textarea id={fieldId} rows={3} value={draft[f.key] ?? ''} onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))} className="text-xs" />
+                      <Textarea id={fieldId} rows={3} value={draft[f.key] ?? ''} onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))} onBlur={(e) => void save({ key: f.key, value: e.target.value }, true)} className="text-xs" />
                     ) : (
                       <Input
                         id={fieldId}
                         type={['number', 'money', 'money-cents', 'rating'].includes(f.type) ? 'number' : f.type === 'email' ? 'email' : f.type === 'url' || f.type === 'image' ? 'url' : 'text'}
                         value={draft[f.key] ?? ''}
                         onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                        onBlur={(e) => void save({ key: f.key, value: e.target.value }, true)}
                         className="h-7 text-xs"
                       />
                     )}

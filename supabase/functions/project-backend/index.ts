@@ -11,6 +11,7 @@ import { verifyAuth, authError } from "../_shared/auth.ts";
 import { isValidUUID, safeParseBody } from "../_shared/validate.ts";
 import { getCmsResourceContract } from "../_shared/catalogSurfaceSummary.ts";
 import { decryptConnectedProjectSecret } from "../_shared/connectedProjectCrypto.ts";
+import { applyExpectedFilters } from "../_shared/recordCompareAndSet.ts";
 
 type Action = "list" | "get" | "create" | "update" | "delete";
 const ACTIONS: Action[] = ["list", "get", "create", "update", "delete"];
@@ -133,6 +134,7 @@ serve(async (req) => {
   const table = contract.sourceTable;
   let recordId = body?.recordId ? String(body.recordId) : undefined;
   const values = (body?.values ?? {}) as Record<string, unknown>;
+  let expected = body?.expected as Record<string, unknown> | undefined;
 
   // Content entries keep their field values inside a `data` jsonb column,
   // filtered by content type; the site profile is the site's single row.
@@ -155,8 +157,14 @@ serve(async (req) => {
     if (typeof slug === "string") allowed.slug = slug;
     if (typeof status === "string") allowed.status = status;
     if (action === "update" && recordId) {
-      const { data: current } = await scoped().eq("id", recordId).maybeSingle();
+      const { data: current, error: readError } = await scoped().eq("id", recordId).maybeSingle();
+      if (readError || !current) return json({ success: false, error: "This content item is unavailable." }, 404);
       const currentData = (current as { data?: Record<string, unknown> } | null)?.data ?? {};
+      const flattened = { ...currentData, ...current };
+      if (expected && Object.entries(expected).some(([key, seen]) => JSON.stringify(flattened[key] ?? null) !== JSON.stringify(seen ?? null))) {
+        return json({ success: false, error: "Conflict: this content changed elsewhere." }, 409);
+      }
+      expected = { data: currentData, title: current.title, slug: current.slug ?? null };
       allowed.data = { ...currentData, ...dataFields };
     } else {
       allowed.data = dataFields;
@@ -167,10 +175,22 @@ serve(async (req) => {
   let result: { data: unknown; error: { message: string } | null };
   if (action === "list") result = await scoped().order(contract.sortField);
   else if (!recordId && action !== "create") return json({ success: false, error: "An item is required." }, 400);
-  else if (action === "get") result = await scoped().eq("id", recordId!).maybeSingle();
+  else if (action === "get") result = await scoped().eq("id", recordId ?? "").maybeSingle();
   else if (action === "create") result = await site.from(table).insert(allowed).select().single();
-  else if (action === "update") result = await site.from(table).update(allowed).eq("id", recordId!).select().single();
-  else result = await site.from(table).delete().eq("id", recordId!);
+  else if (action === "update") {
+    let update = site.from(table).update(allowed).eq("id", recordId ?? "");
+    if (contract.contentType) update = update.eq("content_type", contract.contentType);
+    if (expected) {
+      try { update = applyExpectedFilters(update, expected, contract.editableFields); }
+      catch { return json({ success: false, error: "Invalid expected fields." }, 400); }
+    }
+    result = await update.select().maybeSingle();
+    if (!result.error && !result.data) return json({ success: false, error: "Conflict: this item changed elsewhere or is no longer available." }, 409);
+  } else {
+    let remove = site.from(table).delete().eq("id", recordId ?? "");
+    if (contract.contentType) remove = remove.eq("content_type", contract.contentType);
+    result = await remove;
+  }
 
   if (action !== "list" && action !== "get") {
     await admin.from("audit_logs").insert({
@@ -180,5 +200,6 @@ serve(async (req) => {
     });
   }
   if (result.error) return json({ success: false, error: result.error.message }, 400);
-  return json({ success: true, data: result.data });
+  const flatten = (row: Record<string, unknown>) => contract.contentType ? { ...(row.data as Record<string, unknown> ?? {}), ...row } : row;
+  return json({ success: true, data: Array.isArray(result.data) ? result.data.map(flatten) : result.data ? flatten(result.data as Record<string, unknown>) : result.data });
 });

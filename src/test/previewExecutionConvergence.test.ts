@@ -34,8 +34,8 @@ vi.mock('@/services/cmsRecordService', () => ({
   updateContentRecord: vi.fn(),
 }));
 vi.mock('@/services/businessProfileService', () => ({
-  loadBusinessProfile: vi.fn(),
-  saveBusinessProfile: vi.fn(),
+  loadSiteProfile: vi.fn(),
+  saveSiteProfile: vi.fn(),
 }));
 
 import { executeEditorCommand } from '@/services/editor/editorCommandService';

@@ -18,7 +18,7 @@ const RESOURCE_OPS = new Set<AgentOperationName>(['read_resource', 'update_resou
 const FILE_ARG_OPS = new Set<AgentOperationName>(['inspect_file', 'swap_image']);
 const VERSION_INDEPENDENT = new Set<AgentOperationName>([
   'read_resource', 'update_resource_field', 'inspect_catalog', 'inspect_data',
-  'create_catalog_item', 'hide_catalog_item', 'delete_catalog_item', 'list_resources',
+  'create_catalog_item', 'update_catalog_item', 'hide_catalog_item', 'delete_catalog_item', 'list_resources',
 ]);
 const ROUTER_FILE = '/src/App.tsx';
 const THEME_FILE = '/src/index.css';
@@ -32,7 +32,7 @@ export class BuilderToolRefusal extends Error {
 }
 
 /** Strip a trailing `#field` so a record mark matches any of its fields. */
-const recordOf = (mark: string) => mark.split('#')[0];
+const recordOf = (mark: string) => mark.split('.')[0];
 
 export function preflightBuilderOperation<N extends AgentOperationName>(
   context: UnisonBuilderTurnContext,
@@ -112,8 +112,6 @@ export function assertProposalScope(context: UnisonBuilderTurnContext, name: Age
   for (const path of paths) {
     if (path === ROUTER_FILE) throw new BuilderToolRefusal(name, 'PageRegistry alone authors /src/App.tsx.');
     if (path === THEME_FILE && (name === 'set_theme_tokens' || name === 'set_font')) continue;
-    // Catalog updates intentionally sync every page showing the old value.
-    if (name === 'update_catalog_item') continue;
     if (context.sourceTargets.length && !context.sourceTargets.includes(path)) {
       throw new BuilderToolRefusal(name, `Proposal touches ${path}, outside this request's source targets.`);
     }

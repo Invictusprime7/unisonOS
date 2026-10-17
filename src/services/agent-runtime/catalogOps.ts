@@ -7,6 +7,7 @@
  */
 import { getCatalogSurface, getCatalogSurfaceByTable, type CatalogSourceTable, type CatalogSurface } from '@/platform/core/catalogSurfaceRegistry';
 import { applyResourceOp, queryResource } from '@/services/resources/resourceRuntime';
+import { executeEditorCommand } from '@/services/editor/editorCommandService';
 
 export const EDITABLE_CATALOG_SURFACES = ['products', 'services', 'menu_items', 'pricing_plans'] as const;
 
@@ -91,15 +92,20 @@ export async function createCatalogItem(businessId: string, surfaceId: string, p
 }
 
 export async function updateCatalogItemRow(
-  businessId: string, surfaceId: string, id: string, patch: CatalogPatch, projectId?: string | null,
+  businessId: string, surfaceId: string, id: string, patch: CatalogPatch, projectId?: string | null, observed?: Record<string, unknown>,
 ): Promise<{ before: CatalogItem | null; after: CatalogItem }> {
   const surface = surfaceOrThrow(surfaceId);
   const rows = await queryResource(surface.surfaceId, { businessId, projectId, mode: 'builder' });
   const beforeRow = rows.find((r) => String(r.id) === id);
-  const row = await applyResourceOp({
-    op: 'update', ref: { resourceKey: surface.surfaceId, kind: 'catalog', recordId: id },
-    values: normalizeCatalogPatch(surface, patch),
-  }, { businessId, projectId, mode: 'builder' });
+  if (!beforeRow) throw new Error('This item is no longer available in this project.');
+  const values = normalizeCatalogPatch(surface, patch);
+  const expected = observed ?? Object.fromEntries(Object.keys(values).map((key) => [key, beforeRow[key] ?? null]));
+  const result = await executeEditorCommand({
+    type: 'update-resource-field', target: { ownerKind: 'resource', projectId },
+    ref: { resourceKey: surface.surfaceId, kind: 'catalog', recordId: id }, values, expected,
+  }, { source: 'ai', resource: { businessId, projectId, mode: 'builder' } });
+  if (!result.ok) throw new Error(result.error ?? 'Catalog update failed.');
+  const row = result.record;
   if (!row) throw new Error('Catalog update returned no saved record.');
   const after = toCatalogItem(surface, row);
   return { before: beforeRow ? toCatalogItem(surface, beforeRow) : null, after };

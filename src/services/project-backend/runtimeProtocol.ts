@@ -27,7 +27,7 @@ export type BackendCommandV2 =
   | { kind: 'resource.list'; resourceKey: string; query?: Record<string, unknown> }
   | { kind: 'resource.get'; resourceKey: string; recordId: string }
   | { kind: 'resource.mutate'; resourceKey: string; action: 'create'; values: Record<string, unknown> }
-  | { kind: 'resource.mutate'; resourceKey: string; action: 'update'; recordId: string; values: Record<string, unknown>; expectedRecordVersion?: string }
+  | { kind: 'resource.mutate'; resourceKey: string; action: 'update'; recordId: string; values: Record<string, unknown>; expected?: Record<string, unknown>; expectedRecordVersion?: string }
   | { kind: 'resource.mutate'; resourceKey: string; action: 'delete'; recordId: string }
   | { kind: 'asset.link'; assetId: string; targetId: string; property: string }
   | { kind: 'intent.execute'; intentId: string; payload: Record<string, unknown> }
@@ -112,7 +112,7 @@ function buildResourceOp(command: Extract<BackendCommandV2, { kind: 'resource.mu
   if (!definition) throw new ProtocolError('NOT_FOUND', `Unknown resource "${command.resourceKey}".`);
   const ref = { resourceKey: definition.key, kind: definition.kind, catalogKind: definition.catalogKind, recordId: command.recordId };
   return command.action === 'update'
-    ? { op: 'update', ref, values: command.values }
+    ? { op: 'update', ref, values: command.values, ...(command.expected ? { expected: command.expected } : {}) }
     : { op: 'delete', ref };
 }
 

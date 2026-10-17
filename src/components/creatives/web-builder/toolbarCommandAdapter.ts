@@ -122,7 +122,7 @@ export function useToolbarCommands(
       const pending = lane === 'resource' ? toast.loading('Saving to the linked item…') : null;
       const result = await executeEditorCommand(command, {
         source: 'toolbar',
-        resource: resource as ResourceContext,
+        resource: { ...resource, mode: 'builder' },
         executors: { source, presentation, route, binding },
       });
       if (pending !== null) toast.dismiss(pending);

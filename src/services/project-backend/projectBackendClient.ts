@@ -5,7 +5,7 @@ export type ProjectBackendAction = 'list' | 'get' | 'create' | 'update' | 'delet
 
 export async function callProjectBackend<T = unknown>(req: {
   projectId: string; action: ProjectBackendAction; resource: string;
-  recordId?: string; values?: Record<string, unknown>;
+  recordId?: string; values?: Record<string, unknown>; expected?: Record<string, unknown>;
 }): Promise<T> {
   const { data, error } = await supabase.functions.invoke('project-backend', { body: req });
   if (error) throw new Error(error.message || 'This site’s database could not be reached.');

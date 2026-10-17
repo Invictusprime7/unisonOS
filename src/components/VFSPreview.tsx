@@ -88,6 +88,7 @@ const LOCAL_PREVIEW_URL = import.meta.env.VITE_LOCAL_PREVIEW_URL || '';
 export interface InlineTextEditChange {
   selector: string;
   text: string;
+  originalText?: string;
   revisionId: string | null;
   target: {
     pagePath: string | null;
@@ -1025,6 +1026,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         void Promise.resolve(onInlineTextCommit({
           selector: data.selector,
           text: data.text,
+          originalText: typeof data.originalText === 'string' ? data.originalText : undefined,
           revisionId: typeof data.revisionId === 'string' ? data.revisionId : null,
           target: {
             pagePath: typeof data.target?.pagePath === 'string' ? data.target.pagePath : null,

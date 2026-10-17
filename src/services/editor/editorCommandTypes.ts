@@ -33,9 +33,14 @@ export interface EditorTarget {
   projectId?: string | null;
 }
 
-interface Base<T extends string> { type: T; target: EditorTarget }
+interface Base<T extends string> {
+  type: T;
+  target: EditorTarget;
+  /** Raw saved field values observed before this edit; never formatted prices. */
+  expected?: Record<string, unknown>;
+}
 
-export type SetTextCommand = Base<'set-text'> & { text: string };
+export type SetTextCommand = Base<'set-text'> & { text: string; originalText?: string };
 export type SetStyleCommand = Base<'set-style'> & { styles: Record<string, string> };
 export type SetAttributeCommand = Base<'set-attribute'> & { name: string; value: string | null };
 export type SetLinkCommand = Base<'set-link'> & { href: string };
@@ -82,4 +87,5 @@ export interface EditorCommandResult {
   revisionId?: string | null;
   undo?: () => Promise<void>;
   error?: string;
+  record?: import('@/services/resources/resourceTypes').ResourceRecord | null;
 }

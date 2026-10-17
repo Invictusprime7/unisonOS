@@ -28,7 +28,7 @@ describe('AI catalog shared resource ownership', () => {
     const off = onResourceInvalidated((event) => invalidations.push(event));
     const result = await agentOperations.update_catalog_item(ctx, 'products', 'row-1', { price: 25, image_url: 'https://assets.example/new.jpg' });
     off();
-    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({ businessId: 'business-1', projectId: 'project-1', resource: 'products', recordId: 'row-1', values: { price: 25, image_url: 'https://assets.example/new.jpg' } });
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({ businessId: 'business-1', projectId: 'project-1', resource: 'products', recordId: 'row-1', values: { price: 25, image_url: 'https://assets.example/new.jpg' }, expected: { price: 10, image_url: 'https://assets.example/old.jpg' } });
     expect(result.change).toBeNull();
     expect(ctx.files['/src/pages/Home.tsx']).toContain('Unrelated $10');
     expect(ctx.files['/src/pages/Home.tsx']).toContain('old.jpg');
@@ -44,5 +44,20 @@ describe('AI catalog shared resource ownership', () => {
   it('surfaces failed reads instead of claiming the catalog is empty', async () => {
     mocks.list.mockRejectedValue(new Error('Catalog unavailable'));
     await expect(listCatalog('business-1', ['products'], 'project-1')).rejects.toThrow('Catalog unavailable');
+  });
+  it('rejects a stale AI field value without writing or invalidating', async () => {
+    const events: unknown[] = [];
+    const off = onResourceInvalidated((event) => events.push(event));
+    await expect(agentOperations.update_catalog_item(ctx, 'products', 'row-1', { price: 25 }, { price: 9 })).rejects.toThrow('changed elsewhere');
+    off();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+  it('cannot read or update another site record, even under the same business', async () => {
+    mocks.list.mockImplementation(async ({ projectId }) => projectId === 'project-1' ? [] : [{ id: 'row-1', price: 10 }]);
+    expect(await agentOperations.inspect_data(ctx, 'products')).toEqual([]);
+    await expect(agentOperations.update_catalog_item(ctx, 'products', 'row-1', { price: 25 })).rejects.toThrow('this project');
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.list.mock.calls.every(([input]) => input.projectId === 'project-1')).toBe(true);
   });
 });

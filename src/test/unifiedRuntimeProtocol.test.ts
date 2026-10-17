@@ -112,17 +112,18 @@ describe('unified runtime protocol v2', () => {
     expect(mocks.listCmsRecords).not.toHaveBeenCalled();
   });
 
-  it.each(['content:faq', 'business-profile'])('fails closed for dedicated %s without using shared CMS', async (resourceKey) => {
+  it.each(['content:faq', 'business-profile'])('routes dedicated %s through the same gateway without using shared CMS', async (resourceKey) => {
     registerContentTypes([{ id: 'type-1', api_key: 'faq', display_name: 'FAQ', field_schema: [{ key: 'question' }] }]);
     mocks.resolve.mockResolvedValue({
       bindingId: 'binding-1', projectId: 'project-1', siteId: 'site-1',
       mode: 'dedicated', provider: 'supabase', status: 'ready',
     });
+    mocks.callProjectBackend.mockResolvedValue([{ id: 'record-1', title: 'FAQ', data: { question: 'Updated?' } }]);
 
     const result = await executeBackendCommandV2(context, { kind: 'resource.list', resourceKey });
 
-    expect(result).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED' } });
-    expect(mocks.callProjectBackend).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, data: [expect.objectContaining({ id: 'record-1' })] });
+    expect(mocks.callProjectBackend).toHaveBeenCalledWith({ projectId: 'project-1', action: 'list', resource: resourceKey });
     expect(mocks.listCmsRecords).not.toHaveBeenCalled();
   });
 

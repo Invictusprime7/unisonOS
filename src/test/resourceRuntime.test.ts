@@ -14,8 +14,8 @@ vi.mock('@/services/project-backend/projectBackendResolver', () => ({
   projectBackendResolver: { resolve: (...a: unknown[]) => resolveProjectBackend(...a), invalidate: vi.fn() },
 }));
 vi.mock('@/services/businessProfileService', () => ({
-  loadBusinessProfile: vi.fn(async (id: string) => ({ businessId: id, name: 'Acme' })),
-  saveBusinessProfile: vi.fn(async (id: string, p: object) => ({ businessId: id, name: 'Acme', ...p })),
+  loadSiteProfile: vi.fn(async (id: string) => ({ businessId: id, name: 'Acme' })),
+  saveSiteProfile: vi.fn(async (id: string, _project: unknown, p: object) => ({ businessId: id, name: 'Acme', ...p })),
 }));
 
 import { getResource, listResources, registerContentTypes } from '@/services/resources/resourceRegistry';

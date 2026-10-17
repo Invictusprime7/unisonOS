@@ -27,5 +27,5 @@
 
 - Builder preferences are optional local state enforced at request/execution boundaries; tools gate the menu, catalog/business settings gate their operations. Why: hiding controls cannot authorize disabled mutations.
 
-- Agent catalog tools delegate to Resource Runtime for project routing/invalidation; never swap matching source literals. Why: one record owner.
+- Agent record updates use EditorCommand with observed fields; adapters own scoped writes/invalidation. Why: clicks and AI share one owner.
 - Edit gates block only compile/imports, stale/ownership, protected paths, data loss and binding execution; design/scope findings are advisory; theme requests use the theme lane. Why: policy blocks stopped valid edits.

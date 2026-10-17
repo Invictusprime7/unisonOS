@@ -4,7 +4,8 @@
  * operations only *propose* file changes, which callers hand to the existing
  * transaction (`runBuilderAiMutation` → `commitMutation`). No new writer.
  */
-import { supabase } from '@/integrations/supabase/client';
+import { executeEditorCommand } from '@/services/editor/editorCommandService';
+import { readEditorResource } from '@/services/editor/executors/resourceExecutor';
 import { collectIntentTargets } from './intentInvariant';
 import {
   listCatalog, createCatalogItem, updateCatalogItemRow, deleteCatalogItem,
@@ -21,7 +22,8 @@ import {
 } from './systemGraph';
 import { resolveEditableEntity, type EditableSelection } from './editableOwnershipResolver';
 import { listResources, getResource } from '@/services/resources/resourceRegistry';
-import { getResourceRecord, applyResourceOp, parseResourceProvenance } from '@/services/resources/resourceRuntime';
+import { queryResource, parseResourceProvenance } from '@/services/resources/resourceRuntime';
+import { getCatalogSurfaceByTable } from '@/platform/core/catalogSurfaceRegistry';
 import type { ResourceDefinition, ResourceRecord } from '@/services/resources/resourceTypes';
 import { removeSection, moveSection, restyleSection, swapVariant, type SectionActionResult } from './sectionActions';
 import { isCoreIntent } from '@/platform/core/coreIntents';
@@ -162,13 +164,9 @@ export const agentOperations = {
   /** Project-scoped catalog read through the normal access rules. */
   async inspect_data(ctx: AgentContext, table: CatalogTable, limit = 20): Promise<unknown[]> {
     if (!ctx.businessId || !CATALOG_TABLES.includes(table)) return [];
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      .eq('business_id', ctx.businessId)
-      .limit(limit);
-    if (error) throw new Error(error.message);
-    return data ?? [];
+    const surface = getCatalogSurfaceByTable(table);
+    if (!surface) return [];
+    return (await queryResource(surface.surfaceId, { businessId: ctx.businessId, projectId: ctx.projectId, mode: 'builder' })).slice(0, Math.max(0, limit));
   },
   /** Propose CSS custom-property changes in the site stylesheet. */
   set_theme_tokens(ctx: AgentContext, tokens: Record<string, string>): ProposedChange | null {
@@ -213,10 +211,10 @@ export const agentOperations = {
    * bound views; matching literals elsewhere never imply record ownership.
    */
   async update_catalog_item(
-    ctx: AgentContext, surfaceId: string, id: string, patch: CatalogPatch,
+    ctx: AgentContext, surfaceId: string, id: string, patch: CatalogPatch, expected?: Record<string, unknown>,
   ): Promise<{ change: ProposedChange | null; summary: string; item: CatalogItem }> {
     if (!ctx.businessId) throw new Error('No business is linked to this site.');
-    const { after } = await updateCatalogItemRow(ctx.businessId, surfaceId, id, patch, ctx.projectId);
+    const { after } = await updateCatalogItemRow(ctx.businessId, surfaceId, id, patch, ctx.projectId, expected);
     const what = patch.price != null ? `price $${patch.price}` : patch.image_url ? 'new photo' : patch.active === false ? 'hidden' : 'updated';
     const summary = `${after.name}: ${what} saved`;
     return { change: null, summary, item: after };
@@ -249,20 +247,27 @@ export const agentOperations = {
     if (!ctx.businessId) throw new Error('No business is linked to this site.');
     const ref = parseResourceProvenance(provenance);
     if (!ref) throw new Error(`Unknown record mark "${provenance}".`);
-    return getResourceRecord(ref.resourceKey, { businessId: ctx.businessId, projectId: ctx.projectId, mode: 'builder' }, ref.recordId);
+    return readEditorResource(ref, { businessId: ctx.businessId, projectId: ctx.projectId, mode: 'builder' });
   },
   /**
    * Change one field of the record behind a `data-ut-resource` mark. Writes go
    * through ResourceRuntime (validated, editable-only, invalidates the preview);
    * no page file changes, so button destinations are untouched.
    */
-  async update_resource_field(ctx: AgentContext, provenance: string, value: unknown, field?: string): Promise<{ summary: string; record: ResourceRecord | null }> {
+  async update_resource_field(ctx: AgentContext, provenance: string, value: unknown, field?: string, expected?: Record<string, unknown>): Promise<{ summary: string; record: ResourceRecord | null }> {
     if (!ctx.businessId) throw new Error('No business is linked to this site.');
     const ref = parseResourceProvenance(provenance);
     if (!ref) throw new Error(`Unknown record mark "${provenance}".`);
     const key = field ?? ref.field;
     if (!key) throw new Error('Name the field to change.');
-    const record = await applyResourceOp({ op: 'update', ref, values: { [key]: value } }, { businessId: ctx.businessId, projectId: ctx.projectId, mode: 'builder' });
+    const resource = { businessId: ctx.businessId, projectId: ctx.projectId, mode: 'builder' as const };
+    const before = await readEditorResource(ref, resource);
+    const result = await executeEditorCommand({
+      type: 'update-resource-field', target: { ownerKind: 'resource', projectId: ctx.projectId }, ref,
+      values: { [key]: value }, expected: expected ?? (before ? { [key]: before[key] ?? null } : undefined),
+    }, { source: 'ai', resource });
+    if (!result.ok) throw new Error(result.error ?? 'Could not save this field.');
+    const record = result.record ?? null;
     const label = getResource(ref.resourceKey)?.schema.find((f) => f.key === key)?.label ?? key;
     return { summary: `${label} saved`, record };
   },
