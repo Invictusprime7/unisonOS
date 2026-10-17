@@ -370,7 +370,8 @@ export function mutateJSXText(
       const after = leaf.value.slice(Math.max(0, Math.min(leaf.value.length, cutEnd - from)));
       if (to < prefix || from > cutEnd) return null;
       if (insertHere) inserted = true;
-      return { ...leaf, next: before + (insertHere ? insertion : '') + after };
+      const next = before + (insertHere ? insertion : '') + after;
+      return next === leaf.value ? null : { ...leaf, next };
     }).filter((edit) => edit !== null);
     let next = source;
     for (const edit of edits.reverse()) {
