@@ -1,26 +1,54 @@
 {
   "version": "5",
   "specifiers": {
+    "npm:@babel/parser@7.29.8": "7.29.8",
     "npm:@supabase/supabase-js@2": "2.89.0"
   },
   "npm": {
+    "@babel/helper-string-parser@7.29.7": {
+      "integrity": "sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw==",
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@babel/helper-string-parser/-/helper-string-parser-7.29.7.tgz"
+    },
+    "@babel/helper-validator-identifier@7.29.7": {
+      "integrity": "sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg==",
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@babel/helper-validator-identifier/-/helper-validator-identifier-7.29.7.tgz"
+    },
+    "@babel/parser@7.29.8": {
+      "integrity": "sha512-E8lTAYNB1KW+FH+VGJuZM1ioAx2E6oVlvQFRrf5P8ZZmsiJXYAD9vTFV7yyEURNzgh1dFqMZuO6tUwcARbqFCA==",
+      "dependencies": [
+        "@babel/types"
+      ],
+      "bin": true,
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@babel/parser/-/parser-7.29.8.tgz"
+    },
+    "@babel/types@7.29.8": {
+      "integrity": "sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==",
+      "dependencies": [
+        "@babel/helper-string-parser",
+        "@babel/helper-validator-identifier"
+      ],
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@babel/types/-/types-7.29.8.tgz"
+    },
     "@supabase/auth-js@2.89.0": {
       "integrity": "sha512-wiWZdz8WMad8LQdJMWYDZ2SJtZP5MwMqzQq3ehtW2ngiI3UTgbKiFrvMUUS3KADiVlk4LiGfODB2mrYx7w2f8w==",
       "dependencies": [
         "tslib"
-      ]
+      ],
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@supabase/auth-js/-/auth-js-2.89.0.tgz"
     },
     "@supabase/functions-js@2.89.0": {
       "integrity": "sha512-XEueaC5gMe5NufNYfBh9kPwJlP5M2f+Ogr8rvhmRDAZNHgY6mI35RCkYDijd92pMcNM7g8pUUJov93UGUnqfyw==",
       "dependencies": [
         "tslib"
-      ]
+      ],
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@supabase/functions-js/-/functions-js-2.89.0.tgz"
     },
     "@supabase/postgrest-js@2.89.0": {
       "integrity": "sha512-/b0fKrxV9i7RNOEXMno/I1862RsYhuUo+Q6m6z3ar1f4ulTMXnDfv0y4YYxK2POcgrOXQOgKYQx1eArybyNvtg==",
       "dependencies": [
         "tslib"
-      ]
+      ],
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@supabase/postgrest-js/-/postgrest-js-2.89.0.tgz"
     },
     "@supabase/realtime-js@2.89.0": {
       "integrity": "sha512-aMOvfDb2a52u6PX6jrrjvACHXGV3zsOlWRzZsTIOAJa0hOVvRp01AwC1+nLTGUzxzezejrYeCX+KnnM1xHdl+w==",
@@ -29,14 +57,16 @@
         "@types/ws",
         "tslib",
         "ws"
-      ]
+      ],
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@supabase/realtime-js/-/realtime-js-2.89.0.tgz"
     },
     "@supabase/storage-js@2.89.0": {
       "integrity": "sha512-6zKcXofk/M/4Eato7iqpRh+B+vnxeiTumCIP+Tz26xEqIiywzD9JxHq+udRrDuv6hXE+pmetvJd8n5wcf4MFRQ==",
       "dependencies": [
         "iceberg-js",
         "tslib"
-      ]
+      ],
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@supabase/storage-js/-/storage-js-2.89.0.tgz"
     },
     "@supabase/supabase-js@2.89.0": {
       "integrity": "sha512-KlaRwSfFA0fD73PYVMHj5/iXFtQGCcX7PSx0FdQwYEEw9b2wqM7GxadY+5YwcmuEhalmjFB/YvqaoNVF+sWUlg==",
@@ -46,34 +76,42 @@
         "@supabase/postgrest-js",
         "@supabase/realtime-js",
         "@supabase/storage-js"
-      ]
+      ],
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@supabase/supabase-js/-/supabase-js-2.89.0.tgz"
     },
     "@types/node@25.0.3": {
       "integrity": "sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA==",
       "dependencies": [
         "undici-types"
-      ]
+      ],
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@types/node/-/node-25.0.3.tgz"
     },
     "@types/phoenix@1.6.7": {
-      "integrity": "sha512-oN9ive//QSBkf19rfDv45M7eZPi0eEXylht2OLEXicu5b4KoQ1OzXIw+xDSGWxSxe1JmepRR/ZH283vsu518/Q=="
+      "integrity": "sha512-oN9ive//QSBkf19rfDv45M7eZPi0eEXylht2OLEXicu5b4KoQ1OzXIw+xDSGWxSxe1JmepRR/ZH283vsu518/Q==",
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@types/phoenix/-/phoenix-1.6.7.tgz"
     },
     "@types/ws@8.18.1": {
       "integrity": "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==",
       "dependencies": [
         "@types/node"
-      ]
+      ],
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@types/ws/-/ws-8.18.1.tgz"
     },
     "iceberg-js@0.8.1": {
-      "integrity": "sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA=="
+      "integrity": "sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA==",
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/iceberg-js/-/iceberg-js-0.8.1.tgz"
     },
     "tslib@2.8.1": {
-      "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="
+      "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==",
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/tslib/-/tslib-2.8.1.tgz"
     },
     "undici-types@7.16.0": {
-      "integrity": "sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw=="
+      "integrity": "sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==",
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/undici-types/-/undici-types-7.16.0.tgz"
     },
     "ws@8.18.3": {
-      "integrity": "sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg=="
+      "integrity": "sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg==",
+      "tarball": "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/ws/-/ws-8.18.3.tgz"
     }
   },
   "redirects": {
@@ -313,5 +351,10 @@
     "https://esm.sh/@supabase/supabase-js@2.76.1": "99f07a2597a0be25436c7520104699b5570de0c91d8e42b1679359dba7716324",
     "https://esm.sh/resend@2.0.0?target=deno": "84d41eb0649a3e5de4550e3505f8389d27ba9f464d1d3232faf34f607b65d064",
     "https://esm.sh/zod@3.23.8": "15e60c792ac21d4818f181671c7c74bf33bf7526d487dc524911e42785d8b5c2"
+  },
+  "workspace": {
+    "dependencies": [
+      "npm:@babel/parser@7.29.8"
+    ]
   }
 }
