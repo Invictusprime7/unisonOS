@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { aiComposerRequestSchema } from '@/contracts/aiComposerContract';
 import { runComposerLane } from '../../supabase/functions/ai-code-assistant/composerLane';
-import { fitBuilderPayload } from '@/services/builderPayloadBudget';
+import { shrinkBuilderTurnPayload } from '@/services/builderPayloadBudget';
 
 const data = 'data:image/png;base64,aGVsbG8=';
 const request = {
@@ -54,7 +54,7 @@ describe('Composer image transport preparation', () => {
 
   it('preserves images and parseable JSON when optional source is trimmed', () => {
     const payload = { mode: 'builder-source-edit', messages: [{ role: 'user', content: JSON.stringify({ ...request, files: { ...request.files, '/src/pages/Other.tsx': 'x'.repeat(20_000) } }) }] };
-    const fitted = fitBuilderPayload(payload, 2_000);
+    const fitted = shrinkBuilderTurnPayload(payload, 2_000);
     const parsed = JSON.parse(fitted.payload.messages[0].content);
     expect(parsed.images).toEqual(request.images);
     expect(aiComposerRequestSchema.safeParse(parsed).success).toBe(true);
