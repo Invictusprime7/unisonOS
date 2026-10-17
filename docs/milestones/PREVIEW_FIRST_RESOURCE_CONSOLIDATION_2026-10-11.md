@@ -33,6 +33,14 @@ Make Live Preview the primary contextual editing *surface*. Keep structured Reso
 
 **Observed risk vs verified failure:** the paths and overlap above are evidenced by source; a live repro of stale overwrite, missing editor hosts, and Supabase RLS cannot be claimed from static ZIP inspection alone.
 
+### Current-source merge
+
+- Preserve the mounted Creator Playground modal, resource placement/publication, funnels, business setup and launch readiness. The separate `CreatorPlaygroundPanel` has no production consumers and is retired rather than migrated into another editor.
+- `PlaygroundSyncController` now exposes hydration only. No active production compile caller was found; this removes a latent alternate authority, not a demonstrated live overwrite. Legacy inferred hydration does not dirty clean state, and pending explicit edits remain dirty. Canonical launch compilation and exact snapshot hydration remain.
+- Catalog agent tools now delegate to Resource Runtime, including project-backend routing, schema validation and invalidation. The compatibility row-tool vocabulary carries optional project scope; existing binding services remain in place.
+- Record updates no longer propose global matching-price/image source replacements. Bound views refresh from resource invalidation; unbound source edits require their own canonical source command.
+- Dedicated-backend content/profile support, record concurrency and signed-in save → preview → reopen acceptance remain open; no database records or schema are changed by this merge.
+
 ## Reference model
 
 - **Lovable:** documented stable JSX/DOM tags, source mapping, AST-scoped updates, instant rendered feedback, and a preview-first edit/selection workflow. See https://lovable.dev/blog/visual-edits and https://docs.lovable.dev/features/preview-toolbar .

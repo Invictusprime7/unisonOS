@@ -20,7 +20,8 @@ describe('Web Builder preview ownership', () => {
     };
     visit(source);
     expect(styleExpression).toBeDefined();
-    const resolveStyle = new Function('device', `return (${styleExpression!.getText(source)});`);
+    if (!styleExpression) throw new Error('Sandpack layout style is missing');
+    const resolveStyle = new Function('device', `return (${styleExpression.getText(source)});`);
     for (const [device, width] of [['desktop', '100%'], ['tablet', '768px'], ['mobile', '375px']]) {
       expect(resolveStyle(device)).toMatchObject({ width, maxWidth: '100%', height: '100%', marginInline: 'auto' });
     }
@@ -61,7 +62,7 @@ describe('Web Builder preview ownership', () => {
     expect(builder).toContain('if (options?.replace) vfsReplaceFiles(preflightedFiles);');
     expect(builder).not.toContain('if (options?.replace) vfsResetToEmpty();');
     expect(sharedPreview).toContain('const filesSignature = useMemo(() => createVfsHandoffSignature(rawFiles)');
-    expect(sharedPreview).toContain('pendingCompileRef.current = { key, files, launchState: launchRef.current };');
+    expect(sharedPreview).toContain('pendingCompileRef.current = { key, files, launchState: launchRef.current, pendingSourceConflictPolicy };');
   });
 
   it('keeps the connected Sandpack provider mounted during background recompiles', () => {
@@ -98,7 +99,7 @@ describe('Web Builder preview ownership', () => {
 
     expect(sharedPreview).toContain('pendingCompileRef');
     expect(sharedPreview).toContain('if (inFlightKeyRef.current) return;');
-    expect(sharedPreview).toContain('pendingCompileRef.current = { key, files, launchState: launchRef.current };');
+    expect(sharedPreview).toContain('pendingCompileRef.current = { key, files, launchState: launchRef.current, pendingSourceConflictPolicy };');
     expect(sharedPreview).not.toContain('latestKeyRef.current !== compileKey');
     expect(sharedPreview).not.toContain("Object.keys(launch?.siteBundleSnapshot?.vfsFiles || {}).length");
   });

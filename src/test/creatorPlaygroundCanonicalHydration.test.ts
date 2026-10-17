@@ -24,7 +24,7 @@ describe('canonical Playground VFS hydration', () => {
     const files = { ...runtimeFiles, '/.unison/site-bundle-snapshot.json': JSON.stringify(snapshot) };
     const { result } = renderHook(() => useCreatorPlayground());
     act(() => { result.current.hydrateFromVFS([], runtimeFiles); });
-    expect(result.current.isDirty).toBe(true);
+    expect(result.current.isDirty).toBe(false);
     act(() => { result.current.hydrateFromVFS([], files); });
     act(() => { result.current.hydrateFromVFS([], files); });
 
@@ -42,6 +42,16 @@ describe('canonical Playground VFS hydration', () => {
       '/src/pages/Home.tsx': 'export default function Home() { return <h1>Legacy</h1>; }',
     }); });
     expect(Object.keys(result.current.pageRegistry.pages)).toEqual(['page_home']);
+    expect(result.current.isDirty).toBe(false);
+  });
+  it('does not erase pending explicit topology edits during compatibility hydration', () => {
+    const { result } = renderHook(() => useCreatorPlayground());
+    act(() => { result.current.addPage('Requested page', '/requested', 'custom'); });
     expect(result.current.isDirty).toBe(true);
+    act(() => { result.current.hydrateFromVFS([], {
+      '/src/pages/Home.tsx': 'export default function Home() { return <h1>Legacy</h1>; }',
+    }); });
+    expect(result.current.isDirty).toBe(true);
+    expect(Object.values(result.current.pageRegistry.pages).some((page) => page.path === '/requested')).toBe(true);
   });
 });

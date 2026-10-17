@@ -1,6 +1,7 @@
 /**
- * catalogOperations — the AI Builder's ONLY sanctioned surface for
- * mutating catalog rows and section→data bindings.
+ * catalogOperations — compatibility tool vocabulary over agentOperations
+ * and the existing section/card binding services. Record storage is owned
+ * by Resource Runtime, not this adapter.
  *
  * Milestone 5 (AI Catalog Intelligence Pass):
  * Instead of hand-editing TSX to change card copy, prices, sort order,
@@ -26,13 +27,7 @@ import {
   getCatalogSurface,
   type CatalogSurface,
 } from '@/platform/core/catalogSurfaceRegistry';
-import { type EditableRowPatch } from '@/services/catalogRowService';
-import {
-  createCmsRecord,
-  getCmsRecord,
-  removeCmsRecord,
-  updateCmsRecord,
-} from '@/services/cmsRecordService';
+import { getCmsRecord } from '@/services/cmsRecordService';
 import {
   getBinding,
   getBindingById,
@@ -182,41 +177,6 @@ async function fetchBindingScope(
 }
 
 
-/** Split a caller-supplied field patch into (editable-shape, raw-column-writes). */
-function splitPatch(
-  surface: CatalogSurface,
-  patch: CatalogRowFieldPatch,
-): { editable: EditableRowPatch; extraColumns: Record<string, unknown> } {
-  const editable: EditableRowPatch = {};
-  const extraColumns: Record<string, unknown> = {};
-  const editableCols = new Set(surface.editableFields.map((f) => f.key));
-
-  for (const [key, value] of Object.entries(patch)) {
-    if (key === 'name' || key === 'description' || key === 'price' || key === 'image_url') {
-      (editable as Record<string, unknown>)[key] = value;
-      continue;
-    }
-    if (editableCols.has(key)) {
-      extraColumns[key] = value;
-    }
-  }
-  return { editable, extraColumns };
-}
-
-function normalizeCmsValues(surface: CatalogSurface, patch: CatalogRowFieldPatch): Record<string, unknown> {
-  const { editable, extraColumns } = splitPatch(surface, patch);
-  const values: Record<string, unknown> = { ...extraColumns };
-  if (editable.name !== undefined) values[surface.fields.title] = editable.name ?? '';
-  if (editable.description !== undefined && surface.fields.description) values[surface.fields.description] = editable.description;
-  if (editable.image_url !== undefined && surface.fields.image) values[surface.fields.image] = editable.image_url;
-  if (editable.price !== undefined) {
-    const dollars = editable.price == null || !Number.isFinite(editable.price) ? 0 : editable.price;
-    if (surface.fields.priceCents) values[surface.fields.priceCents] = Math.round(dollars * 100);
-    if (surface.fields.price) values[surface.fields.price] = dollars;
-  }
-  return values;
-}
-
 async function locateBindingId(
   locator: SectionBindingLocator,
 ): Promise<string | null> {
@@ -243,7 +203,8 @@ async function rowOp(op: CatalogOperationName, args: Record<string, unknown>): P
   const surfaceId = String(args.surfaceId ?? '');
   const businessId = String(args.businessId ?? '');
   const rowId = String(args.rowId ?? args.itemId ?? '');
-  const ctx = { files: {}, businessId };
+  const projectId = typeof args.projectId === 'string' ? args.projectId : null;
+  const ctx = { files: {}, businessId, projectId };
   if (op === 'createCatalogRow') {
     const item = await agentOperations.create_catalog_item(ctx, surfaceId, (args.patch ?? {}) as CatalogPatch);
     return { ok: true, op, message: `Created ${item.name}`, data: { id: item.id, surfaceId } };
@@ -556,6 +517,7 @@ export const CATALOG_OPERATION_TOOLS = [
       properties: {
         surfaceId: { type: 'string', enum: SURFACE_IDS },
         businessId: { type: 'string' },
+        projectId: { type: 'string' },
         patch: ROW_PATCH_SCHEMA,
       },
     },
@@ -570,6 +532,7 @@ export const CATALOG_OPERATION_TOOLS = [
       properties: {
         surfaceId: { type: 'string', enum: SURFACE_IDS },
         businessId: { type: 'string' },
+        projectId: { type: 'string' },
         rowId: { type: 'string' },
         patch: ROW_PATCH_SCHEMA,
       },
@@ -585,6 +548,7 @@ export const CATALOG_OPERATION_TOOLS = [
       properties: {
         surfaceId: { type: 'string', enum: SURFACE_IDS },
         businessId: { type: 'string' },
+        projectId: { type: 'string' },
         itemId: { type: 'string' },
         patch: ROW_PATCH_SCHEMA,
       },
@@ -658,6 +622,7 @@ export const CATALOG_OPERATION_TOOLS = [
       properties: {
         surfaceId: { type: 'string', enum: SURFACE_IDS },
         businessId: { type: 'string' },
+        projectId: { type: 'string' },
         rowId: { type: 'string' },
       },
     },

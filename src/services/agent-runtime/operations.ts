@@ -209,31 +209,17 @@ export const agentOperations = {
     await deleteCatalogItem(ctx.businessId, surfaceId, id, ctx.projectId);
   },
   /**
-   * Write a catalog record (database first), then propose the matching
-   * preview edit (old image URL / old price text → new) for the canonical
-   * save path. Sections bound to live data need no file change.
+   * Write only the resolved catalog record. Resource invalidation refreshes
+   * bound views; matching literals elsewhere never imply record ownership.
    */
   async update_catalog_item(
     ctx: AgentContext, surfaceId: string, id: string, patch: CatalogPatch,
   ): Promise<{ change: ProposedChange | null; summary: string; item: CatalogItem }> {
     if (!ctx.businessId) throw new Error('No business is linked to this site.');
-    const { before, after } = await updateCatalogItemRow(ctx.businessId, surfaceId, id, patch, ctx.projectId);
-    const swaps: Array<[string, string]> = [];
-    if (patch.image_url && before?.image && before.image !== patch.image_url) swaps.push([before.image, patch.image_url]);
-    if (patch.price != null && before?.price) {
-      const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
-      swaps.push([`$${fmt(before.price)}`, `$${fmt(patch.price)}`]);
-    }
-    const files: Record<string, string> = {};
-    for (const [path, src] of Object.entries(ctx.files)) {
-      if (!/^\/src\/.+\.(t|j)sx?$/.test(path)) continue;
-      let next = src;
-      for (const [x, y] of swaps) next = next.split(x).join(y);
-      if (next !== src) files[path] = next;
-    }
+    const { after } = await updateCatalogItemRow(ctx.businessId, surfaceId, id, patch, ctx.projectId);
     const what = patch.price != null ? `price $${patch.price}` : patch.image_url ? 'new photo' : patch.active === false ? 'hidden' : 'updated';
     const summary = `${after.name}: ${what} saved`;
-    return { change: Object.keys(files).length ? { files, summary } : null, summary, item: after };
+    return { change: null, summary, item: after };
   },
   /** Every editable record type (catalog, content, business details) and its editable fields. */
   list_resources(): Array<{
