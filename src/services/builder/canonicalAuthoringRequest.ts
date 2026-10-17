@@ -31,16 +31,15 @@ export function shouldUseCanonicalComposer(input: {
   isReactProject: boolean;
   isLaunchPlanningRequest: boolean;
   isCatalogMutationRequest: boolean;
-  hasAttachments: boolean;
   hasVfs: boolean;
   isScopedEdit?: boolean;
 }): boolean {
   // Scoped UI and behavioral edits need the same validated source protocol;
-  // a selected element changes context, not the authoring lane.
+  // a selected element changes context, not the authoring lane. Image
+  // attachments ride the typed `images` field, so they no longer divert the lane.
   return input.isReactProject
     && !input.isLaunchPlanningRequest
     && !input.isCatalogMutationRequest
-    && !input.hasAttachments
     && input.hasVfs;
 }
 

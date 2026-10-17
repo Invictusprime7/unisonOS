@@ -226,7 +226,7 @@ test('preserves a full minute for GPT-4.1 after a reasoning timeout', () => {
 });
 
 test('keeps server headroom beyond the funded Wizard lead attempt', () => {
-  assert(PROVIDER_LOOP_TOTAL_BUDGET_MS === 135_000, 'provider loop should allow 135 seconds');
+  assert(PROVIDER_LOOP_TOTAL_BUDGET_MS === 145_000, 'provider loop should allow 145 seconds');
 });
 
 test('omits reasoning_effort for the GPT-4.1 Wizard fallback', () => {

@@ -24,8 +24,8 @@
 - [x] Phase 4b document context: forward uploaded links and extracted file text to App Builder, ahead of optional runtime context so truncation cannot crowd them out; image vision remains on its existing path
 - [x] Phase 4b image transport preparation: typed references through App Builder and Composer repairs, actual image content parts and payload preservation; 71 regression tests pass; production routing remains unchanged pending provider fallback and signed-in checks
 - [x] Phase 4b provider boundary: deterministic real-adapter tests verify Gemini/OpenAI/gateway image bytes and placement context through failover and Composer repair; 2 new tests + 39 client regressions pass; no live calls or routing changes
-- [ ] Phase 4b image enablement: Anthropic fallbacks forward incompatible OpenAI image_url parts in both providerClient and aiProviderLoop; provider-format repair and live provider/signed-in acceptance required before routing changes
-- [ ] Existing edge regression drift: full edge run has 68 passes and 2 failures (provider-budget expectation 135s vs current 145s; hybrid router flag expectation); preserve current routing/budgets pending a scoped follow-up
+- [x] Phase 4b image enablement: shared toAnthropicMessages converts OpenAI image_url data-URL parts to Anthropic base64 image blocks in providerClient.callAnthropic and aiProviderLoop Phase 4; attachment exclusion removed from shouldUseCanonicalComposer and AIBuilderPanel threads typed images into unisonAppBuilder.edit; edge 71/71 and client 21/21 pass; signed-in acceptance still pending
+- [x] Edge regression drift resolved: budget test updated to current 145s, builder_source_edit gateway-lead expectation matches composer routing; full edge suite 71 passed / 0 failed
 - [ ] Phase 4b remainder: migrate attachment/non-React source fallback callers before further removals (requires authenticated acceptance evidence on authoritative backend); compatibility extractors remain intact
 - Later: authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON

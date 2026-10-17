@@ -298,6 +298,40 @@ async function callOpenAICompatible(
   return withProviderHeader(response, provider);
 }
 
+/**
+ * Convert OpenAI-style message content to Anthropic blocks. `image_url` parts
+ * carrying a base64 data URL become Anthropic `image` blocks; anything else
+ * (remote URLs, unknown parts) is dropped so the request stays valid.
+ */
+export function toAnthropicContent(content: unknown): unknown {
+  if (!Array.isArray(content)) return content;
+  const blocks: unknown[] = [];
+  for (const part of content) {
+    if (!part || typeof part !== "object") continue;
+    const p = part as Record<string, unknown>;
+    if (p.type === "text" && typeof p.text === "string") {
+      blocks.push({ type: "text", text: p.text });
+      continue;
+    }
+    if (p.type === "image_url") {
+      const url = typeof p.image_url === "object" && p.image_url !== null
+        ? String((p.image_url as Record<string, unknown>).url ?? "")
+        : String(p.image_url ?? "");
+      const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=\s]+)$/.exec(url);
+      if (match) {
+        blocks.push({ type: "image", source: { type: "base64", media_type: match[1], data: match[2].replace(/\s/g, "") } });
+      }
+    }
+  }
+  return blocks.length > 0 ? blocks : "";
+}
+
+export function toAnthropicMessages(messages: ChatMessage[]): Array<{ role: string; content: unknown }> {
+  return messages
+    .filter((message) => message.role !== "system")
+    .map(({ role, content }) => ({ role, content: toAnthropicContent(content) }));
+}
+
 async function callAnthropic(request: ChatCompletionRequest, signal?: AbortSignal): Promise<Response> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("anthropic is not configured");
@@ -306,9 +340,7 @@ async function callAnthropic(request: ChatCompletionRequest, signal?: AbortSigna
     .filter((message) => message.role === "system")
     .map((message) => String(message.content))
     .join("\n\n");
-  const messages = request.messages
-    .filter((message) => message.role !== "system")
-    .map(({ role, content }) => ({ role, content }));
+  const messages = toAnthropicMessages(request.messages);
   const response = await fetchWithShortRateLimitRetry(ANTHROPIC_MESSAGES_URL, {
     method: "POST",
     headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
