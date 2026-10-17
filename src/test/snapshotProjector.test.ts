@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import {
+  absorbPendingVfsOperations,
   acknowledgePendingVfsOperations,
+  getPendingVfsSequenceWatermark,
   clearPendingVfsOperations,
   getPendingVfsOperations,
   projectSnapshotVfsFiles,
@@ -379,6 +381,70 @@ describe('snapshot projector', () => {
     const snapshot = snapshotWith({ '/src/App.tsx': 'router', '/src/pages/Home.tsx': 'old' });
     const resolution = resolveSnapshot(snapshot.vfsFiles, { siteBundleSnapshot: snapshot, draftId: 'draft-scoped' } as never);
     expect(resolution.projectionScope).toBe('draft-scoped');
+  });
+
+  it('does not block an inline edit authored on the accepted revision when its recorded base lagged', () => {
+    // Revision R1 changed Home, but the autosave baseline still held R0 bytes.
+    const revisionZero = { '/src/App.tsx': 'router', '/src/pages/Home.tsx': 'home R0' };
+    const revisionOne = { ...revisionZero, '/src/pages/Home.tsx': 'home R1' };
+    const snapshot = snapshotWith(revisionOne);
+    try {
+      recordPendingVfsMutation({
+        scope: 'draft-lagging-base',
+        baseRevisionId: 'R1',
+        beforeFiles: revisionZero,
+        afterFiles: { ...revisionZero, '/src/pages/Home.tsx': 'home R1 + inline text' },
+        operationId: 'inline-text',
+      });
+      const projected = projectSnapshotVfsFiles(revisionOne, {
+        snapshot,
+        isWizardDraft: true,
+        themePresetId: 'restaurant-warm',
+        projectionScope: 'draft-lagging-base',
+        acceptedRevisionId: 'R1',
+      });
+      expect(projected['/src/pages/Home.tsx']).toBe('home R1 + inline text');
+    } finally {
+      clearPendingVfsOperations('draft-lagging-base');
+    }
+  });
+
+  it('absorbs superseded working-set edits once a commit built from them is accepted', () => {
+    const revisionZero = { '/src/App.tsx': 'router', '/src/pages/Home.tsx': 'home R0' };
+    try {
+      recordPendingVfsMutation({
+        scope: 'draft-absorb', baseRevisionId: 'R0', beforeFiles: revisionZero,
+        afterFiles: { ...revisionZero, '/src/pages/Home.tsx': 'first edit' }, operationId: 'first',
+      });
+      recordPendingVfsMutation({
+        scope: 'draft-absorb', baseRevisionId: 'R0', beforeFiles: revisionZero,
+        afterFiles: { ...revisionZero, '/src/pages/Home.tsx': 'second edit' }, operationId: 'second',
+      });
+      const watermark = getPendingVfsSequenceWatermark();
+      recordPendingVfsMutation({
+        scope: 'draft-absorb', baseRevisionId: 'R0', beforeFiles: revisionZero,
+        afterFiles: { ...revisionZero, '/src/pages/Home.tsx': 'typed after capture' }, operationId: 'later',
+      });
+      expect(absorbPendingVfsOperations('draft-absorb', { throughSequence: watermark }).sort()).toEqual(['first', 'second']);
+      expect(getPendingVfsOperations('draft-absorb').map((operation) => operation.operationId)).toEqual(['later']);
+
+      const accepted = { ...revisionZero, '/src/pages/Home.tsx': 'second edit' };
+      clearPendingVfsOperations('draft-absorb');
+      recordPendingVfsMutation({
+        scope: 'draft-absorb', baseRevisionId: 'R0', beforeFiles: revisionZero,
+        afterFiles: { ...revisionZero, '/src/pages/Home.tsx': 'first edit' }, operationId: 'stale',
+      });
+      absorbPendingVfsOperations('draft-absorb');
+      expect(projectSnapshotVfsFiles(accepted, {
+        snapshot: snapshotWith(accepted),
+        isWizardDraft: true,
+        themePresetId: 'restaurant-warm',
+        projectionScope: 'draft-absorb',
+        acceptedRevisionId: 'R1',
+      })['/src/pages/Home.tsx']).toBe('second edit');
+    } finally {
+      clearPendingVfsOperations('draft-absorb');
+    }
   });
 
   it('rejects preview hydration from an unsealed Wizard snapshot', () => {

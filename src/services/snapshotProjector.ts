@@ -665,6 +665,32 @@ export function finalizePendingVfsOperation(input: {
   return removedId ?? null;
 }
 
+/** Local order of the newest recorded operation; capture it with the files a commit is built from. */
+export function getPendingVfsSequenceWatermark(): number {
+  return pendingVfsSequence;
+}
+
+/**
+ * A canonical commit built from the live working set already contains every
+ * operation recorded before that working set was captured. Absorbing them on
+ * acceptance keeps the journal from replaying superseded bytes over the new
+ * revision (the source of false "pending source conflicts" after edits).
+ */
+export function absorbPendingVfsOperations(
+  scope?: string | null,
+  options: { throughSequence?: number } = {},
+): string[] {
+  const limit = typeof options.throughSequence === 'number' ? options.throughSequence : pendingVfsSequence;
+  const absorbed: string[] = [];
+  for (const [operationId, operation] of pendingVfsOperations) {
+    if (operationScopeKey(operation.scope) !== operationScopeKey(scope)) continue;
+    if (operation.sequence > limit) continue;
+    pendingVfsOperations.delete(operationId);
+    absorbed.push(operationId);
+  }
+  return absorbed;
+}
+
 export function clearPendingVfsOperations(scope?: string | null): void {
   if (scope === undefined) {
     pendingVfsOperations.clear();
@@ -780,16 +806,23 @@ function reconcilePendingVfsOperations(
   const conflicts: PendingVfsConflict[] = [];
 
   for (const operation of operations) {
-    const lineageEstablished = Boolean(
-      !operation.baseRevisionId ||
-      (acceptedId && projectedRevisionIds.has(operation.baseRevisionId)),
+    // Revision lineage is the conflict authority. When an operation was
+    // authored on the accepted revision (or on a candidate already projected
+    // onto it), no other writer intervened, so a byte mismatch against its
+    // recorded base only means the recorder's baseline lagged (an earlier
+    // commit adopted without refreshing it, or a stale embedded snapshot).
+    // Only a different base revision can carry a genuine overlapping write.
+    const revisionLineage = Boolean(
+      operation.baseRevisionId && acceptedId && projectedRevisionIds.has(operation.baseRevisionId),
     );
+    const lineageEstablished = Boolean(!operation.baseRevisionId || revisionLineage);
     const operationConflicts: PendingVfsConflict[] = [];
 
     for (const change of operation.changes) {
       const acceptedContents = fileContents(files, change.path);
       const intendedContents = operationIntendedContents(change);
       if (sameContents(acceptedContents, intendedContents)) continue;
+      if (revisionLineage) continue;
 
       if (!lineageEstablished && change.baseContents === undefined) {
         operationConflicts.push({

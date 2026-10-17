@@ -225,8 +225,10 @@ import { inferCanonicalComponentSlug } from '@/services/canonicalComponentRegist
 import { buildCanonicalLaunchArtifacts } from '@/services/canonicalLaunchVfs';
 import { clearLauncherHandoff, readLauncherHandoff } from '@/services/launcherHandoffPersistence';
 import {
+  absorbPendingVfsOperations,
   acknowledgePendingVfsOperations,
   assertNoMinimalFallbackPreview,
+  getPendingVfsSequenceWatermark,
   finalizePendingVfsOperation,
   projectSnapshotVfsFiles,
   resolveSnapshot,
@@ -2815,6 +2817,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       draftId: currentDraftId ?? null,
       exemptReason: options?.adoption?.exemptReason,
     });
+    // An accepted commit was authored from this live working set, so every
+    // pending operation recorded so far is already inside it. Replaying them
+    // over the accepted bytes is what raised false source conflicts.
+    if (isAcceptedCanonicalRevision) absorbPendingVfsOperations(pendingProjectionScope);
     try {
 
       const normalizedEntryPoint = options?.entryPoint
@@ -2872,6 +2878,15 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
 
       if (options?.replace) vfsReplaceFiles(preflightedFiles);
       else vfsImportFiles(preflightedFiles);
+      if (isAcceptedCanonicalRevision) {
+        // The adopted bytes are the persisted revision: advance the autosave
+        // baseline with it so later deltas are recorded against this revision,
+        // never against an older one.
+        const adoptedFiles = options?.replace ? preflightedFiles : { ...currentFiles, ...preflightedFiles };
+        lastPersistedVfsFilesRef.current = { ...adoptedFiles };
+        lastSavedVfsSignatureRef.current = computeBuilderVfsSignature(adoptedFiles);
+        lastRecordedPendingVfsSignatureRef.current = '';
+      }
       const syncedEntry = syncBuilderFromFiles(
         preflightedFiles,
         options?.preferredPath || normalizedEntryPoint || null,
@@ -4997,6 +5012,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       });
       lastRecordedPendingVfsSignatureRef.current = pendingMutationKey;
     }
+    // Everything recorded up to here is contained in `currentVfsFiles`, the
+    // exact working set this save commits.
+    const absorbedThroughSequence = getPendingVfsSequenceWatermark();
 
     const reason = options?.reason || 'interval_autosave';
     const snapshot: BuilderRecoverySnapshot = {
@@ -5133,6 +5151,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             acceptedRevisionId: commit.persistedRevisionId,
           });
         }
+        absorbPendingVfsOperations(pendingProjectionScope, { throughSequence: absorbedThroughSequence });
         markBuilderRecoveryPersisted(snapshot, existingDraftId, undefined, commit.persistedRevisionId);
         if (!isActiveBuilderCommitScope(activeCommitScopeRef.current, capturedCommitScope)) {
           // The old project's durable commit succeeded, but its completion must
@@ -8278,6 +8297,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   // P0.3 — one transaction: validate + persist in a single
                   // canonical commit, mirror, then settle on one terminal state.
                   const beforeSnapshotFiles = beforeFiles;
+                  const baseRevisionForRecord = currentRevisionIdRef.current || null;
+                  const absorbedThroughSequence = getPendingVfsSequenceWatermark();
                   const outcome = await runBuilderAiMutation(commitCtx, {
                     mirror: (committedFiles) => {
                       try {
@@ -8319,9 +8340,15 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                     const { refreshDataOperationResources } = await import('@/services/dataOperationRefresh');
                     refreshDataOperationResources({ projectId: projectIdForCommit, businessId, results: outcome.commit.dataOpsApplied });
                   }
-                   recordPendingVfsMutation({
+                  // The commit was built from the live working set: absorb what it
+                  // contains and advance the autosave baseline to the accepted bytes.
+                  absorbPendingVfsOperations(pendingProjectionScope, { throughSequence: absorbedThroughSequence });
+                  lastPersistedVfsFilesRef.current = { ...mergedFiles };
+                  lastSavedVfsSignatureRef.current = computeBuilderVfsSignature(mergedFiles);
+                  lastRecordedPendingVfsSignatureRef.current = '';
+                  recordPendingVfsMutation({
                     scope: pendingProjectionScope,
-                    baseRevisionId: currentRevisionIdRef.current || null,
+                    baseRevisionId: baseRevisionForRecord,
                     candidateRevisionId: outcome.revisionId ?? null,
                     beforeFiles: beforeSnapshotFiles,
                     afterFiles: mergedFiles,
@@ -8481,6 +8508,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   return { success: false, errors: ['Canonical project identity is unavailable.'] };
                 }
                 // P0.3 — same single transaction as the desktop mount.
+                const baseRevisionForRecord = currentRevisionIdRef.current || null;
+                const absorbedThroughSequence = getPendingVfsSequenceWatermark();
                 const outcome = await runBuilderAiMutation(commitCtx, {
                   mirror: (committedFiles) => {
                     try {
@@ -8514,9 +8543,13 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   const { refreshDataOperationResources } = await import('@/services/dataOperationRefresh');
                   refreshDataOperationResources({ projectId: projectIdForCommit, businessId, results: outcome.commit.dataOpsApplied });
                 }
-                 recordPendingVfsMutation({
+                absorbPendingVfsOperations(pendingProjectionScope, { throughSequence: absorbedThroughSequence });
+                lastPersistedVfsFilesRef.current = { ...mergedFiles };
+                lastSavedVfsSignatureRef.current = computeBuilderVfsSignature(mergedFiles);
+                lastRecordedPendingVfsSignatureRef.current = '';
+                recordPendingVfsMutation({
                   scope: pendingProjectionScope,
-                  baseRevisionId: currentRevisionIdRef.current || null,
+                  baseRevisionId: baseRevisionForRecord,
                   candidateRevisionId: outcome.revisionId ?? null,
                   beforeFiles,
                   afterFiles: mergedFiles,
