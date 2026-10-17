@@ -268,6 +268,7 @@ export function buildPublishedRuntimeConfig(
     controllerEndpoints: supabaseUrl
       ? {
           'intent-exec': `${supabaseUrl}/functions/v1/intent-exec`,
+          'site-auth': `${supabaseUrl}/functions/v1/site-auth`,
           'create-order-checkout': `${supabaseUrl}/functions/v1/create-order-checkout`,
         }
       : {},

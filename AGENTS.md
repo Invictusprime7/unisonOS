@@ -3,9 +3,9 @@
 - Load Unison tokens after base CSS, bridge app roles in `src/styles/unison-theme.css`, and load font links in `main.tsx`; why: vendor values win without vendor edits or saved-site regeneration.
 
 - `LauncherWizard` is selection-only: it captures intent and invokes launch orchestration, but never authors or mutates VFS source.
-- `UnisonAppBuilder` alone authors fresh launches: derive `AppBuildContract`, generate/repair one isolated candidate, promote after site-wide closure.
+- `UnisonAppBuilder` is the sole fresh-launch application author: derive `AppBuildContract`, generate/repair one candidate, promote after site-wide closure.
 - The canonical platform owns topology, routes, capabilities, intents, bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation. It must not generate a competing fresh-launch page implementation after App Builder authorship.
-- `commitMutation` is the sole canonical writer; initial generation accepts one complete passing candidate, never repair attempts or per-page checkpoints as revisions.
+- `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
 - Saved projects hydrate accepted revisions; parsers are compatibility-only. Candidates stay unsanitized/unsplit; upload text/links lead context and images survive Composer repairs. Image routing uses typed Composer transport; signed-in acceptance remains required; why: preserve vision and source.
 - Composer contracts are byte-mirrored at `supabase/functions/_shared/aiComposerContract.ts` and `src/contracts/aiComposerContract.ts`; enforce targets, planned routes, dependency requests/new AST module reads, and declared/new literal intents; edge edits require hunks. Why: canonical authoring vocabulary is not ownership or live readiness.
 - Composer author/repair/edit modes stay in `ai-code-assistant/composerLane.ts`; why: no parallel pipelines.
@@ -19,7 +19,7 @@
 - Chat and Wizard share one launch plan (`src/services/launch/chatLaunchPlan.ts`): the chat brief prefills the Wizard, and `buildSyncedVisionBrief` puts final selections first; page briefs put composition target + design contract before that vision. Why: separate chat/Wizard inputs drifted and crowded out composition vocabulary.
 - Agent tools use enforced dispatch; proposals use `runBuilderAiMutation` → `commitMutation`. Capture live VFS/revision together; refuse stale preparation/selection. Connector context is read-only; source edits/React repairs require App Builder candidates. Launch/catalog retain chat transport; unsupported legacy source edits refuse. Why: one writer, current context, no fallback author.
 
-- Save queue, terminal, resource, project-list, preflight, scoped-edit, preview, site-backend and editor-command rules: `src/services/AGENTS.md`; AI provider order: `supabase/functions/_shared/AGENTS.md`.
+- Service rules (including portable recipe identity): `src/services/AGENTS.md`; AI provider order: `supabase/functions/_shared/AGENTS.md`.
 - UNISON is the only backend: `src/integrations/supabase/env.ts` ignores other injected refs, `main.tsx` fails closed on identity mismatch, and backend changes deploy only via `.github/workflows/supabase-auto-update.yml`, so every schema change needs a timestamped `supabase/migrations` file (drizzle alone fails CI); why: Lovable tooling targets its built-in database.
 - Auth state listeners stay synchronous and defer auth-backed queries/audits to a later task; why: awaiting SDK calls inside its session lock deadlocks successful sign-in.
 - Before app load, bridge only auth keys to sessionStorage on quota errors; never evict project data or edit the generated client. Why: full storage must not block sign-in; fallback lasts until the tab closes.

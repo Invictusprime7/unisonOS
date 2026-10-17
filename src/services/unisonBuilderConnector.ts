@@ -2,6 +2,7 @@ import type {
   UnisonBuilderConnectorInput,
   UnisonBuilderTurnContext,
 } from '@/types/unisonBuilderConnector';
+import { readMaterializedDesignSources } from '@/services/app-builder/design/designSourceMaterializer';
 
 // Canonical Unison token roles (values are always supplied by the project's sealed theme).
 const TOKEN_NAMES = [
@@ -54,6 +55,7 @@ export function createUnisonBuilderContext(input: UnisonBuilderConnectorInput): 
       artDirectionPackId: registry?.artDirectionPackId ?? null,
       allowedImplementationIds: registry?.implementations.map(item => item.id) ?? [],
       projection: registry,
+      materializedRecipes: readMaterializedDesignSources(input.files),
     },
     designSystem: {
       tokenNames: TOKEN_NAMES, preserveSealedArtDirection: true,
@@ -78,6 +80,9 @@ export function renderUnisonBuilderDirective(context: UnisonBuilderTurnContext):
     `Existing files require explicit necessary hunks; complete source is allowed only for new files. PageRegistry alone authors /src/App.tsx.`,
     'Saved catalog/content values must use agentOperations through ResourceRuntime; presentation edits preserve record marks, bindings and button destinations.',
     `Canonical implementations: ${context.registry.allowedImplementationIds.join(', ') || 'not resolved; do not invent certification'}`,
+    `App Builder materialized portable recipes (implementation ID -> module, export, props): ${JSON.stringify(context.registry.materializedRecipes)}`,
+    'App Builder is the sole source author. Import verified public recipe exports, never recipe internals or invented component IDs. Preserve sectionId and componentInstanceId; componentInstanceId belongs to the canonical functional instance, not the variant ID. Never manufacture cmp_ IDs.',
+    'Local disclosure, menu, lightbox and billing toggles stay in component state with no backend intent. auth.login/auth.register on links open or focus authentication; forms use data-intent-form="auth.login"/"auth.register" and auth.submit slot, never duplicate click intents on submit buttons.',
     `Sealed Art Direction: ${context.registry.artDirectionPackId ?? 'not supplied; preserve existing theme'}`,
     `Design token roles: ${context.designSystem.tokenNames.join(', ')}`,
     'Capability and binding validation remain mandatory; missing business capability readiness blocks publishing, not a safe preview draft.',

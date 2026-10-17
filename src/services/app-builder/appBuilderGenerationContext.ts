@@ -130,6 +130,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract): Ap
     `Protected paths: ${runtime.protectedPaths.join(', ')}.`,
     `Approved dependencies: ${runtime.approvedDependencies.join(', ')}.`,
     modules,
+    'Portable recipe identity: pass stable sectionId from the page composition and componentInstanceId only from an existing canonical functional instance; never invent cmp_ IDs or substitute an implementation ID for an instance ID. Local toggles are component state, not data-ut-intent. Auth submit forms use data-intent-form="auth.login"/"auth.register"; auth.login/auth.register click bindings only open/focus auth.',
     `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.`,
   ].filter(Boolean).join('\n');
   return {

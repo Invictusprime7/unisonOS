@@ -46,7 +46,8 @@ export const AuthSignUp: React.FC<BaseSectionProps<'auth-form'>> = ({ section, t
       style={{ background: hsl(theme.colors.muted) }}
     >
       <form
-        data-ut-intent="auth.register"
+        data-intent-form="auth.register"
+        data-ut-slot="auth.submit"
         className="w-full max-w-md space-y-5 p-6 sm:p-8 motion-safe:transition-transform motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 motion-reduce:transform-none"
         style={{
           borderRadius: theme.radius,
@@ -71,7 +72,6 @@ export const AuthSignUp: React.FC<BaseSectionProps<'auth-form'>> = ({ section, t
         {field('unison-signup-password', 'Password', 'password', 'new-password')}
         <button
           type="submit"
-          data-ut-intent="auth.register"
           className="w-full px-4 py-2.5 text-sm font-medium hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-opacity motion-reduce:transition-none"
           style={{ borderRadius: theme.radius, background: hsl(theme.colors.primary), color: hsl(theme.colors.primaryForeground) }}
         >
