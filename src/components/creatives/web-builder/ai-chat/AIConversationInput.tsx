@@ -172,7 +172,7 @@ export const AIConversationInput: React.FC<Props> = ({
           {droppedFiles.map((f) => (
             <div
               key={f.id}
-              className="flex items-center gap-1.5 px-2 py-1 bg-muted/50 border border-border rounded-lg text-[11px] text-foreground/70 max-w-[160px] group"
+              className="flex items-center gap-1.5 px-2 py-1 bg-muted border border-border rounded text-muted-foreground min-w-0 group"
             >
               {f.type === 'image' ? (
                 f.preview ? (
@@ -256,7 +256,7 @@ export const AIConversationInput: React.FC<Props> = ({
           <Button variant="link" size="icon" onClick={capturePreviewScreenshot} disabled={isLoading || isCapturing || droppedFiles.length >= 5} aria-label="Capture preview screenshot" title="Capture preview screenshot"><Camera /></Button>
           <Button variant="link" size="icon" onClick={() => fileInputRef.current?.click()} disabled={isLoading || droppedFiles.length >= 5} aria-label="Attach files" title="Attach files"><Paperclip /></Button>
         </div>
-        <span className="text-[10px] text-muted-foreground/40">
+        <span className="text-muted-foreground">
           {droppedFiles.length > 0 && `${droppedFiles.length}/5 files · `}
 
         </span>

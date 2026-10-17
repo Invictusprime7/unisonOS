@@ -1,14 +1,16 @@
 # Roadmap
 
 ## Active: AI Builder frontend replacement
-- [ ] Replace Builder chrome/composer with minimal borders and reduced hover fills; expose compact feature settings
-- [ ] Enforce feature toggles at request dispatch, use the connector for tool actions, and retire legacy source-writing/debug fallback branches
-- [ ] Verify settings and interface interactions; authenticated saved-project acceptance needs a valid UNISON session
+- [x] Replace Builder chrome/composer with minimal borders and reduced hover fills; expose compact feature settings
+- [x] Enforce feature toggles at request dispatch, use the connector for tool actions, and retire legacy source-writing/debug fallback branches
+- [x] Verify real panel controls in isolation: switches persist, command tools disable, accessible input, zero runtime errors; 78 regressions and authority lint pass
+- [ ] Verify authenticated save → preview → reopen for all four flows; blocked by unavailable authoritative UNISON session and designated test project
 
 ## Active: Unified AI Builder request closure
 - [x] Wire React debug repairs to App Builder candidates; page creation carries connector context; image requests and catalog/selection inspections use enforced tools; capture live VFS/revision, refuse stale preparation/selection and unsupported capability bindings
 - [ ] Verify page creation, image replacement, catalog edits and capability bindings through save → preview → reopen on UNISON (regressions pass; browser reaches sign-in without runtime errors, but available session targets another backend)
-- [ ] Remove legacy non-React/specialized paths only after authenticated replacement acceptance; retained pending a valid UNISON session and designated test project
+- [x] Remove Builder response-to-source extraction and direct theme/icon/layout/debug source shortcuts; source authorship is Composer-only. Launch/catalog transport remains; unsupported non-React source editing refuses.
+- [ ] Complete replacement acceptance before removing compatibility helpers outside Builder; requires a valid UNISON session and designated test project
 
 ## Sign-in recovery
 - [x] Recover auth-key quota errors with tab-persistent fallback, without deleting project data
@@ -36,7 +38,7 @@
 - [x] Phase 4b provider boundary: deterministic real-adapter tests verify Gemini/OpenAI/gateway image bytes and placement context through failover and Composer repair; 2 new tests + 39 client regressions pass; no live calls or routing changes
 - [x] Phase 4b image enablement: shared toAnthropicMessages converts OpenAI image_url data-URL parts to Anthropic base64 image blocks in providerClient.callAnthropic and aiProviderLoop Phase 4; attachment exclusion removed from shouldUseCanonicalComposer and AIBuilderPanel threads typed images into unisonAppBuilder.edit; edge 71/71 and client 21/21 pass; signed-in acceptance still pending
 - [x] Edge regression drift resolved: budget test updated to current 145s, builder_source_edit gateway-lead expectation matches composer routing; full edge suite 71 passed / 0 failed
-- [ ] Phase 4b remainder: migrate attachment/non-React source fallback callers before further removals (requires authenticated acceptance evidence on authoritative backend); compatibility extractors remain intact
+- [ ] Phase 4b remainder: authenticated attachment/source acceptance before removing compatibility helpers outside Builder; Builder itself is now candidate-only
 - Later: authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON
 - Audit persistence: evaluate existing telemetry before adding canonical migrations; no new tables or record changes in Phase 1

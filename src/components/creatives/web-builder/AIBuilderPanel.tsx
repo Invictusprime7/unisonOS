@@ -98,10 +98,7 @@ import {
   setMessages as persistMessages,
   type PersistedMessage,
 } from '@/services/aiHistoryStore';
-import { parseLayoutIntent } from '@/utils/layoutIntentEngine';
 // Side-effect import: registers GHL skill pack with global registry
-import { detectSections } from '@/utils/sectionSwapper';
-import { isThemeOnlyRequest } from '@/services/theme/themeEdit';
 import { isBuilderProviderUnavailable, isBuilderSessionError, runBuilderTurn, shouldOfferBuilderProviderRetry } from '@/services/builderBrainClient';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
 import {
@@ -119,8 +116,6 @@ import {
 } from '@/services/aiBuilderApply';
 import {
   CANDIDATE_GENERATED_NOTICE,
-  CANDIDATE_STYLESHEET_NOTICE,
-  CANDIDATE_COMPONENT_NOTICE,
   CANDIDATE_PAGE_NOTICE,
   neutralizeModelSuccessClaim,
   transactionVerdictLine,
@@ -151,7 +146,6 @@ import {
 } from '@/services/builderRequestInterpreter';
 import { uploadForPlacement, buildUploadPlacementBlock, CERTIFIED_VOCABULARY_NOTE, type PlacedUpload } from '@/services/assets/uploadPlacement';
 import {
-  AIPermissionControl,
   AI_EDIT_PERMISSION_STORAGE_KEY,
   loadAIEditPermissions,
   type AIEditPermissionCategory,
@@ -575,7 +569,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   vfsContext,
   vfsFiles,
   onApplyToVFS,
-  onThemeEdit,
   previewRef,
   projectId,
   revisionId,
@@ -2892,7 +2885,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
           {features.tools && <AgentCommandPalette files={vfsFiles ?? {}} onApply={onApplyToVFS} onAsk={setInput} businessId={businessId} revisionId={revisionId} projectId={projectId} getCurrentRequestState={getCurrentRequestState} features={features} />}
           {agentTarget && (
-            <div className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+            <div className="builder-context" role="status" aria-live="polite">
               <span className="truncate">
                 Editing: <span className="text-foreground">&lt;{agentTarget.tagName}&gt;{agentTarget.text ? ` “${agentTarget.text}”` : ''}</span>
               </span>
@@ -2908,7 +2901,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           )}
           {heldFiles && (
             <div
-              className="flex items-baseline gap-3 border-t border-border px-3 py-2 text-xs text-muted-foreground"
+              className="builder-context"
               role="status"
               aria-live="polite"
             >
