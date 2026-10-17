@@ -5,7 +5,7 @@
 
 - `LauncherWizard` is selection-only: it captures intent and invokes launch orchestration, but never authors or mutates VFS source.
 - `UnisonAppBuilder` is the sole fresh-launch application author: derive `AppBuildContract`, generate/repair one candidate, promote after site-wide closure.
-- The canonical platform owns topology, routes, capabilities, intents, bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation. It must not generate a competing fresh-launch page implementation after App Builder authorship.
+- The canonical platform owns topology/routes, capabilities/intents/bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation; never generate competing pages after App Builder authorship.
 - `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
 - Saved projects hydrate accepted revisions; parsers and Playground hydration are read-only compatibility. Candidates stay unsanitized/unsplit; uploads lead context and images survive Composer repairs. Why: preserve source; signed-in acceptance remains required.
 - Composer contracts are byte-mirrored at `supabase/functions/_shared/aiComposerContract.ts` and `src/contracts/aiComposerContract.ts`; enforce targets, planned routes, dependency requests/new AST module reads, and declared/new literal intents; edge edits require hunks. Why: canonical authoring vocabulary is not ownership or live readiness.
@@ -13,7 +13,7 @@
 - Page composition intelligence lives in `src/services/composition/` (one universal planner + data-only industry profiles, consumed under App Builder orchestration); why: industries differ by data, never by engine.
 - Variant selection goes through `src/services/designImplementationEligibility.ts`; variants carry authored `capabilities`/`compatibility`/`lifecycle`/`ai` contracts, preferred over string inference. Why: registry growth narrows candidates deterministically, never widens AI context.
 - WebBuilder launch-handoff dedupes on `routeHandoffImportedRef`, never `importedRouteStateRef`; why: revision adoption updates the shared ref, replaying original Wizard files over saved edits.
-- The `projects` ↔ `builder_drafts` name-sync triggers skip when `pg_trigger_depth() > 1` and only write rows whose values differ; why: re-entrant writes to the in-flight draft row raised SQLSTATE 27000 and failed every builder save.
+- `projects` ↔ `builder_drafts` name-sync triggers skip when `pg_trigger_depth() > 1` and write only changed values; why: re-entry raises SQLSTATE 27000 and blocks saves.
 - Persist draft chat in owner-only `builder_chat_history` via debounced `aiHistoryStore.setMessages`; localStorage is a cache. Why: conversations must survive devices/sessions.
 - App Builder pages must pass the structural floor in `src/services/app-builder/design/pageStructureGate.ts` (shared nav + footer, minimum body sections, imagery on media-led roles) via the orchestrator's `pageCheck`, and each page brief leads with its own composition target and only its own archetype block; why: the router adds no chrome and truncated, site-wide briefs let the AI ship lone centered heroes.
 
