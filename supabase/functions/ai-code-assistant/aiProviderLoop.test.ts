@@ -8,6 +8,51 @@ import {
 const test = (name: string, fn: () => unknown) => Deno.test(name, async () => { resetDirectQuotaCooldown(); await fn(); });
 import { isPageDesignRequest } from '../_shared/catalogTools.ts';
 import { buildResponseBody } from '../_shared/responseNormalizer.ts';
+import { runComposerLane } from './composerLane.ts';
+
+test('Composer image references survive provider fallback and format repair end to end', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+    const data = 'data:image/png;base64,aGVsbG8=';
+    const durableUrl = 'https://example.test/upload.png';
+    const sent: Array<{ url: string; messages: Array<{ role: string; content: unknown }> }> = [];
+    let gatewayCalls = 0;
+    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      sent.push({ url: String(url), messages: body.messages });
+      if (!String(url).includes('lovable')) {
+        return new Response('{"error":{"message":"Billing is required"}}', { status: 402 });
+      }
+      gatewayCalls++;
+      const content = gatewayCalls === 1 ? 'invalid response' :
+        'SUMMARY: Updated\n<<<EDIT /src/pages/Home.tsx\n<<<<<<< SEARCH\nBefore\n=======\nAfter\n>>>>>>> REPLACE\n>>>END';
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }));
+    }) as typeof fetch;
+    const response = await runComposerLane(JSON.stringify({
+      task: 'builder_source_edit',
+      page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' },
+      brief: 'Place the uploaded reference', instruction: 'Update the supplied page',
+      files: { '/src/pages/Home.tsx': 'export default function Home(){return <main>Before</main>}' },
+      sourceTargets: ['/src/pages/Home.tsx'], routes: [],
+      runtimeContext: `Uploaded URL: ${durableUrl}`, images: [{ name: 'upload.png', data }],
+    }), {}, async aiMessages => runProviderLoop({ aiMessages, providerPlan: hybridPlan, navPageGen: false }));
+    assert(response.status === 200, 'Composer should accept the repaired candidate');
+    assert(gatewayCalls === 2, 'both generation and format repair must run');
+    assert(sent.length === 4, 'failed Gemini/OpenAI leads, gateway generation and gateway repair must run');
+    assert(sent[0].url.includes('googleapis') && sent[1].url.includes('openai'), 'both direct provider families must be exercised');
+    assert(sent.slice(2).every(call => call.url.includes('lovable')), 'repair uses the surviving gateway');
+    for (const call of sent) {
+      const content = call.messages.find(message => message.role === 'user')?.content;
+      assert(Array.isArray(content), 'image content must not be flattened to text');
+      assert(JSON.stringify(content).includes(durableUrl), 'durable placement context must survive');
+      const image = (content as Array<{ type: string; image_url?: { url: string } }>).find(part => part.type === 'image_url');
+      assert(image?.image_url?.url === data, 'reference bytes must survive every attempted provider');
+    }
+    const payload = await response.json();
+    const candidate = JSON.parse(payload.content);
+    assert(candidate.fileOps[0].content === 'export default function Home(){return <main>After</main>}', 'repaired file edit must read back intact');
+    assert(!candidate.fileOps[0].content.includes(data), 'reference data must not leak into authored source');
+  });
+});
 
 test('page design requests cannot be diverted into catalog mutations', () => {
   assert(isPageDesignRequest('home is complete. design the other nav pages.'), 'remaining pages require file output');

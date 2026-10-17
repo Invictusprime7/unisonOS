@@ -1,9 +1,46 @@
 import {
+  createLastResortGatewayChatCompletion,
   createPlannedChatCompletion,
   fetchWithShortRateLimitRetry,
   getShortRateLimitRetryMs,
   resolveConfiguredProviders,
 } from "./providerClient.ts";
+
+Deno.test("preserves multimodal image parts on Gemini, OpenAI and managed gateway wire requests", async () => {
+  const originalFetch = globalThis.fetch;
+  const names = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "UNISONGEMINI_API_KEY", "OPENAI_API_KEY", "OPENAI_MODEL", "LOVABLE_API_KEY"];
+  const saved = new Map(names.map(name => [name, Deno.env.get(name)]));
+  const messages = [{ role: "system", content: "Edit only the supplied source" }, {
+    role: "user", content: [
+      { type: "text", text: "Place https://example.test/upload.png using this reference" },
+      { type: "image_url", image_url: { url: "data:image/png;base64,aGVsbG8=" } },
+    ],
+  }];
+  const sent: Array<{ url: string; body: Record<string, unknown> }> = [];
+  try {
+    for (const name of names) Deno.env.delete(name);
+    for (const name of ["GEMINI_API_KEY", "OPENAI_API_KEY", "LOVABLE_API_KEY"]) Deno.env.set(name, "test-key");
+    globalThis.fetch = (async (url, init) => {
+      sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+      return new Response('{"choices":[{"message":{"content":"ok"}}]}');
+    }) as typeof fetch;
+    for (const model of ["google/gemini-3.8-flash", "openai/gpt-4.1"]) {
+      await createPlannedChatCompletion({ model, messages, max_tokens: 1000 });
+    }
+    await createLastResortGatewayChatCompletion({ model: "google/gemini-3.8-flash", messages, max_tokens: 1000 });
+    assertEquals(sent.map(call => call.url), [
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      "https://api.openai.com/v1/chat/completions",
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+    ]);
+    for (const call of sent) assertEquals(call.body.messages, messages);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [name, value] of saved) {
+      if (value === undefined) Deno.env.delete(name); else Deno.env.set(name, value);
+    }
+  }
+});
 
 Deno.test("preserves capable OpenAI models and applies actual model output limits", async () => {
   const originalFetch = globalThis.fetch;
