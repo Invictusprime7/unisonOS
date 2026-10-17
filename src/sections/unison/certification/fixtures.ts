@@ -12,7 +12,7 @@ export const CERTIFICATION_THEME: ThemeTokens = {
 };
 
 const img = (n: number) => ({ src: `https://images.example/${n}.jpg`, alt: `Sample image ${n}`, caption: `Caption ${n}`, category: n % 2 ? 'Work' : 'Studio' });
-const cta = (label: string) => ({ label, href: '#contact', intent: 'contact.open' });
+const cta = (label: string) => ({ label, href: '#contact', intent: 'contact.submit' });
 const service = (n: number) => ({ title: `Service ${n}`, description: `Description for service ${n}.`, price: `$${n}0`, image: img(n).src, cta: cta('Book') });
 
 export const CERTIFICATION_FIXTURES: { [K in SectionType]: SectionPropsMap[K] } = {

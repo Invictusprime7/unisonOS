@@ -31,7 +31,7 @@ export const AuthSignIn: React.FC<BaseSectionProps<'auth-form'>> = ({ section, t
         </p>
       </div>
       <div className="flex items-center justify-center px-6 py-16 sm:px-10">
-        <form className="w-full max-w-sm space-y-5" data-ut-intent="auth.submit">
+        <form className="w-full max-w-sm space-y-5" data-ut-intent="auth.login">
           <div className="space-y-2">
             <h1
               data-ut-slot="auth.heading"
@@ -88,7 +88,7 @@ export const AuthSignIn: React.FC<BaseSectionProps<'auth-form'>> = ({ section, t
           </div>
           <button
             type="submit"
-            data-ut-intent="auth.submit"
+            data-ut-intent="auth.login"
             className="w-full px-4 py-2.5 text-sm font-medium motion-reduce:transition-none transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               borderRadius: theme.radius,
