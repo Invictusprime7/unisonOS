@@ -52,10 +52,23 @@ async function resolveRecordId(ref: ResourceEntityRef, ctx: ResourceContext): Pr
 export async function executeResourceCommand(command: EditorCommand, ctx: ResourceContext): Promise<EditorCommandResult> {
   const parsed = (command.type === 'update-resource-field' && command.ref) || parseResourceProvenance(command.target.resourceMark);
   if (!parsed) return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: 'This element is not linked to a saved item.' };
+  const values = valuesFor(command, parsed.field);
+  const label = getResource(parsed.resourceKey)?.label ?? parsed.resourceKey;
   const recordId = await resolveRecordId(parsed, ctx);
   if (!recordId) {
-    const label = getResource(parsed.resourceKey)?.label ?? parsed.resourceKey;
-    return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: `No saved ${label} record matches this element yet. Save the site first, then try again.` };
+    // WYSIWYG edits must never be gated on a manual save: materialize the
+    // record from the element's identity and apply the edit in one write.
+    const created = await executeResourceCommandCompatible<ResourceRecord>(ctx, {
+      kind: 'resource.mutate', resourceKey: parsed.resourceKey, action: 'create', values: seedValuesFor(parsed, values),
+    }, () => applyResourceOp({ op: 'create', resourceKey: parsed.resourceKey, values: seedValuesFor(parsed, values) }, ctx)).catch(() => null);
+    if (!created) {
+      return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: `Couldn't save this ${label} edit yet — try again in a moment.` };
+    }
+    return {
+      ok: true, command: command.type, lane: 'resource',
+      savedTo: `${label} → ${String(created.name ?? created.title ?? parsed.recordId)} (created)`,
+      changedFields: Object.keys(values),
+    };
   }
   const ref = { ...parsed, recordId };
   const values = valuesFor(command, ref.field);
