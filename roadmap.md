@@ -1,5 +1,13 @@
 # Roadmap
 
+## Active: Enforced AI Builder Connector
+- [ ] Phase 1: typed context connector integrated with existing App Builder edits and shared transport; ownership, revision and registry validation; regression tests
+- [ ] Phase 2: shared typed tool dispatch and capability/binding preflight
+- [ ] Phase 3: edge-side proposal enforcement using existing Composer lanes
+- [ ] Phase 4: remove legacy files only after call-site and replacement verification
+- [ ] Phase 5: authenticated cross-industry browser acceptance
+- Audit persistence: evaluate existing telemetry before adding canonical migrations; no new tables or record changes in Phase 1
+
 ## Active: Preview-First Resource & Editing Consolidation (guidebook: docs/milestones/PREVIEW_FIRST_RESOURCE_CONSOLIDATION_2026-10-11.md)
 
 - [x] M0 (PR1): editor command instrumentation (correlation IDs, lane, save target) + golden ownership fixture matrix test
