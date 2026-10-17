@@ -23,7 +23,6 @@ import {
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TaskPlanSteps } from '../TaskPlanSteps';
 import type { VFSEdit, IframeError, ThinkingStep, MessageMeta, Message as ConversationMessage } from '../AIBuilderPanel';
 export type { ConversationMessage };
 
@@ -59,10 +58,11 @@ const ThinkingPipeline: React.FC<{ steps: ThinkingStep[] }> = ({ steps }) => {
   };
 
   return (
-    <div className="mb-2 rounded-xl border border-border/70 bg-muted/20">
+    <div className="mb-2">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
         {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         <span className="flex items-center gap-1.5">
@@ -78,26 +78,14 @@ const ThinkingPipeline: React.FC<{ steps: ThinkingStep[] }> = ({ steps }) => {
           </span>
         </span>
 
-        <div className="ml-auto flex items-center gap-1.5 text-[10px]">
-          <span className="rounded-md border border-border/80 bg-background px-1.5 py-0.5 text-muted-foreground">
-            {steps.length} steps
-          </span>
-          {activeCount > 0 && (
-            <span className="rounded-md border border-border/80 bg-background px-1.5 py-0.5 text-muted-foreground">
-              {activeCount} active
-            </span>
-          )}
-          {doneCount > 0 && (
-            <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600 dark:text-emerald-400">
-              {doneCount} done
-            </span>
-          )}
-        </div>
+        <span className="ml-auto min-w-0 truncate text-[10px] text-muted-foreground">
+          {hasError || isComplete ? `${steps.length} steps` : lastStep.content}
+        </span>
       </button>
 
       {expanded && (
-        <div className="px-3 pb-3">
-          <div className="rounded-lg border border-border/60 bg-background/90 p-2">
+        <div className="pb-2 pl-1">
+          <div>
             <div className="space-y-1.5 border-l border-border/70 pl-2.5">
               {steps.map((step, index) => (
                 <div
@@ -274,7 +262,6 @@ export const AIConversationMessage: React.FC<Props> = ({ message, onViewEdits, o
         {message.claudeReasoning && <ReasoningBlock reasoning={message.claudeReasoning} />}
 
         {/* Task Plan */}
-        {message.taskPlan && <TaskPlanSteps plan={message.taskPlan} className="mb-2" />}
 
         {/* Thinking Pipeline */}
         {message.thinking && message.thinking.length > 0 && (
