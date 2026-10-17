@@ -4020,7 +4020,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       }
       const page = edit.path.split('/').pop() ?? edit.path;
       toast.warning('The AI changed the same text you edited', {
-        description: `Choose what to keep on ${page}.`,
+        description: `On ${page}: keep your edit (replaces the AI’s version of this page) or discard it.`,
         duration: Infinity,
         action: {
           label: 'Keep my edit',
