@@ -107,3 +107,4 @@
 - [x] Resource executor resolves default fields from the resource schema (menu image → image_url), never hardcoded guesses
 - [x] Dedicated-backend gateway contract extended to content entries + site profile (project-backend edge); client resourceRuntime no longer throws for non-catalog adapters — gateway is the authority
 - [ ] Deploy project-backend edge change via GitHub workflow; live signed-in slice check still open
+- [x] WYSIWYG never gated on manual save: unmatched slug marks auto-create the record in one write (seeded name from the mark), "Save the site first" dead-end removed; 30 resource tests pass
