@@ -2159,6 +2159,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             const editResult = await unisonAppBuilder.edit({
               operationId: `builder:${generateId()}`,
               attachmentContext: _fileContext,
+              images: _attachments.length > 0
+                ? _attachments.map((a) => ({ name: a.name, data: a.data }))
+                : undefined,
               page,
               brief: [
                 'Edit the accepted React project without changing unrelated source.',
