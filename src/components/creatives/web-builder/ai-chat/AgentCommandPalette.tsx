@@ -3,9 +3,10 @@ import { toast } from 'sonner';
 import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from '@/components/ui/command';
-import { agentOperations, type CatalogTable } from '@/services/agent-runtime/operations';
+import { type CatalogTable } from '@/services/agent-runtime/operations';
 import { dispatchBuilderOperation } from '@/services/unisonBuilderToolDispatch';
 import { createUnisonBuilderContext } from '@/services/unisonBuilderConnector';
+import { captureBuilderRequestState, type BuilderRequestState } from '@/services/builder/builderRequestState';
 import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 import { emitAgentEvent, onAgentEvent, type AgentEvent } from '@/services/agent-runtime/agentEvents';
 import { applyAIBuilderFiles, type AIBuilderApplyCallback } from '@/services/aiBuilderApply';
@@ -18,6 +19,8 @@ interface Props {
   onAsk: (prompt: string) => void;
   businessId?: string | null;
   revisionId?: string | null;
+  projectId?: string | null;
+  getCurrentRequestState?: () => BuilderRequestState;
 }
 
 type Mode = 'root' | 'font' | 'map' | 'changes' | 'catalog' | 'price' | 'image';
@@ -29,7 +32,7 @@ type ChangeEntry = AgentEvent & { at: number };
  * Ctrl/Cmd+K. Every action calls the same agent-runtime operations and the
  * same save path the AI uses — the menu has no capabilities of its own.
  */
-export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisionId }: Props) {
+export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisionId, projectId, getCurrentRequestState }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('root');
   const [query, setQuery] = useState('');
@@ -45,8 +48,10 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
         setOpen((o) => !o);
       }
     };
+    const onOpen = () => setOpen(true);
+    window.addEventListener('unison:open-command-tools', onOpen);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('unison:open-command-tools', onOpen); };
   }, []);
 
   const [catalog, setCatalog] = useState<CatalogRow[] | null>(null);
@@ -55,7 +60,9 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
     if (mode !== 'catalog' || catalog) return;
     if (!businessId) { setCatalog([]); return; }
     Promise.all(EDITABLE.map(async (table) => {
-      const rows = (await agentOperations.inspect_data({ files, businessId }, table, 50).catch(() => [])) as Record<string, unknown>[];
+      const state = captureBuilderRequestState(getCurrentRequestState?.() ?? { files, projectId: projectId ?? null, businessId: businessId ?? null, revisionId: revisionId ?? null });
+      const connector = createUnisonBuilderContext(state);
+      const rows = (await dispatchBuilderOperation(connector, state, 'inspect_data', table, 50).catch(() => [])) as Record<string, unknown>[];
       return rows.map((r) => ({
         table, id: String(r.id), name: String(r.name ?? 'Untitled'),
         price: r.price != null ? Number(r.price) : r.price_cents != null ? Number(r.price_cents) / 100 : null,
@@ -68,12 +75,13 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
     if (!picked) return;
     const value = raw.trim();
     const patch = mode === 'price' ? { price: Number(value.replace(/[^0-9.]/g, '')) } : { image_url: value };
-    if (mode === 'price' && !(patch.price! >= 0 && value)) { toast.error('Type a number, e.g. 49.99'); return; }
+    if (mode === 'price' && !(typeof patch.price === 'number' && patch.price >= 0 && value)) { toast.error('Type a number, e.g. 49.99'); return; }
     if (mode === 'image' && !/^https:\/\//.test(value)) { toast.error('Paste an image link starting with https://'); return; }
     setOpen(false);
     try {
-      const connector = createUnisonBuilderContext({ businessId: businessId ?? null, revisionId: revisionId ?? null });
-      const { change, summary } = await dispatchBuilderOperation(connector, { files, businessId, revisionId }, 'update_catalog_item', picked.table, picked.id, patch);
+      const state = captureBuilderRequestState(getCurrentRequestState?.() ?? { files, projectId: projectId ?? null, businessId: businessId ?? null, revisionId: revisionId ?? null });
+      const connector = createUnisonBuilderContext(state);
+      const { change, summary } = await dispatchBuilderOperation(connector, state, 'update_catalog_item', picked.table, picked.id, patch);
       emitAgentEvent({ kind: 'data_change', message: summary, status: 'ok' });
       setCatalog(null);
       if (change) await run(change); else toast.success(`${summary}. The page didn't show the old value, so only the database changed.`);
@@ -139,7 +147,7 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
         {mode === 'font' && (
           <CommandGroup heading="Fonts">
             {FONTS.map((f) => (
-              <CommandItem key={f} onSelect={() => run(agentOperations.set_font({ files }, f))}>{f}</CommandItem>
+              <CommandItem key={f} onSelect={async () => { try { const state = captureBuilderRequestState(getCurrentRequestState?.() ?? { files, projectId: projectId ?? null, businessId: businessId ?? null, revisionId: revisionId ?? null }); await run(await dispatchBuilderOperation(createUnisonBuilderContext(state), state, 'set_font', f)); } catch (error) { toast.error(error instanceof Error ? error.message : 'Font change refused.'); } }}>{f}</CommandItem>
             ))}
           </CommandGroup>
         )}

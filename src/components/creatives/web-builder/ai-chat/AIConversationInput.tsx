@@ -150,7 +150,7 @@ export const AIConversationInput: React.FC<Props> = ({
   const canSend = (input.trim() || droppedFiles.length > 0) && !isLoading;
 
   return (
-    <div className={cn("p-3 border-t border-border bg-background/95 backdrop-blur-sm", className)}>
+    <div className={cn("builder-composer", className)}>
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -186,12 +186,12 @@ export const AIConversationInput: React.FC<Props> = ({
                 <FileText className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
               )}
               <span className="truncate">{f.name}</span>
-              <button
+              <Button variant="link" size="icon" aria-label={`Remove ${f.name}`}
                 onClick={() => onRemoveFile(f.id)}
-                className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
+                className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0 "
               >
                 <X className="w-3 h-3" />
-              </button>
+              </Button>
             </div>
           ))}
         </div>
@@ -200,7 +200,7 @@ export const AIConversationInput: React.FC<Props> = ({
       {/* Input area */}
       <div
         className={cn(
-          'relative rounded-xl border border-border bg-card transition-all duration-200 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20',
+          'builder-input-frame',
           isDragging && 'ring-2 ring-primary/40 border-primary/40'
         )}
         onDragOver={handleDragOver}
@@ -226,22 +226,20 @@ export const AIConversationInput: React.FC<Props> = ({
             }
           }}
           placeholder={droppedFiles.length > 0 ? 'Add instructions for attachments...' : 'What would you like to build?'}
-          className="min-h-[48px] max-h-[120px] border-0 bg-transparent text-sm resize-none shadow-none focus-visible:ring-0 pr-12 placeholder:text-muted-foreground/40"
+          aria-label="Message AI Builder"
+          className="border-0 bg-transparent text-sm resize-none shadow-none focus-visible:ring-0 placeholder:text-muted-foreground"
           disabled={isLoading}
         />
 
         {/* Send button — inside the text field */}
-        <div className="absolute right-1.5 bottom-1.5">
+        <div className="builder-input-send">
           <Button
             size="icon"
             onClick={onSend}
             disabled={!canSend}
-            className={cn(
-              "h-8 w-8 rounded-lg transition-all duration-200",
-              canSend
-                ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
-                : "bg-muted text-muted-foreground"
-            )}
+            variant="link"
+            aria-label="Send message"
+            title="Send message"
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -253,33 +251,14 @@ export const AIConversationInput: React.FC<Props> = ({
       </div>
 
       {/* Toolbar row — outside the text field */}
-      <div className="flex items-center justify-between mt-1.5 px-1">
+      <div className="builder-input-toolbar">
         <div className="flex items-center gap-0.5">
-          {/* Screenshot capture */}
-          <button
-            onClick={capturePreviewScreenshot}
-            disabled={isLoading || isCapturing || droppedFiles.length >= 5}
-            className={cn(
-              "p-1.5 rounded-md text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 disabled:opacity-30 transition-all",
-              isCapturing && "animate-pulse text-primary"
-            )}
-            title="Capture preview screenshot"
-          >
-            <Camera className="w-3.5 h-3.5" />
-          </button>
-          {/* Attach files */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading || droppedFiles.length >= 5}
-            className="p-1.5 rounded-md text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 disabled:opacity-30 transition-all"
-            title="Attach files"
-          >
-            <Paperclip className="w-3.5 h-3.5" />
-          </button>
+          <Button variant="link" size="icon" onClick={capturePreviewScreenshot} disabled={isLoading || isCapturing || droppedFiles.length >= 5} aria-label="Capture preview screenshot" title="Capture preview screenshot"><Camera /></Button>
+          <Button variant="link" size="icon" onClick={() => fileInputRef.current?.click()} disabled={isLoading || droppedFiles.length >= 5} aria-label="Attach files" title="Attach files"><Paperclip /></Button>
         </div>
         <span className="text-[10px] text-muted-foreground/40">
           {droppedFiles.length > 0 && `${droppedFiles.length}/5 files · `}
-          Enter to send · Shift+Enter for new line
+
         </span>
       </div>
     </div>
