@@ -22,7 +22,7 @@ vi.mock('@/services/project-backend/runtimeProtocol', () => ({
 
 import { executeResourceCommand } from '@/services/editor/executors/resourceExecutor';
 
-const ctx = { businessId: 'b1', projectId: 'p1', siteId: 's1', mode: 'legacy' } as never;
+const ctx = { businessId: 'b1', projectId: 'p1', siteId: 's1', mode: 'builder' } as const;
 const REAL_ID = '11111111-2222-3333-4444-555555555555';
 
 function setTextCommand(mark: string) {
@@ -84,6 +84,26 @@ describe('resource executor slug resolution', () => {
     const result = await executeResourceCommand(setTextCommand(`products#${REAL_ID}`), ctx);
     expect(result.ok).toBe(true);
     expect(runtime.queryResource).not.toHaveBeenCalled();
+  });
+  it('does not materialize a duplicate record when a scoped read fails', async () => {
+    runtime.queryResource.mockRejectedValueOnce(new Error('Transport unavailable'));
+    await expect(executeResourceCommand(setTextCommand('products#ghost-item'), ctx)).rejects.toThrow('Transport unavailable');
+    expect(runtime.applyResourceOp).not.toHaveBeenCalled();
+  });
+  it('protects generated slug edits with the original preview text', async () => {
+    runtime.queryResource.mockResolvedValueOnce([{ id: REAL_ID, slug: 'soup' }]);
+    runtime.getResourceRecord.mockResolvedValueOnce({ id: REAL_ID, name: 'Someone else edited this' });
+    const result = await executeResourceCommand({ type: 'set-text', target: { resourceMark: 'products#soup.name' }, originalText: 'Soup', text: 'New soup' }, ctx);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('changed elsewhere');
+    expect(runtime.applyResourceOp).not.toHaveBeenCalled();
+  });
+  it('rejects another project target before reads or writes', async () => {
+    const result = await executeResourceCommand({ type: 'set-text', target: { projectId: 'p2', resourceMark: `products#${REAL_ID}.name` }, text: 'New' }, ctx);
+    expect(result.ok).toBe(false);
+    expect(runtime.queryResource).not.toHaveBeenCalled();
+    expect(runtime.getResourceRecord).not.toHaveBeenCalled();
+    expect(runtime.applyResourceOp).not.toHaveBeenCalled();
   });
 });
 

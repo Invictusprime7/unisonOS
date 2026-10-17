@@ -18,6 +18,10 @@ vi.mock('@/services/assets/uploadPlacement', () => ({
 
 import { RecordFieldsEditor } from '@/components/creatives/web-builder/RecordFieldsEditor';
 
+vi.mock('@/services/project-backend/runtimeProtocol', () => ({
+  executeResourceCommandCompatible: (_ctx: unknown, _command: unknown, legacy: () => Promise<unknown>) => legacy(),
+}));
+
 describe('RecordFieldsEditor image upload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -44,6 +48,7 @@ describe('RecordFieldsEditor image upload', () => {
         op: 'update',
         ref: expect.objectContaining({ resourceKey: 'business-profile', kind: 'business-profile', recordId: 'business-1' }),
         values: { logoUrl: 'https://storage.example/logo.png' },
+        expected: { logoUrl: '' },
       },
       { businessId: 'business-1', projectId: 'project-1', mode: 'builder' },
     ));

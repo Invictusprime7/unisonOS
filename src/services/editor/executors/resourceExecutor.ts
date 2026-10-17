@@ -47,6 +47,7 @@ function seedValuesFor(ref: ResourceEntityRef, values: Record<string, unknown>):
  * of failing gateway validation.
  */
 async function resolveRecordId(ref: ResourceEntityRef, ctx: ResourceContext): Promise<string | null> {
+  if (ref.kind === 'business-profile') return ctx.businessId;
   if (UUID_RE.test(ref.recordId)) return ref.recordId;
   const listed = await executeResourceCommandCompatible<ResourceRecord[]>(ctx, {
     kind: 'resource.list', resourceKey: ref.resourceKey,
@@ -80,6 +81,7 @@ export async function readEditorResource(ref: ResourceEntityRef, ctx: ResourceCo
 }
 
 export async function executeResourceCommand(command: EditorCommand, ctx: ResourceContext): Promise<EditorCommandResult> {
+  if (ctx.mode !== 'builder') return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: 'Published sites cannot change records.' };
   if (command.target.projectId && command.target.projectId !== ctx.projectId) {
     return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: 'This item belongs to another project.' };
   }
