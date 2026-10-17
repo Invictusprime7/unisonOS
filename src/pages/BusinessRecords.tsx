@@ -108,8 +108,8 @@ export default function BusinessRecords() {
   return <main className="records-page">
     <header className="records-row"><h1>Records</h1><Link to={projectId ? `/web-builder?id=${projectId}` : '/business/content'}>Back</Link></header>
     <div className="records-row">
-      <Select value={projectId || undefined} onValueChange={(value) => setParams({ projectId: value })}><SelectTrigger aria-label="Site"><SelectValue placeholder="Select site" /></SelectTrigger><SelectContent>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name || 'Untitled site'}</SelectItem>)}</SelectContent></Select>
-      {!scopedBusinessId && <Select value={businessId || undefined} onValueChange={setBusinessId}><SelectTrigger aria-label="Business"><SelectValue placeholder="Select business" /></SelectTrigger><SelectContent>{businesses.map((business) => <SelectItem key={business.id} value={business.id}>{business.name}</SelectItem>)}</SelectContent></Select>}
+      <Select value={projectId} onValueChange={(value) => setParams({ projectId: value })}><SelectTrigger aria-label="Site"><SelectValue placeholder="Select site" /></SelectTrigger><SelectContent>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name || 'Untitled site'}</SelectItem>)}</SelectContent></Select>
+      {!scopedBusinessId && <Select value={businessId} onValueChange={setBusinessId}><SelectTrigger aria-label="Business"><SelectValue placeholder="Select business" /></SelectTrigger><SelectContent>{businesses.map((business) => <SelectItem key={business.id} value={business.id}>{business.name}</SelectItem>)}</SelectContent></Select>}
       <Button variant="ghost" size="icon" aria-label="Refresh records" disabled={loading || !projectId} onClick={() => setRevision((r) => r + 1)}><RefreshCw /></Button>
     </div>
     <nav className="records-row" aria-label="Record types">
