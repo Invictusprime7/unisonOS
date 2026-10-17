@@ -1,0 +1,15 @@
+.records-page {
+  padding: var(--ut-density-padding);
+  display: grid;
+  gap: var(--ut-density-gap);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--ut-font-sans);
+}
+.records-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ut-density-gap); }
+.records-layout { display: flex; flex-wrap: wrap; gap: var(--ut-density-gap); }
+.records-list { flex-grow: 1; }
+.records-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ut-density-gap); border-bottom-style: solid; border-bottom-width: var(--ut-border-weight); border-bottom-color: hsl(var(--border)); padding-block: var(--ut-density-padding); }
+.records-item span { color: hsl(var(--muted-foreground)); }
+.records-page aside { flex-grow: 1; min-width: 0; }
+.records-page h1, .records-page h2 { font-family: var(--ut-font-sans); }

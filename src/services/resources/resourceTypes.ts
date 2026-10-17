@@ -40,6 +40,8 @@ export interface ResourceStorageDefinition {
   contentType?: string;
   /** content_types.id, required by the content command gateway. */
   contentTypeId?: string;
+  /** Historical type aliases share a logical collection without moving rows. */
+  contentTypeIds?: string[];
 }
 
 export interface ResourceDefinition {

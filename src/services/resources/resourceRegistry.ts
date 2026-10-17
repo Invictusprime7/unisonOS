@@ -9,6 +9,30 @@ import type { ResourceDefinition, ResourceFieldDefinition, ResourceFieldType } f
 export const BUSINESS_PROFILE_RESOURCE_KEY = 'business-profile';
 export const CONTENT_STATUSES = ['draft', 'review', 'published', 'archived'] as const;
 
+export type CanonicalRecordKind = 'testimonials' | 'projects' | 'case-studies' | 'faqs';
+/** Content aliases are separate from renderer aliases: case_studies still renders portfolio cards. */
+const CONTENT_RECORD_ALIASES: Record<CanonicalRecordKind, readonly string[]> = {
+  testimonials: ['testimonials', 'testimonial', 'reviews', 'review', 'social-proof', 'socialproof', 'customer-reviews', 'customerreviews'],
+  projects: ['projects', 'project', 'portfolio', 'portfolio-projects', 'work'],
+  'case-studies': ['case-studies', 'case-study', 'casestudies', 'casestudy', 'caseStudies'],
+  faqs: ['faq', 'faqs', 'frequently-asked-questions', 'frequently-asked-question', 'frequentlyaskedquestions', 'questions-and-answers', 'questions', 'q-and-a'],
+};
+const normalizeRecordAlias = (key: string) => key.replace(/^content:/i, '').trim().replace(/_/g, '-').toLowerCase();
+export function resolveContentRecordKind(key: string): CanonicalRecordKind | null {
+  const normalized = normalizeRecordAlias(key);
+  return (Object.keys(CONTENT_RECORD_ALIASES) as CanonicalRecordKind[]).find((kind) => CONTENT_RECORD_ALIASES[kind].some((alias) => normalizeRecordAlias(alias) === normalized)) ?? null;
+}
+export function canonicalContentSlug(key: string): string {
+  const kind = resolveContentRecordKind(key);
+  return kind === 'faqs' ? 'faq' : kind ?? key.trim().replace(/_/g, '-');
+}
+export function canonicalRecordKind(def: ResourceDefinition): CanonicalRecordKind | null {
+  if (def.kind === 'content') return resolveContentRecordKind(def.storage.contentType ?? def.key);
+  if (def.key === 'testimonials') return 'testimonials';
+  if (def.key === 'portfolio') return 'projects';
+  return null;
+}
+
 function catalogFieldType(t: CatalogFieldType): ResourceFieldType {
   return t;
 }
@@ -72,7 +96,7 @@ export interface ContentTypeRow {
 const CONTENT_FIELD_TYPES = new Set<ResourceFieldType>(['text', 'textarea', 'richtext', 'number', 'image', 'boolean', 'url', 'email', 'json', 'tags']);
 
 export function contentTypeToResource(row: ContentTypeRow): ResourceDefinition | null {
-  const slug = String(row.api_key ?? row.slug ?? row.key ?? '').trim();
+  const slug = canonicalContentSlug(String(row.api_key ?? row.slug ?? row.key ?? '').trim());
   if (!slug) return null;
   const raw = Array.isArray(row.field_schema)
     ? row.field_schema
@@ -84,6 +108,7 @@ export function contentTypeToResource(row: ContentTypeRow): ResourceDefinition |
     const t = String(o.type ?? 'text') as ResourceFieldType;
     return [{ key, label: String(o.label ?? key), type: CONTENT_FIELD_TYPES.has(t) ? t : 'text', required: o.required === true, editable: true }];
   });
+  if (!schema.some((field) => field.key === 'title')) schema.unshift({ key: 'title', label: 'Title', type: 'text', required: true, editable: true });
   return {
     key: `content:${slug}`,
     kind: 'content',
@@ -101,9 +126,22 @@ const contentDefs = new Map<string, ResourceDefinition>();
 /** Replace the dynamic content definitions for the current business. */
 export function registerContentTypes(rows: ContentTypeRow[]): ResourceDefinition[] {
   contentDefs.clear();
-  for (const r of rows) {
+  // Prefer the canonical spelling for future creates; retain every historical
+  // type ID for reads. Never dedupe entries by title or destroy their revisions.
+  for (const r of [...rows].sort((a, b) => {
+    const score = (row: ContentTypeRow) => Number(String(row.api_key ?? row.slug ?? '') !== canonicalContentSlug(String(row.api_key ?? row.slug ?? '')));
+    return score(a) - score(b) || String(a.id ?? '').localeCompare(String(b.id ?? ''));
+  })) {
     const d = contentTypeToResource(r);
-    if (d) contentDefs.set(d.key, d);
+    if (!d) continue;
+    const existing = contentDefs.get(d.key);
+    if (!existing) {
+      d.storage.contentTypeIds = d.storage.contentTypeId ? [d.storage.contentTypeId] : [];
+      contentDefs.set(d.key, d);
+    } else {
+      if (d.storage.contentTypeId && !existing.storage.contentTypeIds?.includes(d.storage.contentTypeId)) existing.storage.contentTypeIds?.push(d.storage.contentTypeId);
+      for (const field of d.schema) if (!existing.schema.some((f) => f.key === field.key)) existing.schema.push(field);
+    }
   }
   return [...contentDefs.values()];
 }
@@ -118,7 +156,17 @@ export function listResources(): ResourceDefinition[] {
 
 export function getResource(key: string): ResourceDefinition | null {
   if (key === BUSINESS_PROFILE_RESOURCE_KEY) return BUSINESS_PROFILE_RESOURCE;
-  if (key.startsWith('content:')) return contentDefs.get(key) ?? null;
+  if (key.startsWith('content:')) return contentDefs.get(`content:${canonicalContentSlug(key.slice('content:'.length))}`) ?? null;
   const surface = getCatalogSurface(key);
   return surface && surface.editableFields.length > 0 ? catalogSurfaceToResource(surface) : null;
+}
+
+/** Records navigation is derived from the authorities above, not another registry. */
+export function listRecordCollections(): Array<{ kind: CanonicalRecordKind; label: string; resources: ResourceDefinition[] }> {
+  const resources = listResources();
+  return (['testimonials', 'projects', 'case-studies', 'faqs'] as const).map((kind) => ({
+    kind,
+    label: kind === 'case-studies' ? 'Case studies' : kind === 'faqs' ? 'FAQs' : kind === 'projects' ? 'Projects' : 'Testimonials',
+    resources: resources.filter((def) => canonicalRecordKind(def) === kind),
+  }));
 }

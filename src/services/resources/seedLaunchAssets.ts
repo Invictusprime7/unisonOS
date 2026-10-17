@@ -10,9 +10,10 @@ import { loadBusinessProfile, saveBusinessProfile, type BusinessProfilePatch } f
 import { createContentRecord, listContentRecords, listContentTypes, mutateContentRecord } from '@/services/cmsRecordService';
 import type { CreatorData, CreatorProduct } from '@/types/creatorData';
 import { normalizeIndustryKey } from '@/platform/core/industryMatrix';
+import { canonicalContentSlug } from './resourceRegistry';
 
 /** Content types a fresh launch can seed, mapped from CreatorData collections. */
-const SEED_CONTENT_TYPES: Record<string, { displayName: string; fields: { key: string; label: string; type: string }[] }> = {
+export const SEED_CONTENT_TYPES: Record<string, { displayName: string; fields: { key: string; label: string; type: string }[] }> = {
   faq: { displayName: 'FAQs', fields: [
     { key: 'question', label: 'Question', type: 'text' },
     { key: 'answer', label: 'Answer', type: 'textarea' },
@@ -180,7 +181,7 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
     const typeIdByKey = new Map<string, string>();
     for (const t of types) {
       const key = String(t.api_key ?? '').trim();
-      if (key && t.id) typeIdByKey.set(key.replace(/_/g, '-'), String(t.id));
+      if (key && t.id) typeIdByKey.set(canonicalContentSlug(key), String(t.id));
     }
     for (const [key, def] of Object.entries(SEED_CONTENT_TYPES)) {
       if (typeIdByKey.has(key) || !contentPlans.some((p) => p.type === key)) continue;
@@ -230,14 +231,14 @@ export async function adoptLongformFromSite(input: { businessId: string; project
   if (!found.length) return 0;
   const types = await listContentTypes({ businessId: input.businessId, projectId: input.projectId }).catch(() => [] as Array<Record<string, unknown>>);
   const typeIdByKey = new Map<string, string>();
-  for (const t of types) if (t.api_key && t.id) typeIdByKey.set(String(t.api_key), String(t.id));
+  for (const t of types) if (t.api_key && t.id) typeIdByKey.set(canonicalContentSlug(String(t.api_key)), String(t.id));
   let created = 0;
   for (const key of ['articles', 'case-studies'] as const) {
     const items = found.filter((f) => f.kind === key);
     if (!items.length) continue;
     if (!typeIdByKey.has(key)) {
       const def = SEED_CONTENT_TYPES[key];
-      const res = await mutateContentRecord({ action: 'content-type-create', businessId: input.businessId, projectId: input.projectId, values: { apiKey: key, displayName: def.displayName, fieldSchema: { fields: def.fields } } }).catch(() => null);
+      const res = await mutateContentRecord({ action: 'content-type-create', businessId: input.businessId, projectId: input.projectId, values: { apiKey: key.replace(/-/g, '_'), displayName: def.displayName, fieldSchema: { fields: def.fields } } }).catch(() => null);
       if (res?.record?.id) typeIdByKey.set(key, String(res.record.id));
     }
     const typeId = typeIdByKey.get(key);

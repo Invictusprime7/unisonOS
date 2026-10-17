@@ -4,6 +4,7 @@
  * ranked by its industry. Reads/writes go through resourceRuntime only.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowUpRight, ChevronDown, ChevronRight, Eye, FileBox, Grid3X3, List, MoreVertical, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -520,6 +521,7 @@ export function AssetsSection({ businessId, projectId, industry, vfsFiles = {}, 
       <div className="min-w-0 border-b border-white/[0.07] px-7 pb-0 pt-7">
         <div className="mb-5">
           <h3 className="text-2xl font-semibold tracking-[-0.03em] text-slate-100">Assets</h3>
+          <Button variant="link" asChild><Link to={projectId ? `/business/records?projectId=${encodeURIComponent(projectId)}` : '/business/records'}>Records</Link></Button>
           <p className="mt-1 text-xs text-slate-500">Everything this site shows, synchronized with the live preview.</p>
         </div>
         <Tabs defaultValue={initialTab}>

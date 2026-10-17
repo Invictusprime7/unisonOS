@@ -6,7 +6,7 @@
  */
 import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
 import { normalizeIndustryKey } from '@/platform/core/industryMatrix';
-import { listResources, BUSINESS_PROFILE_RESOURCE_KEY } from './resourceRegistry';
+import { listResources, getResource, BUSINESS_PROFILE_RESOURCE_KEY } from './resourceRegistry';
 import type { ResourceDefinition } from './resourceTypes';
 
 export type AssetGroup = 'catalog' | 'content' | 'business' | 'media';
@@ -70,7 +70,7 @@ export function detectUsedAssetKeys(vfsFiles: Record<string, string>): Set<strin
     .map(([, c]) => c)
     .join('\n');
   const used = new Set<string>();
-  for (const m of source.matchAll(/data-ut-resource=["'{`]+([a-z0-9:_-]+)#/g)) used.add(m[1]);
+  for (const m of source.matchAll(/data-ut-resource=["'{`]+([a-z0-9:_-]+)#/g)) used.add(getResource(m[1])?.key ?? m[1]);
   for (const s of listCatalogSurfaces()) {
     const names = [s.componentType, ...s.aliases].filter((n) => /^[A-Z]/.test(n));
     if (names.some((n) => new RegExp(`\\b${n}\\b`).test(source))) used.add(s.surfaceId);

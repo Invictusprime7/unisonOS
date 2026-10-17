@@ -80,6 +80,10 @@
 
 ## Active: Preview-First Resource & Editing Consolidation (guidebook: docs/milestones/PREVIEW_FIRST_RESOURCE_CONSOLIDATION_2026-10-11.md)
 
+- [x] Records page at /business/records: project-scoped collection filters, search, schema editor, create and content lifecycle actions; existing content/catalog pages link to it.
+- [x] Registry alias convergence: catalog renderer aliases preserved; CMS FAQ/case-study/review/project aliases normalize to logical types retaining all historical type IDs, fields and record addresses; launch/adoption reuse aliases.
+- [ ] Physical catalog↔CMS record migration: requires authoritative live audit and approved mapping; legacy records appear in one logical collection but remain in original stores with publishing history intact.
+
 - [x] M0 (PR1): editor command instrumentation (correlation IDs, lane, save target) + golden ownership fixture matrix test
 - [x] M0 remainder: mutation telemetry — commitMutation (base→result revision IDs), runExclusive (surface/duration/outcome), applyResourceOp (key/op/recordId) all record MutationEvents in editorTelemetry; 4 new tests pass
 - [x] M1a: EditableObjectDescriptor + EditorTarget identity (tested)

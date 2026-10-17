@@ -81,4 +81,15 @@ describe('launch content seeding contract', () => {
       }
     }
   });
+  it('reuses historical FAQ and case-study type aliases instead of creating competing types', async () => {
+    mocks.listContentTypes.mockResolvedValue([{ id: 'faq-old', api_key: 'faqs' }, { id: 'case-old', api_key: 'case_studies' }]);
+    const data = createEmptyCreatorData('Launch');
+    data.faqs.first = { faqId: 'first', question: 'When?', answer: 'Today' } as typeof data.faqs[string];
+    const extended = data as typeof data & { caseStudies: Record<string, { title: string; body: string }> };
+    extended.caseStudies = { first: { title: 'Story', body: 'Result' } };
+    await seedLaunchAssets({ businessId: 'business-1', projectId: 'project-1', creatorData: extended });
+    expect(mocks.mutateContentRecord).not.toHaveBeenCalled();
+    expect(mocks.createContentRecord).toHaveBeenCalledWith(expect.objectContaining({ contentTypeId: 'faq-old' }));
+    expect(mocks.createContentRecord).toHaveBeenCalledWith(expect.objectContaining({ contentTypeId: 'case-old' }));
+  });
 });
