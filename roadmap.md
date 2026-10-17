@@ -1,5 +1,9 @@
 # Roadmap
 
+## Active: Web Builder browser startup
+- [x] Replace Babel's Node-only breaking-mode flag without exposing host environment variables
+- [ ] Verify Babel initialization without `process`, editor regressions, and the live Builder route
+
 ## Active: Selected text editing
 - [x] Preserve nested inline formatting/icons in selected literal text and canonical slot edits; anchor direct edits to clicked text, prefer explicit AI source ownership and refuse ambiguous text matches
 - [x] Run nested-text, inspector, rendering and canonical edit regressions
