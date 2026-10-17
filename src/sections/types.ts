@@ -302,7 +302,8 @@ export interface SectionPropsMap {
   'data-table': {
     heading?: string;
     columns?: Array<{ key: string; label: string }>;
-    rows?: Array<Record<string, string>>;
+    rows?: Array<Record<string, unknown>>;
+    sourceTable?: string;
     emptyMessage?: string;
     stats?: Array<{ label: string; value: string; change?: string }>;
   };

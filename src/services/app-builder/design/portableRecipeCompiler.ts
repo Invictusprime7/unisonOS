@@ -144,11 +144,13 @@ export function compilePortableRecipes(bundle: DesignSourceBundle, root: string 
     const recipe = reroot(`${COMPONENTS_ROOT}/recipes/${component}.ts`, root);
     const identifier = files[recipe] ? variantIdentifier(files[recipe], id) : undefined;
     if (files[wrapper] && identifier) {
+      const internalComponent = `Portable${component}Family`;
+      files[wrapper] = files[wrapper].replace(`export default function ${component}(`, `export default function ${internalComponent}(`);
       implementationModules[id] = wrapper;
       if (identifier) exportNames[id] = identifier;
       const hint = identifier ? variantPropHints(files[recipe], identifier) : undefined;
       if (hint) propHints[id] = hint;
-      shims.set(wrapper, [...(shims.get(wrapper) ?? []), `export const ${identifier} = ({ sectionId, componentInstanceId, ...props }: any) => <${component} sectionId={sectionId} componentInstanceId={componentInstanceId} props={props} variantId=${JSON.stringify(id)} />;`]);
+      shims.set(wrapper, [...(shims.get(wrapper) ?? []), `export const ${identifier} = ({ sectionId, componentInstanceId, ...props }: any) => <${internalComponent} sectionId={sectionId} componentInstanceId={componentInstanceId} props={props} variantId=${JSON.stringify(id)} />;`]);
     } else unresolved.push(id);
   }
   for (const [wrapper, lines] of shims) files[wrapper] = `${files[wrapper].trimEnd()}\n\n${[...new Set(lines)].join('\n')}\n`;

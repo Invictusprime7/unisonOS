@@ -419,10 +419,6 @@ interface AIBuilderPanelProps {
   templateName?: string | null;
   defaultTargetFile?: string | null;
   pageTargets?: PageSourceTarget[];
-  /** @deprecated Ignored. AI output must go through onApplyToVFS. */
-  onCodeGenerated?: (code: string) => void;
-  /** @deprecated Ignored. AI output must go through onApplyToVFS. */
-  onFilesPatch?: (files: Record<string, string>) => boolean;
   onViewEdits?: (edits: VFSEdit[]) => void;
   /** Opens a project file in the code editor (used by the live file ribbon). */
   onOpenFile?: (path: string) => void;
@@ -458,8 +454,7 @@ interface AIBuilderPanelProps {
   vfsContext?: string | null;
   /** Full VFS file map for component-level site analysis */
   vfsFiles?: Record<string, string> | null;
-  /** Direct VFS apply callback — bypasses legacy onCodeGenerated pipeline, uses AI→VFS orchestrator */
-  onThemeEdit?: (prompt: string) => Promise<boolean>;
+  /** Canonical candidate apply callback, including presentation changes. */
   onApplyToVFS: AIBuilderApplyCallback;
   /** Preview handle ref for building component behavior maps (DOM inspection) */
   previewRef?: React.RefObject<{ getIframe?: () => HTMLIFrameElement | null } | null>;
@@ -1966,35 +1961,20 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               canonicalCandidate = generation.changeSet;
               canonicalRouteOps = [...generation.routeOps];
               dedicatedPageGeneration = true;
-              const files = Object.fromEntries(Object.entries(generation.candidateFiles)
-                .filter(([path, content]) => vfsFiles[path] !== content));
               response = {
                 data: {
-                  content: JSON.stringify({
-                    files,
-                    explanation: `Unison App Builder prepared ${generation.outcomes.length} new page${generation.outcomes.length === 1 ? '' : 's'}.`,
-                  }),
+                  content: `Unison App Builder prepared ${generation.outcomes.length} new page${generation.outcomes.length === 1 ? '' : 's'}.`,
                   actionType: 'canonical-page-generation',
-                  filesDetected: Object.keys(files),
+                  filesDetected: canonicalCandidate.fileOps.map(operation => operation.path),
                 },
                 error: null,
               };
             } else {
-              const files = Object.fromEntries(candidate.fileOps
-                .filter((operation) => operation.type !== 'delete')
-                .map((operation) => [operation.path, operation.content]));
-              const deletions = candidate.fileOps
-                .filter((operation) => operation.type === 'delete')
-                .map((operation) => operation.path);
               response = {
                 data: {
-                  content: JSON.stringify({
-                    files,
-                    deletions,
-                    explanation: editResult.summary ?? 'Unison App Builder prepared this source candidate.',
-                  }),
+                  content: editResult.summary ?? 'Unison App Builder prepared this source candidate.',
                   actionType: 'canonical-source-edit',
-                  filesDetected: Object.keys(files),
+                  filesDetected: candidate.fileOps.map(operation => operation.path),
                 },
                 error: null,
               };
@@ -2237,7 +2217,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       let explanationText = neutralizeModelSuccessClaim(aiContent) || CANDIDATE_GENERATED_NOTICE;
       let multiFileOutput: Record<string, string> | null = null;
       let multiFileDeletions: string[] = [];
-      const structuredContractExtractionFailed = false;
       let transactionVerdict: string | null = null;
       if (canonicalCandidate?.fileOps.length) {
         const preparedOutput = canonicalCandidateOutput(canonicalCandidate);
@@ -2378,18 +2357,14 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       const executionFailed = thinkingSteps.some(step => step.type === 'error');
       if (!executionFailed) thinkingSteps.push({
         id: generateId(),
-        type: structuredContractExtractionFailed ? 'error' : aiReasoning ? 'reasoning' : 'complete',
-        message: structuredContractExtractionFailed
-          ? 'Response validation failed'
-          : aiReasoning
+        type: aiReasoning ? 'reasoning' : 'complete',
+        message: aiReasoning
           ? `Extended reasoning complete (${(aiReasoning.length / 1000).toFixed(1)}k chars)`
           : 'Generation complete',
         timestamp: new Date(),
-        details: structuredContractExtractionFailed
-          ? 'The response contained a files contract that could not be parsed.'
-          : aiReasoning ? aiReasoning.slice(0, 500) + (aiReasoning.length > 500 ? '…' : '') : undefined,
+        details: aiReasoning ? aiReasoning.slice(0, 500) + (aiReasoning.length > 500 ? '…' : '') : undefined,
       });
-      if (aiReasoning && !structuredContractExtractionFailed && !executionFailed) {
+      if (aiReasoning && !executionFailed) {
         thinkingSteps.push({
           id: generateId(),
           type: 'complete',
@@ -2398,7 +2373,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         });
       }
 
-      if (structuredContractExtractionFailed || executionFailed) {
+      if (executionFailed) {
         advancePlanStep(taskPlan, 'patch', 'failed');
         advancePlanStep(taskPlan, 'refresh_preview', 'failed');
       } else if (!multiFileOutput) {
@@ -2412,9 +2387,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           ? {
               ...m,
               content: [
-                explanationText || (structuredContractExtractionFailed
-                  ? 'The AI response could not be converted into project files.'
-                  : neutralizeModelSuccessClaim(aiContent) || CANDIDATE_GENERATED_NOTICE),
+                explanationText || neutralizeModelSuccessClaim(aiContent) || CANDIDATE_GENERATED_NOTICE,
                 transactionVerdict,
               ].filter(Boolean).join('\n\n'),
 

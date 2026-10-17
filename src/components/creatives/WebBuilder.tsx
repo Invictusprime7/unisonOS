@@ -300,13 +300,6 @@ import { exportFabricCanvasToHtmlCss } from "./web-builder/fabricExport";
  * Returns warnings if the AI significantly altered the template structure.
  */
 // AI code preservation + validation helpers extracted to web-builder/aiCodeHelpers.ts
-import {
-  type CodeValidationResult,
-  extractStyleBlocks,
-  preserveStyleBlocks,
-  preserveInlineClasses,
-  validateAICodeChange,
-} from "./web-builder/aiCodeHelpers";
 
 
 // Define SelectedElement interface to match HTMLElementPropertiesPanel expected type
@@ -8177,7 +8170,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 onToolsHostChange={setAIBuilderToolsHost}
                 onCustomizerHostChange={setAIBuilderCustomizerHost}
                 customizerAvailable={Boolean(previewCode && !selectedObject)}
-                onThemeEdit={requestThemeEdit}
                 currentCode={previewCode}
                 systemType={activeSystemType}
                 templateName={currentTemplateName}
@@ -8363,164 +8355,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                     description: `${edits.length} file(s) modified - check the file explorer`,
                   });
                 }}
-                onCodeGenerated={async (code) => {
-                  console.log('[WebBuilder] ========== AI CODE GENERATED ==========');
-                  console.log('[WebBuilder] Code length:', code.length);
-                  console.log('[WebBuilder] Code preview:', code.substring(0, 200));
-                  
-                  // Validate AI-generated code against current template to detect destructive changes
-                  const validation = validateAICodeChange(previewCode, code);
-                  if (validation.warnings.length > 0) {
-                    console.warn('[WebBuilder] AI code validation warnings:', validation.warnings);
-                  }
-                  
-                  // If critical changes detected, REJECT the AI output and keep original
-                  if (validation.severity === 'critical') {
-                    console.error('[WebBuilder] CRITICAL: AI made destructive changes — REJECTING output');
-                    toast.error('AI edit rejected — it would have changed your entire template', {
-                      description: validation.warnings.join('; '),
-                      duration: 8000,
-                    });
-                    return; // Do NOT apply the code
-                  }
-                  
-                  if (validation.severity === 'warning') {
-                    toast.warning('AI modified template structure', {
-                      description: validation.warnings.join('; '),
-                      duration: 5000,
-                    });
-                  }
-                  
-                  // Preserve original style blocks and inline classes to prevent style drift from AI edits
-                  let safeCode = code;
-                  if (previewCode && previewCode.trim().startsWith('<')) {
-                    safeCode = preserveStyleBlocks(previewCode, code);
-                    safeCode = preserveInlineClasses(previewCode, safeCode);
-                    if (safeCode !== code) {
-                      console.log('[WebBuilder] Style blocks and inline classes preserved from original template');
-                    }
-                  }
-                  
-                  const effectiveSystemType = (activeSystemType || (systemType as BusinessSystemType) || null) as BusinessSystemType | null;
-                  const normalized = normalizeTemplateForCtaContract({
-                    code: safeCode,
-                    systemType: effectiveSystemType,
-                  });
-                  setTemplateCtaAnalysis(normalized.analysis);
-                  console.log('[WebBuilder] Auto-wired intents:', normalized.analysis.intents);
-                  console.log('[WebBuilder] Normalized code length:', normalized.code.length);
-                  
-                  const imported = await commitBuilderFiles(templateToVFSFiles(normalized.code, currentTemplateName || 'AI Generated'), {
-                    source: 'ai-builder',
-                    summary: 'AI code edit',
-                  }).then((f) => (f ? { files: f } : null));
-                  if (!imported) return;
-                  console.log('[WebBuilder] VFS updated via importBuilderFiles');
-                  const saved = await saveDraft({
-                    force: true,
-                    reason: 'ai_edit',
-                    vfsFiles: imported?.files || virtualFS.getSandpackFiles(),
-                  });
-                  if (!saved) {
-                    toast.error('AI edit saved locally, but Cloud sync is pending');
-                    return;
-                  }
-                  
-                  console.log('[WebBuilder] setPreviewCode called, switching to canvas view');
-                  setViewMode('canvas');
-                  
-                  toast.success('Code Generated!', {
-                    description: validation.severity === 'ok' 
-                      ? 'Your AI-generated content is now in the preview'
-                      : 'Check the preview - some structural changes were made'
-                  });
-                }}
-                onFilesPatch={(files) => {
-                  if (!files || Object.keys(files).length === 0) return false;
 
-                  const effectiveSystemType = (activeSystemType || (systemType as BusinessSystemType) || null) as BusinessSystemType | null;
-                  const normalizedFiles = { ...files };
-
-                  // Guard: AI must never overwrite the canonical router. It is
-                  // auto-derived from the PageRegistry by the registry-version
-                  // effect; allowing AI to write App.tsx would break multi-page
-                  // navigation (especially the Home route).
-                  // Strip all auto-generated/protected entry-shell files. These
-                  // are owned by the canonical pipeline; AI edits to them are
-                  // always overwritten and frequently introduce syntax errors
-                  // that the AI then tries to "fix" in prose.
-                  const protectedPaths = [
-                    '/src/App.tsx', '/App.tsx',
-                    '/src/main.tsx', '/main.tsx',
-                    '/src/index.css', '/index.css',
-                  ];
-                  for (const p of protectedPaths) {
-                    if (normalizedFiles[p]) {
-                      console.warn(`[WebBuilder] Stripping AI-authored ${p} — owned by canonical pipeline`);
-                      delete normalizedFiles[p];
-                    }
-                  }
-
-                  // Guard: AI must never overwrite or delete the Home page
-                  // unless the user explicitly targeted it. The Home page
-                  // always remains as the anchor route.
-                  const homePage = Object.values(creatorPlayground.pageRegistry.pages).find(p => p.isHome);
-                  const homeFilePath = homePage?.filePath;
-                  if (homeFilePath && normalizedFiles[homeFilePath]) {
-                    const targetingHome = activePagePath === homeFilePath;
-                    if (!targetingHome) {
-                      console.warn(`[WebBuilder] Stripping AI write to Home page (${homeFilePath}) — Home must remain intact`);
-                      delete normalizedFiles[homeFilePath];
-                    }
-                  }
-
-                  if (Object.keys(normalizedFiles).length === 0) {
-                    toast.error('Patch rejected', { description: 'AI tried to modify only protected files (router / Home page).' });
-                    return false;
-                  }
-
-                  if (files["/index.html"]) {
-                    const normalized = normalizeTemplateForCtaContract({
-                      code: files["/index.html"],
-                      systemType: effectiveSystemType,
-                    });
-                    normalizedFiles["/index.html"] = normalized.code;
-                    setTemplateCtaAnalysis(normalized.analysis);
-                    console.log('[WebBuilder] Auto-wired intents in file patch:', normalized.analysis.intents);
-                  }
-
-                  // Canonical commit is async; this handler must stay sync, so
-                  // the draft save is chained onto the accepted revision.
-                  void commitBuilderFiles(normalizedFiles, {
-                    source: 'ai-builder',
-                    summary: 'Approved AI patch plan',
-                  }).then((committedFiles) => {
-                    if (!committedFiles) return;
-                    void saveDraft({
-                      force: true,
-                      reason: 'ai_edit',
-                      vfsFiles: committedFiles,
-                    });
-                  });
-
-                  // Detect new pages so the user gets immediate feedback that a
-                  // route was added (the orphan-detection effect will register
-                  // them in PageRegistry and the router-sync effect will rebuild
-                  // /src/App.tsx automatically).
-                  const newPages = Object.keys(normalizedFiles).filter(p =>
-                    /^\/src\/pages\/[^/]+\.tsx$/.test(p) && p !== homeFilePath
-                  );
-
-                  setViewMode('canvas');
-                  if (newPages.length > 0) {
-                    toast.success(`Added ${newPages.length} new page${newPages.length > 1 ? 's' : ''}`, {
-                      description: newPages.map(p => p.split('/').pop()).join(', '),
-                    });
-                  } else {
-                    toast.success('Files updated', { description: 'Approved patch plan applied to project files' });
-                  }
-                  return true;
-                }}
               />
             </ResizablePanel>
             <ResizableHandle className="w-1.5 bg-gradient-to-b from-transparent via-lime-500/20 to-transparent hover:via-lime-400/50 transition-all duration-300 shadow-[0_0_8px_rgba(0,255,0,0.2)]" />
@@ -8553,7 +8388,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               onToolsHostChange={setAIBuilderToolsHost}
               onCustomizerHostChange={setAIBuilderCustomizerHost}
               customizerAvailable={Boolean(previewCode && !selectedObject)}
-                onThemeEdit={requestThemeEdit}
               currentCode={previewCode}
               systemType={activeSystemType}
               templateName={currentTemplateName}
@@ -8710,25 +8544,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               }}
               onOpenFile={(path) => { setViewMode('split'); openBuilderFile(path); }}
               onViewEdits={() => { setViewMode('split'); setAiPanelOpen(false); }}
-              onCodeGenerated={async (code) => {
-                const committed = await commitBuilderFiles(templateToVFSFiles(code, currentTemplateName || 'AI Template'), {
-                  source: 'ai-builder',
-                  summary: 'AI generated code',
-                });
-                if (!committed) return;
-                const imported = { files: committed };
-                const saved = await saveDraft({
-                  force: true,
-                  reason: 'ai_edit',
-                  vfsFiles: imported?.files || virtualFS.getSandpackFiles(),
-                });
-                if (!saved) {
-                  toast.error('AI edit saved locally, but Cloud sync is pending');
-                  return;
-                }
-                setViewMode('canvas');
-                setAiPanelOpen(false);
-              }}
+
             />
           </div>
         )}

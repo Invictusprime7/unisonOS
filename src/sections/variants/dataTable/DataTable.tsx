@@ -1,6 +1,7 @@
 import React from 'react';
 import type { BaseSectionProps } from '../../types';
 import { hsl } from '../../themeUtils';
+import { tableCellBinding, tableCellValue } from './tableData';
 
 const DEFAULT_COLUMNS = [
   { key: 'name', label: 'Name' },
@@ -44,7 +45,7 @@ export const DataTable: React.FC<BaseSectionProps<'data-table'>> = ({ section, t
           {heading}
         </h2>
         <div className="overflow-x-auto" style={{ borderRadius: theme.radius, border: `1px solid ${hsl(theme.colors.border)}` }}>
-          <table className="w-full min-w-[32rem] border-collapse text-left text-sm" style={{ color: hsl(theme.colors.foreground) }}>
+          <table className="w-full border-collapse text-left text-sm" style={{ color: hsl(theme.colors.foreground) }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${hsl(theme.colors.border)}`, background: hsl(theme.colors.muted) }}>
                 {columns.map((column) => (
@@ -64,7 +65,7 @@ export const DataTable: React.FC<BaseSectionProps<'data-table'>> = ({ section, t
               ) : (
                 rows.map((row, index) => (
                   <tr
-                    key={index}
+                    key={typeof row.id === 'string' || typeof row.id === 'number' ? row.id : index}
                     className="last:border-0 motion-reduce:transition-none transition-colors"
                     style={{
                       borderBottom: `1px solid ${hsl(theme.colors.border)}`,
@@ -72,8 +73,8 @@ export const DataTable: React.FC<BaseSectionProps<'data-table'>> = ({ section, t
                     }}
                   >
                     {columns.map((column) => (
-                      <td key={column.key} className="px-4 py-3">
-                        {row[column.key] ?? ''}
+                      <td key={column.key} className="px-4 py-3" {...tableCellBinding(p.sourceTable, row, column.key)}>
+                        {tableCellValue(row[column.key])}
                       </td>
                     ))}
                   </tr>

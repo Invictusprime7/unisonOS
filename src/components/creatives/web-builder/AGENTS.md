@@ -1,4 +1,5 @@
 # Directory rules
+- Builder source output is projected only from App Builder candidates and applied via `onApplyToVFS`; there are no prose/file extraction or legacy generated-code callbacks. Why: a second result path can report success before the canonical save reaches preview.
 - The floating edit toolbar's AI box is a front-end of the AI Builder: it dispatches `unison:builder-send` {prompt, target} and never calls AI itself; why: one agent owns context, button-destination checks and saves.
 - Direct toolbar edits (style/text/image/attrs/delete/duplicate/move) commit via `commitBuilderFiles` inside `runExclusive('toolbar')`, then run post-save intent verification; why: the old bridge bypassed the save queue, ignored edits in non-active files and never checked buttons.
 - Toolbar and Builder image generation run through the AI Builder's image extension (`ai-code-assistant` mode `image-generate`, `imageExtension.ts`) with the clicked element's site context, then save via the canonical image-replace path; why: images must be site-aware like every other Builder edit.

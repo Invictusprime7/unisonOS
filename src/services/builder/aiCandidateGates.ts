@@ -16,9 +16,10 @@ import { buildAICandidateChangeSet, type CandidateBuildResult, type CandidateOpe
 import { repairAuthoredImages } from './authoredImageRepair';
 import { auditSiteAffinity, type HomepageVisualLanguage } from '@/services/launch/homepageFirstContract';
 import { assertBackendOps } from '@/types/backendOperations';
+import { invalidArbitraryClasses } from './arbitraryClassValidation';
 
 export interface CandidateGateFailure {
-  gate: 'parse' | 'import-graph' | 'empty' | 'affinity' | 'design-source' | 'backend-proposal';
+  gate: 'parse' | 'import-graph' | 'empty' | 'affinity' | 'design-source' | 'backend-proposal' | 'css-value';
   path: string;
   message: string;
 }
@@ -116,6 +117,12 @@ export async function runCandidateGates(build: CandidateBuildResult, affinity?: 
     }
   }
   failures.push(...(await parseFailures(touched, files)));
+  for (const path of touched.filter(p => CODE_RE.test(p))) {
+    if (failures.some(failure => failure.path === path && failure.gate === 'parse')) continue;
+    try {
+      failures.push(...invalidArbitraryClasses(files[path]).map(message => ({ gate: 'css-value' as const, path, message })));
+    } catch { /* Parse gate owns invalid source diagnostics. */ }
+  }
 
   for (const path of touched.filter((p) => CODE_RE.test(p))) {
     for (const spec of localImports(files[path])) {
