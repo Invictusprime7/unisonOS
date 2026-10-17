@@ -81,7 +81,7 @@ export const contentResourceAdapter: ResourceAdapter = {
     if (expected && Object.entries(expected).some(([key, seen]) => JSON.stringify(flat[key] ?? null) !== JSON.stringify(seen ?? null))) {
       throw new Error('Conflict: this content changed elsewhere. Reload the item and try again.');
     }
-    const { title: _title, ...dataValues } = values;
+    const dataValues = Object.fromEntries(Object.entries(values).filter(([key]) => key !== 'title'));
     const data = { ...((current.data as Record<string, unknown>) ?? {}), ...dataValues };
     return flattenContentEntry(await updateContentRecord({
       businessId: ctx.businessId, projectId: ctx.projectId, recordId: id,

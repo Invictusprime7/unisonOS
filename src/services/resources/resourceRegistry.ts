@@ -12,10 +12,10 @@ export const CONTENT_STATUSES = ['draft', 'review', 'published', 'archived'] as 
 export type CanonicalRecordKind = 'testimonials' | 'projects' | 'case-studies' | 'faqs';
 /** Content aliases are separate from renderer aliases: case_studies still renders portfolio cards. */
 const CONTENT_RECORD_ALIASES: Record<CanonicalRecordKind, readonly string[]> = {
-  testimonials: ['testimonials', 'testimonial', 'reviews', 'review', 'social-proof', 'customer-reviews'],
+  testimonials: ['testimonials', 'testimonial', 'reviews', 'review', 'social-proof', 'socialproof', 'customer-reviews', 'customerreviews'],
   projects: ['projects', 'project', 'portfolio', 'portfolio-projects', 'work'],
   'case-studies': ['case-studies', 'case-study', 'casestudies', 'casestudy', 'caseStudies'],
-  faqs: ['faq', 'faqs', 'frequently-asked-questions', 'frequently-asked-question', 'questions-and-answers', 'questions', 'q-and-a'],
+  faqs: ['faq', 'faqs', 'frequently-asked-questions', 'frequently-asked-question', 'frequentlyaskedquestions', 'questions-and-answers', 'questions', 'q-and-a'],
 };
 const normalizeRecordAlias = (key: string) => key.replace(/^content:/i, '').trim().replace(/_/g, '-').toLowerCase();
 export function resolveContentRecordKind(key: string): CanonicalRecordKind | null {

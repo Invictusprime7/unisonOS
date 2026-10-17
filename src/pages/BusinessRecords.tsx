@@ -112,13 +112,13 @@ export default function BusinessRecords() {
       <Button variant="ghost" size="icon" aria-label="Refresh records" disabled={loading || !projectId} onClick={() => setRevision((r) => r + 1)}><RefreshCw /></Button>
     </div>
     <nav className="records-row" aria-label="Record types">
-      <Button variant={kind === 'all' ? 'default' : 'ghost'} onClick={() => setKind('all')}>All</Button>
-      {collections.map((collection) => <Button key={collection.kind} variant={kind === collection.kind ? 'default' : 'ghost'} onClick={() => setKind(collection.kind)}>{collection.label} ({records.filter((r) => r.kind === collection.kind).length})</Button>)}
+      <Button variant={kind === 'all' ? 'default' : 'link'} onClick={() => setKind('all')}>All</Button>
+      {collections.map((collection) => <Button key={collection.kind} variant={kind === collection.kind ? 'default' : 'link'} onClick={() => setKind(collection.kind)}>{collection.label} ({records.filter((r) => r.kind === collection.kind).length})</Button>)}
     </nav>
     <div className="records-row"><Search aria-hidden="true" /><Input aria-label="Search records" placeholder="Search records" value={search} onChange={(event) => setSearch(event.target.value)} /><Button onClick={() => void createRecord()} disabled={busy || !projectId || !scopedBusinessId || kind === 'all'}><Plus />New record</Button></div>
     {errors.map((error) => <p role="alert" key={error}>{error}</p>)}
     {loading ? <p role="status">Loading records…</p> : !projectId ? <p>Select a site.</p> : <div className="records-layout"><div className="records-list">
-      {visible.length ? visible.map((item) => <article key={item.key} className="records-item"><Button variant={selected === item.key ? 'secondary' : 'ghost'} onClick={() => setSelected(item.key)}>{item.title}</Button><span>{collections.find((c) => c.kind === item.kind)?.label}</span><span>{String(item.record.status ?? 'Active')}</span></article>) : <p>No records found.</p>}
+      {visible.length ? visible.map((item) => <article key={item.key} className="records-item"><Button variant={selected === item.key ? 'secondary' : 'link'} onClick={() => setSelected(item.key)}>{item.title}</Button><span>{collections.find((c) => c.kind === item.kind)?.label}</span><span>{String(item.record.status ?? 'Active')}</span></article>) : <p>No records found.</p>}
     </div>{active && <aside aria-label="Edit record"><h2>{active.title}</h2><RecordFieldsEditor key={active.key} mark={active.key} businessId={scopedBusinessId} projectId={projectId} defaultOpen />{active.resource.kind === 'content' && <div className="records-row">{(['draft', 'review', 'published', 'archived'] as const).filter((status) => status !== active.record.status).map((status) => <Button key={status} variant="outline" disabled={busy} onClick={() => void transition(status)}>{status === 'published' ? 'Publish' : status === 'review' ? 'Submit for review' : status === 'archived' ? 'Archive' : 'Draft'}</Button>)}</div>}</aside>}</div>}
   </main>;
 }
