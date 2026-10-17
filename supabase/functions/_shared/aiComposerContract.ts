@@ -60,6 +60,16 @@ export function composerScopeViolations(
 /** Proposal scope only; not proof of ownership or revision freshness. */
 export function composerProposalViolations(req: AIComposerRequest, response: AIComposerResponse): string[] {
   const violations = composerScopeViolations(req.task, req.page.filePath, response.fileOps);
+  for (const op of response.fileOps) {
+    if (op.type === 'delete' || !/\.[jt]sx?$/.test(op.path)) continue;
+    try {
+      const prior = bindingOwnershipIssues(req.files[op.path] ?? '');
+      const next = bindingOwnershipIssues(op.content);
+      for (const [issue, count] of next) {
+        if (count > (prior.get(issue) ?? 0)) violations.push(`${op.path}: ${issue}`);
+      }
+    } catch { /* Source parsing is enforced by the candidate/import gates. */ }
+  }
   if (req.task !== 'builder_source_edit') return violations;
   const targets = new Set(req.sourceTargets ?? []);
   const approvedIntents = new Set(req.approvedIntents ?? []);
@@ -124,6 +134,34 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
   return violations;
 }
 export const AI_AUTHORED_MARKER = '// @unison-ai-authored';
+/** Local controls and auth submit forms cannot borrow click/overlay bindings. */
+function bindingOwnershipIssues(source: string): Map<string, number> {
+  const ast = parse(source, { sourceType: 'unambiguous', plugins: ['jsx', 'typescript'] });
+  const issues = new Map<string, number>();
+  const add = (issue: string) => issues.set(issue, (issues.get(issue) ?? 0) + 1);
+  const visit = (node: any): void => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'JSXOpeningElement') {
+      const attributes = new Map<string, string>();
+      for (const attribute of node.attributes ?? []) {
+        const value = attribute.value?.type === 'JSXExpressionContainer' ? attribute.value.expression : attribute.value;
+        if (attribute.type === 'JSXAttribute' && value?.type === 'StringLiteral') attributes.set(attribute.name.name, value.value);
+      }
+      const intent = attributes.get('data-ut-intent');
+      if (intent === 'ui.toggle') add('local toggles must own component state, not ui.toggle bindings');
+      if ((intent === 'auth.login' || intent === 'auth.register')
+        && (node.name?.name === 'form' || (node.name?.name === 'button' && attributes.get('type') !== 'button') || (node.name?.name === 'input' && attributes.get('type') === 'submit'))) {
+        add('auth submit must use data-intent-form, not an overlay click binding');
+      }
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === 'object') visit(value);
+    }
+  };
+  visit(ast.program);
+  return issues;
+}
 /** Syntax-backed module reads; comments and ordinary strings are not imports. */
 function moduleImportCounts(source: string): Map<string, number> {
   const ast = parse(source, { sourceType: 'unambiguous', plugins: ['jsx', 'typescript'], createImportExpressions: true });

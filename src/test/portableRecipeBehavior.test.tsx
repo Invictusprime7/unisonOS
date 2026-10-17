@@ -50,7 +50,7 @@ describe('App Builder portable recipe behavior', () => {
 
   it('toggles billing locally without dispatching a backend intent', () => {
     const { PricingBillingToggle } = components(['pricing:billing-toggle'], 'Pricing');
-    render(<PricingBillingToggle items={[]} />);
+    render(<PricingBillingToggle tiers={[{ name: 'Standard', price: '100', features: ['Service'] }]} />);
     const monthly = screen.getByRole('button', { name: 'Monthly' });
     const yearly = screen.getByRole('button', { name: /Yearly/ });
     expect(monthly).toHaveAttribute('aria-pressed', 'true');

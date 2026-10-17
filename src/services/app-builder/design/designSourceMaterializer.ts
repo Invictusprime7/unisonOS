@@ -4,7 +4,7 @@ import type { DesignSourceBundle } from './DesignSourceBundle';
 import { DESIGN_SOURCE_BUNDLE_VERSION } from './DesignSourceBundle';
 import { compilePortableRecipes, DESIGN_SOURCE_ROOT, type MaterializedDesignModule } from './portableRecipeCompiler';
 import { compilerOwnershipHash } from '@/platform/core/resolvedComposition';
-import { getVariantById } from '@/sections/variants';
+import { getVariantById, type VariantId } from '@/sections/variants';
 
 export const DESIGN_SOURCE_MANIFEST_PATH = '/.unison/design-source-manifest.json';
 
@@ -33,7 +33,7 @@ export function readMaterializedDesignSources(files?: Readonly<Record<string, st
       && compilerOwnershipHash(files[module.path]) === module.hash,
     ).map(module => module.path));
     return Object.fromEntries(Object.entries(manifest.implementations ?? {}).filter(([id, entry]) => {
-      const variant = getVariantById(id);
+      const variant = getVariantById(id as VariantId);
       return variant?.vfs?.mode === 'portable-recipe' && variant.vfs.certification === 'approved'
         && variant.sectionType === entry.sectionType && entry.certification === 'approved'
         && verified.has(entry.modulePath) && verified.has(entry.modulePath.replace(/\/([^/]+)\.tsx$/, '/recipes/$1.ts'))
