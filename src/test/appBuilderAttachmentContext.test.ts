@@ -6,6 +6,7 @@ describe('App Builder document attachment flow', () => {
   it('carries the uploaded link and extracted text through authoring and repair', async () => {
     const files = { '/src/pages/Home.tsx': 'export default function Home(){return <main>Before</main>}' };
     const attachmentContext = '[UPLOADED FILES]\nurl: https://example.test/owner-brief.pdf\nextracted text: Owner-written service details';
+    const images = [{ name: 'reference.png', data: 'data:image/png;base64,aGVsbG8=' }];
     const invoke = vi.fn()
       .mockResolvedValueOnce({ data: { content: JSON.stringify({ summary: 'Draft', fileOps: [{
         type: 'replace', path: '/src/pages/Home.tsx',
@@ -22,13 +23,14 @@ describe('App Builder document attachment flow', () => {
       operationId: 'document-edit', currentFiles: files, baseRevisionId: 'accepted-revision',
       page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' },
       sourceTargets: ['/src/pages/Home.tsx'], instruction: 'Use my uploaded brief for the service text.',
-      attachmentContext, runtimeContext: 'Optional context'.repeat(2000), timeoutMs: 180_000,
+      attachmentContext, images, runtimeContext: 'Optional context'.repeat(2000), timeoutMs: 180_000,
     });
     expect(invoke).toHaveBeenCalledTimes(2);
     for (const [turn] of invoke.mock.calls) {
       const request = JSON.parse(turn.messages[0].content);
       expect(turn.mode).toBe('builder-source-edit');
       expect(request.runtimeContext.startsWith(attachmentContext)).toBe(true);
+      expect(request.images).toEqual(images);
     }
     expect(result.candidate.status).toBe('ready-for-commit');
     expect(result.candidateFiles['/src/pages/Home.tsx']).toContain('Owner-written service details');
