@@ -45,7 +45,12 @@ export type MoveCommand = Base<'move'> & { direction: 'up' | 'down' };
 export type SetVisibilityCommand = Base<'set-visibility'> & { visible: boolean };
 export type DuplicateCommand = Base<'duplicate'>;
 export type DeleteCommand = Base<'delete'>;
-export type UpdateResourceFieldCommand = Base<'update-resource-field'> & { ref?: ResourceEntityRef; values: Record<string, unknown> };
+export type UpdateResourceFieldCommand = Base<'update-resource-field'> & {
+  ref?: ResourceEntityRef;
+  values: Record<string, unknown>;
+  /** Field values the editor last saw; a mismatch means someone else changed the record (stale write). */
+  expected?: Record<string, unknown>;
+};
 export type InsertComponentCommand = Base<'insert-component'> & { implementationId: string; position: 'before' | 'after' };
 export type CreateComponentCommand = Base<'create-component'> & { name: string; purpose: string };
 export type CreatePageCommand = Base<'create-page'> & { path: string; title: string };

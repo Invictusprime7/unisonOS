@@ -88,7 +88,7 @@
 - [ ] M2 (PR2/3): Preview as sole primary edit UI — [x] inspector routes data-bound text/media to resource commands (replace "Edit it from the content panel" dead-end), [x] fill missing lane executors (binding), [x] upload picker from preview context (site storage, no inline data); [x] pending/saved/error + undo states; [ ] six-fixture reload exit check (needs signed-in browser run)
 - [ ] M3 (PR4): unified Resources UX (Records/Collections), one canonical record type per use case (testimonials/projects/FAQ collisions); [x] catalogOperations → agentOperations → Resource Runtime
 - [ ] M4 (PR5): remaining mounted Creator Playground UX consolidation; [x] unused duplicate panel retired and PlaygroundSyncController hydration-only
-- [ ] M5: tenant scoping/RLS verification, dedicated-backend content/profile adapters, expected-revision concurrency on record updates
+- [ ] M5: tenant scoping/RLS verification (open); [x] dedicated-backend content/profile adapters; [x] expected-revision check on record updates (`expected` on update-resource-field)
 - [ ] M6: AI edits ride the same EditorCommand/ResourceRuntime plane
 - [ ] M7: cross-industry E2E beta gate (10 cases in guidebook)
 

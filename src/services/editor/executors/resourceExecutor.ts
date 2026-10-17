@@ -61,6 +61,15 @@ async function resolveRecordId(ref: ResourceEntityRef, ctx: ResourceContext): Pr
   return match ? String(match.id) : null;
 }
 
+/** Expected-revision check: a field is stale when it no longer holds what the editor saw (and isn't already the new value). */
+export function staleFields(command: EditorCommand, before: ResourceRecord | null, values: Record<string, unknown>): string[] {
+  if (command.type !== 'update-resource-field' || !command.expected || !before) return [];
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  return Object.entries(command.expected)
+    .filter(([k, seen]) => !same(before[k], seen) && !same(before[k], values[k]))
+    .map(([k]) => k);
+}
+
 export async function executeResourceCommand(command: EditorCommand, ctx: ResourceContext): Promise<EditorCommandResult> {
   const parsed = (command.type === 'update-resource-field' && command.ref) || parseResourceProvenance(command.target.resourceMark);
   if (!parsed) return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: 'This element is not linked to a saved item.' };
@@ -86,6 +95,11 @@ export async function executeResourceCommand(command: EditorCommand, ctx: Resour
   const before = await executeResourceCommandCompatible<ResourceRecord | null>(ctx, {
     kind: 'resource.get', resourceKey: ref.resourceKey, recordId: ref.recordId,
   }, () => getResourceRecord(ref.resourceKey, ctx, ref.recordId)).catch(() => null);
+  const stale = staleFields(command, before, values);
+  if (stale.length) {
+    return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [],
+      error: `This ${label} changed elsewhere (${stale.join(', ')}) since you opened it — reload to see the latest, then edit again.` };
+  }
   await executeResourceCommandCompatible(ctx, {
     kind: 'resource.mutate', resourceKey: ref.resourceKey, action: 'update', recordId: ref.recordId, values,
   }, () => applyResourceOp({ op: 'update', ref, values }, ctx));
