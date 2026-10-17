@@ -58,12 +58,25 @@ describe('resource executor slug resolution', () => {
     );
   });
 
-  it('fails with a clear message when no saved record matches the mark', async () => {
+  it('creates the record on the spot when no saved record matches the mark', async () => {
     runtime.queryResource.mockResolvedValueOnce([]);
+    runtime.applyResourceOp.mockResolvedValueOnce({ id: 'new-1', name: 'Ghost Item' });
+    const result = await executeResourceCommand(setTextCommand('products#ghost-item'), ctx);
+    expect(result.ok).toBe(true);
+    expect(result.savedTo).toContain('created');
+    expect(runtime.applyResourceOp).toHaveBeenCalledWith(
+      expect.objectContaining({ op: 'create', resourceKey: 'products', values: expect.objectContaining({ name: 'New name' }) }),
+      ctx,
+    );
+  });
+
+  it('reports a clear failure when the auto-create write fails', async () => {
+    runtime.queryResource.mockResolvedValueOnce([]);
+    runtime.applyResourceOp.mockRejectedValueOnce(new Error('boom'));
     const result = await executeResourceCommand(setTextCommand('products#ghost-item'), ctx);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain('No saved');
-    expect(runtime.applyResourceOp).not.toHaveBeenCalled();
+    expect(result.error).toContain("Couldn't save");
+    expect(result.error).not.toContain('Save the site first');
   });
 
   it('skips the lookup when the mark already carries a saved record id', async () => {

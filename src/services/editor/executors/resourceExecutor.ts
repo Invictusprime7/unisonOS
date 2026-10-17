@@ -28,6 +28,18 @@ function defaultFieldFor(command: EditorCommand): string {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Seed a created record with a human name derived from the element's mark slug. */
+function seedValuesFor(ref: ResourceEntityRef, values: Record<string, unknown>): Record<string, unknown> {
+  const schema = getResource(ref.resourceKey)?.schema ?? [];
+  const nameKey = schema.find((f) => f.editable && f.key === 'name')?.key
+    ?? schema.find((f) => f.editable && f.key === 'title')?.key;
+  const seeded = { ...values };
+  if (nameKey && seeded[nameKey] === undefined) {
+    seeded[nameKey] = ref.recordId.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return seeded;
+}
+
 /**
  * Generated catalog sections stamp marks with the in-memory product id/slug,
  * while the saved CMS row owns a UUID. Resolve slug marks to the real saved
@@ -52,20 +64,31 @@ async function resolveRecordId(ref: ResourceEntityRef, ctx: ResourceContext): Pr
 export async function executeResourceCommand(command: EditorCommand, ctx: ResourceContext): Promise<EditorCommandResult> {
   const parsed = (command.type === 'update-resource-field' && command.ref) || parseResourceProvenance(command.target.resourceMark);
   if (!parsed) return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: 'This element is not linked to a saved item.' };
+  const values = valuesFor(command, parsed.field);
+  const label = getResource(parsed.resourceKey)?.label ?? parsed.resourceKey;
   const recordId = await resolveRecordId(parsed, ctx);
   if (!recordId) {
-    const label = getResource(parsed.resourceKey)?.label ?? parsed.resourceKey;
-    return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: `No saved ${label} record matches this element yet. Save the site first, then try again.` };
+    // WYSIWYG edits must never be gated on a manual save: materialize the
+    // record from the element's identity and apply the edit in one write.
+    const created = await executeResourceCommandCompatible<ResourceRecord>(ctx, {
+      kind: 'resource.mutate', resourceKey: parsed.resourceKey, action: 'create', values: seedValuesFor(parsed, values),
+    }, () => applyResourceOp({ op: 'create', resourceKey: parsed.resourceKey, values: seedValuesFor(parsed, values) }, ctx)).catch(() => null);
+    if (!created) {
+      return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: `Couldn't save this ${label} edit yet — try again in a moment.` };
+    }
+    return {
+      ok: true, command: command.type, lane: 'resource',
+      savedTo: `${label} → ${String(created.name ?? created.title ?? parsed.recordId)} (created)`,
+      changedFields: Object.keys(values),
+    };
   }
   const ref = { ...parsed, recordId };
-  const values = valuesFor(command, ref.field);
   const before = await executeResourceCommandCompatible<ResourceRecord | null>(ctx, {
     kind: 'resource.get', resourceKey: ref.resourceKey, recordId: ref.recordId,
   }, () => getResourceRecord(ref.resourceKey, ctx, ref.recordId)).catch(() => null);
   await executeResourceCommandCompatible(ctx, {
     kind: 'resource.mutate', resourceKey: ref.resourceKey, action: 'update', recordId: ref.recordId, values,
   }, () => applyResourceOp({ op: 'update', ref, values }, ctx));
-  const label = getResource(ref.resourceKey)?.label ?? ref.resourceKey;
   const previous = before ? Object.fromEntries(Object.keys(values).map((k) => [k, before[k]])) : null;
   return {
     ok: true, command: command.type, lane: 'resource',
