@@ -2064,9 +2064,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             const graphText = renderSystemGraphForPrompt(graph);
             if (graphText) previewSnapshot = `${previewSnapshot ?? ''}\n\n${graphText}`.trim();
             if (selectedTarget) {
-              const selectedEntity = agentOperations.inspect_editable_entity({
-                files: vfsFiles ?? {}, revisionId,
-              }, {
+              const inspectionContext = createUnisonBuilderContext({ files: vfsFiles, revisionId, projectId, businessId });
+              const selectedEntity = await dispatchBuilderOperation(inspectionContext, {
+                files: vfsFiles, revisionId, projectId, businessId,
+              }, 'inspect_editable_entity', {
                 selector: selectedTarget.selector,
                 revisionId: selectedTarget.revisionId,
                 pagePath: selectedTarget.scopeAncestors?.pagePath,
@@ -2372,7 +2373,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 error: null,
               };
             }
-          } else response = await runBuilderTurn<any>({
+          } else {
+            ensureCurrentRequest();
+            response = await runBuilderTurn<any>({
             messages: conversationHistory,
             connectorContext: {
               projectId, businessId, revisionId,
