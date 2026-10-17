@@ -85,7 +85,7 @@ export function FileActivityRibbon({ active, onOpenFile, className }: Props) {
         >
           {active
             ? <Loader2 aria-hidden className="w-3.5 h-3.5 shrink-0 text-primary animate-spin motion-reduce:animate-none" />
-            : <CheckCircle2 aria-hidden className="w-3.5 h-3.5 shrink-0 text-primary" />}
+            : saved ? <CheckCircle2 aria-hidden className="w-3.5 h-3.5 shrink-0 text-primary" /> : <CircleAlert aria-hidden className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
           <span role="status" aria-live="polite" className="truncate">
             {active ? `Working for ${seconds}s` : `Worked for ${seconds}s`}
             {!active && ` · ${describeRunOutcome({ active, saved, preview })}`}
