@@ -53,7 +53,7 @@ export function rebaseTextEdit(before: string, after: string, latest: string): T
 
   // Widest context first; shrink until the original span is found exactly once.
   let sawAmbiguous = false;
-  for (const size of [CONTEXT_CHARS, 12, 6, 0]) {
+  for (const size of [CONTEXT_CHARS, 12, 6]) {
     const leadingFull = before.slice(Math.max(0, span.start - size), span.start);
     const trailingFull = before.slice(span.start + span.removed.length, span.start + span.removed.length + size);
     for (const [leading, trailing] of [[leadingFull, trailingFull], [leadingFull, ''], ['', trailingFull]] as const) {
