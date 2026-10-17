@@ -23,7 +23,7 @@ describe('enforced builder tool dispatch', () => {
     await expect(dispatchBuilderOperation(ctx(), { ...agent, projectId: 'p2' }, 'inspect_routes')).rejects.toThrow(/another project/);
   });
   it('refuses unknown intents before resolving bindings', async () => {
-    await expect(dispatchBuilderOperation(ctx(), agent, 'propose_bind_intent', {} as never, 'nav.goto_page')).rejects.toThrow(/Unknown canonical intent/);
+    await expect(dispatchBuilderOperation(ctx(), agent, 'propose_bind_intent', {} as never, 'totally.fake_intent')).rejects.toThrow(/Unknown canonical intent/);
   });
   it('refuses non-canonical theme tokens and allows canonical ones', async () => {
     await expect(dispatchBuilderOperation(ctx(), agent, 'set_theme_tokens', { '--brand-x': 'red' })).rejects.toThrow(/canonical design token/);
