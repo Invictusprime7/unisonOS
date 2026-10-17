@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
-import { SUPABASE_IDENTITY } from "@/integrations/supabase/env";
+import { SUPABASE_IDENTITY, SUPABASE_AUTH_STORAGE_KEY } from "@/integrations/supabase/env";
+import { installAuthStorageQuotaRecovery } from "@/integrations/supabase/authStorageQuota";
 import "./index.css";
 import "@/design-system/unison-x-loveable-design-d5be96/design-system/unison/styles/tokens.css";
 import "./styles/unison-theme.css";
@@ -56,14 +57,14 @@ window.addEventListener('error', (event) => {
   const root = document.getElementById("root");
   if (root && !root.innerHTML) {
     root.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0f172a; color: #e2e8f0; font-family: system-ui;">
-        <div style="text-align: center; padding: 2rem;">
-          <h1 style="color: #ef4444; margin-bottom: 1rem;">Application Error</h1>
-          <p style="margin-bottom: 0.5rem;">An error occurred while loading the application.</p>
-          <p style="color: #94a3b8; font-size: 0.875rem;">${event.error?.message || 'Unknown error'}</p>
-          <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none; border-radius: 0.375rem; cursor: pointer;">
+      <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: var(--ut-font-body);">
+        <div style="text-align: center; padding: var(--ut-density-padding);">
+          <h1 style="color: hsl(var(--destructive)); margin-bottom: var(--ut-density-gap);">Application Error</h1>
+          <p style="margin-bottom: var(--ut-density-gap);">An error occurred while loading the application.</p>
+          <p style="color: hsl(var(--muted-foreground));">${event.error?.message || 'Unknown error'}</p>
+          <a href="" style="color: hsl(var(--primary));">
             Reload Page
-          </button>
+          </a>
         </div>
       </div>
     `;
@@ -106,6 +107,9 @@ try {
     );
     throw new Error(`[supabase] identity guard: ${reason}`);
   }
+  if (SUPABASE_AUTH_STORAGE_KEY) {
+    installAuthStorageQuotaRecovery(SUPABASE_AUTH_STORAGE_KEY, window.localStorage, window.sessionStorage);
+  }
   void import("./App.tsx").then(({ default: App }) => root.render(<App />));
   
   // Mark app as loaded
@@ -114,13 +118,13 @@ try {
 } catch (error) {
   console.error('Failed to render app:', error);
   rootElement.innerHTML = `
-    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0f172a; color: #e2e8f0; font-family: system-ui;">
-      <div style="text-align: center; padding: 2rem;">
-        <h1 style="color: #ef4444; margin-bottom: 1rem;">Failed to Start Application</h1>
-        <p style="margin-bottom: 0.5rem;">Please check the browser console for details.</p>
-        <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none; border-radius: 0.375rem; cursor: pointer;">
+    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: var(--ut-font-body);">
+      <div style="text-align: center; padding: var(--ut-density-padding);">
+        <h1 style="color: hsl(var(--destructive)); margin-bottom: var(--ut-density-gap);">Failed to Start Application</h1>
+        <p style="margin-bottom: var(--ut-density-gap);">Please check the browser console for details.</p>
+        <a href="" style="color: hsl(var(--primary));">
           Reload Page
-        </button>
+        </a>
       </div>
     </div>
   `;
