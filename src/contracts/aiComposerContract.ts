@@ -61,6 +61,21 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
   const violations = composerScopeViolations(req.task, req.page.filePath, response.fileOps);
   if (req.task !== 'builder_source_edit') return violations;
   const targets = new Set(req.sourceTargets ?? []);
+  const approvedIntents = new Set(req.approvedIntents ?? []);
+  for (const intent of response.intentsUsed ?? []) {
+    if (!approvedIntents.has(intent)) violations.push(`${intent}: intent is not approved for this request`);
+  }
+  // Omitting INTENTS must not bypass literal DOM binding checks.
+  // Preserve legacy bindings during unrelated edits; reject new occurrences.
+  for (const op of response.fileOps) {
+    if (op.type === 'delete') continue;
+    const prior = literalIntentCounts(req.files[op.path] ?? '');
+    for (const [intent, count] of literalIntentCounts(op.content)) {
+      if (count > (prior.get(intent) ?? 0) && !approvedIntents.has(intent)) {
+        violations.push(`${op.path}: ${intent}: new DOM intent is not approved for this request`);
+      }
+    }
+  }
   const approvedDependencies = new Set(req.approvedDependencies ?? []);
   for (const dependency of response.requestedDependencies ?? []) {
     if (!approvedDependencies.has(dependency)) violations.push(`${dependency}: dependency is not approved for this request`);
@@ -91,6 +106,16 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
   return violations;
 }
 export const AI_AUTHORED_MARKER = '// @unison-ai-authored';
+/** Literal bindings only; computed values remain runtime-owned. */
+function literalIntentCounts(source: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  const attribute = /\bdata-ut-intent\s*=\s*(?:"([^"]*)"|'([^']*)'|\{\s*(?:"([^"]*)"|'([^']*)'|`([^`$]*)`)\s*\})/g;
+  for (const match of source.matchAll(attribute)) {
+    const intent = match.slice(1).find(value => value !== undefined) ?? '';
+    counts.set(intent, (counts.get(intent) ?? 0) + 1);
+  }
+  return counts;
+}
 
 const pathSchema = z.string().regex(/^\/(?:src|public)\/[A-Za-z0-9_\-./]+\.(tsx|ts|jsx|js|css|json)$/).refine((p) => !p.includes('..'));
 
@@ -151,6 +176,7 @@ export const aiComposerRequestSchema = z.object({
   sourceTargets: z.array(pathSchema).min(1).max(80).optional(),
   approvedRouteOps: z.array(aiComposerRouteOpSchema).max(12).optional(),
   approvedDependencies: z.array(z.string().min(1).max(120)).max(300).optional(),
+  approvedIntents: z.array(z.string().min(1).max(80)).max(300).optional(),
   routes: z.array(z.object({ title: z.string().max(120), route: z.string().max(200) })).max(40),
   priorPages: z.array(z.object({ role: z.string().max(60), summary: z.string().max(2000) })).max(20).optional(),
   diagnostics: z.array(z.string().max(1000)).max(30).optional(),
