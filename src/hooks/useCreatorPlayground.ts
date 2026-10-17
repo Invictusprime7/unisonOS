@@ -574,7 +574,8 @@ export function useCreatorPlayground(
     setPageRegistry(merged.pageRegistry);
     setCreatorData(merged.creatorData);
     setLastHydration(result);
-    setIsDirty(true);
+    // Inference is a compatibility read, not a user mutation or a save request.
+    // Retain any already pending explicit edits; hydration itself stays clean.
     
     console.log('[useCreatorPlayground] Hydrated from VFS:', result.stats);
     return result;

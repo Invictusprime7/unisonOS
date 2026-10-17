@@ -39,6 +39,8 @@ The terminal accepts commands and recognized plain-language requests. Read-only 
 
 Saved-record edits are separate from source revisions. A marked product or business detail updates its real record through the shared resource runtime. The save toast can undo the captured values. That undo is not a checkpoint restore, and old hardcoded pages are not automatically connected to saved records.
 
+Preview-first consolidation preserves business operations and developer tools while retiring redundant editing paths. AI catalog tools use the same project-scoped record runtime as visual edits; a price or photo change does not rewrite unrelated matching text in source. Playground hydration is a compatibility read, not a source regeneration API.
+
 ## Preview and publishing
 
 The active website preview runs React source in Sandpack through the shared VFS preparation path. Canvas and Split are views of that project, not separate site generators. Fabric belongs to graphic/design tooling, not the website's rendering authority. Docker/static helpers are not automatic fallback previews for accepted sites.

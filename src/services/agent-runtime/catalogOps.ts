@@ -7,8 +7,7 @@
  * `data_change` agent event.
  */
 import { getCatalogSurface, getCatalogSurfaceByTable, type CatalogSourceTable, type CatalogSurface } from '@/platform/core/catalogSurfaceRegistry';
-import { createCmsRecord, listCmsRecords, removeCmsRecord, updateCmsRecord } from '@/services/cmsRecordService';
-import { emitAgentEvent } from './agentEvents';
+import { applyResourceOp, queryResource } from '@/services/resources/resourceRuntime';
 
 export const EDITABLE_CATALOG_SURFACES = ['products', 'services', 'menu_items', 'pricing_plans'] as const;
 
@@ -74,7 +73,7 @@ export function toCatalogItem(surface: CatalogSurface, r: Record<string, unknown
 export async function listCatalog(businessId: string, surfaceIds: readonly string[] = EDITABLE_CATALOG_SURFACES, projectId?: string | null): Promise<CatalogItem[]> {
   const all = await Promise.all(surfaceIds.map(async (id) => {
     const surface = surfaceOrThrow(id);
-    const rows = await listCmsRecords({ businessId, projectId, resource: surface.surfaceId }).catch(() => []);
+    const rows = await queryResource(surface.surfaceId, { businessId, projectId, mode: 'builder' });
     return rows.map((r) => toCatalogItem(surface, r));
   }));
   return all.flat();
@@ -82,14 +81,13 @@ export async function listCatalog(businessId: string, surfaceIds: readonly strin
 
 export async function createCatalogItem(businessId: string, surfaceId: string, patch: CatalogPatch, projectId?: string | null): Promise<CatalogItem> {
   const surface = surfaceOrThrow(surfaceId);
-  const row = await createCmsRecord({
-    businessId,
-    projectId,
-    resource: surface.surfaceId,
+  const row = await applyResourceOp({
+    op: 'create',
+    resourceKey: surface.surfaceId,
     values: { ...surface.newRowDefaults, ...normalizeCatalogPatch(surface, patch) },
-  });
+  }, { businessId, projectId, mode: 'builder' });
+  if (!row) throw new Error('Catalog creation returned no saved record.');
   const item = toCatalogItem(surface, row);
-  emitAgentEvent({ kind: 'data_change', message: `Added ${surface.rowLabel} "${item.name}"`, status: 'ok' });
   return item;
 }
 
@@ -97,20 +95,20 @@ export async function updateCatalogItemRow(
   businessId: string, surfaceId: string, id: string, patch: CatalogPatch, projectId?: string | null,
 ): Promise<{ before: CatalogItem | null; after: CatalogItem }> {
   const surface = surfaceOrThrow(surfaceId);
-  const rows = await listCmsRecords({ businessId, projectId, resource: surface.surfaceId });
+  const rows = await queryResource(surface.surfaceId, { businessId, projectId, mode: 'builder' });
   const beforeRow = rows.find((r) => String(r.id) === id);
-  const row = await updateCmsRecord({
-    businessId, projectId, resource: surface.surfaceId, recordId: id, values: normalizeCatalogPatch(surface, patch),
-  });
+  const row = await applyResourceOp({
+    op: 'update', ref: { resourceKey: surface.surfaceId, kind: 'catalog', recordId: id },
+    values: normalizeCatalogPatch(surface, patch),
+  }, { businessId, projectId, mode: 'builder' });
+  if (!row) throw new Error('Catalog update returned no saved record.');
   const after = toCatalogItem(surface, row);
-  emitAgentEvent({ kind: 'data_change', message: `Updated ${surface.rowLabel} "${after.name}"`, status: 'ok' });
   return { before: beforeRow ? toCatalogItem(surface, beforeRow) : null, after };
 }
 
 export async function deleteCatalogItem(businessId: string, surfaceId: string, id: string, projectId?: string | null): Promise<void> {
   const surface = surfaceOrThrow(surfaceId);
-  await removeCmsRecord({ businessId, projectId, resource: surface.surfaceId, recordId: id });
-  emitAgentEvent({ kind: 'data_change', message: `Removed a ${surface.rowLabel}`, status: 'ok' });
+  await applyResourceOp({ op: 'delete', ref: { resourceKey: surface.surfaceId, kind: 'catalog', recordId: id } }, { businessId, projectId, mode: 'builder' });
 }
 
 /** Compact catalog summary for the AI context. */
