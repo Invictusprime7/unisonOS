@@ -2155,6 +2155,27 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               instruction: _userContent.slice(0, 4000),
               currentFiles: vfsFiles!,
               baseRevisionId: revisionId,
+              connectorContext: {
+                projectId, businessId, revisionId,
+                registryContext: builderRegistryContext,
+                requestEnvelope: capabilityInterpretation.envelope,
+                descriptor: selectedTarget?.descriptor,
+                selection: selectedTarget ? {
+                  selector: selectedTarget.selector,
+                  clickedTag: selectedTarget.tagName,
+                  projectId,
+                  revisionId: selectedTarget.revisionId,
+                  pagePath: selectedTarget.scopeAncestors?.pagePath,
+                  sectionId: selectedTarget.scopeAncestors?.sectionId,
+                  componentPath: page.filePath,
+                  sourceTable: selectedTarget.provenance?.sourceTable,
+                  rowId: selectedTarget.provenance?.rowId,
+                  field: selectedTarget.provenance?.field,
+                  resourceMark: selectedTarget.provenance?.resource,
+                  bindingId: selectedTarget.provenance?.bindingId,
+                  primaryIntent: selectedTarget.intent,
+                } : null,
+              },
               sourceTargets: Array.from(new Set([
                 page.filePath,
                 ...(isCartWiringRequest
@@ -2297,6 +2318,24 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             }
           } else response = await runBuilderTurn<any>({
             messages: conversationHistory,
+            connectorContext: {
+              projectId, businessId, revisionId,
+              registryContext: builderRegistryContext,
+              requestEnvelope: capabilityInterpretation.envelope,
+              descriptor: selectedTarget?.descriptor,
+              selection: selectedTarget ? {
+                selector: selectedTarget.selector,
+                clickedTag: selectedTarget.tagName,
+                projectId,
+                revisionId: selectedTarget.revisionId,
+                pagePath: selectedTarget.scopeAncestors?.pagePath,
+                resourceMark: selectedTarget.provenance?.resource,
+                sourceTable: selectedTarget.provenance?.sourceTable,
+                rowId: selectedTarget.provenance?.rowId,
+                field: selectedTarget.provenance?.field,
+                primaryIntent: selectedTarget.intent,
+              } : null,
+            },
             registryContext: builderRegistryContext ?? undefined,
             // Milestone 4: durable envelope + verdict log, scoped to this draft.
             runContext: {

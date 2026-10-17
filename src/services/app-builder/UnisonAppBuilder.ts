@@ -30,6 +30,7 @@ import {
   type AppRepairRequest,
 } from './appBuilderContracts';
 import { orchestrateAppBuild } from './appBuilderOrchestrator';
+import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
@@ -176,6 +177,12 @@ export function createUnisonAppBuilder(
     },
 
     async edit(input) {
+      const connector = createUnisonBuilderContext({
+        ...input.connectorContext,
+        files: input.currentFiles,
+        revisionId: input.baseRevisionId,
+        sourceTargets: input.sourceTargets,
+      });
       const assembled = await assembleCanonicalAuthoringRequest({
         task: 'builder_source_edit',
         page: input.page,
@@ -187,7 +194,7 @@ export function createUnisonAppBuilder(
         sourceTargets: [...input.sourceTargets],
         routes: [...(input.routes ?? [])],
         registryContext: input.registryContext,
-        runtimeContext: input.runtimeContext,
+        runtimeContext: [renderUnisonBuilderDirective(connector), input.runtimeContext].filter(Boolean).join('\n'),
         diagnostics: input.diagnostics ? [...input.diagnostics] : undefined,
       });
       const composer = await runComposer({

@@ -262,6 +262,8 @@ export interface AppBuilderPageGenerationResult {
 
 export interface AppEditRequest {
   operationId: string;
+  /** Read-only context from the selected element and existing canonical authorities. */
+  connectorContext?: import('@/types/unisonBuilderConnector').UnisonBuilderConnectorInput;
   baseRevisionId?: string | null;
   currentFiles: Readonly<Record<string, string>>;
   instruction: string;
