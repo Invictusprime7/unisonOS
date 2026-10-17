@@ -19,6 +19,28 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe('Builder session recovery', () => {
+  it('rejects cross-project connector targets before auth or network calls', async () => {
+    const { runBuilderTurn } = await import('@/services/builderBrainClient');
+    const result = await runBuilderTurn({ ...input, connectorContext: {
+      projectId: 'site-a', selection: { projectId: 'site-b' },
+    } });
+    expect(result.error?.message).toContain('another project');
+    expect(auth.getSession).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('sends the connector contract without duplicating raw files on transport', async () => {
+    const { runBuilderTurn } = await import('@/services/builderBrainClient');
+    const result = await runBuilderTurn({ ...input, connectorContext: {
+      files: { '/src/pages/Home.tsx': 'private-source-marker' },
+      sourceTargets: ['/src/pages/Home.tsx'], projectId: 'site-a',
+    } });
+    expect(result.error).toBeNull();
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(payload.messages[0].content).toContain('[UNISON BUILDER CONNECTOR v1]');
+    expect(payload.messages[1]).toEqual(input.messages[0]);
+    expect(payload.connectorContext).toBeUndefined();
+    expect(fetchMock.mock.calls[0][1].body).not.toContain('private-source-marker');
+  });
   it('refreshes a rejected edge token and replays with the new credential', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Invalid or expired token' }), { status: 401 }));
     const { runBuilderTurn } = await import('@/services/builderBrainClient');
