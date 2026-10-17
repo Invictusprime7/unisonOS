@@ -1074,7 +1074,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         try {
           requireBuilderFeature(featuresRef.current, 'catalog');
           ensureCurrentRequest();
-          const agentCtx = { files: vfsFiles ?? {}, businessId, projectId: projectId ?? undefined, revisionId };
+          const agentCtx = { features: featuresRef.current, files: vfsFiles ?? {}, businessId, projectId: projectId ?? undefined, revisionId };
           const connector = createUnisonBuilderContext({
             projectId: projectId ?? null,
             businessId, revisionId,
@@ -1235,6 +1235,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
       const rawInput = _userContent;
       const { enhancedPrompt: intelligentPrompt, analysis: promptAnalysis, isSurgical: detectedSurgical, isBehavioral: detectedBehavioral, isFullGen: isFullGeneration, isDebug: detectedDebug } = enhancePromptForAI(rawInput);
+      if (detectedDebug) requireBuilderFeature(featuresRef.current, 'repairs');
       const isSurgicalEdit = detectedSurgical && !!currentCode;
       const isRouteWiringRequest = /\b(?:route|routing|router|navigate|redirect|href|active\s+(?:nav|menu|link)|nav(?:bar)?\s+(?:link|item)s?|menu\s+(?:link|item)s?)\b/i.test(rawInput);
       const isBehavioralEdit = (detectedBehavioral || isRouteWiringRequest) && !!currentCode;
@@ -1748,7 +1749,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             || Boolean(selectedTarget?.provenance?.sourceTable);
           if (businessId && needsCatalog) {
             try {
-              const agentCtx = { files: vfsFiles ?? {}, businessId, projectId, revisionId };
+              const agentCtx = { features: featuresRef.current, files: vfsFiles ?? {}, businessId, projectId, revisionId };
               const connector = createUnisonBuilderContext({ ...agentCtx });
               const catalog = await dispatchBuilderOperation(connector, agentCtx, 'inspect_catalog');
               previewSnapshot = `${previewSnapshot ?? ''}\n\n${renderCatalogForPrompt(catalog)}`.trim();
@@ -2889,7 +2890,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             </div>
           </ScrollArea>
 
-          {features.tools && <AgentCommandPalette files={vfsFiles ?? {}} onApply={onApplyToVFS} onAsk={setInput} businessId={businessId} revisionId={revisionId} projectId={projectId} getCurrentRequestState={getCurrentRequestState} />}
+          {features.tools && <AgentCommandPalette files={vfsFiles ?? {}} onApply={onApplyToVFS} onAsk={setInput} businessId={businessId} revisionId={revisionId} projectId={projectId} getCurrentRequestState={getCurrentRequestState} features={features} />}
           {agentTarget && (
             <div className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground" role="status" aria-live="polite">
               <span className="truncate">

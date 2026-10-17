@@ -6,6 +6,7 @@ import {
 import { type CatalogTable } from '@/services/agent-runtime/operations';
 import { dispatchBuilderOperation } from '@/services/unisonBuilderToolDispatch';
 import { createUnisonBuilderContext } from '@/services/unisonBuilderConnector';
+import type { BuilderFeatures } from '@/services/builder/builderFeatures';
 import { captureBuilderRequestState, type BuilderRequestState } from '@/services/builder/builderRequestState';
 import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 import { emitAgentEvent, onAgentEvent, type AgentEvent } from '@/services/agent-runtime/agentEvents';
@@ -20,6 +21,7 @@ interface Props {
   businessId?: string | null;
   revisionId?: string | null;
   projectId?: string | null;
+  features: BuilderFeatures;
   getCurrentRequestState?: () => BuilderRequestState;
 }
 
@@ -32,7 +34,7 @@ type ChangeEntry = AgentEvent & { at: number };
  * Ctrl/Cmd+K. Every action calls the same agent-runtime operations and the
  * same save path the AI uses — the menu has no capabilities of its own.
  */
-export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisionId, projectId, getCurrentRequestState }: Props) {
+export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisionId, projectId, getCurrentRequestState, features }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('root');
   const [query, setQuery] = useState('');
@@ -62,7 +64,7 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
     Promise.all(EDITABLE.map(async (table) => {
       const state = captureBuilderRequestState(getCurrentRequestState?.() ?? { files, projectId: projectId ?? null, businessId: businessId ?? null, revisionId: revisionId ?? null });
       const connector = createUnisonBuilderContext(state);
-      const rows = (await dispatchBuilderOperation(connector, state, 'inspect_data', table, 50).catch(() => [])) as Record<string, unknown>[];
+      const rows = (await dispatchBuilderOperation(connector, { ...state, features }, 'inspect_data', table, 50).catch(() => [])) as Record<string, unknown>[];
       return rows.map((r) => ({
         table, id: String(r.id), name: String(r.name ?? 'Untitled'),
         price: r.price != null ? Number(r.price) : r.price_cents != null ? Number(r.price_cents) / 100 : null,
@@ -81,7 +83,7 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
     try {
       const state = captureBuilderRequestState(getCurrentRequestState?.() ?? { files, projectId: projectId ?? null, businessId: businessId ?? null, revisionId: revisionId ?? null });
       const connector = createUnisonBuilderContext(state);
-      const { change, summary } = await dispatchBuilderOperation(connector, state, 'update_catalog_item', picked.table, picked.id, patch);
+      const { change, summary } = await dispatchBuilderOperation(connector, { ...state, features }, 'update_catalog_item', picked.table, picked.id, patch);
       emitAgentEvent({ kind: 'data_change', message: summary, status: 'ok' });
       setCatalog(null);
       if (change) await run(change); else toast.success(`${summary}. The page didn't show the old value, so only the database changed.`);
@@ -147,7 +149,7 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
         {mode === 'font' && (
           <CommandGroup heading="Fonts">
             {FONTS.map((f) => (
-              <CommandItem key={f} onSelect={async () => { try { const state = captureBuilderRequestState(getCurrentRequestState?.() ?? { files, projectId: projectId ?? null, businessId: businessId ?? null, revisionId: revisionId ?? null }); await run(await dispatchBuilderOperation(createUnisonBuilderContext(state), state, 'set_font', f)); } catch (error) { toast.error(error instanceof Error ? error.message : 'Font change refused.'); } }}>{f}</CommandItem>
+              <CommandItem key={f} onSelect={async () => { try { const state = captureBuilderRequestState(getCurrentRequestState?.() ?? { files, projectId: projectId ?? null, businessId: businessId ?? null, revisionId: revisionId ?? null }); await run(await dispatchBuilderOperation(createUnisonBuilderContext(state), { ...state, features }, 'set_font', f)); } catch (error) { toast.error(error instanceof Error ? error.message : 'Font change refused.'); } }}>{f}</CommandItem>
             ))}
           </CommandGroup>
         )}
