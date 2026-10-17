@@ -64,6 +64,7 @@ import { AgentCommandPalette } from './ai-chat/AgentCommandPalette';
 import { CatalogPanel } from './ai-chat/CatalogPanel';
 import { agentOperations } from '@/services/agent-runtime/operations';
 import { dispatchBuilderOperation } from '@/services/unisonBuilderToolDispatch';
+import { STALE_EDIT_PREFIX } from '@/services/builder/builderMutationCoordinator';
 import { createUnisonBuilderContext } from '@/services/unisonBuilderConnector';
 import { renderCatalogForPrompt } from '@/services/agent-runtime/catalogOps';
 import { parseResourceValueRequest } from '@/services/agent-runtime/resourceValueRequest';
@@ -732,10 +733,26 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   const confirmedSetupRef = useRef(false);
   const answerAsk = (messageId: string, option: { label: string; reply: string }, confirmsSetup: boolean) => {
     setMessages((prev) => prev.map((m) => (m.id === messageId && m.ask ? { ...m, ask: { ...m.ask, answer: option.label } } : m)));
+    if (!option.reply) return; // e.g. "Cancel": nothing to send
     confirmedSetupRef.current = confirmsSetup;
     pendingPromptRef.current = option.reply;
     setInput(option.reply);
   };
+
+  // A save landed while the AI worked: offer to re-run the same request on the newest version.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== 'assistant' || last.ask || !last.content?.startsWith(STALE_EDIT_PREFIX)) return;
+    const prompt = [...messages].reverse().find((m) => m.role === 'user')?.content;
+    if (!prompt) return;
+    setMessages((prev) => prev.map((m) => (m.id === last.id ? {
+      ...m,
+      ask: { question: 'apply-on-latest', options: [
+        { label: 'Apply on latest version', reply: prompt },
+        { label: 'Cancel', reply: '' },
+      ] },
+    } : m)));
+  }, [messages]);
 
   useEffect(() => {
     try {
