@@ -38,7 +38,7 @@ import {
 } from '@/services/builder/builderCommitController';
 import { VFSPreview, type InlineTextEditChange, type VFSPreviewHandle } from '../VFSPreview';
 import { executeEditorCommand } from '@/services/editor/editorCommandService';
-import type { EditorTarget } from '@/services/editor/editorCommandTypes';
+import type { EditorCommand, EditorCommandResult, EditorTarget } from '@/services/editor/editorCommandTypes';
 import { DeployButton } from '@/components/DeployButton';
 import { CollapsiblePropertiesPanel } from "./web-builder/CollapsiblePropertiesPanel";
 import { CanvasDragDropService } from "@/services/canvasDragDropService";

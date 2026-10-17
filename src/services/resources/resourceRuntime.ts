@@ -14,10 +14,14 @@ import { callProjectBackend } from '@/services/project-backend/projectBackendCli
 import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
 import type { ProjectBackendDescriptor } from '@/services/project-backend/projectBackendTypes';
 
-/** Dedicated sites: catalog commands go through the private project-backend connection. */
-function dedicated(d: ProjectBackendDescriptor | null, def: ResourceDefinition, projectId?: string | null): projectId is string {
+/**
+ * Dedicated sites: every resource kind goes through the private project-backend
+ * connection. The gateway is the authority on which resources a dedicated
+ * database supports — unknown ones get a clean rejection there, never a
+ * client-side special case per adapter.
+ */
+function dedicated(d: ProjectBackendDescriptor | null, _def: ResourceDefinition, projectId?: string | null): projectId is string {
   if (d?.mode !== 'dedicated') return false;
-  if (def.storage.adapter !== 'catalog') throw new Error(`${def.label} isn't available on sites with their own database yet.`);
   return Boolean(projectId);
 }
 const rec = (r: unknown): ResourceRecord => ({ ...(r as Record<string, unknown>), id: String((r as Record<string, unknown>)?.id ?? '') });
