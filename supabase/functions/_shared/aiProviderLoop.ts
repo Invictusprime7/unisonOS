@@ -9,6 +9,7 @@ import {
   createLastResortGatewayChatCompletion,
   createPlannedChatCompletion,
   normalizeOpenAIModel,
+  toAnthropicMessages,
 } from "../_shared/ai/providerClient.ts";
 import type { ChatCompletionRequest } from "../_shared/ai/providerClient.ts";
 import type { ModelSpec } from './providerRouter.ts';
