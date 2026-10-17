@@ -262,6 +262,8 @@ export interface AppBuilderPageGenerationResult {
 
 export interface AppEditRequest {
   operationId: string;
+  /** Durable upload links/extracted text; not a substitute for image vision. */
+  attachmentContext?: string;
   /** Read-only context from the selected element and existing canonical authorities. */
   connectorContext?: import('@/types/unisonBuilderConnector').UnisonBuilderConnectorInput;
   baseRevisionId?: string | null;

@@ -2159,6 +2159,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             emitAgentEvent({ kind: 'plan', message: `Writing changes to ${page.filePath.split('/').pop()}`, status: 'running', path: page.filePath });
             const editResult = await unisonAppBuilder.edit({
               operationId: `builder:${generateId()}`,
+              attachmentContext: _fileContext,
               page,
               brief: [
                 'Edit the accepted React project without changing unrelated source.',

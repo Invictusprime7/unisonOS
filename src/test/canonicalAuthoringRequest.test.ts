@@ -19,6 +19,28 @@ const files = {
 };
 
 describe('canonical AI authorship request assembly', () => {
+  it('keeps uploaded document links and extracted text ahead of optional runtime context', async () => {
+    const attachmentContext = '[Attached file: brief.md]\nOwner-written brief\nurl: https://example.test/brief.md';
+    const assembled = await assembleCanonicalAuthoringRequest({
+      task: 'builder_source_edit',
+      page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' },
+      brief: 'Edit the accepted page.', knowledgeQuery: 'home', baseFiles: files, routes: [],
+      attachmentContext, runtimeContext: 'Optional site context'.repeat(2000),
+    });
+    expect(assembled.request.runtimeContext?.startsWith(attachmentContext)).toBe(true);
+    expect(assembled.request.runtimeContext?.length).toBe(12000);
+    expect(aiComposerRequestSchema.safeParse(assembled.request).success).toBe(true);
+  });
+
+  it('keeps text-only turns free of an invented attachment context', async () => {
+    const assembled = await assembleCanonicalAuthoringRequest({
+      task: 'builder_source_edit',
+      page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' },
+      brief: 'Edit the page.', knowledgeQuery: 'home', baseFiles: files, routes: [],
+      runtimeContext: 'Existing runtime evidence',
+    });
+    expect(assembled.request.runtimeContext).toBe('Existing runtime evidence');
+  });
   it('routes ordinary React source edits to Composer and leaves specialized lanes alone', () => {
     const base = {
       isReactProject: true, isLaunchPlanningRequest: false,
