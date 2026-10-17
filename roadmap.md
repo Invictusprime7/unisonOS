@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Unified AI Builder request closure
+- [ ] Route remaining AI edits through the connector and canonical operations, using current revision, selection, catalog and design context
+- [ ] Verify page creation, image replacement, catalog edits and capability bindings through save → preview → reopen
+- [ ] Remove fallback paths only after replacement acceptance; retain any path blocked on live verification
+
 ## Sign-in recovery
 - [x] Recover auth-key quota errors with tab-persistent fallback, without deleting project data
 - [x] Release auth listener locks before onboarding lookups and audit logging; reset loading on thrown sign-in errors; 11 regression tests pass
