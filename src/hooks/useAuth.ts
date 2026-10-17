@@ -62,10 +62,13 @@ export function useAuth(): AuthState & AuthActions {
 
   // Initialize auth state
   useEffect(() => {
+    let active = true;
+    const auditTimers = new Set<ReturnType<typeof setTimeout>>();
     // Get initial session
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
+        if (!active) return;
         
         if (error) {
           setState(prev => ({ ...prev, loading: false, error }));
@@ -79,6 +82,7 @@ export function useAuth(): AuthState & AuthActions {
           error: null,
         });
       } catch (err) {
+        if (!active) return;
         setState(prev => ({ 
           ...prev, 
           loading: false, 
@@ -91,7 +95,8 @@ export function useAuth(): AuthState & AuthActions {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
+        if (!active) return;
         setState(prev => ({
           ...prev,
           user: session?.user ?? null,
@@ -99,28 +104,35 @@ export function useAuth(): AuthState & AuthActions {
           loading: false,
         }));
 
-        // Log auth events
+        // Never await auth-backed audit work under the SDK's session lock.
+        const timer = setTimeout(() => {
+          auditTimers.delete(timer);
+          if (!active) return;
         if (event === 'SIGNED_IN') {
-          await auditLogger.log({
+          void auditLogger.log({
             action: 'login',
             resourceType: 'user',
             resourceId: session?.user?.id,
             metadata: { method: 'password' }
           });
         } else if (event === 'SIGNED_OUT') {
-          await auditLogger.log({
+          void auditLogger.log({
             action: 'logout',
             resourceType: 'user',
           });
         } else if (event === 'PASSWORD_RECOVERY') {
-          await auditLogger.logSecurityEvent('password_change', {
+          void auditLogger.logSecurityEvent('password_change', {
             event: 'password_recovery_initiated'
           }, 'medium');
         }
+        }, 0);
+        auditTimers.add(timer);
       }
     );
 
     return () => {
+      active = false;
+      auditTimers.forEach(clearTimeout);
       subscription.unsubscribe();
     };
   }, []);

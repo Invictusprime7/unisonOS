@@ -97,22 +97,36 @@ const Auth = () => {
 
   useEffect(() => {
     let handled = false;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session && !handled) {
-        handled = true;
-        const dest = await resolvePostAuthDestination(session.user.id, (event as string) === "SIGNED_UP");
-        navigate(dest);
-      }
+    let active = true;
+    let redirectTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleRedirect = (userId: string, isNewSignup = false) => {
+      if (!active || handled) return;
+      handled = true;
+      // Auth listeners execute under the SDK session lock. Database/auth work
+      // must start on a later task, after that lock has been released.
+      redirectTimer = setTimeout(() => {
+        void resolvePostAuthDestination(userId, isNewSignup).then((dest) => {
+          if (active) navigate(dest, { replace: true });
+        }).catch(() => {
+          if (active) navigate("/dashboard", { replace: true });
+        });
+      }, 0);
+    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) scheduleRedirect(session.user.id, (event as string) === "SIGNED_UP");
     });
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        const dest = await resolvePostAuthDestination(session.user.id);
-        navigate(dest);
-      }
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) scheduleRedirect(session.user.id);
+    }).catch(() => {
+      if (active) setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      clearTimeout(redirectTimer);
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -159,19 +173,17 @@ const Auth = () => {
     const email = formData.get("signin-email") as string;
     const password = formData.get("signin-password") as string;
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    setLoading(false);
-
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+    } catch (error) {
       toast({
         title: "Sign in failed",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Unable to sign in. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
