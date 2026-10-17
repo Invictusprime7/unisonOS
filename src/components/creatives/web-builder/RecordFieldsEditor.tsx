@@ -155,15 +155,16 @@ export function RecordFieldsEditor({ mark, businessId, projectId, defaultOpen = 
                   <div key={f.key} className="flex flex-col gap-0.5 text-[10px] text-white/60">
                     <label htmlFor={fieldId}>{f.label}</label>
                     {f.type === 'boolean' ? (
-                      <input id={fieldId} type="checkbox" checked={draft[f.key] === 'true'} onChange={(e) => setDraft((d) => ({ ...d, [f.key]: String(e.target.checked) }))} />
+                      <input id={fieldId} type="checkbox" checked={draft[f.key] === 'true'} onChange={(e) => { const value = String(e.target.checked); setDraft((d) => ({ ...d, [f.key]: value })); void save({ key: f.key, value }, true); }} />
                     ) : f.type === 'textarea' || f.type === 'richtext' ? (
-                      <Textarea id={fieldId} rows={3} value={draft[f.key] ?? ''} onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))} className="text-xs" />
+                      <Textarea id={fieldId} rows={3} value={draft[f.key] ?? ''} onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))} onBlur={(e) => void save({ key: f.key, value: e.target.value }, true)} className="text-xs" />
                     ) : (
                       <Input
                         id={fieldId}
                         type={['number', 'money', 'money-cents', 'rating'].includes(f.type) ? 'number' : f.type === 'email' ? 'email' : f.type === 'url' || f.type === 'image' ? 'url' : 'text'}
                         value={draft[f.key] ?? ''}
                         onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                        onBlur={(e) => void save({ key: f.key, value: e.target.value }, true)}
                         className="h-7 text-xs"
                       />
                     )}

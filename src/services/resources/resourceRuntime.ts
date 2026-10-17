@@ -12,6 +12,7 @@ import { getResource } from './resourceRegistry';
 import { withProjectBackend } from '@/services/project-backend/projectBackendGateway';
 import { callProjectBackend } from '@/services/project-backend/projectBackendClient';
 import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
+import { flattenContentEntry } from './resourceAdapters';
 import type { ProjectBackendDescriptor } from '@/services/project-backend/projectBackendTypes';
 
 /**
@@ -24,7 +25,9 @@ function dedicated(d: ProjectBackendDescriptor | null, _def: ResourceDefinition,
   if (d?.mode !== 'dedicated') return false;
   return Boolean(projectId);
 }
-const rec = (r: unknown): ResourceRecord => ({ ...(r as Record<string, unknown>), id: String((r as Record<string, unknown>)?.id ?? '') });
+const rec = (r: unknown, def?: ResourceDefinition): ResourceRecord => def?.kind === 'content'
+  ? flattenContentEntry(r as Record<string, unknown>)
+  : ({ ...(r as Record<string, unknown>), id: String((r as Record<string, unknown>)?.id ?? '') });
 import type {
   ResourceContext, ResourceDataOp, ResourceDefinition, ResourceEntityRef, ResourceInvalidation, ResourceRecord,
 } from './resourceTypes';
@@ -55,7 +58,7 @@ export function onResourceInvalidated(listener: (inv: ResourceInvalidation) => v
 export async function queryResource(key: string, ctx: ResourceContext): Promise<ResourceRecord[]> {
   const def = defOrThrow(key);
   return withProjectBackend(ctx.projectId, async (d) => dedicated(d, def, ctx.projectId)
-    ? ((await callProjectBackend<unknown[]>({ projectId: ctx.projectId, action: 'list', resource: def.key })) ?? []).map(rec)
+    ? ((await callProjectBackend<unknown[]>({ projectId: ctx.projectId, action: 'list', resource: def.key })) ?? []).map((row) => rec(row, def))
     : RESOURCE_ADAPTERS[def.storage.adapter].query(def, ctx), ctx.siteId);
 }
 
@@ -64,7 +67,7 @@ export async function getResourceRecord(key: string, ctx: ResourceContext, id: s
   return withProjectBackend(ctx.projectId, async (d) => {
     if (!dedicated(d, def, ctx.projectId)) return RESOURCE_ADAPTERS[def.storage.adapter].get(def, ctx, id);
     const r = await callProjectBackend({ projectId: ctx.projectId, action: 'get', resource: def.key, recordId: id });
-    return r ? rec(r) : null;
+    return r ? rec(r, def) : null;
   }, ctx.siteId);
 }
 
@@ -122,8 +125,8 @@ export async function applyResourceOp(op: ResourceDataOp, ctx: ResourceContext):
     result = await withProjectBackend(ctx.projectId, async (d) => {
     if (dedicated(d, def, ctx.projectId)) {
       const pid = ctx.projectId;
-      if (op.op === 'create') return rec(await callProjectBackend({ projectId: pid, action: 'create', resource: def.key, values: filterWritableValues(def, op.values) }));
-      if (op.op === 'update') return rec(await callProjectBackend({ projectId: pid, action: 'update', resource: def.key, recordId: op.ref.recordId, values: filterWritableValues(def, op.values), ...(op.expected ? { expected: op.expected } : {}) }));
+      if (op.op === 'create') return rec(await callProjectBackend({ projectId: pid, action: 'create', resource: def.key, values: filterWritableValues(def, op.values) }), def);
+      if (op.op === 'update') return rec(await callProjectBackend({ projectId: pid, action: 'update', resource: def.key, recordId: op.ref.recordId, values: filterWritableValues(def, op.values), ...(op.expected ? { expected: op.expected } : {}) }), def);
       await callProjectBackend({ projectId: pid, action: 'delete', resource: def.key, recordId: op.ref.recordId });
       return null;
     }

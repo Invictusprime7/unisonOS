@@ -134,6 +134,7 @@ serve(async (req) => {
   const table = contract.sourceTable;
   let recordId = body?.recordId ? String(body.recordId) : undefined;
   const values = (body?.values ?? {}) as Record<string, unknown>;
+  let expected = body?.expected as Record<string, unknown> | undefined;
 
   // Content entries keep their field values inside a `data` jsonb column,
   // filtered by content type; the site profile is the site's single row.
@@ -156,8 +157,14 @@ serve(async (req) => {
     if (typeof slug === "string") allowed.slug = slug;
     if (typeof status === "string") allowed.status = status;
     if (action === "update" && recordId) {
-      const { data: current } = await scoped().eq("id", recordId).maybeSingle();
+      const { data: current, error: readError } = await scoped().eq("id", recordId).maybeSingle();
+      if (readError || !current) return json({ success: false, error: "This content item is unavailable." }, 404);
       const currentData = (current as { data?: Record<string, unknown> } | null)?.data ?? {};
+      const flattened = { ...currentData, ...current };
+      if (expected && Object.entries(expected).some(([key, seen]) => JSON.stringify(flattened[key] ?? null) !== JSON.stringify(seen ?? null))) {
+        return json({ success: false, error: "Conflict: this content changed elsewhere." }, 409);
+      }
+      expected = { data: currentData, title: current.title, slug: current.slug ?? null };
       allowed.data = { ...currentData, ...dataFields };
     } else {
       allowed.data = dataFields;
@@ -173,8 +180,8 @@ serve(async (req) => {
   else if (action === "update") {
     let update = site.from(table).update(allowed).eq("id", recordId ?? "");
     if (contract.contentType) update = update.eq("content_type", contract.contentType);
-    if (body?.expected) {
-      try { update = applyExpectedFilters(update, body.expected as Record<string, unknown>, contract.editableFields); }
+    if (expected) {
+      try { update = applyExpectedFilters(update, expected, contract.editableFields); }
       catch { return json({ success: false, error: "Invalid expected fields." }, 400); }
     }
     result = await update.select().maybeSingle();
@@ -193,5 +200,6 @@ serve(async (req) => {
     });
   }
   if (result.error) return json({ success: false, error: result.error.message }, 400);
-  return json({ success: true, data: result.data });
+  const flatten = (row: Record<string, unknown>) => contract.contentType ? { ...(row.data as Record<string, unknown> ?? {}), ...row } : row;
+  return json({ success: true, data: Array.isArray(result.data) ? result.data.map(flatten) : result.data ? flatten(result.data as Record<string, unknown>) : result.data });
 });

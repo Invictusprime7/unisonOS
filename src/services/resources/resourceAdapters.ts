@@ -8,7 +8,7 @@ import {
   createCmsRecord, listCmsRecords, removeCmsRecord, updateCmsRecord,
   createContentRecord, getContentRecord, listContentRecords, updateContentRecord,
 } from '@/services/cmsRecordService';
-import { loadBusinessProfile, saveBusinessProfile, type BusinessProfilePatch } from '@/services/businessProfileService';
+import { loadSiteProfile, saveSiteProfile, type BusinessProfilePatch } from '@/services/businessProfileService';
 import type { ResourceAdapter, ResourceAdapterId, ResourceDefinition, ResourceRecord } from './resourceTypes';
 
 function withId(r: Record<string, unknown>): ResourceRecord {
@@ -71,13 +71,17 @@ export const contentResourceAdapter: ResourceAdapter = {
       contentTypeId: def.storage.contentTypeId, status: 'draft', values: { data: values },
     }));
   },
-  async update(def, ctx, id, values) {
+  async update(def, ctx, id, values, expected) {
     const current = await getContentRecord({ businessId: ctx.businessId, projectId: ctx.projectId, recordId: id });
+    const flat = flattenContentEntry(current);
+    if (expected && Object.entries(expected).some(([key, seen]) => JSON.stringify(flat[key] ?? null) !== JSON.stringify(seen ?? null))) {
+      throw new Error('Conflict: this content changed elsewhere. Reload the item and try again.');
+    }
     const data = { ...((current.data as Record<string, unknown>) ?? {}), ...values };
     return flattenContentEntry(await updateContentRecord({
       businessId: ctx.businessId, projectId: ctx.projectId, recordId: id,
       // The content command requires the title on every update.
-      values: { title: String(values.title ?? values.name ?? current.title ?? ''), data }, changeSummary: `Edited ${Object.keys(values).join(', ')}`,
+      values: { title: String(values.title ?? values.name ?? current.title ?? ''), slug: current.slug, locale: current.locale, data }, changeSummary: `Edited ${Object.keys(values).join(', ')}`,
     }));
   },
   // No delete: content leaves via the archive transition, preserving the publishing workflow.
@@ -89,15 +93,23 @@ export const businessProfileResourceAdapter: ResourceAdapter = {
     return r ? [r] : [];
   },
   async get(_def, ctx) {
-    const p = await loadBusinessProfile(ctx.businessId);
+    const p = await loadSiteProfile(ctx.businessId, ctx.projectId);
     return p ? ({ ...p, id: p.businessId } as unknown as ResourceRecord) : null;
   },
   async create() {
     throw new Error('The business profile already exists — edit it instead.');
   },
-  async update(_def, ctx, id, values) {
+  async update(_def, ctx, id, values, expected) {
     if (id !== ctx.businessId) throw new Error('A business can only edit its own profile.');
-    const next = await saveBusinessProfile(ctx.businessId, values as BusinessProfilePatch);
+    if (expected) {
+      const current = await loadSiteProfile(ctx.businessId, ctx.projectId);
+      if (!current) throw new Error('This profile is no longer available.');
+      const fields = current as unknown as Record<string, unknown>;
+      if (Object.entries(expected).some(([key, seen]) => JSON.stringify(fields[key] ?? null) !== JSON.stringify(seen ?? null))) {
+        throw new Error('Conflict: these site details changed elsewhere. Reload the item and try again.');
+      }
+    }
+    const next = await saveSiteProfile(ctx.businessId, ctx.projectId, values as BusinessProfilePatch);
     if (!next) throw new Error('The business profile could not be saved.');
     return { ...next, id: next.businessId } as unknown as ResourceRecord;
   },
