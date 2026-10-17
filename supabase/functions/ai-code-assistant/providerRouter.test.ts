@@ -95,7 +95,7 @@ Deno.test('Hybrid launch page writing: managed gateway leads, funded Gemini back
     assertEquals(plan.gatewayModels[0].id, 'google/gemini-3.8-flash');
   }
   const edit = buildProviderPlan({ ...task, type: 'builder_source_edit' }, true, undefined, 'complex', 'composer', withGateway);
-  assertEquals(edit.gatewayLeads, undefined);
+  assertEquals(edit.gatewayLeads, true);
   const noGateway = buildProviderPlan({ ...task, type: 'site_page_author' }, true, undefined, 'complex', 'composer', bothProviders);
   assertEquals(noGateway.gatewayLeads, undefined);
 });
