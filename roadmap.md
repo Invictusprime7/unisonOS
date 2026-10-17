@@ -6,7 +6,8 @@
 - [x] AI Builder saved-record edits run through the enforced dispatcher
 - [x] Command menu and Catalog panel catalog saves run through the enforced dispatcher
 - [x] Stale-session edits: records ignore page version; page edits replay on newest version when safe, else ask (dispatcher + 4 tests; Builder UI prompt for the ask still to wire)
-- [ ] AI Builder redesign: minimal reasoning-based UI, remove task planner, Copilot-style iterative thinking, reposition panel controls for accessibility
+- [x] AI Builder redesign pass 1: task planner removed; quiet thinking trace; status in header; model + catalog controls moved below input
+- [ ] Redesign pass 2: multi-step reason→act→check iteration loop; "Apply on latest or cancel?" prompt in chat
 - Later: edge-side proposal enforcement in existing Composer lane
 - Later: edge-side proposal enforcement using existing Composer lanes; audited legacy removal; authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON

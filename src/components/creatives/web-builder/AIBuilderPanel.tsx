@@ -89,7 +89,6 @@ import { DebugAgentPanel } from './DebugAgentPanel';
 import { interpretPrompt, type TaskPlan } from '@/unison';
 import { buildUnisonAIContext } from '@/unison/aiContext';
 import type { PlanStepStatus } from '@/unison/nlTypes';
-import { TaskPlanSteps } from './TaskPlanSteps';
 import {
   hydrateAIHistoryFromSupabase,
   loadAIHistory,
@@ -1581,7 +1580,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       });
 
       // ── Phase 1b: Unison Task Interpretation ──
-      liveStep('analyzing', 'Running Unison task planner...');
+      liveStep('analyzing', 'Reading your request and the current site...');
       
       const projectContext: import('@/unison').ProjectContext = {
         provisionedCapabilities: [],
@@ -1595,9 +1594,8 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       const { plan: taskPlan, feedback: unisonFeedback } = interpretPrompt(_userContent, projectContext);
       const unisonContext = buildUnisonAIContext(taskPlan);
       
-      liveStep('analyzing', `Plan: ${taskPlan.steps.length} steps · route: ${taskPlan.route}`,
-        `Confidence: ${Math.round(taskPlan.intent.confidence * 100)}% · Complexity: ${taskPlan.estimatedComplexity}`
-      );
+      // Interpretation feeds the AI's context only; reasoning is shown as thinking steps, not a task list.
+      liveStep('analyzing', 'Working out what needs to change');
       
       // Helper: advance TaskPlan step statuses in-place and update the message
       const advancePlanStep = (plan: TaskPlan, stepType: string, status: PlanStepStatus) => {
@@ -1607,15 +1605,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           if (status === 'running') step.startedAt = new Date().toISOString();
           if (status === 'done' || status === 'failed') step.completedAt = new Date().toISOString();
         }
-        setMessages(prev => prev.map(m =>
-          m.id === streamingId ? { ...m, taskPlan: { ...plan } } : m
-        ));
       };
-
-      // Attach task plan to the streaming message
-      setMessages(prev => prev.map(m =>
-        m.id === streamingId ? { ...m, taskPlan } : m
-      ));
 
       // Mark initial steps as running
       advancePlanStep(taskPlan, 'analyze', 'running');
@@ -3568,7 +3558,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           <div className="flex items-center gap-1.5">
             <h2 className="text-xs font-semibold text-foreground">AI Builder</h2>
             <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <CircleDot className="h-2.5 w-2.5 text-emerald-500" /> Ready
+              <CircleDot className={cn('h-2.5 w-2.5', isLoading ? 'text-primary' : 'text-emerald-500')} /> {isLoading ? 'Thinking' : pendingPermissionAction ? 'Review needed' : 'Ready'}
             </span>
           </div>
           <p className="truncate text-[10px] text-muted-foreground/70">
@@ -3587,10 +3577,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             <ChevronLeft className="w-4 h-4" />
           </Button>
         )}
-        </div>
-        <div className="flex h-6 items-center justify-between px-3 text-[10px] text-muted-foreground/70">
-          <span className="font-mono tracking-wide">UNISON AI</span>
-          <span>{isLoading ? 'Working...' : pendingPermissionAction ? 'Review required' : 'Workspace edits'}</span>
         </div>
       </div>
 
@@ -3808,17 +3794,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             </div>
           </ScrollArea>
 
-          {/* AI Gateway Options */}
-          <AIGatewayOptions
-            config={gatewayConfig}
-            onChange={setGatewayConfig}
-            className="flex-shrink-0 border-t border-border"
-          />
-
           <AgentCommandPalette files={vfsFiles ?? {}} onApply={onApplyToVFS} onAsk={setInput} businessId={businessId} revisionId={revisionId} />
-          <div className="flex justify-end border-t border-border px-2 py-1">
-            <CatalogPanel files={vfsFiles ?? {}} businessId={businessId} onApply={onApplyToVFS} />
-          </div>
           {agentTarget && (
             <div className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground" role="status" aria-live="polite">
               <span className="truncate">
@@ -3895,6 +3871,11 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             onRemoveFile={removeFile}
             previewRef={previewRef}
           />
+          {/* Secondary controls sit below the input so the composer stays the primary target */}
+          <div className="flex items-center gap-2 border-t border-border px-2 py-1">
+            <AIGatewayOptions config={gatewayConfig} onChange={setGatewayConfig} className="min-w-0 flex-1" />
+            <CatalogPanel files={vfsFiles ?? {}} businessId={businessId} onApply={onApplyToVFS} />
+          </div>
         </TabsContent>
 
         {/* Backend Tab — full-stack proposal review + approval surface */}
