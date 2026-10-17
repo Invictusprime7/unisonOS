@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Uploaded preview-first architecture merge
+- [ ] Merge the uploaded recommendations into the existing guidebook, retaining proven ownership and compatibility paths
+- [ ] Remove unused Playground compile authority and obsolete duplicate editing surfaces after auditing consumers
+- [ ] Run ownership, hydration, resource and canonical-edit regressions; document remaining live-verification blockers
+
 ## Active: Web Builder browser startup
 - [x] Replace Babel's Node-only breaking-mode flag without exposing host environment variables
 - [x] Verify Babel initialization without `process` in isolated browser bundles, 22 editor regressions, authority lint, and live Builder startup with zero page errors; saved-project content remains blocked by the authoritative-session issue below
