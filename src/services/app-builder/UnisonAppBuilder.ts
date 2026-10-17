@@ -196,6 +196,7 @@ export function createUnisonAppBuilder(
         routes: [...(input.routes ?? [])],
         registryContext: input.registryContext,
         runtimeContext: [renderUnisonBuilderDirective(connector), input.runtimeContext].filter(Boolean).join('\n'),
+        attachmentContext: input.attachmentContext,
         diagnostics: input.diagnostics ? [...input.diagnostics] : undefined,
       });
       const composer = await runComposer({

@@ -73,6 +73,8 @@ export interface CanonicalAuthoringRequestInput {
   previousResponse?: string;
   registryContext?: unknown;
   runtimeContext?: string;
+  /** Uploaded links and extracted document text, kept ahead of optional runtime context. */
+  attachmentContext?: string;
   sourceTargets?: string[];
   approvedRouteOps?: readonly TopologyChange[];
 }
@@ -299,7 +301,7 @@ export async function assembleCanonicalAuthoringRequest(
       diagnostics: input.diagnostics?.map((item) => item.slice(0, 1000)).slice(0, 30),
       previousResponse: input.previousResponse,
       registryContext: boundedRegistry,
-      runtimeContext: input.runtimeContext?.slice(0, 12000),
+      runtimeContext: [input.attachmentContext, input.runtimeContext].filter(Boolean).join('\n').slice(0, 12000) || undefined,
       evidence,
     },
     evidence,
