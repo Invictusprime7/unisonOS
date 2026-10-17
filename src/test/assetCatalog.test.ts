@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildRenderedResourceIndex, detectUsedAssetKeys, isRelevantAsset, listAssetTypes, normalizeIndustry } from '@/services/resources/assetCatalog';
+import { registerContentTypes } from '@/services/resources/resourceRegistry';
 
 describe('asset catalog', () => {
   it('ranks by industry and marks used types', () => {
@@ -16,5 +17,14 @@ describe('asset catalog', () => {
   it('indexes rendered record marks', () => {
     const idx = buildRenderedResourceIndex({ '/a.tsx': '<p data-ut-resource="products#p1.name">x</p>' });
     expect(idx.get('products#p1')).toEqual(['/a.tsx']);
+  });
+  it('recognizes historical CMS marks as the canonical asset collection', () => {
+    registerContentTypes([{ id: 'faq-type', api_key: 'faq' }, { id: 'case-type', api_key: 'case_studies' }]);
+    try {
+      const used = detectUsedAssetKeys({ '/src/pages/Home.tsx': '<p data-ut-resource="content:faqs#q1.answer" /><p data-ut-resource="content:case_studies#c1.title" />' });
+      expect(used.has('content:faq')).toBe(true);
+      expect(used.has('content:case-studies')).toBe(true);
+      expect(used.has('content:faqs')).toBe(false);
+    } finally { registerContentTypes([]); }
   });
 });

@@ -49,7 +49,8 @@ export default function BusinessRecords() {
     })();
     return () => { alive = false; };
   }, []);
-  const scopedBusinessId = projects.find((p) => p.id === projectId)?.business_id ?? businessId;
+  const selectedProject = projects.find((p) => p.id === projectId);
+  const scopedBusinessId = selectedProject ? selectedProject.business_id ?? businessId : '';
   useEffect(() => {
     let alive = true;
     setRecords([]);

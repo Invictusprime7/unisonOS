@@ -36,4 +36,10 @@ describe('unified records page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New record' }));
     await waitFor(() => expect(mocks.create).toHaveBeenCalledWith({ op: 'create', resourceKey: 'content:faq', values: { title: 'New question', question: 'New question', answer: '' } }, { businessId: 'business-a', projectId: 'project-a', mode: 'builder' }));
   });
+  it('does not query or create records for a project absent from the accessible project list', async () => {
+    render(<MemoryRouter initialEntries={['/business/records?projectId=other-project']}><BusinessRecords /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New record' })).toBeDisabled());
+    expect(mocks.load).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
 });
