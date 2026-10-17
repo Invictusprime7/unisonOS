@@ -2878,6 +2878,15 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
 
       if (options?.replace) vfsReplaceFiles(preflightedFiles);
       else vfsImportFiles(preflightedFiles);
+      if (isAcceptedCanonicalRevision) {
+        // The adopted bytes are the persisted revision: advance the autosave
+        // baseline with it so later deltas are recorded against this revision,
+        // never against an older one.
+        const adoptedFiles = options?.replace ? preflightedFiles : { ...currentFiles, ...preflightedFiles };
+        lastPersistedVfsFilesRef.current = { ...adoptedFiles };
+        lastSavedVfsSignatureRef.current = computeBuilderVfsSignature(adoptedFiles);
+        lastRecordedPendingVfsSignatureRef.current = '';
+      }
       const syncedEntry = syncBuilderFromFiles(
         preflightedFiles,
         options?.preferredPath || normalizedEntryPoint || null,
