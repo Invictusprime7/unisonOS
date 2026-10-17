@@ -2,6 +2,7 @@
 
 import { APP_BUILDER_GENERATION_PREFIXES } from '@/contracts/aiComposerContract';
 import {
+  collectLocalImportClosure,
   findLocalJsxImportContractViolations,
   findUnresolvedLocalImports,
 } from '@/services/laneBCompanionModules';
@@ -348,8 +349,13 @@ export async function validateAppBuildCandidate(input: {
 
   for (const requirement of bindingGuideRequirements(input.contract.business.bindingGuide)) {
     const page = pages.find((candidate) => candidate.route === requirement.route);
-    const source = page ? files[page.filePath] : undefined;
-    if (!page || !source || !requirement.markers.some((marker) => hasCtaMarker(source, marker))) {
+    // A page's surface includes the authored components it renders (shared
+    // nav, footer, newsletter band); the binder stamps markers there too.
+    const surface = page?.filePath && files[page.filePath]
+      ? collectLocalImportClosure(files, page.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path))
+      : [];
+    const hasMarker = surface.some((path) => requirement.markers.some((marker) => hasCtaMarker(files[path] ?? '', marker)));
+    if (!page || !hasMarker) {
       issues.push({
         severity: 'blocker',
         code: 'wizard-binding-marker-missing',

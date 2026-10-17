@@ -152,6 +152,46 @@ export function findUnresolvedLocalImports(
   return unresolved;
 }
 
+/**
+ * The entry module plus every local module it reaches through relative or
+ * `@/` imports, in discovery order. Shared chrome (nav, footer, newsletter)
+ * lives in imported components, so page-owned surfaces must include them.
+ */
+export function collectLocalImportClosure(
+  files: Readonly<Record<string, string>>,
+  entryPath: string,
+  include: (path: string) => boolean = () => true,
+): string[] {
+  const normalizedFiles: Record<string, string> = {};
+  for (const [path, content] of Object.entries(files || {})) {
+    if (typeof content === 'string') normalizedFiles[normalizeVfsPath(path)] = content;
+  }
+  const existingPaths = new Set(Object.keys(normalizedFiles));
+  const entry = normalizeVfsPath(entryPath);
+  if (!existingPaths.has(entry)) return [];
+  const importRegex = /(?:import|export)\s+(?:[\w*{},\s]+?\s+from\s+)?['"]((?:\.\.?\/|@\/)[^'"]+)['"]/g;
+  const visited: string[] = [];
+  const seen = new Set<string>([entry]);
+  const queue = [entry];
+  while (queue.length) {
+    const filePath = queue.shift()!;
+    visited.push(filePath);
+    if (!/\.(tsx?|jsx?)$/.test(filePath)) continue;
+    const content = normalizedFiles[filePath];
+    importRegex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = importRegex.exec(content)) !== null) {
+      const raw = match[1];
+      if (/\.(css|scss|less|svg|png|jpe?g|webp|gif)$/i.test(raw)) continue;
+      const resolved = resolveRelativeModule(filePath, raw.startsWith('@/') ? `/src/${raw.slice(2)}` : raw, existingPaths);
+      if (!resolved || seen.has(resolved) || !include(resolved)) continue;
+      seen.add(resolved);
+      queue.push(resolved);
+    }
+  }
+  return visited;
+}
+
 export function describeUnresolvedImports(items: UnresolvedLocalImport[]): string {
   return items
     .slice(0, 5)
