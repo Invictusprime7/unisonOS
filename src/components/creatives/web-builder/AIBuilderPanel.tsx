@@ -84,7 +84,6 @@ import { generateCanonicalDesignPrompt } from '@/sections/promptContext/canonica
 import { analyzeReactSite, resolveEditTarget } from '@/utils/reactSiteAnalysis';
 import { resolveExplicitPageTarget, resolveRouteSourceFile, resolveLocalImports, type PageSourceTarget } from './previewRouteTabs';
 import { buildComponentBehaviorMap, formatBehaviorMapForPrompt } from '@/services/aiVFSOrchestrator';
-import { htmlDocToReactComponent as htmlDocToReactComponentFn } from '@/utils/htmlToJsx';
 import { AIGatewayOptions, type GatewayConfig } from './AIGatewayOptions';
 import { vfsEventBus } from '@/services/vfsEventBus';
 import { diagnosticsAggregator } from '@/services/diagnosticsAggregator';
@@ -100,11 +99,7 @@ import {
   type PersistedMessage,
 } from '@/services/aiHistoryStore';
 import { parseLayoutIntent } from '@/utils/layoutIntentEngine';
-import { executeLayoutIntent } from '@/utils/layoutIntentExecutor';
-import { parseGhlWireIntent } from '@/utils/ghlWireIntent';
-import { parseIconWireIntent, stampIconIntentInSource } from '@/utils/iconWireIntent';
 // Side-effect import: registers GHL skill pack with global registry
-import { wireGhlBinding } from '@/services/skills/ghlSkillPack';
 import { detectSections } from '@/utils/sectionSwapper';
 import { isThemeOnlyRequest } from '@/services/theme/themeEdit';
 import { isBuilderProviderUnavailable, isBuilderSessionError, runBuilderTurn, shouldOfferBuilderProviderRetry } from '@/services/builderBrainClient';
@@ -117,7 +112,6 @@ import { buildCatalogContext, renderCatalogContextForPrompt } from '@/utils/cata
 import { compileCatalogToolCalls, type RawToolCall } from '@/services/catalogToolExecutor';
 import type { GeneratedUiManifest } from '@/platform/core/generatedUiFoundation';
 import type { WizardDesignIntervention } from '@/services/wizardDesignIntervention';
-import { sanitizeGeneratedFiles, sanitizeTsxFile } from '@/utils/tsxSanitizer';
 import {
   applyAIBuilderFiles,
   type AIBuilderApplyCallback,
@@ -141,7 +135,6 @@ import { buildAICandidateChangeSet, type AICandidateChangeSet } from '@/services
 import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { deriveFilePath } from '@/services/routeNavigationService';
 import { createBuilderPage } from '@/types/pageRegistry';
-import { buildSequentialAiTasks } from '@/services/builder/sequentialAiTasks';
 import { canonicalCandidateOutput } from '@/services/builder/canonicalCandidateOutput';
 import { findUnrequestedCopyChanges, findUnrequestedScopedSideEffects } from '@/services/builder/scopedEditContentGuard';
 
@@ -157,7 +150,6 @@ import {
   requiresRenderableUiPatch,
 } from '@/services/builderRequestInterpreter';
 import { uploadForPlacement, buildUploadPlacementBlock, CERTIFIED_VOCABULARY_NOTE, type PlacedUpload } from '@/services/assets/uploadPlacement';
-import { extractMultiFileOutput, extractStylesheetOutput } from '@/utils/aiResponseParser';
 import {
   AIPermissionControl,
   AI_EDIT_PERMISSION_STORAGE_KEY,
@@ -172,102 +164,6 @@ import {
 } from '@/services/capabilityIntentBindingResolver';
 
 // ============================================================================
-/**
- * Strip module.exports blocks using brace-counting so nested objects are fully removed.
- * Also strips leading comment lines (e.g. "// tailwind.config.js") before the block.
- */
-function stripModuleExportsBlocks(code: string): string {
-  // First strip comment-prefixed config sections
-  code = code.replace(/(?:\/\/[^\n]*(?:tailwind|config)[^\n]*\n)+/gi, (match, offset) => {
-    // Only strip if followed by module.exports
-    const after = code.slice(offset + match.length).trimStart();
-    return after.startsWith('module.exports') ? '' : match;
-  });
-
-  let result = code;
-  let safetyCounter = 0;
-  while (safetyCounter++ < 5) {
-    const idx = result.indexOf('module.exports');
-    if (idx === -1) break;
-
-    // Find the opening brace
-    const braceStart = result.indexOf('{', idx);
-    if (braceStart === -1) {
-      result = result.slice(0, idx) + result.slice(result.indexOf('\n', idx) + 1);
-      continue;
-    }
-
-    // Count braces to find matching close
-    let depth = 0;
-    let end = braceStart;
-    for (; end < result.length; end++) {
-      if (result[end] === '{') depth++;
-      else if (result[end] === '}') { depth--; if (depth === 0) break; }
-    }
-
-    let removeEnd = end + 1;
-    if (result[removeEnd] === ';') removeEnd++;
-    while (result[removeEnd] === '\n' || result[removeEnd] === '\r') removeEnd++;
-
-    result = result.slice(0, idx) + result.slice(removeEnd);
-  }
-
-  return result.trim();
-}
-
-/**
- * Strip inline backtick code references from AI reasoning text.
- * Converts "`<style>`" → "STYLE_TAG" etc. to prevent HTML tag matching in reasoning.
- */
-function stripInlineCodeRefs(content: string): string {
-  return content.replace(/`[^`]*`/g, 'CODE_REF');
-}
-
-/**
- * Extract HTML from AI response that mixes reasoning text with raw HTML.
- * Handles cases like: "I will generate...<!DOCTYPE html><html>...</html>"
- * Returns the extracted HTML or null if no HTML found.
- * 
- * IMPORTANT: Ignores HTML tags mentioned inside backtick code references
- * in reasoning text (e.g. "`<html>`", "`<style>`").
- */
-function extractRawHtmlFromMixed(content: string): string | null {
-  // Strip inline code refs so `<html>` in reasoning doesn't trigger false match
-  const cleaned = stripInlineCodeRefs(content);
-
-  // Case 1: Content contains <!DOCTYPE html> — extract everything from there
-  const doctypeIdx = cleaned.indexOf('<!DOCTYPE');
-  if (doctypeIdx >= 0) {
-    // Use the index from cleaned to slice from the ORIGINAL content
-    const originalDoctypeIdx = content.indexOf('<!DOCTYPE', Math.max(0, doctypeIdx - 50));
-    if (originalDoctypeIdx >= 0) {
-      return content.slice(originalDoctypeIdx).trim();
-    }
-  }
-  
-  // Case 2: Content contains <html — but only if it looks like an actual tag (not inside prose)
-  // Match <html followed by > or whitespace+attributes, NOT inside backticks
-  const htmlTagRegex = /<html[\s>]/gi;
-  let match: RegExpExecArray | null;
-  while ((match = htmlTagRegex.exec(cleaned)) !== null) {
-    // Find the corresponding position in original content
-    const originalIdx = content.indexOf('<html', Math.max(0, match.index - 50));
-    if (originalIdx >= 0) {
-      const extracted = content.slice(originalIdx).trim();
-      if (extracted.includes('</html>')) return extracted;
-    }
-  }
-  
-  return null;
-}
-
-/**
- * Convert raw HTML into a proper React component with native JSX.
- */
-function wrapHtmlInReactComponent(html: string): string {
-  return htmlDocToReactComponentFn(html, 'App');
-}
-
 // Types
 // ============================================================================
 
@@ -804,18 +700,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     }
   }, [isApplyingPermissionAction, pendingPermissionAction]);
 
-  const queueDebugPatchReview = useCallback((files: Record<string, string>, meta: AIBuilderApplyMeta) => {
-    queuePermissionReview({
-      category: 'behavioral',
-      title: 'Debug patch',
-      description: meta.summary || 'A debug patch is ready to apply to the project.',
-      apply: async () => (await applyAIBuilderFiles(onApplyToVFS, files, {
-        ...meta,
-        origin: 'debug-patch-reviewed',
-      })).success,
-    });
-  }, [onApplyToVFS, queuePermissionReview]);
-
   // Auto-send when a welcome prompt is selected
   useEffect(() => {
     if (pendingPromptRef.current && input === pendingPromptRef.current && !isLoading) {
@@ -1163,7 +1047,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     // Build attachments for the edge function
     const attachments = droppedFiles
       .filter(f => f.type === 'image' && f.preview)
-      .map(f => ({ name: f.name, type: 'image', data: f.preview! }));
+      .flatMap(f => f.preview ? [{ name: f.name, type: 'image', data: f.preview }] : []);
 
     const userContent = input.trim() || `Analyse the attached file${droppedFiles.length > 1 ? 's' : ''} and incorporate them into the design.`;
     const isLaunchPlanningRequest = droppedFiles.length === 0 && detectLaunchPlanningIntent(userContent);
@@ -1180,32 +1064,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     setInput('');
     setDroppedFiles([]);
     setIsLoading(true);
-    if (!isLaunchPlanningRequest && droppedFiles.length === 0 && onThemeEdit && isThemeOnlyRequest(userContent)) {
-      if (!canAutoApply('ui')) {
-        queuePermissionReview({
-          category: 'ui',
-          title: 'Theme edit',
-          description: userContent,
-          apply: async () => onThemeEdit(userContent),
-        });
-        setMessages(prev => [...prev, {
-          id: generateId(),
-          role: 'assistant',
-          content: 'Theme edit prepared. Review it below before it changes the project.',
-          timestamp: new Date(),
-        }]);
-        setIsLoading(false);
-        return;
-      }
-      try {
-        if (!await onThemeEdit(userContent)) throw new Error('The theme could not be saved. Your current site is unchanged.');
-        setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: 'Updated the theme while preserving your content and composition.', timestamp: new Date() }]);
-      } catch (error) {
-        setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: error instanceof Error ? error.message : 'Theme update failed.', timestamp: new Date() }]);
-      } finally { setIsLoading(false); }
-      return;
-    }
-
     // Record-backed value: a clicked price/name carrying a data-ut-resource mark
     // is changed on the saved record (ResourceRuntime), never in page code.
     const resourceMark = selectedTarget?.provenance?.resource;
@@ -1214,6 +1072,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       const value = ref ? parseResourceValueRequest(userContent, ref.field) : null;
       if (ref && value !== null) {
         try {
+          requireBuilderFeature(featuresRef.current, 'catalog');
           ensureCurrentRequest();
           const agentCtx = { files: vfsFiles ?? {}, businessId, projectId: projectId ?? undefined, revisionId };
           const connector = createUnisonBuilderContext({
@@ -1309,7 +1168,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         && !!onApproveCapabilityPlan;
       if (canApplyBackend) {
         setPendingCapabilityProposal({ plan: capabilityPlan, resolution, isApplying: true });
-        const outcome = await onApproveCapabilityPlan!(capabilityPlan, resolution);
+        ensureCurrentRequest();
+        const outcome = await onApproveCapabilityPlan?.(capabilityPlan, resolution);
+        if (!outcome) throw new Error('Capability approval is unavailable.');
         if (outcome.success) {
           backendAutoApplied = true;
           toast.success('Backend capability applied automatically');
@@ -1339,250 +1200,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       }
     }
 
-    // ── Icon Wire Fast Path ──────────────────────────────────────────────
-    // Deterministic NL → data-ut-* stamp on the named Lucide icon in the
-    // current preview file. Skips the LLM. Also handles workflow-ref prompts
-    // ("wire the Bell icon to workflow <uuid>") by delegating to the GHL path.
-    if (!isLaunchPlanningRequest && droppedFiles.length === 0 && layoutOps) {
-      try {
-        const iconIntent = parseIconWireIntent(userContent);
-        if (iconIntent && iconIntent.confidence >= 0.7) {
-          // Workflow refs — delegate to the existing GHL wire fast path below.
-          if (!iconIntent.workflowRef && iconIntent.coreIntent) {
-            const previewSrc = layoutOps.getPreviewCode();
-            const stamp = stampIconIntentInSource({
-              source: previewSrc,
-              iconName: iconIntent.iconName,
-              coreIntent: iconIntent.coreIntent,
-              iconKey: iconIntent.iconKey,
-              placement: iconIntent.placement,
-              sectionHint: iconIntent.sectionHint,
-            });
-
-            if (stamp.ok) {
-              const summary = `Wire <${iconIntent.iconName}/> → ${iconIntent.coreIntent}` +
-                (iconIntent.placement ? ` (${iconIntent.placement})` : '');
-              if (!canAutoApply('ui')) {
-                queuePermissionReview({
-                  category: 'ui',
-                  title: 'Icon interaction edit',
-                  description: summary,
-                  apply: async () => layoutOps.applyLayoutCode(stamp.nextSource, summary),
-                });
-                setMessages((prev) => [...prev, {
-                  id: generateId(),
-                  role: 'assistant',
-                  content: `${summary}\n\nReady for review. No source was changed.`,
-                  timestamp: new Date(),
-                }]);
-                setIsLoading(false);
-                return;
-              }
-              const applied = layoutOps.applyLayoutCode(stamp.nextSource, summary);
-              const badge = applied ? '✓' : '⚠';
-              const details = [
-                `${badge} Stamped **${stamp.matches}** \`<${iconIntent.iconName}/>\` element${stamp.matches === 1 ? '' : 's'} in the current file`,
-                `→ \`data-ut-intent="${iconIntent.coreIntent}"\`` +
-                  (iconIntent.iconKey ? `, \`data-ut-icon-key="${iconIntent.iconKey}"\`` : '') +
-                  (iconIntent.placement ? `, \`data-ut-placement="${iconIntent.placement}"\`` : ''),
-                '',
-                applied
-                  ? '_Runtime autoBinder + TemplateRuntimeProvider will now handle clicks on this icon end-to-end._'
-                  : '_Preview refused the patch — revert from history if unexpected._',
-              ].join('\n');
-              setMessages((prev) => [
-                ...prev,
-                { id: generateId(), role: 'assistant', content: details, timestamp: new Date() },
-              ]);
-              setIsLoading(false);
-              return;
-            }
-
-            // Fall through with an explanatory assistant message so the LLM
-            // doesn't get a second bite — the icon just wasn't in this file.
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: generateId(),
-                role: 'assistant',
-                content: `⚠ Couldn't find a \`<${iconIntent.iconName}/>\` element in the current preview file. Open the page/section that contains this icon and try again, or specify the section (e.g. "…in navbar").`,
-                timestamp: new Date(),
-              },
-            ]);
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (err) {
-        console.error('[AIBuilderPanel] Icon wire fast-path error:', err);
-      }
-    }
-
-    // ── GHL Wire Fast Path ───────────────────────────────────────────────
-    // Deterministic NL → site_intent_bindings write for GoHighLevel workflows.
-    if (!isLaunchPlanningRequest && droppedFiles.length === 0 && projectId && businessId) {
-      try {
-        const wire = parseGhlWireIntent(userContent);
-        if (wire && wire.confidence >= 0.75) {
-          const elementKey =
-            (layoutOps?.selectionSelector as string | undefined) ||
-            (wire.elementHint ? `hint:${wire.elementHint}` : null);
-          if (elementKey) {
-            const reviewSummary = `Wire ${wire.elementHint ?? 'selected element'} to the GHL workflow.`;
-            if (!canAutoApply('backend')) {
-              queuePermissionReview({
-                category: 'backend',
-                title: 'Backend workflow binding',
-                description: reviewSummary,
-                apply: async () => Boolean(await wireGhlBinding({
-                  businessId,
-                  projectId,
-                  pagePath: '/',
-                  elementKey,
-                  elementLabel: wire.elementHint ?? layoutOps?.selectionSection ?? null,
-                  intent: 'button.click',
-                  workflowId: wire.workflowRef,
-                })),
-              });
-              setMessages((prev) => [...prev, {
-                id: generateId(),
-                role: 'assistant',
-                content: `${reviewSummary}\n\nReady for review. No backend binding was written.`,
-                timestamp: new Date(),
-              }]);
-              setIsLoading(false);
-              return;
-            }
-            const binding = await wireGhlBinding({
-              businessId,
-              projectId,
-              pagePath: '/',
-              elementKey,
-              elementLabel: wire.elementHint ?? layoutOps?.selectionSection ?? null,
-              intent: 'button.click',
-              workflowId: wire.workflowRef,
-            });
-            const summary = binding
-              ? `✓ Wired **${wire.elementHint ?? 'selected element'}** to GHL workflow \`${wire.workflowRef}\`. It will fire on click via the runtime intent executor.`
-              : `⚠ Could not persist GHL binding — check business membership and try again.`;
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: generateId(),
-                role: 'assistant',
-                content: `${summary}\n\n_Applied instantly — no model call. Manage from the Intent Inspector._`,
-                timestamp: new Date(),
-              },
-            ]);
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (err) {
-        console.error('[AIBuilderPanel] GHL wire fast-path error:', err);
-      }
-    }
-
-    // ── Layout-Intent Fast Path ──────────────────────────────────────────
-    // Deterministic NL → layout-op (center / move / align / reorder).
-    // Skips the LLM round-trip entirely on a confident match.
-    if (!isLaunchPlanningRequest && layoutOps && droppedFiles.length === 0) {
-      try {
-        const previewSrc = layoutOps.getPreviewCode();
-        const detected = previewSrc ? detectSections(previewSrc) : [];
-        const intent = parseLayoutIntent({
-          prompt: userContent,
-          selectionSelector: layoutOps.selectionSelector,
-          selectionSection: layoutOps.selectionSection,
-          detectedSections: detected,
-        });
-
-        // Auto-apply class edits (high confidence). Structural reorders also
-        // execute (the user already chose to send), but we surface a richer
-        // summary so they can revert from history.
-        if (intent && intent.confidence >= 0.75) {
-          let summary = intent.operation.describe;
-          if (!canAutoApply('ui')) {
-            queuePermissionReview({
-              category: 'ui',
-              title: 'Layout edit',
-              description: summary,
-              apply: async () => {
-                if (intent.operation.kind === 'element-move') {
-                  if (intent.operation.direction === 'up') layoutOps.moveElementUp();
-                  else layoutOps.moveElementDown();
-                  return true;
-                }
-                const reviewResult = executeLayoutIntent(intent, {
-                  previewCode: layoutOps.getPreviewCode(),
-                  findBounds: layoutOps.findBounds,
-                  selectionSelector: layoutOps.selectionSelector,
-                });
-                if (!reviewResult.ok || !reviewResult.nextCode) return false;
-                return layoutOps.applyLayoutCode(reviewResult.nextCode, reviewResult.summary);
-              },
-            });
-            setMessages((prev) => [...prev, {
-              id: generateId(),
-              role: 'assistant',
-              content: `${summary}\n\nReady for review. No layout was changed.`,
-              timestamp: new Date(),
-            }]);
-            setIsLoading(false);
-            return;
-          }
-          let success = false;
-
-          if (intent.operation.kind === 'element-move') {
-            if (intent.operation.direction === 'up') layoutOps.moveElementUp();
-            else layoutOps.moveElementDown();
-            success = true;
-          } else {
-            const result = executeLayoutIntent(intent, {
-              previewCode: previewSrc,
-              findBounds: layoutOps.findBounds,
-              selectionSelector: layoutOps.selectionSelector,
-            });
-            if (result.ok && result.nextCode) {
-              success = layoutOps.applyLayoutCode(result.nextCode, result.summary);
-              summary = result.summary;
-            } else if (!result.ok) {
-              console.warn('[AIBuilderPanel] Layout intent matched but executor failed:', result.reason);
-            }
-          }
-
-          if (success) {
-            const assistantMsg: Message = {
-              id: generateId(),
-              role: 'assistant',
-              content: `✓ ${summary}\n\n_Applied instantly via the layout engine — no model call. Revert anytime from the edit history._`,
-              timestamp: new Date(),
-            };
-            setMessages(prev => [...prev, assistantMsg]);
-            setIsLoading(false);
-            return;
-          }
-          // If we matched but couldn't execute, fall through to the LLM with
-          // a hint added to the prompt for better targeting.
-        }
-      } catch (err) {
-        console.error('[AIBuilderPanel] Layout intent fast path error:', err);
-        // Non-fatal — fall through to the LLM.
-      }
-    }
-
-
-    // Keep fileContext & attachments in closure for the rest of handleSend
-    const _fileContext = fileContext + placementContext;
-    const _attachments = attachments;
-    const _userContent = userContent;
-    const launchBrief = isLaunchPlanningRequest ? extractLaunchBriefFromPrompt(_userContent) : undefined;
-
-    let streamingId: string | null = null;
-
-    try {
-      // Initialize live thinking cascade
-      const thinkingSteps: ThinkingStep[] = [];
+    const thinkingSteps: ThinkingStep[] = [];
       streamingId = generateId();
       
       // Add streaming message immediately (visible with empty thinking)
@@ -2414,9 +2032,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             },
             requestEnvelope: capabilityInterpretation.envelope,
             unisonContext,
-            // Specialized non-source and non-React lanes keep
-            // their established transport. Ordinary React source authorship is
-            // handled above by the canonical Composer protocol.
+            // Launch planning and catalog proposals retain chat transport; source is candidate-only.
             mode: isLaunchPlanningRequest ? 'launch-desk' : 'template-react',
             currentCode: undefined,
             editMode: false,
@@ -2827,7 +2443,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           actionType: responseMeta?.actionType,
         });
         if (dataOutcome.success) {
-          toast.success('Catalog changes saved and synchronized to the live preview');
+          const verification = await awaitPreviewVerification();
+          if (verification.verified) toast.success('Catalog changes saved and confirmed in preview');
+          else toast.warning('Catalog changes saved; preview confirmation is still pending');
           vfsEventBus.emit('ai:apply:complete', { filesWritten: [], source: 'catalog-data' });
         } else {
           toast.error('Catalog changes were not applied', { description: dataOutcome.errors?.[0] });
@@ -3000,6 +2618,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: 'Repair prepared for review. Your saved site is unchanged.', timestamp: new Date() }]);
           return;
         }
+        assertBuilderRequestState(state, getCurrentRequestState?.() ?? state);
         const outcome = await applyAIBuilderFiles(onApplyToVFS, output.files, { origin: 'debug-fix', prompt: errorPrompt, summary: result.summary, deletions: output.deletions, routeOps: candidate.routeOps, candidate });
         if (!outcome.success) throw new Error(outcome.errors?.[0] ?? 'The repair could not be saved.');
         setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: result.summary ?? 'Saved the validated repair.', timestamp: new Date() }]);
@@ -3060,6 +2679,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           </TabsTrigger>
           <TabsTrigger
             value="tools"
+            disabled={!features.tools}
             className="text-[10px] gap-1 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
           >
             <Layers className="h-3.5 w-3.5" />
@@ -3076,6 +2696,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           )}
           <TabsTrigger
             value="debug"
+            disabled={!features.repairs}
             className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
           >
             <Bug className="w-3.5 h-3.5" />
@@ -3088,6 +2709,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           </TabsTrigger>
           <TabsTrigger
             value="backend"
+            disabled={!features.capabilities}
             className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
           >
             <Database className="w-3.5 h-3.5" />
@@ -3095,7 +2717,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           </TabsTrigger>
         </TabsList>
 
-        <div role="tabpanel" aria-hidden={activeTab !== 'tools'} hidden={activeTab !== 'tools'} className="min-h-0 flex-1 overflow-hidden">
+        <div role="tabpanel" aria-hidden={activeTab !== 'tools' || !features.tools} hidden={activeTab !== 'tools' || !features.tools} className="min-h-0 flex-1 overflow-hidden">
           <div ref={onToolsHostChange} className="h-full min-h-0 overflow-hidden" />
         </div>
         {onCustomizerHostChange && customizerAvailable && (
@@ -3188,9 +2810,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   <div className="mt-2 flex items-baseline gap-3">
                     <button
                       type="button"
-                      disabled={pendingCapabilityProposal.isApplying || pendingCapabilityProposal.resolution.unresolved.length > 0 || !onApproveCapabilityPlan}
+                      disabled={!features.capabilities || pendingCapabilityProposal.isApplying || pendingCapabilityProposal.resolution.unresolved.length > 0 || !onApproveCapabilityPlan}
                       onClick={async () => {
-                        if (!onApproveCapabilityPlan) return;
+                        if (!onApproveCapabilityPlan || !featuresRef.current.capabilities) return;
                         setPendingCapabilityProposal((current) => current ? { ...current, isApplying: true } : current);
                         const outcome = await onApproveCapabilityPlan(
                           pendingCapabilityProposal.plan,
@@ -3297,6 +2919,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   disabled={isApplyingHeld}
                   className="text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={async () => {
+                    if (heldFiles.candidate?.dataOps?.length && !featuresRef.current.catalog) { toast.error('Turn on catalog edits in AI settings before applying.'); return; }
                     const pending = heldFiles.files;
                     const deletions = heldFiles.deletions;
                     const routeOps = heldFiles.routeOps;
@@ -3347,16 +2970,16 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
         {/* Backend Tab — full-stack proposal review + approval surface */}
         <TabsContent value="backend" className="flex-1 flex flex-col m-0 min-h-0 data-[state=inactive]:hidden">
-          <MigrationProposalPanel
+          {features.capabilities && <MigrationProposalPanel
             projectId={projectId ?? undefined}
             businessId={businessId ?? undefined}
             className="flex-1 min-h-0"
-          />
+          />}
         </TabsContent>
 
         {/* Debug Tab */}
         <TabsContent value="debug" className="flex-1 flex flex-col m-0 min-h-0 data-[state=inactive]:hidden">
-          <DebugAgentPanel
+          {features.repairs && <DebugAgentPanel
             iframeErrors={iframeErrors}
             onFixError={handleFixError}
             onDebugRequest={(prompt) => {
@@ -3368,7 +2991,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             onReviewPatch={() => toast.info('Describe the repair in Builder chat to prepare a validated candidate.')}
             vfsFiles={vfsFiles}
             isFixing={isFixing}
-          />
+          />}
         </TabsContent>
       </Tabs>
     </div>
