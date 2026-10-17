@@ -75,6 +75,6 @@ describe('auth listener lock release', () => {
     render(<Auth />);
     fireEvent.submit(screen.getByLabelText('Password').closest('form') as HTMLFormElement);
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Sign in failed' })));
-    expect(screen.getByRole('button', { name: 'Sign in', exact: true })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Sign in$/ })).not.toBeDisabled();
   });
 });
