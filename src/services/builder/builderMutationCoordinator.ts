@@ -106,11 +106,14 @@ export function rebaseCandidate(
   };
 }
 
+/** Stable lead text; the Builder chat keys its "apply on latest" choice off it. */
+export const STALE_EDIT_PREFIX = 'Your site changed while the AI was working';
+
 /** Plain-language explanation for a stale candidate. */
 export function describeStaleCandidate(conflicts: string[] = []): string {
   const who = lastCommit
     ? `${lastCommit.surface === 'autosave' ? 'an autosave' : `a ${lastCommit.surface} save`} at ${new Date(lastCommit.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
     : 'another save';
   const files = conflicts.length ? ` It changed ${conflicts.slice(0, 3).join(', ')} too.` : '';
-  return `Your site changed while the AI was working (${who}).${files} Please send the request again so it runs on the latest version.`;
+  return `${STALE_EDIT_PREFIX} (${who}).${files} Nothing was overwritten. You can apply the same request on the latest version.`;
 }

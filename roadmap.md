@@ -7,7 +7,8 @@
 - [x] Command menu and Catalog panel catalog saves run through the enforced dispatcher
 - [x] Stale-session edits: records ignore page version; page edits replay on newest version when safe, else ask (dispatcher + 4 tests; Builder UI prompt for the ask still to wire)
 - [x] AI Builder redesign pass 1: task planner removed; quiet thinking trace; status in header; model + catalog controls moved below input
-- [ ] Redesign pass 2: multi-step reason→act→check iteration loop; "Apply on latest or cancel?" prompt in chat
+- [x] "Apply on latest version / Cancel" choice in Builder chat after a save lands mid-edit
+- [ ] Redesign pass 2: visible reason→act→check iteration (surface existing repair loop rounds as thinking steps)
 - Later: edge-side proposal enforcement in existing Composer lane
 - Later: edge-side proposal enforcement using existing Composer lanes; audited legacy removal; authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON
