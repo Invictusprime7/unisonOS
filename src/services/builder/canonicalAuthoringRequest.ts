@@ -10,6 +10,7 @@ import {
   collectValidImportPaths,
 } from '@/services/builderRegistryContext';
 import type { WizardAggregatedRegistryContext } from '@/services/launch/wizardRegistryAggregation';
+import { INTENT_REGISTRY } from '@/platform/core/intentSurfaceRegistry';
 
 /** Mirrors `aiComposerRequestSchema.brief.max` on the edge function. */
 const COMPOSER_BRIEF_LIMIT = 12000;
@@ -292,6 +293,7 @@ export async function assembleCanonicalAuthoringRequest(
         return aiComposerRouteOpSchema.parse(wireOp);
       }) : undefined,
       approvedDependencies: input.task === 'builder_source_edit' ? existingDependencies(input.baseFiles) : undefined,
+      approvedIntents: input.task === 'builder_source_edit' ? permittedBuilderIntents(registryValue) : undefined,
       routes,
       priorPages: input.priorPages,
       diagnostics: input.diagnostics?.map((item) => item.slice(0, 1000)).slice(0, 30),
@@ -302,6 +304,18 @@ export async function assembleCanonicalAuthoringRequest(
     },
     evidence,
   };
+}
+
+/** Existing accepted package inventory only; this does not approve new installs. */
+export function permittedBuilderIntents(registry: unknown): string[] {
+  const requirements = registry && typeof registry === 'object' && 'capabilityRequirements' in registry
+    ? registry.capabilityRequirements : undefined;
+  const capabilities = new Set(Array.isArray(requirements) ? requirements.flatMap(item =>
+    item && typeof item === 'object' && typeof item.id === 'string' ? [item.id] : []) : []);
+  return Object.values(INTENT_REGISTRY)
+    .filter(intent => intent.status !== 'deprecated' && intent.triggerType === 'user-action'
+      && (intent.requiredCapabilities ?? []).every(id => capabilities.has(id)))
+    .map(intent => intent.name).sort();
 }
 
 /** Existing accepted package inventory only; this does not approve new installs. */
