@@ -62,7 +62,6 @@ import { emitAgentEvent, lineDelta } from '@/services/agent-runtime/agentEvents'
 import { buildSystemGraph, renderSystemGraphForPrompt } from '@/services/agent-runtime/systemGraph';
 import { AgentCommandPalette } from './ai-chat/AgentCommandPalette';
 import { CatalogPanel } from './ai-chat/CatalogPanel';
-import { agentOperations } from '@/services/agent-runtime/operations';
 import { dispatchBuilderOperation } from '@/services/unisonBuilderToolDispatch';
 import { STALE_EDIT_PREFIX } from '@/services/builder/builderMutationCoordinator';
 import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
@@ -2446,6 +2445,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               maxTokens: gatewayConfig.maxTokens,
             } : undefined,
           });
+          }
           
           // Check for retryable errors
           if (response.error) {
