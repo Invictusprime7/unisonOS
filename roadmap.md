@@ -5,7 +5,7 @@
 - [x] Retire unused Playground compile API and unmounted duplicate panel; inferred hydration stays clean; catalog tools delegate to project-scoped Resource Runtime without global source swaps
 - [x] Run 53 ownership/hydration/resource/canonical-edit tests and both authority lints; preview build passes
 - [ ] Signed-in record save → preview → reopen acceptance; requires authoritative UNISON session and designated project
-- [ ] Existing previewSingleOwner suite has two stale source-string expectations missing pendingSourceConflictPolicy; preview implementation was not changed in this merge
+- [x] Refresh two stale previewSingleOwner expectations to retain the existing pendingSourceConflictPolicy; preview implementation unchanged
 
 ## Active: Web Builder browser startup
 - [x] Replace Babel's Node-only breaking-mode flag without exposing host environment variables
