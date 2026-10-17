@@ -5,6 +5,7 @@
   },
   "nodeModulesDir": "auto",
   "imports": {
+    "@babel/parser": "npm:@babel/parser@7.29.8",
     "serve": "https://deno.land/std@0.168.0/http/server.ts",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7",
     "stripe": "https://esm.sh/stripe@14.14.0?target=deno",
