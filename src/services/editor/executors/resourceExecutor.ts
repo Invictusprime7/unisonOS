@@ -28,6 +28,18 @@ function defaultFieldFor(command: EditorCommand): string {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Seed a created record with a human name derived from the element's mark slug. */
+function seedValuesFor(ref: ResourceEntityRef, values: Record<string, unknown>): Record<string, unknown> {
+  const schema = getResource(ref.resourceKey)?.schema ?? [];
+  const nameKey = schema.find((f) => f.editable && f.key === 'name')?.key
+    ?? schema.find((f) => f.editable && f.key === 'title')?.key;
+  const seeded = { ...values };
+  if (nameKey && seeded[nameKey] === undefined) {
+    seeded[nameKey] = ref.recordId.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return seeded;
+}
+
 /**
  * Generated catalog sections stamp marks with the in-memory product id/slug,
  * while the saved CMS row owns a UUID. Resolve slug marks to the real saved
@@ -71,7 +83,6 @@ export async function executeResourceCommand(command: EditorCommand, ctx: Resour
     };
   }
   const ref = { ...parsed, recordId };
-  const values = valuesFor(command, ref.field);
   const before = await executeResourceCommandCompatible<ResourceRecord | null>(ctx, {
     kind: 'resource.get', resourceKey: ref.resourceKey, recordId: ref.recordId,
   }, () => getResourceRecord(ref.resourceKey, ctx, ref.recordId)).catch(() => null);
