@@ -4,6 +4,8 @@ import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from '@/components/ui/command';
 import { agentOperations, type CatalogTable } from '@/services/agent-runtime/operations';
+import { dispatchBuilderOperation } from '@/services/unisonBuilderToolDispatch';
+import { createUnisonBuilderContext } from '@/services/unisonBuilderConnector';
 import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 import { emitAgentEvent, onAgentEvent, type AgentEvent } from '@/services/agent-runtime/agentEvents';
 import { applyAIBuilderFiles, type AIBuilderApplyCallback } from '@/services/aiBuilderApply';
@@ -70,7 +72,8 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
     if (mode === 'image' && !/^https:\/\//.test(value)) { toast.error('Paste an image link starting with https://'); return; }
     setOpen(false);
     try {
-      const { change, summary } = await agentOperations.update_catalog_item({ files, businessId }, picked.table, picked.id, patch);
+      const connector = createUnisonBuilderContext({ businessId: businessId ?? null, revisionId: revisionId ?? null });
+      const { change, summary } = await dispatchBuilderOperation(connector, { files, businessId, revisionId }, 'update_catalog_item', picked.table, picked.id, patch);
       emitAgentEvent({ kind: 'data_change', message: summary, status: 'ok' });
       setCatalog(null);
       if (change) await run(change); else toast.success(`${summary}. The page didn't show the old value, so only the database changed.`);

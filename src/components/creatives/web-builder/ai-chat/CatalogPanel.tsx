@@ -9,6 +9,8 @@ import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { getCatalogSurface } from '@/platform/core/catalogSurfaceRegistry';
 import { agentOperations } from '@/services/agent-runtime/operations';
+import { dispatchBuilderOperation } from '@/services/unisonBuilderToolDispatch';
+import { createUnisonBuilderContext } from '@/services/unisonBuilderConnector';
 import { EDITABLE_CATALOG_SURFACES, type CatalogItem, type CatalogPatch } from '@/services/agent-runtime/catalogOps';
 import { applyAIBuilderFiles, type AIBuilderApplyCallback } from '@/services/aiBuilderApply';
 
@@ -33,6 +35,7 @@ export function CatalogPanel({ files, businessId, onApply }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadFor = useRef<CatalogItem | null>(null);
   const ctx = useMemo(() => ({ files, businessId }), [files, businessId]);
+  const connector = useMemo(() => createUnisonBuilderContext({ businessId: businessId ?? null }), [businessId]);
 
   useEffect(() => {
     const onOpen = () => setOpen(true);
@@ -50,7 +53,7 @@ export function CatalogPanel({ files, businessId, onApply }: Props) {
   const save = async (item: CatalogItem, patch: CatalogPatch) => {
     setBusy(item.id);
     try {
-      const { change, summary, item: next } = await agentOperations.update_catalog_item(ctx, item.surfaceId, item.id, patch);
+      const { change, summary, item: next } = await dispatchBuilderOperation(connector, ctx, 'update_catalog_item', item.surfaceId, item.id, patch);
       setItems((prev) => prev?.map((i) => (i.id === item.id ? next : i)) ?? prev);
       if (change) {
         const outcome = await applyAIBuilderFiles(onApply, change.files, { summary, origin: 'command-menu' });
@@ -68,7 +71,7 @@ export function CatalogPanel({ files, businessId, onApply }: Props) {
 
   const add = async () => {
     try {
-      const item = await agentOperations.create_catalog_item(ctx, tab, { name: `New ${getCatalogSurface(tab)?.rowLabel ?? 'item'}`, price: 0 });
+      const item = await dispatchBuilderOperation(connector, ctx, 'create_catalog_item', tab, { name: `New ${getCatalogSurface(tab)?.rowLabel ?? 'item'}`, price: 0 });
       setItems((prev) => [...(prev ?? []), item]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not add an item.');
