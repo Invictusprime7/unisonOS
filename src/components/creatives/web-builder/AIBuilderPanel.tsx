@@ -2133,7 +2133,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             isReactProject,
             isLaunchPlanningRequest,
             isCatalogMutationRequest: isCatalogMutationRequest(_userContent),
-            hasAttachments: _attachments.length > 0,
             hasVfs: !!vfsFiles,
             isScopedEdit: isSurgicalEdit || isBehavioralEdit,
           });
