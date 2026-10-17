@@ -45,7 +45,6 @@ const ThinkingPipeline: React.FC<{ steps: ThinkingStep[] }> = ({ steps }) => {
   const lastError = [...steps].reverse().find((step) => step.type === 'error');
   const hasError = Boolean(lastError);
   const isComplete = !hasError && lastStep.type === 'complete';
-  const doneCount = steps.filter((step) => step.type === 'complete').length;
   const activeCount = hasError || isComplete ? 0 : 1;
   const stepIcons: Record<string, React.ReactNode> = {
     analyzing: <Sparkles className="w-3 h-3 text-muted-foreground" />,
@@ -79,7 +78,7 @@ const ThinkingPipeline: React.FC<{ steps: ThinkingStep[] }> = ({ steps }) => {
         </span>
 
         <span className="ml-auto min-w-0 truncate text-[10px] text-muted-foreground">
-          {hasError || isComplete ? `${steps.length} steps` : lastStep.content}
+          {hasError || isComplete ? `${steps.length} steps` : lastStep.message}
         </span>
       </button>
 

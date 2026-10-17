@@ -89,7 +89,6 @@ import { DebugAgentPanel } from './DebugAgentPanel';
 import { interpretPrompt, type TaskPlan } from '@/unison';
 import { buildUnisonAIContext } from '@/unison/aiContext';
 import type { PlanStepStatus } from '@/unison/nlTypes';
-import { TaskPlanSteps } from './TaskPlanSteps';
 import {
   hydrateAIHistoryFromSupabase,
   loadAIHistory,
