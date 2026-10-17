@@ -15,6 +15,53 @@ import { decryptConnectedProjectSecret } from "../_shared/connectedProjectCrypto
 type Action = "list" | "get" | "create" | "update" | "delete";
 const ACTIONS: Action[] = ["list", "get", "create", "update", "delete"];
 
+/**
+ * One tenant-scoped contract for every resource kind (guidebook §41–43):
+ * catalog surfaces come from the canonical summary; the site profile and
+ * CMS content entries are declared here against the dedicated runtime schema
+ * (`site_profiles`, `content_entries`). Unknown resources are rejected cleanly.
+ */
+interface DedicatedContract {
+  resource: string;
+  sourceTable: string;
+  sortField: string;
+  editableFields: Record<string, string>;
+  requiredFields: string[];
+  /** CMS content entries are filtered by this type and store fields in `data`. */
+  contentType?: string;
+  /** Single-record resources resolve to the site's one row. */
+  singleRecord?: boolean;
+}
+
+function contractFor(resource: string): DedicatedContract | null {
+  const cms = getCmsResourceContract(resource);
+  if (cms) return cms;
+  if (resource === "business-profile") {
+    return {
+      resource,
+      sourceTable: "site_profiles",
+      sortField: "id",
+      editableFields: {
+        name: "text", tagline: "text", description: "textarea", logoUrl: "text",
+        phone: "text", email: "text", website: "text", address: "json", hours: "json", socialLinks: "json",
+      },
+      requiredFields: ["name"],
+      singleRecord: true,
+    };
+  }
+  if (resource.startsWith("content:")) {
+    return {
+      resource,
+      sourceTable: "content_entries",
+      sortField: "created_at",
+      editableFields: { title: "text", slug: "text", status: "text", data: "json" },
+      requiredFields: [],
+      contentType: resource.slice("content:".length),
+    };
+  }
+  return null;
+}
+
 serve(async (req) => {
   const pre = handleCorsPreflightRequest(req);
   if (pre) return pre;
