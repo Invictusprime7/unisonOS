@@ -16,6 +16,7 @@ describe('R6 — legacy AI page generator surface stays deleted', () => {
     'supabase/functions/generate-page/index.ts',
     'src/components/onboarding/SystemsAIPanel.tsx',
     'src/test/systemsAiPanelThemePipeline.test.ts',
+    'src/utils/stripComposerTrailer.ts',
   ];
 
   it.each(deleted)('%s does not exist', (path) => {
