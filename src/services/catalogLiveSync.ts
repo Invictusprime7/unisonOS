@@ -15,13 +15,14 @@ export const LIVE_CATALOG_TABLES = [
 
 export function startCatalogLiveSync(input: { businessId: string; projectId?: string | null }): () => void {
   let seq = 0;
-  let channel = supabase.channel(`catalog-live:${input.businessId}`);
+  let channel = supabase.channel(`catalog-live:${input.businessId}:${input.projectId ?? 'account'}`);
   for (const table of LIVE_CATALOG_TABLES) {
     channel = channel.on(
       'postgres_changes' as never,
       { event: '*', schema: 'public', table, filter: `business_id=eq.${input.businessId}` },
       (payload: { new?: Record<string, unknown>; old?: Record<string, unknown> }) => {
         const row = payload.new && Object.keys(payload.new).length ? payload.new : payload.old;
+        if (input.projectId && row?.project_id && row.project_id !== input.projectId) return;
         refreshDataOperationResources({
           projectId: input.projectId ?? null,
           businessId: input.businessId,

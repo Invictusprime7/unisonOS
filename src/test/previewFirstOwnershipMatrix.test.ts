@@ -218,6 +218,7 @@ describe('M0 ownership fixture matrix', () => {
     expect(readCommand).toEqual({ kind: 'resource.get', resourceKey: 'services', recordId: 's1' });
     expect(writeCommand).toEqual({
       kind: 'resource.mutate', resourceKey: 'services', action: 'update', recordId: 's1', values: { name: 'Cut & Blowdry' },
+      expected: { name: null },
     });
     expect(readContext.operationId).not.toBe(writeContext.operationId);
     expect(applyResourceOp).not.toHaveBeenCalled();
