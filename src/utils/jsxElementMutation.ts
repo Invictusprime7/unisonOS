@@ -365,7 +365,7 @@ export function mutateJSXText(
       const from = offset;
       const to = offset + leaf.value.length;
       offset = to;
-      const insertHere = !inserted && prefix >= from && prefix <= to;
+      const insertHere = !inserted && prefix >= from && (prefix < to || prefix === old.length && to === old.length);
       const before = leaf.value.slice(0, Math.max(0, Math.min(leaf.value.length, prefix - from)));
       const after = leaf.value.slice(Math.max(0, Math.min(leaf.value.length, cutEnd - from)));
       if (to < prefix || from > cutEnd) return null;

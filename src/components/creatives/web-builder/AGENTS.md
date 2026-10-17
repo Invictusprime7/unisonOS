@@ -1,4 +1,5 @@
 # Directory rules
+- Selected text edits use the shared literal-leaf JSX mutation and clicked-text anchoring; preserve inline wrappers/icons and refuse dynamic data expressions. Why: rejecting every nested tag blocked edits, while replacing only the first text run left stale formatted copy behind.
 - Builder source output is projected only from App Builder candidates and applied via `onApplyToVFS`; there are no prose/file extraction or legacy generated-code callbacks. Why: a second result path can report success before the canonical save reaches preview.
 - The floating edit toolbar's AI box is a front-end of the AI Builder: it dispatches `unison:builder-send` {prompt, target} and never calls AI itself; why: one agent owns context, button-destination checks and saves.
 - Direct toolbar edits (style/text/image/attrs/delete/duplicate/move) commit via `commitBuilderFiles` inside `runExclusive('toolbar')`, then run post-save intent verification; why: the old bridge bypassed the save queue, ignored edits in non-active files and never checked buttons.
