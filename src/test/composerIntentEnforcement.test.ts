@@ -49,8 +49,8 @@ describe('Builder action vocabulary policy', () => {
   it('preserves existing legacy occurrences but refuses new duplicates', () => {
     const content = '<button data-ut-intent="nav.goto_page"/>';
     const existing = { ...req, files: { [path]: content } };
-    expect(composerProposalViolations(existing, { ...response, fileOps: [{ type: 'replace', path, content: `${content} updated` }] })).toEqual([]);
-    expect(composerProposalViolations(existing, { ...response, fileOps: [{ type: 'replace', path, content: content + content }] }).join()).toContain('not approved');
+    expect(composerProposalViolations(existing, { ...response, fileOps: [{ type: 'replace', path, content: `${content}; const updated = true;` }] })).toEqual([]);
+    expect(composerProposalViolations(existing, { ...response, fileOps: [{ type: 'replace', path, content: `${content}; ${content};` }] }).join()).toContain('not approved');
   });
   it('edge repairs an unsupported DOM action before returning source', async () => {
     const hunk = (content: string) => `<<<EDIT ${path}\n<<<<<<< SEARCH\nOld\n=======\n${content}\n>>>>>>> REPLACE\n>>>END`;

@@ -57,3 +57,13 @@ The mirrored proposal check rejects unapproved `intentsUsed` and new literal `da
 This is request vocabulary enforcement, not server authorization or confirmation that payments, emails or other live handlers are configured. Computed bindings are not covered by the literal scanner; runtime/canonical gates remain authoritative. No migrations, production records or backend deployment changed. Authenticated edit/read-back and canonical workflow deployment remain unverified.
 
 Verification: 84 tests pass across ten suites, including canonical capability derivation, alias/lifecycle rejection, literal bindings without metadata, preservation of old occurrences, duplicate prevention, edge repair and client refusal. Contract byte parity and preview build are OK.
+
+## Phase 3d — Actual source imports
+
+The mirrored proposal check now parses changed TypeScript/JSX with Babel and inspects static imports, side-effect imports, re-exports, dynamic imports, require calls and TypeScript import forms. New package roots must belong to the accepted dependency inventory even when `DEPENDENCIES` is omitted. Local paths remain subject to canonical import resolution. New remote/protocol and computed module loads are rejected; unparseable source cannot receive unverifiable approval.
+
+Existing specifier occurrences survive unrelated edits, but adding occurrences requires approval. Comments and ordinary strings are ignored. This is an inventory check, not a replacement for dependencyResolver classification/certification or runtime authorization. Direct require calls are conservatively checked, including locally shadowed require identifiers. Launch intake remains unchanged.
+
+The existing Composer endpoint, repair loop and sole commit writer are preserved. No migrations or production records changed; canonical workflow deployment and authenticated edit/read-back remain pending.
+
+Verification: 107 tests pass across eleven suites, including nine module syntax forms, scoped subpaths, local imports, remote/protocol rejection, computed loads, comment/string handling, existing-import preservation, edge repair and pre-candidate client refusal. Mirrored contracts match and preview build is OK. Edge import maps pin the explicit parser version; deployed edge execution is not verified.
