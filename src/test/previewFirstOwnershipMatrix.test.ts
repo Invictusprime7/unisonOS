@@ -15,6 +15,7 @@ vi.mock('@/services/resources/resourceRuntime', async (importOriginal) => {
     ...actual,
     applyResourceOp: vi.fn(async () => undefined),
     getResourceRecord: vi.fn(async () => ({ id: 'r1', name: 'Old name' })),
+    queryResource: vi.fn(async () => [{ id: 'r1', name: 'Old name' }, { id: 'm1', name: 'Old name' }, { id: 'p1', name: 'Old name' }, { id: 's1', name: 'Old name' }, { id: 'pr1', title: 'Old title' }, { id: 'c1', title: 'Old title' }]),
   };
 });
 
@@ -190,9 +191,11 @@ describe('M0 ownership fixture matrix', () => {
     runtimeProtocol.execute.mockImplementation(async (context, command) => ({
       ok: true,
       operationId: context.operationId,
-      data: command.kind === 'resource.get'
-        ? { id: 's1', name: 'Old name' }
-        : { id: 's1', name: 'Cut & Blowdry' },
+      data: command.kind === 'resource.list'
+        ? [{ id: 's1', name: 'Old name' }]
+        : command.kind === 'resource.get'
+          ? { id: 's1', name: 'Old name' }
+          : { id: 's1', name: 'Cut & Blowdry' },
     }));
 
     const result = await executeEditorCommand(MATRIX[0].command, {
@@ -201,9 +204,14 @@ describe('M0 ownership fixture matrix', () => {
     });
 
     expect(result).toMatchObject({ ok: true, lane: 'resource' });
-    expect(runtimeProtocol.execute).toHaveBeenCalledTimes(2);
-    const [readContext, readCommand] = runtimeProtocol.execute.mock.calls[0];
-    const [writeContext, writeCommand] = runtimeProtocol.execute.mock.calls[1];
+    expect(runtimeProtocol.execute).toHaveBeenCalledTimes(3);
+    const [listContext, listCommand] = runtimeProtocol.execute.mock.calls[0];
+    const [readContext, readCommand] = runtimeProtocol.execute.mock.calls[1];
+    const [writeContext, writeCommand] = runtimeProtocol.execute.mock.calls[2];
+    expect(listContext).toMatchObject({
+      protocolVersion: 2, projectId: 'p1', siteId: 'site-1', businessId: 'b1', actorKind: 'studio-user',
+    });
+    expect(listCommand).toEqual({ kind: 'resource.list', resourceKey: 'services' });
     expect(readContext).toMatchObject({
       protocolVersion: 2, projectId: 'p1', siteId: 'site-1', businessId: 'b1', actorKind: 'studio-user',
     });
