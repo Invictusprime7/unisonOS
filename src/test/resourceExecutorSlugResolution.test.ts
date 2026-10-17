@@ -86,3 +86,12 @@ describe('resource executor slug resolution', () => {
     expect(runtime.queryResource).not.toHaveBeenCalled();
   });
 });
+
+describe('expected-revision concurrency', () => {
+  it('flags fields changed elsewhere and ignores already-applied values', async () => {
+    const { staleFields } = await import('@/services/editor/executors/resourceExecutor');
+    const cmd = { type: 'update-resource-field', target: {}, values: { price: 12, name: 'Soup' }, expected: { price: 10, name: 'Old' } } as never;
+    expect(staleFields(cmd, { id: 'x', price: 11, name: 'Soup' }, { price: 12, name: 'Soup' })).toEqual(['price']);
+    expect(staleFields(cmd, { id: 'x', price: 10, name: 'Old' }, { price: 12, name: 'Soup' })).toEqual([]);
+  });
+});
