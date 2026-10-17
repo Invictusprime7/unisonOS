@@ -20,11 +20,12 @@ describe('Builder action vocabulary policy', () => {
     expect(allowed).not.toContain('button.click');
     expect(allowed).not.toContain('nav.goto_page');
   });
-  it('requires all canonical capabilities and ignores supplied intent claims', () => {
+  it('uses canonical capability requirements and ignores supplied intent claims', () => {
     expect(permittedBuilderIntents(registry)).toContain('cart.add');
-    expect(permittedBuilderIntents(registry)).not.toContain('cart.checkout');
+    expect(permittedBuilderIntents(registry)).toContain('cart.checkout');
+    expect(permittedBuilderIntents(registry)).not.toContain('booking.create');
     expect(permittedBuilderIntents(registry)).not.toContain('invented.action');
-    expect(permittedBuilderIntents({ capabilityRequirements: [{ id: 'commerce' }, { id: 'payments' }] })).toContain('cart.checkout');
+    expect(permittedBuilderIntents({ capabilityRequirements: [{ id: 'booking' }] })).toContain('booking.create');
   });
   it('assembles permissions from saved capability context', async () => {
     const assembled = await assembleCanonicalAuthoringRequest({
@@ -32,7 +33,7 @@ describe('Builder action vocabulary policy', () => {
       baseFiles: { ...req.files, '/.unison/wizard-registry-context.json': JSON.stringify(registry) },
     });
     expect(assembled.request.approvedIntents).toContain('cart.add');
-    expect(assembled.request.approvedIntents).not.toContain('cart.checkout');
+    expect(assembled.request.approvedIntents).not.toContain('booking.create');
   });
   it('rejects unknown, alias and lifecycle declarations', () => {
     for (const intent of ['invented.action', 'nav.goto_page', 'button.click', 'booking.create']) {

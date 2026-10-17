@@ -47,3 +47,11 @@ Builder request assembly projects existing `initialRouteOps` into the Composer w
 Launch and dedicated multi-page authoring retain their existing topology path. These request approvals are not server ownership authorization, capability verification or permission to install a new package. External imports not declared in `requestedDependencies` and capability/intent membership remain pending work; source parsing, import resolution and canonical acceptance remain authoritative. No migrations, live records or backend deployment changed.
 
 Verification: 75 tests pass across nine suites, including exact route matching independent of key order, altered route/navigation rejection, duplicate route rejection, dependency inventory assembly, edge repair, client pre-candidate refusal and positive launch page creation. Preview build is OK; deployment and authenticated edit/read-back remain unverified.
+
+## Phase 3c — Intent/capability authoring vocabulary
+
+Builder request assembly derives `approvedIntents` from the canonical intent registry and accepted registry capability IDs, not supplied `providedIntents` claims. Universal user actions remain available; aliases, deprecated intents and lifecycle/workflow events are excluded. Missing capability context permits only universal actions.
+
+The mirrored proposal check rejects unapproved `intentsUsed` and new literal `data-ut-intent` occurrences even when response metadata omits them. Unchanged existing legacy occurrences survive unrelated edits. Edge repair and client pre-candidate checks share this policy. Launch authoring keeps its existing validation path.
+
+This is request vocabulary enforcement, not server authorization or confirmation that payments, emails or other live handlers are configured. Computed bindings are not covered by the literal scanner; runtime/canonical gates remain authoritative. No migrations, production records or backend deployment changed. Authenticated edit/read-back and canonical workflow deployment remain unverified.

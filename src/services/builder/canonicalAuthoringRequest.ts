@@ -306,7 +306,7 @@ export async function assembleCanonicalAuthoringRequest(
   };
 }
 
-/** Existing accepted package inventory only; this does not approve new installs. */
+/** Canonical authoring vocabulary; capability context does not prove live readiness. */
 export function permittedBuilderIntents(registry: unknown): string[] {
   const requirements = registry && typeof registry === 'object' && 'capabilityRequirements' in registry
     ? registry.capabilityRequirements : undefined;
