@@ -51,17 +51,20 @@ export function flattenContentEntry(r: Record<string, unknown>): ResourceRecord 
 
 export const contentResourceAdapter: ResourceAdapter = {
   async query(def, ctx) {
-    const rows = await listContentRecords({
+    const ids = def.storage.contentTypeIds?.length ? def.storage.contentTypeIds : [def.storage.contentTypeId];
+    const rows = (await Promise.all(ids.map((contentTypeId) => listContentRecords({
       businessId: ctx.businessId, projectId: ctx.projectId, siteId: ctx.siteId,
-      contentTypeId: def.storage.contentTypeId,
+      contentTypeId,
       // Published runtime never sees drafts — enforced here AND by the filter below.
       status: ctx.mode === 'published' ? 'published' : undefined,
-    });
-    const flat = rows.map(flattenContentEntry);
+    })))).flat();
+    const flat = [...new Map(rows.map((row) => [String(row.id), flattenContentEntry(row)])).values()];
     return ctx.mode === 'published' ? flat.filter((r) => r.status === 'published') : flat;
   },
   async get(def, ctx, id) {
-    const r = flattenContentEntry(await getContentRecord({ businessId: ctx.businessId, projectId: ctx.projectId, recordId: id }));
+    const raw = await getContentRecord({ businessId: ctx.businessId, projectId: ctx.projectId, recordId: id });
+    if (raw.content_type_id && def.storage.contentTypeIds?.length && !def.storage.contentTypeIds.includes(String(raw.content_type_id))) return null;
+    const r = flattenContentEntry(raw);
     if (ctx.mode === 'published' && r.status !== 'published') return null;
     return r;
   },
