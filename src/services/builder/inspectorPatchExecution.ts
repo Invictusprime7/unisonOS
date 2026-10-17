@@ -27,6 +27,8 @@ import type { ThemeEdit } from '@/services/theme/themeEdit';
 import { toCompositionRole } from './semanticPresentationOps';
 import { parseResourceProvenance } from '@/services/resources/resourceRuntime';
 import type { ResourceEntityRef } from '@/services/resources/resourceTypes';
+import { mutateJSXText } from '@/utils/jsxElementMutation';
+import { findElementBoundsInJSX } from '@/components/creatives/web-builder/jsxSourceUtils';
 
 export type InspectorExecution =
   | { kind: 'presentation'; summary: string; ops: PresentationOp[] }
@@ -254,23 +256,23 @@ export function planInspectorExecution(
     return { kind: 'rejected', reason: 'Text cannot contain code or markup characters.' };
   }
 
-  const after = target.content.slice(target.end + 1);
-  const literal = /^([^<>{}]*)</.exec(after);
-  if (!literal) {
+  const contents = mutateJSXText(target.content, op.selector || `[data-ut-slot="${op.slotId}"]`, text, (source) => {
+    const bounds = findElementBoundsInJSX(source, `[data-ut-slot="${op.slotId}"]`);
+    return bounds?.start === target.start ? bounds : null;
+  });
+  if (contents === null) {
     return {
       kind: 'rejected',
       reason: `Slot "${op.slotId}" renders text from data that is not linked to a saved item, so it cannot be edited here. Ask the AI Builder to link or rewrite it.`,
     };
   }
-  const textStart = target.end + 1;
-  const textEnd = textStart + literal[1].length;
   return {
     kind: 'source',
     summary: plan.description,
     fileOps: [{
       type: 'replace',
       path: target.path,
-      contents: replaceFileRange(target.content, textStart, textEnd, text),
+      contents,
     }],
   };
 }

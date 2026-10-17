@@ -1041,7 +1041,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     console.log('[WebBuilder] handleFloatingTextUpdate called:', selector, text);
     const res = applyMutatorAcrossVFS(
       selector,
-      (code) => mutateJSXText(code, selector, text, findElementBoundsInJSX),
+      (code) => mutateJSXText(code, selector, text, anchoredFinder(findElementBoundsInJSX, selectionAnchor(selector))),
       (next) => {
         setPreviewCode(next);
         setEditorCode(next);
@@ -1054,7 +1054,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     );
     if (!res.ok) {
       if (res.reason === 'ambiguous') return false;
-      toast.error('Could not update text — element contains nested markup or was not found. Try the AI edit instead.');
+      toast.error('Could not locate editable text for this selection. Reselect the text; linked content must be edited in its saved item.');
       return false;
     }
     return true;

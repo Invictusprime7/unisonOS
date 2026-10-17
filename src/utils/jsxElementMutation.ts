@@ -13,6 +13,9 @@
  * a finder callback to keep it decoupled from that file's internals.
  */
 
+import { parseExpression } from '@babel/parser';
+import * as t from '@babel/types';
+
 export type JSXBounds = { start: number; end: number };
 export type BoundsFinder = (jsx: string, selector: string) => JSXBounds | null;
 
@@ -287,8 +290,8 @@ export function mutateJSXImageSrc(
 }
 
 /**
- * Replace the inner text of a JSX element. Only safe for elements whose
- * children are a single text node or a {expression} that we will overwrite.
+ * Replace source-owned text without dropping inline elements or icon children.
+ * Dynamic data expressions refuse: their saved-record owner must handle edits.
  */
 export function mutateJSXText(
   source: string,
@@ -309,13 +312,78 @@ export function mutateJSXText(
   const childEnd = bounds.end - closeTagMatch[0].length;
   if (childEnd < childStart) return null;
 
-  // If existing children contain JSX elements (not just text/{expr}), refuse —
-  // we don't want to clobber nested markup.
   const existing = source.substring(childStart, childEnd);
-  if (/<[A-Za-z]/.test(existing)) return null;
+  if (/<[A-Za-z]|\{/.test(existing)) {
+    const fragment = source.slice(bounds.start, bounds.end);
+    const leaves: Array<{ start: number; end: number; value: string }> = [];
+    const inline = new Set(['span', 'strong', 'em', 'b', 'i', 'u', 's', 'small', 'mark', 'a', 'sup', 'sub', 'code']);
+    let valid = true;
+    try {
+      const root = parseExpression(fragment, { plugins: ['jsx', 'typescript'] });
+      if (!t.isJSXElement(root)) return null;
+      const collect = (node: t.JSXElement | t.JSXFragment) => {
+        for (const child of node.children) {
+          if (t.isJSXText(child)) {
+            // React's JSX whitespace cleanup, not DOM textContent's indentation.
+            const lines = child.value.split(/\r\n|\n|\r/);
+            const last = lines.reduce((found, line, i) => /[^ \t]/.test(line) ? i : found, 0);
+            const value = lines.map((line, i) => {
+              let next = line.replace(/\t/g, ' ');
+              if (i !== 0) next = next.replace(/^ +/, '');
+              if (i !== lines.length - 1) next = next.replace(/ +$/, '');
+              return next && i !== last ? next + ' ' : next;
+            }).join('');
+            if (value && child.start != null && child.end != null) leaves.push({ start: child.start, end: child.end, value });
+          } else if (t.isJSXFragment(child)) collect(child);
+          else if (t.isJSXElement(child)) {
+            const name = child.openingElement.name;
+            if (t.isJSXIdentifier(name) && inline.has(name.name)) collect(child);
+            else if (!child.openingElement.selfClosing && !(t.isJSXIdentifier(name) && name.name === 'svg')) valid = false;
+          } else if (t.isJSXExpressionContainer(child)) {
+            if (t.isJSXEmptyExpression(child.expression)) continue;
+            const expr = child.expression;
+            const value = t.isStringLiteral(expr) ? expr.value : t.isTemplateLiteral(expr) && !expr.expressions.length ? expr.quasis[0]?.value.cooked : null;
+            if (value == null) valid = false;
+            else if (child.start != null && child.end != null) leaves.push({ start: child.start, end: child.end, value });
+          } else valid = false;
+        }
+      };
+      collect(root);
+    } catch { return null; }
+    if (!valid || !leaves.length) return null;
+    const old = leaves.map(leaf => leaf.value).join('');
+    if (old === text) return source;
+    let prefix = 0;
+    while (prefix < old.length && prefix < text.length && old[prefix] === text[prefix]) prefix++;
+    let suffix = 0;
+    while (suffix < old.length - prefix && suffix < text.length - prefix && old[old.length - suffix - 1] === text[text.length - suffix - 1]) suffix++;
+    const cutEnd = old.length - suffix;
+    const insertion = text.slice(prefix, text.length - suffix);
+    let offset = 0;
+    let inserted = false;
+    const edits = leaves.map(leaf => {
+      const from = offset;
+      const to = offset + leaf.value.length;
+      offset = to;
+      const insertHere = !inserted && prefix >= from && (prefix < to || prefix === old.length && to === old.length);
+      const before = leaf.value.slice(0, Math.max(0, Math.min(leaf.value.length, prefix - from)));
+      const after = leaf.value.slice(Math.max(0, Math.min(leaf.value.length, cutEnd - from)));
+      if (to < prefix || from > cutEnd) return null;
+      if (insertHere) inserted = true;
+      const next = before + (insertHere ? insertion : '') + after;
+      return next === leaf.value ? null : { ...leaf, next };
+    }).filter((edit) => edit !== null);
+    let next = source;
+    for (const edit of edits.reverse()) {
+      // A literal expression renders &, braces and angle brackets as text, never JSX.
+      const value = edit.next ? `{${JSON.stringify(edit.next)}}` : '';
+      next = next.slice(0, bounds.start + edit.start) + value + next.slice(bounds.start + edit.end);
+    }
+    return next;
+  }
 
   // Escape JSX-significant characters in the new text
-  const safe = text.replace(/[{}<>]/g, (c) => `{'${c}'}`);
+  const safe = /[&{}<>]/.test(text) ? `{${JSON.stringify(text)}}` : text;
   return source.substring(0, childStart) + safe + source.substring(childEnd);
 }
 

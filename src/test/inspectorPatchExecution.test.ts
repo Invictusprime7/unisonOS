@@ -113,6 +113,17 @@ describe('inspector patch execution', () => {
     expect(result.kind).toBe('rejected');
   });
 
+  it('edits an entire nested slot without leaving the old formatted suffix behind', () => {
+    const result = planInspectorExecution(
+      plan({ type: 'set-slot-text', sectionId: 'hero-1', selector: '', slotId: 'hero.headline', value: 'Build beautiful sites' }),
+      { files: { '/src/pages/Home.tsx': PAGE.replace('Old headline', 'Build <strong>better</strong> sites') } },
+    );
+    expect(result.kind).toBe('source');
+    if (result.kind !== 'source') return;
+    const op = result.fileOps[0];
+    expect(op.type !== 'delete' ? op.contents : '').toContain('Build <strong>{"beautiful"}</strong> sites');
+  });
+
   it('swaps a slot image source and alt text', () => {
     const result = planInspectorExecution(
       plan({ type: 'set-slot-asset', sectionId: 'hero-1', selector: '', slotId: 'hero.media', value: '/new.jpg', alt: 'new' }),
