@@ -51,15 +51,23 @@ export function rebaseTextEdit(before: string, after: string, latest: string): T
   const span = diffSpan(before, after);
   if (!span) return { status: 'unchanged', code: latest };
 
-  const leading = before.slice(Math.max(0, span.start - CONTEXT_CHARS), span.start);
-  const trailing = before.slice(span.start + span.removed.length, span.start + span.removed.length + CONTEXT_CHARS);
-  const needle = `${leading}${span.removed}${trailing}`;
-  const hits = occurrences(latest, needle);
-  if (hits.length === 0) return { status: 'conflict', reason: 'span-missing' };
-  if (hits.length > 1) return { status: 'conflict', reason: 'span-ambiguous' };
-  const at = hits[0] + leading.length;
-  return {
-    status: 'applied',
-    code: `${latest.slice(0, at)}${span.inserted}${latest.slice(at + span.removed.length)}`,
-  };
+  // Widest context first; shrink until the original span is found exactly once.
+  let sawAmbiguous = false;
+  for (const size of [CONTEXT_CHARS, 12, 6, 0]) {
+    const leadingFull = before.slice(Math.max(0, span.start - size), span.start);
+    const trailingFull = before.slice(span.start + span.removed.length, span.start + span.removed.length + size);
+    for (const [leading, trailing] of [[leadingFull, trailingFull], [leadingFull, ''], ['', trailingFull]] as const) {
+      const needle = `${leading}${span.removed}${trailing}`;
+      if (!needle.trim()) continue;
+      const hits = occurrences(latest, needle);
+      if (hits.length > 1) { sawAmbiguous = true; continue; }
+      if (hits.length === 0) continue;
+      const at = hits[0] + leading.length;
+      return {
+        status: 'applied',
+        code: `${latest.slice(0, at)}${span.inserted}${latest.slice(at + span.removed.length)}`,
+      };
+    }
+  }
+  return { status: 'conflict', reason: sawAmbiguous ? 'span-ambiguous' : 'span-missing' };
 }
