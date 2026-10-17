@@ -140,6 +140,7 @@ import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { deriveFilePath } from '@/services/routeNavigationService';
 import { createBuilderPage } from '@/types/pageRegistry';
 import { buildSequentialAiTasks } from '@/services/builder/sequentialAiTasks';
+import { canonicalCandidateOutput } from '@/services/builder/canonicalCandidateOutput';
 import { findUnrequestedCopyChanges, findUnrequestedScopedSideEffects } from '@/services/builder/scopedEditContentGuard';
 
 import {
@@ -2579,7 +2580,12 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       // P0.5: the authoritative verdict line, set only by the transaction layer.
       let transactionVerdict: string | null = null;
 
-      if (aiContent) {
+      if (canonicalCandidate?.fileOps.length) {
+        const preparedOutput = canonicalCandidateOutput(canonicalCandidate);
+        multiFileOutput = preparedOutput.files;
+        multiFileDeletions = preparedOutput.deletions;
+        explanationText = CANDIDATE_GENERATED_NOTICE;
+      } else if (aiContent && !canonicalCandidate) {
         const trimmed = aiContent.trim();
 
         const structuredOutput = extractMultiFileOutput(trimmed);
@@ -2748,7 +2754,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         }
       }
 
-      // Handle multi-file output — prefer orchestrator, fall back to legacy callback
+      // Prepared Composer candidates bypass compatibility response extraction.
       if (multiFileOutput) {
         liveStep('validating', `Multi-file output: ${Object.keys(multiFileOutput).length} files detected`, Object.keys(multiFileOutput).join(', '));
         console.log('[AIBuilderPanel] Multi-file output detected:', Object.keys(multiFileOutput));
@@ -2756,6 +2762,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         // Normalize paths, filter config files, and strip module.exports from component content
         const BLOCKED_FILES = /\/(tailwind\.config|postcss\.config|vite\.config|tsconfig|package\.json|package-lock)/i;
         let normalizedFiles: Record<string, string> = {};
+        if (canonicalCandidate) {
+          normalizedFiles = multiFileOutput;
+        } else {
         for (const [path, content] of Object.entries(multiFileOutput)) {
           const normalizedPath = path.startsWith('/') ? path : `/${path}`;
           if (BLOCKED_FILES.test(normalizedPath)) {
@@ -2773,6 +2782,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         normalizedFiles = sanitizedFiles.files;
         if (sanitizedFiles.invalidFiles.length > 0) {
           console.warn('[AIBuilderPanel] Sanitized structurally incomplete AI files:', sanitizedFiles.invalidFiles);
+        }
         }
 
         // Check if approval is recommended before auto-applying
@@ -2820,7 +2830,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             console.log('[AIBuilderPanel] Applying candidate to VFS:', Object.keys(normalizedFiles));
             vfsEventBus.emit('ai:apply:start', { source: 'multi-file' });
             markPreviewPending();
-            const sequentialTasks = dedicatedPageGeneration
+            const sequentialTasks = canonicalCandidate || dedicatedPageGeneration
               ? [{
                   id: `${canonicalCandidate?.id ?? 'builder-pages'}:1`,
                   files: normalizedFiles,

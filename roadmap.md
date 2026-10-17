@@ -20,7 +20,8 @@
 - [x] Actual-import dependency enforcement: AST inspection at the shared proposal boundary for undeclared packages, remote/computed imports; 107 regression tests pass; deployment and signed-in acceptance remain unverified
 - [x] Phase 4a: audited Builder consumers; removed unused Composer trailer helper, retained active parser/repair/compatibility paths; 116 tests and authority lint pass
 - [x] Phase 4a continuation: retired unused response-to-VFS authoring exports; active fallback extraction preserved; 74 tests and authority lint pass
-- [ ] Phase 4b: migrate active non-Composer fallback callers before further removals (requires authenticated acceptance evidence on authoritative backend)
+- [x] Phase 4b first boundary: prepared Composer candidates bypass response extraction and compatibility sanitization; complete file operations apply together without sequential splitting
+- [ ] Phase 4b remainder: migrate attachment/non-React source fallback callers before further removals (requires authenticated acceptance evidence on authoritative backend); compatibility extractors remain intact
 - Later: authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON
 - Audit persistence: evaluate existing telemetry before adding canonical migrations; no new tables or record changes in Phase 1
