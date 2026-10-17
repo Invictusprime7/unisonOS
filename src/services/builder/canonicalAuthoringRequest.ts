@@ -75,6 +75,7 @@ export interface CanonicalAuthoringRequestInput {
   runtimeContext?: string;
   /** Uploaded links and extracted document text, kept ahead of optional runtime context. */
   attachmentContext?: string;
+  images?: AIComposerRequest['images'];
   sourceTargets?: string[];
   approvedRouteOps?: readonly TopologyChange[];
 }
@@ -302,6 +303,7 @@ export async function assembleCanonicalAuthoringRequest(
       previousResponse: input.previousResponse,
       registryContext: boundedRegistry,
       runtimeContext: [input.attachmentContext, input.runtimeContext].filter(Boolean).join('\n').slice(0, 12000) || undefined,
+      images: input.images,
       evidence,
     },
     evidence,
