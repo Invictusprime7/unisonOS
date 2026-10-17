@@ -37,3 +37,5 @@ Builder requests carry explicit `sourceTargets`, separate from read-only `files`
 Existing-file edits require SEARCH/REPLACE blocks at the edge; JSON cannot bypass the hunk policy. Empty searches and ambiguous whitespace-normalized matches are rejected. Builder requests without targets fail before provider invocation; launch scope is unchanged.
 
 This validates proposals against the supplied request, not authenticated ownership, capabilities or server revision freshness. Canonical acceptance and `commitMutation` remain authoritative. Route/dependency/capability enforcement and authenticated cross-industry acceptance remain pending. No endpoint, database or production records change; deployment uses the existing GitHub workflow.
+
+Verification: 60 tests pass across seven Composer, App Builder and connector suites, including actual edge-lane rejection/repair, client pre-candidate rejection, target assembly, four-file explicit scope, and byte-mirror parity. Preview build is OK. Canonical workflow deployment and real signed-in edit/read-back remain unverified; no live backend deployment was attempted.

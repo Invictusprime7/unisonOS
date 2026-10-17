@@ -14,7 +14,7 @@
 - [x] AI Builder redesign pass 1: task planner removed; quiet thinking trace; status in header; model + catalog controls moved below input
 - [x] "Apply on latest version / Cancel" choice in Builder chat after a save lands mid-edit
 - [x] Redesign pass 2: AI rounds (think → draft → check → adjust) narrated live in the Builder activity feed
-- [ ] Composer proposal scope enforcement: explicit targets, hunk-only existing-file edits and shared client checks; regression verification in progress
+- [x] Composer proposal scope enforcement: explicit targets, hunk-only existing-file edits and shared client checks; 60 regression tests pass; canonical workflow deployment and authenticated acceptance remain unverified
 - Later: capability/route/dependency proposal enforcement; audited legacy removal; authenticated cross-industry browser acceptance
 - Live verification blocked: available managed session targets the built-in backend, not authoritative UNISON
 - Audit persistence: evaluate existing telemetry before adding canonical migrations; no new tables or record changes in Phase 1
