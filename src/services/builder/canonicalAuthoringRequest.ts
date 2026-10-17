@@ -1,3 +1,4 @@
+import { SANDPACK_DEPENDENCIES } from '@/utils/sandpackDependencies';
 import { aiComposerRouteOpSchema, type AIComposerRequest, type AIComposerTask } from '@/contracts/aiComposerContract';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import {
@@ -236,10 +237,21 @@ export async function assembleCanonicalAuthoringRequest(
       validImportPaths: collectValidImportPaths(input.baseFiles),
     };
   }
-  const boundedRegistry = registryValue === undefined ? undefined : stableJson(registryValue);
-  if (boundedRegistry && boundedRegistry.length > 60000) {
-    throw new Error('[CanonicalAuthoringRequest] bounded registry context exceeds 60000 characters.');
+  // Edit policy: an oversized registry is trimmed (longest lists halved), never
+  // a reason to refuse the request.
+  let boundedRegistry = registryValue === undefined ? undefined : stableJson(registryValue);
+  for (let pass = 0; boundedRegistry && boundedRegistry.length > 60000 && pass < 12; pass += 1) {
+    const record = { ...(registryValue as Record<string, unknown>) };
+    const longest = Object.entries(record)
+      .filter(([, value]) => Array.isArray(value) && value.length > 1)
+      .sort((a, b) => stableJson(b[1]).length - stableJson(a[1]).length)[0];
+    if (!longest) { boundedRegistry = undefined; break; }
+    const list = longest[1] as unknown[];
+    record[longest[0]] = list.slice(0, Math.ceil(list.length / 2));
+    registryValue = record;
+    boundedRegistry = stableJson(registryValue);
   }
+  if (boundedRegistry && boundedRegistry.length > 60000) boundedRegistry = undefined;
   const componentRecipeBrief = registryValue
     ? renderComponentRecipes(registryValue, input.page.role).slice(0, 2400)
     : '';
@@ -254,7 +266,10 @@ export async function assembleCanonicalAuthoringRequest(
     baseRevisionId: input.baseRevisionId ?? null,
     sourceContextHash: await hashText(stableJson(source.files)),
     sourcePaths: Object.keys(source.files).sort(),
-    sourceContextComplete: source.completeTargets && source.omitted.length === 0 && source.unresolvedImports.length === 0,
+    // Edit policy: only the files being edited must be complete; omitted
+    // supporting context and unresolved imports are notes (new broken imports
+    // are still caught by the candidate import gate).
+    sourceContextComplete: source.completeTargets,
     omittedSourcePaths: source.omitted.map((item) => item.path).sort(),
     unresolvedImports: source.unresolvedImports.map((item) => `${item.path}:${item.specifier}`).sort(),
     registryContextHash: boundedRegistry ? await hashText(boundedRegistry) : null,
@@ -303,7 +318,13 @@ export async function assembleCanonicalAuthoringRequest(
       diagnostics: input.diagnostics?.map((item) => item.slice(0, 1000)).slice(0, 30),
       previousResponse: input.previousResponse,
       registryContext: boundedRegistry,
-      runtimeContext: [input.attachmentContext, input.runtimeContext].filter(Boolean).join('\n').slice(0, 12000) || undefined,
+      runtimeContext: [
+        input.attachmentContext,
+        input.runtimeContext,
+        source.omitted.length
+          ? `Not included for size (read-only context, do not edit): ${source.omitted.map((item) => item.path).slice(0, 20).join(', ')}`
+          : '',
+      ].filter(Boolean).join('\n').slice(0, 12000) || undefined,
       images: input.images,
       evidence,
     },
@@ -313,6 +334,8 @@ export async function assembleCanonicalAuthoringRequest(
 
 /** Canonical authoring vocabulary; capability context does not prove live readiness. */
 export function permittedBuilderIntents(registry: unknown): string[] {
+  // Capability-gated intents stay tied to installed capabilities so an edit
+  // never adds a dead button; unapproved ones are repaired, not refused.
   const requirements = registry && typeof registry === 'object' && 'capabilityRequirements' in registry
     ? registry.capabilityRequirements : undefined;
   const capabilities = new Set(Array.isArray(requirements) ? requirements.flatMap(item =>
@@ -325,6 +348,13 @@ export function permittedBuilderIntents(registry: unknown): string[] {
 
 /** Existing accepted package inventory only; this does not approve new installs. */
 function existingDependencies(files: Record<string, string>): string[] {
+  // Packages the preview runtime already ships are installed by definition.
+  const base = Object.keys(SANDPACK_DEPENDENCIES)
+    .filter((name) => !/^(@babel\/|@types\/|typescript$|esbuild|vite|eslint|postcss|autoprefixer|tailwindcss$)/.test(name));
+  return [...new Set([...base, ...projectDependencies(files)])].sort();
+}
+
+function projectDependencies(files: Record<string, string>): string[] {
   try {
     const pkg: unknown = JSON.parse(files['/package.json'] ?? '{}');
     if (!pkg || typeof pkg !== 'object' || !('dependencies' in pkg)) return [];

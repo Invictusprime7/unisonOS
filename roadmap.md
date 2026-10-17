@@ -99,3 +99,5 @@
 - [x] Real pending-source conflicts offer "Keep my edit on the latest version" / "Discard" in the preview card
 - [x] AI activity feed claims "saved"/"shown in preview" only after a commit and preview confirmation in that run
 - [ ] Live signed-in verification of the above (needs a signed-in session)
+- [ ] Hard vs advisory edit policy: relax style/scope blockers, keep safety blockers (plan 2026-10-17)
+- [ ] Conversational AI Builder: ask/offer 2–3 Unison options for open-ended requests; tappable choices

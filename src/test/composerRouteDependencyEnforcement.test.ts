@@ -43,7 +43,8 @@ describe('Builder route and dependency request policy', () => {
       approvedRouteOps: [{ ...route, createdBy: 'ai' }],
     });
     expect(assembled.request.approvedRouteOps).toEqual([route]);
-    expect(assembled.request.approvedDependencies).toEqual(['react']);
+    expect(assembled.request.approvedDependencies).toEqual(expect.arrayContaining(['react']));
+    expect(assembled.request.approvedDependencies).not.toContain('@babel/standalone');
     expect(assembled.request.files['/package.json']).toBeUndefined();
   });
   it('edge repairs an unauthorized dependency before returning a candidate', async () => {

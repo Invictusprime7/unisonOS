@@ -51,3 +51,17 @@ export function findIntentRetargets(
   });
   return violations;
 }
+
+/**
+ * Edit policy: a destination change the user asked for is intended. True when
+ * the request talks about links/destinations, or names one of the new targets.
+ */
+export function isRequestedRetarget(prompt: string | undefined | null, violation: IntentViolation): boolean {
+  const text = (prompt ?? '').toLowerCase();
+  if (!text) return false;
+  if (/\b(link|links|point|points|go(?:es)? to|navigate|redirect|destination|href|send (?:people|visitors|users) to|open(?:s)? the)\b/.test(text)) return true;
+  return violation.after.some((target) => {
+    const slug = target.replace(/^[#/]+/, '').split(/[/?#]/)[0].toLowerCase();
+    return slug.length > 2 && text.includes(slug);
+  });
+}

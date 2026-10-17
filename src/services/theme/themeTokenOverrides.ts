@@ -1,3 +1,4 @@
+import { normalizeThemeTokenValue } from './themeValueNormalize';
 import { primaryFont, replaceThemeFontImport, THEME_FONT_WEIGHTS } from '@/components/onboarding/themeFonts';
 /**
  * THEME TOKEN OVERRIDES — the builder-side, persisted form of a token edit.
@@ -138,10 +139,13 @@ export interface ThemeOverrideCommitInput {
  */
 export function buildThemeOverrideFileOps(input: ThemeOverrideCommitInput): FileOp[] {
   const contract = readThemeContract(input.files);
-  for (const [name, value] of Object.entries(input.overrides)) {
+  const normalized: ThemeTokenOverrides = {};
+  for (const [name, raw] of Object.entries(input.overrides)) {
+    const value = normalizeThemeTokenValue(name, raw, (THEME_COLOR_TOKENS as readonly string[]).includes(name));
     if (!contract || !contract.tokenNames.includes(name) || !isLegalThemeTokenValue(name, value, contract)) throw new Error('Invalid theme value for ' + name + '. Use its supported type and bounds.');
+    normalized[name] = value;
   }
-  const clean = sanitizeThemeOverrides(input.overrides, contract);
+  const clean = sanitizeThemeOverrides(normalized, contract);
   validateThemeTypography({ ...readCompiledTokenValues(input.files[INDEX_CSS_PATH] ?? ''), ...clean });
   const currentCss = input.files[INDEX_CSS_PATH] ?? '';
   if (!currentCss) return [];

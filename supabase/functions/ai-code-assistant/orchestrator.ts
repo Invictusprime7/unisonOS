@@ -849,6 +849,9 @@ async function runBuilderLane(
       if (scopeResult.blockAutoApply) {
         reviewResult.requiresApproval = true;
       }
+      for (const advisory of scopeResult.advisories ?? []) {
+        reviewResult.warnings.push({ severity: "info", message: advisory });
+      }
 
       return {
         reviewResult,
@@ -988,16 +991,17 @@ async function runBuilderLane(
 
   if (reviewResult && verification.checked && !verification.passed) {
     if (verification.outOfScopeFiles.length > 0) {
+      // Edit policy: extra files are reported, never held for approval.
       reviewResult.warnings.push({
-        severity: "error",
-        message: `Out of declared scope: ${verification.outOfScopeFiles.join(', ')}`,
+        severity: "warning",
+        message: `Also changed: ${verification.outOfScopeFiles.join(', ')}`,
       });
     }
     for (const miss of verification.unmetCriteria.slice(0, 8)) {
       reviewResult.warnings.push({ severity: "warning", message: `Unmet goal: ${miss}` });
     }
     // `must`-priority misses and scope violations can never auto-apply.
-    if (verification.blockingMisses.length > 0 || verification.outOfScopeFiles.length > 0) {
+    if (verification.blockingMisses.length > 0) {
       reviewResult.requiresApproval = true;
     }
   }

@@ -56,13 +56,12 @@ function contract(): AppBuildContract {
 }
 
 describe('UnisonAppBuilder facade', () => {
-  it('stops before inference when required imported source exceeds its budget', async () => {
+  it('stops before inference when the edited source exceeds its budget', async () => {
     const runComposer = vi.fn();
     const result = await createUnisonAppBuilder({ runComposer }).edit({
       operationId: 'missing-source', baseRevisionId: 'r1', currentFiles: {
         ...baseFiles,
-        '/src/pages/Home.tsx': "import SiteNav from '../components/SiteNav'; export default function Home(){return <SiteNav/>}",
-        '/src/components/SiteNav.tsx': 'x'.repeat(60001),
+        '/src/pages/Home.tsx': 'x'.repeat(150001),
       },
       instruction: 'Change navbar', page: { title: 'Home', route: '/', role: 'home', filePath: '/src/pages/Home.tsx' },
       sourceTargets: ['/src/pages/Home.tsx'],

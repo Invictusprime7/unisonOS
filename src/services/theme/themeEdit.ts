@@ -5,7 +5,8 @@ import { THEME_PRESETS } from '@/components/onboarding/themePresets';
 import { themePresetToThemeTokens } from '@/components/onboarding/themePresetToTokens';
 import { resolveArtDirectionPackId } from '@/sections/variants/artDirectionPacks';
 import { projectResolvedArtDirection, readSealedArtDirection } from '@/sections/variants/resolvedArtDirection';
-import { readThemeContract, buildThemeContract, buildThemeContractFiles } from '@/platform/core/themeContract';
+import { readThemeContract, buildThemeContract, buildThemeContractFiles, THEME_COLOR_TOKENS } from '@/platform/core/themeContract';
+import { normalizeThemeTokenValue } from './themeValueNormalize';
 import { isEditableThemeToken, readCompiledTokenValues, validateThemeTypography, isLegalThemeTokenValue, readThemeOverrides, serializeThemeOverrides, THEME_OVERRIDES_PATH, applyOverridesToCss } from './themeTokenOverrides';
 
 export const themeEditSchema = z.object({
@@ -40,15 +41,17 @@ export function decodeThemeEdit(response: unknown): ThemeEdit {
 
 export function prepareThemeEdit(files: Record<string, string>, snapshot: SiteBundleSnapshot, proposal: unknown, revisionId: string | null) {
   const edit = themeEditSchema.parse(proposal);
-  if (edit.snapshotId !== snapshot.snapshotId || edit.revisionId !== revisionId) throw new Error('This theme proposal is stale. Request the change again from the current revision.');
-  const presetId = edit.presetId ?? snapshot.meta.themePresetId;
-  const preset = THEME_PRESETS.find((p) => p.id === presetId);
-  if (!preset) throw new Error('The saved site has no recognized preset. Select a theme before restyling.');
+  // Edit policy: a theme edit is recomputed from the current files, so a
+  // proposal from an older revision/snapshot is applied to the latest one.
+  void revisionId;
+  const presetId = edit.presetId ?? snapshot.meta.themePresetId ?? readThemeContract(files)?.themePresetId;
+  const preset = THEME_PRESETS.find((p) => p.id === presetId) ?? THEME_PRESETS.find((p) => p.id === 'modern') ?? THEME_PRESETS[0];
+  if (!preset) throw new Error('No theme presets are available.');
   const packId = edit.presetId ? resolveArtDirectionPackId({ themePresetId: preset.id, seed: snapshot.meta.designIntervention?.seed ?? snapshot.meta.renderHash ?? preset.id }) : (readSealedArtDirection(snapshot.meta)?.storagePackId ?? snapshot.meta.artDirectionPackId);
   const contract = buildThemeContract({ themePresetId: preset.id, artDirectionPackId: packId });
   const overrides = edit.presetId ? {} : readThemeOverrides(files);
   for (const name of edit.reset) {
-    if (!contract.tokenNames.includes(name) || !isEditableThemeToken(name)) throw new Error('Unknown theme token: ' + name);
+    if (!contract.tokenNames.includes(name) || !isEditableThemeToken(name)) continue;
     delete overrides[name];
   }
   const knownFonts = THEME_FONT_CHOICES;
@@ -58,11 +61,15 @@ export function prepareThemeEdit(files: Record<string, string>, snapshot: SiteBu
       // Models often send a full stack ("'Playfair Display', serif") or a
       // differently-cased name; map it onto the supported font list.
       const families = raw.split(',').map(f => f.trim().replace(/^['"]|['"]$/g, '').toLowerCase());
-      const match = families.map(f => knownFonts.find(k => k.toLowerCase() === f)).find(Boolean);
+      const match = families.map(f => knownFonts.find(k => k.toLowerCase() === f)).find(Boolean)
+        ?? families.map(f => knownFonts.find(k => k.toLowerCase().includes(f) || f.includes(k.toLowerCase()))).find(Boolean);
       if (!match) throw new Error(`That font isn't available for ${name === '--font-heading' ? 'headings' : 'body text'}. Choose one of: ${knownFonts.join(', ')}.`);
       value = match;
     }
-    if (!contract.tokenNames.includes(name) || !isLegalThemeTokenValue(name, value, contract)) throw new Error('Invalid theme value for ' + name + '. Use the supplied token type and bounds.');
+    // Unknown tokens are skipped (advisory); values are normalized first.
+    if (!contract.tokenNames.includes(name) || !isEditableThemeToken(name)) continue;
+    value = normalizeThemeTokenValue(name, value, (THEME_COLOR_TOKENS as readonly string[]).includes(name));
+    if (!isLegalThemeTokenValue(name, value, contract)) throw new Error(`I couldn't read "${raw}" as a value for ${name}. Try a color like #1f6f4a or a size like 12px.`);
     overrides[name] = value.trim();
   }
   validateThemeTypography({ ...readCompiledTokenValues(edit.presetId ? buildThemedIndexCss(preset) : files['/src/index.css'] ?? ''), ...overrides });

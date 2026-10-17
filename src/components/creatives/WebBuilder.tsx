@@ -3744,8 +3744,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const contract = buildThemeContract({ artDirection: readSealedArtDirection(snapshot.meta), artDirectionPackId: snapshot.meta.artDirectionPackId, themePresetId: snapshot.meta.themePresetId });
     const response = await runBuilderTurn<unknown>({ mode: 'theme-edit', messages: [{ role: 'user', content: JSON.stringify({ prompt, snapshotId: snapshot.snapshotId, revisionId, presetId: snapshot.meta.themePresetId, contract: { ...contract, tokenNames: contract.tokenNames.filter(isEditableThemeToken) }, effectiveValues: { ...readCompiledTokenValues(files['/src/index.css'] || '', true), ...readThemeOverrides(files) }, overrides: readThemeOverrides(files), allowedFonts: { '--font-heading': THEME_FONT_CHOICES, '--font-body': THEME_FONT_CHOICES, rule: 'Font tokens take exactly one name from this list, no fallback stack.' }, businessName: snapshot.businessName, industry: snapshot.industry }) }] });
     if (response.error) throw response.error;
-    if ((currentRevisionIdRef.current || null) !== revisionId) throw new Error('The site changed during this request. Please request the theme change again.');
-    return commitThemeTokenOps([], prompt, decodeThemeEdit(response.data));
+    // Edit policy: the theme edit is recomputed on the latest files, so a save
+    // that landed meanwhile does not invalidate it.
+    const latestSnapshot = resolveSnapshot(virtualFSRef.current.getSandpackFiles(), effectiveRouteState as any).snapshot ?? snapshot;
+    const decoded = decodeThemeEdit(response.data);
+    return commitThemeTokenOps([], prompt, { ...decoded, snapshotId: latestSnapshot.snapshotId, revisionId: currentRevisionIdRef.current || null });
   }, [commitThemeTokenOps, effectiveRouteState]);
 
   /**
@@ -7744,6 +7747,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   };
                 }}
                 onCommitted={(commit) => {
+                  // canonical-vfs-exempt: adoption of an accepted commitMutation result
                   importBuilderFiles(commit.vfsFiles, { replace: true, preferredPath: activePagePath, entryPoint: launchEntryPoint, adoption: commitAdoptionRecord(commit) });
                   if (commit.persistedRevisionId) setCurrentRevisionId(commit.persistedRevisionId);
                   toast.success('Template composition saved');
@@ -8224,6 +8228,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           <>
             <ResizablePanel defaultSize={22} minSize={18} maxSize={35}>
               <AIBuilderPanel
+                onRequestThemeEdit={requestThemeEdit}
                 onToolsHostChange={setAIBuilderToolsHost}
                 onCustomizerHostChange={setAIBuilderCustomizerHost}
                 customizerAvailable={Boolean(previewCode && !selectedObject)}
@@ -8450,6 +8455,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         {isMobile && aiPanelOpen && (
           <div className="absolute inset-0 z-40 bg-[#0d0d18] flex flex-col">
             <AIBuilderPanel
+                onRequestThemeEdit={requestThemeEdit}
               onToolsHostChange={setAIBuilderToolsHost}
               onCustomizerHostChange={setAIBuilderCustomizerHost}
               customizerAvailable={Boolean(previewCode && !selectedObject)}
