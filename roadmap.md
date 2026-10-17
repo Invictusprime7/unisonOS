@@ -1,8 +1,9 @@
 # Roadmap
 
 ## Active: Selected text editing
-- [ ] Preserve nested inline formatting when replacing selected generated text; anchor source edits to the clicked text
-- [ ] Run nested-text and inspector regressions; verify saved-project editing where authoritative access is available
+- [x] Preserve nested inline formatting/icons in selected literal text and canonical slot edits; anchor direct edits to clicked text, prefer explicit AI source ownership and refuse ambiguous text matches
+- [x] Run nested-text, inspector, rendering and canonical edit regressions
+- [ ] Verify selected text → save → reopen on the saved project; blocked by the unavailable authoritative UNISON session
 
 ## Active: Builder result and preview closure
 - [x] Retire remaining AI editing fallback paths; removed unused response extraction, legacy code/file callbacks and synthesized file responses; candidate apply stays canonical

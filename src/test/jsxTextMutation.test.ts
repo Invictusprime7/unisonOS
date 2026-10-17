@@ -3,6 +3,9 @@ import { parseExpression } from '@babel/parser';
 import { mutateJSXText } from '@/utils/jsxElementMutation';
 import { findElementBoundsInJSX } from '@/components/creatives/web-builder/jsxSourceUtils';
 import { anchoredFinder } from '@/components/creatives/web-builder/pictureInsertion';
+import * as Babel from '@babel/standalone';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 const edit = (source: string, text: string) => mutateJSXText(source, '#title', text, findElementBoundsInJSX);
 
@@ -41,5 +44,13 @@ describe('selected source text editing', () => {
     expect(edit('<h1 id="title">One <em>two</em> three</h1>', 'One TWO three')).toContain('<em>{"TWO"}</em>');
     expect(edit('<h1 id="title"><span>Hi</span></h1>', 'Hi there')).toContain('{"Hi there"}');
     expect(edit('<h1 id="title"><span>Hi there</span></h1>', 'Hi')).toContain('{"Hi"}');
+  });
+  it('renders the saved nested replacement as the requested text after recompilation', () => {
+    const saved = edit('<h1 id="title">Build <strong>better</strong> sites</h1>', 'Build beautiful sites');
+    const compiled = Babel.transform(`const view = ${saved};`, { presets: ['react'] }).code;
+    const view = new Function('React', `${compiled}; return view;`)(React);
+    const html = renderToStaticMarkup(view);
+    expect(html.replace(/<[^>]*>/g, '')).toBe('Build beautiful sites');
+    expect(html).toContain('<strong>beautiful</strong>');
   });
 });
