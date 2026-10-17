@@ -94,3 +94,8 @@
 
 ## Blocked
 - Per-site dedicated databases: awaiting account/billing choice (owner token vs customer OAuth)
+- [x] Typing during an AI save is held and replayed on top of the AI result (conflict → keep/discard choice)
+- [x] Shared editor, theme and style save points covered by conflict tests (`savePointConflicts.test.ts`)
+- [x] Real pending-source conflicts offer "Keep my edit on the latest version" / "Discard" in the preview card
+- [x] AI activity feed claims "saved"/"shown in preview" only after a commit and preview confirmation in that run
+- [ ] Live signed-in verification of the above (needs a signed-in session)
