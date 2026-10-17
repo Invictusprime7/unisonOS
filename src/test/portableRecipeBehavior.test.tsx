@@ -10,7 +10,7 @@ import { materializeDesignSources } from '@/services/app-builder/design/designSo
 import type { DesignSourceBundle } from '@/services/app-builder/design/DesignSourceBundle';
 import { createUnisonBuilderContext } from '@/services/unisonBuilderConnector';
 import { PUBLISHED_ACTION_RUNTIME_MODULE } from '@/sections/publishedActionRuntimeModule';
-import { THEME } from '@/sections/theme';
+import { LAUNCHER_BASE_THEME as THEME } from '@/sections/themes';
 
 function bundle(ids: string[]): DesignSourceBundle {
   return { implementations: ids.map(id => ({ implementationId: id, sectionType: id.split(':')[0], certification: 'approved' })) } as DesignSourceBundle;
