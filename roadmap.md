@@ -5,7 +5,7 @@
 - [x] Phase 2: enforced dispatch over agentOperations (identity, record ownership, source scope, canonical intents/tokens, router protection); 7 tests
 - [x] AI Builder saved-record edits run through the enforced dispatcher
 - [x] Command menu and Catalog panel catalog saves run through the enforced dispatcher
-- [ ] Stale-session edits: records ignore page version; page edits replay on newest version when safe, else ask
+- [x] Stale-session edits: records ignore page version; page edits replay on newest version when safe, else ask (dispatcher + 4 tests; Builder UI prompt for the ask still to wire)
 - [ ] AI Builder redesign: minimal reasoning-based UI, remove task planner, Copilot-style iterative thinking, reposition panel controls for accessibility
 - Later: edge-side proposal enforcement in existing Composer lane
 - Later: edge-side proposal enforcement using existing Composer lanes; audited legacy removal; authenticated cross-industry browser acceptance
