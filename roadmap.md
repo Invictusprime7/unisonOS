@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Sign-in recovery
+- [x] Recover auth-key quota errors with tab-persistent fallback, without deleting project data
 - [x] Release auth listener locks before onboarding lookups and audit logging; reset loading on thrown sign-in errors; 11 regression tests pass
 - [ ] Confirm real-account sign-in reaches the workspace (available managed session targets a different backend; requires user sign-in)
 

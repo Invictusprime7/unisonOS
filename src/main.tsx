@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
-import { SUPABASE_IDENTITY } from "@/integrations/supabase/env";
+import { SUPABASE_IDENTITY, SUPABASE_AUTH_STORAGE_KEY } from "@/integrations/supabase/env";
+import { installAuthStorageQuotaRecovery } from "@/integrations/supabase/authStorageQuota";
 import "./index.css";
 import "@/design-system/unison-x-loveable-design-d5be96/design-system/unison/styles/tokens.css";
 import "./styles/unison-theme.css";
@@ -105,6 +106,9 @@ try {
       </div>,
     );
     throw new Error(`[supabase] identity guard: ${reason}`);
+  }
+  if (SUPABASE_AUTH_STORAGE_KEY) {
+    installAuthStorageQuotaRecovery(SUPABASE_AUTH_STORAGE_KEY, window.localStorage, window.sessionStorage);
   }
   void import("./App.tsx").then(({ default: App }) => root.render(<App />));
   
