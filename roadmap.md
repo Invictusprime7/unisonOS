@@ -1,9 +1,11 @@
 # Roadmap
 
 ## Active: Uploaded preview-first architecture merge
-- [ ] Merge the uploaded recommendations into the existing guidebook, retaining proven ownership and compatibility paths
-- [ ] Remove unused Playground compile authority and obsolete duplicate editing surfaces after auditing consumers
-- [ ] Run ownership, hydration, resource and canonical-edit regressions; document remaining live-verification blockers
+- [x] Merge recommendations into the guidebook; retain the mounted operations modal, distinct resource schemas, canonical launch compilation and binding services
+- [x] Retire unused Playground compile API and unmounted duplicate panel; inferred hydration stays clean; catalog tools delegate to project-scoped Resource Runtime without global source swaps
+- [x] Run 53 ownership/hydration/resource/canonical-edit tests and both authority lints; preview build passes
+- [ ] Signed-in record save → preview → reopen acceptance; requires authoritative UNISON session and designated project
+- [ ] Existing previewSingleOwner suite has two stale source-string expectations missing pendingSourceConflictPolicy; preview implementation was not changed in this merge
 
 ## Active: Web Builder browser startup
 - [x] Replace Babel's Node-only breaking-mode flag without exposing host environment variables
@@ -76,8 +78,8 @@
 - [x] M1b: preview clicks carry repeat index + structural locator → descriptor; AI scoped to that instance
 - [x] M1c: reacquire selection highlight after rerender — VFSPreview stores last selection identity (selector/section/structuralPath/repeatIndex/resource), bridge resolves it after rebuild (resource mark → selector+index → structural path) and re-applies highlight; drops selection when object vanished
 - [ ] M2 (PR2/3): Preview as sole primary edit UI — [x] inspector routes data-bound text/media to resource commands (replace "Edit it from the content panel" dead-end), [x] fill missing lane executors (binding), [x] upload picker from preview context (site storage, no inline data); [x] pending/saved/error + undo states; [ ] six-fixture reload exit check (needs signed-in browser run)
-- [ ] M3 (PR4): unified Resources UX (Records/Collections), one canonical record type per use case (testimonials/projects/FAQ collisions), catalogOperations delegates to Resource Runtime
-- [ ] M4 (PR5): retire Creator Playground overlap behind `previewFirstResources` flag; PlaygroundSyncController hydrate-only
+- [ ] M3 (PR4): unified Resources UX (Records/Collections), one canonical record type per use case (testimonials/projects/FAQ collisions); [x] catalogOperations → agentOperations → Resource Runtime
+- [ ] M4 (PR5): remaining mounted Creator Playground UX consolidation; [x] unused duplicate panel retired and PlaygroundSyncController hydration-only
 - [ ] M5: tenant scoping/RLS verification, dedicated-backend content/profile adapters, expected-revision concurrency on record updates
 - [ ] M6: AI edits ride the same EditorCommand/ResourceRuntime plane
 - [ ] M7: cross-industry E2E beta gate (10 cases in guidebook)
