@@ -225,8 +225,10 @@ import { inferCanonicalComponentSlug } from '@/services/canonicalComponentRegist
 import { buildCanonicalLaunchArtifacts } from '@/services/canonicalLaunchVfs';
 import { clearLauncherHandoff, readLauncherHandoff } from '@/services/launcherHandoffPersistence';
 import {
+  absorbPendingVfsOperations,
   acknowledgePendingVfsOperations,
   assertNoMinimalFallbackPreview,
+  getPendingVfsSequenceWatermark,
   finalizePendingVfsOperation,
   projectSnapshotVfsFiles,
   resolveSnapshot,
@@ -2815,6 +2817,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       draftId: currentDraftId ?? null,
       exemptReason: options?.adoption?.exemptReason,
     });
+    // An accepted commit was authored from this live working set, so every
+    // pending operation recorded so far is already inside it. Replaying them
+    // over the accepted bytes is what raised false source conflicts.
+    if (isAcceptedCanonicalRevision) absorbPendingVfsOperations(pendingProjectionScope);
     try {
 
       const normalizedEntryPoint = options?.entryPoint
