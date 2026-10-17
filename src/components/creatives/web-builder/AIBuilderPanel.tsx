@@ -1797,6 +1797,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       // Give the AI structured awareness of the canonical catalog registry,
       // live row counts, active bindings, and the currently selected section
       // so it prefers catalog operations over hand-editing TSX for content.
+      let connectorCatalogSummary: string | null = null;
       try {
         const industryForCatalog =
           systemsBuildContext?.identity?.industry ??
@@ -1808,6 +1809,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           selectedSection: null,
         });
         const rendered = renderCatalogContextForPrompt(catalogCtx);
+        connectorCatalogSummary = rendered || null;
         if (rendered) contextLines.push(`\n${rendered}`);
       } catch (err) {
         console.warn('[AIBuilderPanel] buildCatalogContext failed; continuing without it', err);
@@ -2157,6 +2159,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               baseRevisionId: revisionId,
               connectorContext: {
                 projectId, businessId, revisionId,
+                catalogSummary: connectorCatalogSummary,
                 registryContext: builderRegistryContext,
                 requestEnvelope: capabilityInterpretation.envelope,
                 descriptor: selectedTarget?.descriptor,
@@ -2320,6 +2323,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             messages: conversationHistory,
             connectorContext: {
               projectId, businessId, revisionId,
+              catalogSummary: connectorCatalogSummary,
               registryContext: builderRegistryContext,
               requestEnvelope: capabilityInterpretation.envelope,
               descriptor: selectedTarget?.descriptor,
