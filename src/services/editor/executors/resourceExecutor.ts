@@ -36,9 +36,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 async function resolveRecordId(ref: ResourceEntityRef, ctx: ResourceContext): Promise<string | null> {
   if (UUID_RE.test(ref.recordId)) return ref.recordId;
-  const records = await executeResourceCommandCompatible<ResourceRecord[]>(ctx, {
+  const listed = await executeResourceCommandCompatible<ResourceRecord[]>(ctx, {
     kind: 'resource.list', resourceKey: ref.resourceKey,
   }, () => queryResource(ref.resourceKey, ctx)).catch(() => [] as ResourceRecord[]);
+  const records = Array.isArray(listed) ? listed
+    : Array.isArray((listed as { data?: unknown })?.data) ? (listed as { data: ResourceRecord[] }).data
+    : [];
   const wanted = ref.recordId.toLowerCase();
   const match = records.find((r) => String(r.id).toLowerCase() === wanted)
     ?? records.find((r) => typeof r.slug === 'string' && r.slug.toLowerCase() === wanted)
