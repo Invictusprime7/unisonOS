@@ -19,6 +19,11 @@ import { prepareAICandidate, type PageCheck, type PreparedCandidate } from './ai
 import type { HomepageVisualLanguage } from '@/services/launch/homepageFirstContract';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from './canonicalAuthoringRequest';
+import { emitAgentEvent } from '@/services/agent-runtime/agentEvents';
+
+/** Reason→act→check narration for the Builder's activity feed; describes work, never state. */
+const narrate = (kind: 'understanding' | 'file_change' | 'verification' | 'error', message: string, status?: 'running' | 'ok' | 'failed') =>
+  emitAgentEvent({ kind, message, status });
 
 export type ComposerInvoke = typeof runBuilderTurn;
 
@@ -110,6 +115,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
     if (attempt > 1 && remainingMs < MIN_REPAIR_WINDOW_MS) {
       return { ok: false, reason: 'gates_exhausted', attempts: attempt - 1, errors: lastErrors.length ? lastErrors : ['Not enough time left to repair this page.'], response: lastResponse, prepared: lastPrepared };
     }
+    narrate('understanding', attempt === 1 ? 'Thinking through the change' : `Adjusting (round ${attempt} of ${maxAttempts})`, 'running');
     const { data, error } = await invoke({
       mode: AI_COMPOSER_MODES[request.task],
       messages: [{ role: 'user', content: JSON.stringify(request) }],
@@ -148,8 +154,10 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       return { ok: false, reason: 'invalid_response', attempts: attempt, errors: ['AI returned an invalid composer response.'] };
     }
     lastResponse = response;
+    narrate('file_change', `Drafted changes to ${response.fileOps.length} file${response.fileOps.length === 1 ? '' : 's'}`, 'ok');
     const scope = composerScopeViolations(request.task, request.page.filePath, response.fileOps);
     if (scope.length) {
+      narrate('verification', 'The draft reached outside the requested area; narrowing it', 'failed');
       lastErrors = scope;
       request = {
         ...request,
@@ -197,6 +205,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       pageCheck: input.pageCheck,
     });
     lastPrepared = prepared;
+    narrate('verification', prepared.ok ? 'Checks passed' : `Found ${prepared.errors.length} problem${prepared.errors.length === 1 ? '' : 's'}; fixing`, prepared.ok ? 'ok' : 'failed');
     if (prepared.ok) {
       return { ok: true, reason: 'accepted', attempts: attempt, response, prepared, errors: [] };
     }
