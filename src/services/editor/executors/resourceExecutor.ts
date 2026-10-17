@@ -1,5 +1,5 @@
 /** Resource lane: saved record fields go through ResourceRuntime only. */
-import { applyResourceOp, getResourceRecord, parseResourceProvenance } from '@/services/resources/resourceRuntime';
+import { applyResourceOp, getResourceRecord, parseResourceProvenance, queryResource } from '@/services/resources/resourceRuntime';
 import { getResource } from '@/services/resources/resourceRegistry';
 import { executeResourceCommandCompatible } from '@/services/project-backend/runtimeProtocol';
 import type { ResourceContext, ResourceRecord } from '@/services/resources/resourceTypes';
