@@ -1311,11 +1311,14 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           const pageRoute = selectedTarget.scopeAncestors?.pagePath ?? null;
           const pageFile = resolveRouteSourceFile(vfsFiles, pageRoute);
           if (pageFile) {
+            const locator = selectedTarget.descriptor?.sourceLocator ?? selectedTarget.scopeAncestors?.sourceLocator;
+            const owner = locator?.match(/^(\/[^:]+\.(?:tsx|jsx))(?::|$)/)?.[1];
             const needle = (selectedTarget.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
-            const contains = (file: string) => Boolean(needle) && (vfsFiles[file] ?? '').replace(/\s+/g, ' ').includes(needle);
-            selectedSourceFile = contains(pageFile)
-              ? pageFile
-              : resolveLocalImports(vfsFiles, pageFile).find(contains) ?? pageFile;
+            const contains = (file: string) => Boolean(needle) && (vfsFiles[file] ?? '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').includes(needle);
+            const matches = [pageFile, ...resolveLocalImports(vfsFiles, pageFile)].filter(contains);
+            if (!owner && matches.length > 1) throw new Error('This text appears in several components. Reselect it so its source can be identified safely.');
+            if (owner && !vfsFiles[owner]) throw new Error('The selected source is no longer available. Refresh the preview and reselect the text.');
+            selectedSourceFile = owner ?? matches[0] ?? pageFile;
             selectionPinnedFile = selectedSourceFile;
           }
         }
