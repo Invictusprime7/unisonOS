@@ -6,6 +6,7 @@
  */
 import { agentOperations, type AgentContext, type AgentOperationName } from '@/services/agent-runtime/operations';
 import { isCoreIntent } from '@/platform/core/coreIntents';
+import { permittedBuilderIntents } from '@/services/builder/canonicalAuthoringRequest';
 import type { UnisonBuilderTurnContext } from '@/types/unisonBuilderConnector';
 
 type Ops = typeof agentOperations;
@@ -78,6 +79,13 @@ export function preflightBuilderOperation<N extends AgentOperationName>(
   if (name === 'propose_bind_intent') {
     const intent = String(a[1] ?? '');
     if (!isCoreIntent(intent)) refuse(`Unknown canonical intent: ${intent}`);
+    if (!permittedBuilderIntents(context.registry.projection).includes(intent)) {
+      refuse(`This intent is not approved by the current capability contract: ${intent}`);
+    }
+    const target = a[0] as { revisionId?: string | null; projectId?: string | null; bindingId?: string | null } | null;
+    if (target?.revisionId && target.revisionId !== agentCtx.revisionId) refuse('The selected control belongs to an older revision. Re-select it before editing.');
+    if (target?.projectId && target.projectId !== agentCtx.projectId) refuse('The selected control belongs to another project.');
+    if (selection?.bindingId && selection.bindingId !== target?.bindingId) refuse('That control is not the selected binding.');
     const payload = a[2];
     if (payload != null && (typeof payload !== 'object' || Array.isArray(payload))) refuse('Intent payload must be an object.');
   }

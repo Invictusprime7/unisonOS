@@ -56,6 +56,15 @@ function contract(): AppBuildContract {
 }
 
 describe('UnisonAppBuilder facade', () => {
+  it('checks page generation connector identity before invoking the page author', async () => {
+    const authorSite = vi.fn();
+    await expect(createUnisonAppBuilder({ authorSite: authorSite as never }).generatePages({
+      operationId: 'wrong-project', baseRevisionId: 'r2', currentFiles: baseFiles,
+      pages: [{ pageId: 'new', title: 'New', route: '/new', filePath: '/src/pages/New.tsx', role: 'custom', pageType: 'custom' }],
+      businessName: 'Northstar', connectorContext: { projectId: 'p1', selection: { projectId: 'p2' } },
+    })).rejects.toThrow('another project');
+    expect(authorSite).not.toHaveBeenCalled();
+  });
   it('rejects stale connector ownership before source authoring', async () => {
     const runComposer = vi.fn();
     const builder = createUnisonAppBuilder({ runComposer: runComposer as never });

@@ -25,6 +25,13 @@ describe('enforced builder tool dispatch', () => {
   it('refuses unknown intents before resolving bindings', async () => {
     await expect(dispatchBuilderOperation(ctx(), agent, 'propose_bind_intent', {} as never, 'totally.fake_intent')).rejects.toThrow(/Unknown canonical intent/);
   });
+  it('refuses a capability-bound action without its current capability contract', async () => {
+    await expect(dispatchBuilderOperation(ctx(), agent, 'propose_bind_intent', {}, 'booking.create')).rejects.toThrow('capability contract');
+  });
+  it('refuses a different binding than the selected control', async () => {
+    const context = ctx({ selection: { bindingId: 'selected' } });
+    await expect(dispatchBuilderOperation(context, agent, 'propose_bind_intent', { bindingId: 'other' }, 'nav.goto')).rejects.toThrow('selected binding');
+  });
   it('refuses non-canonical theme tokens and allows canonical ones', async () => {
     await expect(dispatchBuilderOperation(ctx(), agent, 'set_theme_tokens', { '--brand-x': 'red' })).rejects.toThrow(/canonical design token/);
     const ok = await dispatchBuilderOperation(ctx(), agent, 'set_theme_tokens', { '--primary': '10 10% 10%' });
