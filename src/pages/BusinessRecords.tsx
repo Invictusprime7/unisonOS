@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RecordFieldsEditor } from '@/components/creatives/web-builder/RecordFieldsEditor';
 import { loadBusinessMemberships } from '@/services/businessMembership';
 import { listContentTypes, mutateContentRecord, transitionContentRecord } from '@/services/cmsRecordService';
-import { listRecordCollections, registerContentTypes, type CanonicalRecordKind } from '@/services/resources/resourceRegistry';
+import { listRecordCollections, registerContentTypes, type RecordCollectionKind } from '@/services/resources/resourceRegistry';
 import { applyResourceOp, onResourceInvalidated } from '@/services/resources/resourceRuntime';
 import { SEED_CONTENT_TYPES } from '@/services/resources/seedLaunchAssets';
 import { getCatalogSurface } from '@/platform/core/catalogSurfaceRegistry';
@@ -27,7 +27,7 @@ export default function BusinessRecords() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [kind, setKind] = useState<CanonicalRecordKind | 'all'>('all');
+  const [kind, setKind] = useState<RecordCollectionKind | 'all'>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
