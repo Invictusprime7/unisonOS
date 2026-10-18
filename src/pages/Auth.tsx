@@ -105,7 +105,10 @@ const Auth = () => {
       // Auth listeners execute under the SDK session lock. Database/auth work
       // must start on a later task, after that lock has been released.
       redirectTimer = setTimeout(() => {
-        void claimGuestDemoIfNeeded(userId).finally(() => resolvePostAuthDestination(userId, isNewSignup)).then((dest) => {
+        void claimGuestDemoIfNeeded(userId)
+          .catch(() => ({ claimed: false, projectId: null }))
+          .then(() => resolvePostAuthDestination(userId, isNewSignup))
+          .then((dest) => {
           if (active) navigate(dest, { replace: true });
         }).catch(() => {
           if (active) navigate("/dashboard", { replace: true });
