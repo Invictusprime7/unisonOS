@@ -6,15 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { HeroSection } from "@/components/home/sections";
 import { clearSiteDiscoveryHandoff, writeSiteDiscoveryHandoff } from "@/components/ai/siteDiscoveryPersistence";
-
-/** One free demo generation per account on this browser. */
-const demoUsedKey = (userId: string) => `unison.demo.generationUsed.${userId}`;
-function readDemoUsed(userId: string): boolean {
-  try { return localStorage.getItem(demoUsedKey(userId)) === "1"; } catch { return false; }
-}
-function markDemoUsed(userId: string): void {
-  try { localStorage.setItem(demoUsedKey(userId), "1"); } catch { /* storage unavailable */ }
-}
+import { readAccountDemoStatus, type AccountDemoStatus } from '@/services/accountDemoGeneration';
 
 export default function LiveDemo() {
   const navigate = useNavigate();
@@ -22,18 +14,34 @@ export default function LiveDemo() {
   const [loading, setLoading] = useState(true);
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [launchBrief, setLaunchBrief] = useState<string | null>(null);
-  const [demoUsed, setDemoUsed] = useState(false);
+  const [demoStatus, setDemoStatus] = useState<AccountDemoStatus | null>(null);
+  const [statusError, setStatusError] = useState(false);
+  const [statusRefresh, setStatusRefresh] = useState(0);
 
   useEffect(() => {
     let active = true;
     void supabase.auth.getSession().then(({ data: { session } }) => {
       if (!active) return;
       setUser(session?.user ?? null);
-      if (session?.user) setDemoUsed(readDemoUsed(session.user.id));
       setLoading(false);
     });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const status = await readAccountDemoStatus();
+        if (active) { setDemoStatus(status); setStatusError(false); }
+      } catch { if (active) setStatusError(true); }
+    };
+    void refresh();
+    window.addEventListener('focus', refresh);
+    const timer = window.setInterval(refresh, 15000);
+    return () => { active = false; window.removeEventListener('focus', refresh); window.clearInterval(timer); };
+  }, [user, statusRefresh, launcherOpen]);
 
   useEffect(() => {
     if (!loading && !user) navigate("/auth", { replace: true });
@@ -51,7 +59,15 @@ export default function LiveDemo() {
     );
   }
 
-  const showChat = !demoUsed || launcherOpen;
+  if (!launcherOpen && (!demoStatus || statusError || demoStatus.inProgress)) {
+    return <section className="min-h-screen bg-background text-foreground">
+      <p role="status">{statusError ? 'Your demo allowance could not be checked. Please try again.' : demoStatus?.inProgress ? 'Your demo generation is in progress. Return to the tab where you started it.' : 'Checking your free demo generation...'}</p>
+      {statusError && <Button onClick={() => setStatusRefresh(value => value + 1)}>Try again</Button>}
+      <Button variant="outline" onClick={goHome}>Go to Unison Home</Button>
+    </section>;
+  }
+
+  const showChat = demoStatus?.remaining === 1 || launcherOpen;
 
   return (
     <div className="min-h-screen bg-background dark">
@@ -64,11 +80,10 @@ export default function LiveDemo() {
 
       {showChat ? (
         <HeroSection
+          demoGeneration
           user={user}
           onAuthRequired={() => navigate("/auth")}
           onSiteConfirmed={(brief) => {
-            markDemoUsed(user.id);
-            setDemoUsed(true);
             try { writeSiteDiscoveryHandoff(user.id, brief); } catch { /* chat copy remains */ }
             setLaunchBrief(brief);
             setLauncherOpen(true);
@@ -85,6 +100,7 @@ export default function LiveDemo() {
           launchBrief={launchBrief}
           onLauncherOpenChange={(open) => {
             setLauncherOpen(open);
+            setStatusRefresh(value => value + 1);
             if (!open) {
               setLaunchBrief(null);
               try { clearSiteDiscoveryHandoff(user.id); } catch { /* ignore */ }

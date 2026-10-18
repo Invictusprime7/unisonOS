@@ -90,6 +90,7 @@ import {
 } from "./wizardCatalog";
 
 export interface LauncherWizardProps {
+  demoGeneration?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialVisionPrompt?: string | null;
@@ -125,6 +126,7 @@ const CHAT_GUIDANCE: Record<SelectionStep, string> = {
 };
 
 export const LauncherWizard = ({
+  demoGeneration = false,
   open,
   onOpenChange,
   initialVisionPrompt,
@@ -407,6 +409,7 @@ export const LauncherWizard = ({
     setLaunchStatus("Preparing your site…");
 
     const input: LaunchOrchestratorInput = {
+      demoGeneration,
       systemId,
       industry: selectedIndustry || undefined,
       visionPrompt: chatPlanRef.current
