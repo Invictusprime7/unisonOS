@@ -1,4 +1,5 @@
 # Directory rules
+- Live Demo uses accountDemoGeneration reservations; canonical revision operation IDs settle usage atomically. Why: browser flags cannot enforce an account allowance or prove a saved draft.
 - App Builder candidate gates validate arbitrary CSS class values before acceptance; table recipes render scalar display values and bind only explicit source tables plus persisted row IDs. Why: syntax-valid JSX can still fail CSS compilation or render record objects as children.
 - Portable recipe context projects App Builder's hash-verified materialization manifest; section IDs and canonical functional instance IDs stay separate. Auth forms own submit dispatch and local toggles own state. Why: names alone cannot prove executable exports or event ownership.
 - The canonical revision RPC is guarded by a per-draft persist circuit breaker in `vfsCommitService.ts` (identical failed payloads back off 2s→60s; background saves never overlap an in-flight write); why: a re-firing failing save once flooded the database with ~80 failed writes per second.
