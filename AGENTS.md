@@ -1,5 +1,5 @@
 # Architecture decisions
-- Unset Babel breaking mode; browsers lack Node process.
+- Unset Babel breaking mode: no browser Node process.
 - Load Unison tokens after base CSS; bridge app roles in `src/styles/unison-theme.css`, font links in `main.tsx`. Why: vendor values win without vendor edits or site regeneration.
 
 - `LauncherWizard` captures intent and invokes orchestration, never authors or mutates VFS. Why: selection-only ownership.
@@ -8,7 +8,7 @@
 - `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
 - Saved projects hydrate accepted revisions; parsers/Playground hydration are read-only. Candidates stay unsanitized/unsplit; uploads lead context and images survive Composer repairs. Why: preserve source; signed-in acceptance remains required.
 - Composer contracts are byte-mirrored at `supabase/functions/_shared/aiComposerContract.ts` and `src/contracts/aiComposerContract.ts`; enforce targets, planned routes, dependency/new import reads and literal intents; hunks preferred, whole-file replaces accepted. Why: authoring vocabulary is not ownership or readiness.
-- Composer author/repair/edit modes stay in `ai-code-assistant/composerLane.ts`; why: no parallel pipelines.
+- Composer modes stay in `ai-code-assistant/composerLane.ts`. Why: no parallel author/repair/edit pipelines.
 - Page composition intelligence lives in `src/services/composition/` (one universal planner + data-only industry profiles, consumed under App Builder orchestration); why: industries differ by data, never by engine.
 - Variant selection goes through `src/services/designImplementationEligibility.ts`; variants carry authored `capabilities`/`compatibility`/`lifecycle`/`ai` contracts, preferred over string inference. Why: registry growth narrows candidates deterministically, never widens AI context.
 - WebBuilder launch-handoff dedupes on `routeHandoffImportedRef`, never `importedRouteStateRef`; why: revision adoption updates the shared ref, replaying original Wizard files over saved edits.
