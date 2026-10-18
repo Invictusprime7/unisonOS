@@ -1,0 +1,25 @@
+# Architecture decisions
+
+- The app imports the attached Unison token stylesheet after its base CSS, bridges app-only roles in `src/styles/unison-theme.css`, and loads library font links in `main.tsx`; why: managed library values must win without editing vendor source or regenerating saved sites.
+
+- `LauncherWizard` is selection-only: it captures intent and invokes launch orchestration, but never authors or mutates VFS source.
+- `UnisonAppBuilder` is the sole fresh-launch application author. Fresh launch derives an `AppBuildContract`, generates and repairs one isolated application candidate, and promotes it only after site-wide closure.
+- The canonical platform owns topology, routes, capabilities, intents, bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation. It must not generate a competing fresh-launch page implementation after App Builder authorship.
+- `commitMutation` remains the only legal canonical writer. Initial App Builder generation produces one accepted revision after the complete candidate passes; repair attempts and per-page generation checkpoints are not canonical revisions.
+- Saved projects hydrate accepted revisions; legacy/parser paths are compatibility-only. Builder projects prepared candidates unsanitized and unsplit; upload text/links lead runtime context; why: no candidate rewriting or lost attachments.
+- Composer contracts are byte-mirrored at `supabase/functions/_shared/aiComposerContract.ts` and `src/contracts/aiComposerContract.ts`; enforce targets, planned routes, dependency requests/new AST module reads, and declared/new literal intents; edge edits require hunks. Why: canonical authoring vocabulary is not ownership or live readiness.
+- Composer author/repair/edit modes stay in `ai-code-assistant/composerLane.ts`; why: no parallel pipelines.
+- Page composition intelligence lives in `src/services/composition/` (one universal planner + data-only industry profiles, consumed under App Builder orchestration); why: industries differ by data, never by engine.
+- Variant selection goes through `src/services/designImplementationEligibility.ts`; variants carry authored `capabilities`/`compatibility`/`lifecycle`/`ai` contracts, preferred over string inference. Why: registry growth narrows candidates deterministically, never widens AI context.
+- The WebBuilder launch-handoff importer dedupes on its own ref (`routeHandoffImportedRef`), never on `importedRouteStateRef`; why: revision adoptions write that shared ref, which made the importer re-apply the original wizard files after every saved edit.
+- The `projects` ↔ `builder_drafts` name-sync triggers skip when `pg_trigger_depth() > 1` and only write rows whose values differ; why: re-entrant writes to the in-flight draft row raised SQLSTATE 27000 and failed every builder save.
+- AI Builder chat history persists per draft in `builder_chat_history` (RLS: owner only), written debounced by `aiHistoryStore.setMessages`; localStorage is only a fast cache. Why: browser-only storage lost conversations across devices/sessions.
+- App Builder pages must pass the structural floor in `src/services/app-builder/design/pageStructureGate.ts` (shared nav + footer, minimum body sections, imagery on media-led roles) via the orchestrator's `pageCheck`, and each page brief leads with its own composition target and only its own archetype block; why: the router adds no chrome and truncated, site-wide briefs let the AI ship lone centered heroes.
+
+- Chat and Wizard share one launch plan (`src/services/launch/chatLaunchPlan.ts`): the chat brief prefills the Wizard, and `buildSyncedVisionBrief` puts final selections first; page briefs put composition target + design contract before that vision. Why: separate chat/Wizard inputs drifted and crowded out composition vocabulary.
+- Agent tools live in `src/services/agent-runtime/`; events use `vfsEventBus`, proposals use `runBuilderAiMutation` → `commitMutation` with intent-retarget checks. Builder context is assembled read-only by `unisonBuilderConnector.ts` from existing authorities; why: no parallel registry, bus or writer.
+
+- Save queue, terminal, resource, project-list, preflight, scoped-edit, preview, site-backend and editor-command rules: `src/services/AGENTS.md`; AI provider order: `supabase/functions/_shared/AGENTS.md`.
+- UNISON is the only backend: `src/integrations/supabase/env.ts` ignores other injected refs, `main.tsx` fails closed on identity mismatch, and backend changes deploy only via `.github/workflows/supabase-auto-update.yml`, so every schema change needs a timestamped `supabase/migrations` file (drizzle alone fails CI); why: Lovable tooling targets its built-in database.
+- Auth state listeners stay synchronous and defer auth-backed queries/audits to a later task; why: awaiting SDK calls inside its session lock deadlocks successful sign-in.
+- Before app load, bridge only auth keys to sessionStorage on quota errors; never evict project data or edit the generated client. Why: full storage must not block sign-in; fallback lasts until the tab closes.

@@ -8,6 +8,7 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — remote module resolved by the edge runtime; isolated tsc cannot fetch it
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { hasAnonymousClaimForSubject, isAnonymousRequestAllowed } from "./authPolicy.ts";
 
 // Local shadow so isolated `tsc` checks resolve Deno without the global lib.
 declare const Deno: { env: { get(key: string): string | undefined } };
@@ -18,6 +19,7 @@ export interface AuthenticatedUser {
   id: string;
   email: string;
   role: string;
+  isAnonymous: boolean;
 }
 
 export interface AuthResult {
@@ -73,7 +75,10 @@ function getClaimsClient(authHeader: string): SupabaseClient {
  * Dev mode bypass: If __devMode is present in the request body, create a mock user
  * for local development and testing.
  */
-export async function verifyAuth(req: Request): Promise<AuthResult> {
+export async function verifyAuth(
+  req: Request,
+  options: { allowAnonymous?: boolean } = {},
+): Promise<AuthResult> {
   // Check for JWT in the Authorization header
   const authHeader = req.headers.get("authorization");
 
@@ -100,11 +105,16 @@ export async function verifyAuth(req: Request): Promise<AuthResult> {
     const claims = claimsResult?.data?.claims;
 
     if (!claimsResult?.error && typeof claims?.sub === "string") {
+      const isAnonymous = claims.is_anonymous === true;
+      if (!isAnonymousRequestAllowed(isAnonymous, options.allowAnonymous)) {
+        return { user: null, error: "Anonymous sessions are not permitted for this operation", status: 403 };
+      }
       return {
         user: {
           id: claims.sub,
           email: typeof claims.email === "string" ? claims.email : "",
           role: typeof claims.role === "string" ? claims.role : "authenticated",
+          isAnonymous,
         },
         error: null,
         status: 200,
@@ -124,11 +134,16 @@ export async function verifyAuth(req: Request): Promise<AuthResult> {
         const admin = getAdminClient();
         const { data: adminData, error: adminError } = await admin.auth.getUser(token);
         if (!adminError && adminData?.user) {
+          const isAnonymous = hasAnonymousClaimForSubject(token, adminData.user.id);
+          if (!isAnonymousRequestAllowed(isAnonymous, options.allowAnonymous)) {
+            return { user: null, error: "Anonymous sessions are not permitted for this operation", status: 403 };
+          }
           return {
             user: {
               id: adminData.user.id,
               email: adminData.user.email || "",
               role: adminData.user.role || "authenticated",
+              isAnonymous,
             },
             error: null,
             status: 200,
@@ -140,12 +155,17 @@ export async function verifyAuth(req: Request): Promise<AuthResult> {
       return { user: null, error: "Invalid or expired token", status: 401 };
     }
 
+    const isAnonymous = hasAnonymousClaimForSubject(token, user.id);
+    if (!isAnonymousRequestAllowed(isAnonymous, options.allowAnonymous)) {
+      return { user: null, error: "Anonymous sessions are not permitted for this operation", status: 403 };
+    }
 
     return {
       user: {
         id: user.id,
         email: user.email || "",
         role: user.role || "authenticated",
+        isAnonymous,
       },
       error: null,
       status: 200,

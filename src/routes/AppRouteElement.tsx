@@ -1,8 +1,11 @@
-import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
+import { AsyncRouteLoadingFallback, RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { RouteShellFrame } from "@/components/shell";
-import { useEffect, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement, type ReactNode } from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { RouteMetaProvider } from "./RouteMetaContext";
 import { RouteRuntimeProvider } from "./RouteRuntimeContext";
+import { resolveRouteAccess } from "./routeAccessPolicy";
 import { getRouteShellActivationOptionsFromEnv, isRouteShellEnabled } from "./routeShellActivation";
 import type { AppRouteConfig, AppRouteMeta } from "./routeConfig";
 
@@ -14,6 +17,56 @@ export function getRouteDocumentTitle(meta: AppRouteMeta) {
 
 interface AppRouteElementProps {
   route: AppRouteConfig;
+}
+
+function RouteAccessGate({ meta, children }: { meta: AppRouteMeta; children: ReactNode }) {
+  const location = useLocation();
+  const [sessionState, setSessionState] = useState({
+    loading: meta.requiresAuth === true,
+    authenticated: false,
+    anonymous: false,
+  });
+
+  useEffect(() => {
+    if (!meta.requiresAuth) {
+      setSessionState({ loading: false, authenticated: false, anonymous: false });
+      return;
+    }
+
+    let active = true;
+    const applySession = (session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']) => {
+      if (!active) return;
+      setSessionState({
+        loading: false,
+        authenticated: Boolean(session?.user && !session.user.is_anonymous),
+        anonymous: session?.user.is_anonymous === true,
+      });
+    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => applySession(session));
+    void supabase.auth.getSession().then(({ data }) => applySession(data.session)).catch(() => applySession(null));
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [meta.requiresAuth]);
+
+  const decision = resolveRouteAccess(meta, {
+    isAuthenticated: sessionState.authenticated,
+    isAnonymousUser: sessionState.anonymous,
+    authLoading: sessionState.loading,
+  });
+
+  if (decision.kind === "loading") {
+    return <AsyncRouteLoadingFallback label="Checking your account…" />;
+  }
+
+  if (decision.kind === "redirect" && decision.redirectTo) {
+    const next = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={`${decision.redirectTo}?next=${encodeURIComponent(next)}`} replace />;
+  }
+
+  return <>{children}</>;
 }
 
 export function AppRouteElement({ route }: AppRouteElementProps): ReactElement {
@@ -61,7 +114,9 @@ export function AppRouteElement({ route }: AppRouteElementProps): ReactElement {
   return (
     <RouteErrorBoundary routeName={meta.id}>
       <RouteMetaProvider meta={meta}>
-        <RouteRuntimeProvider meta={meta}>{routeElement}</RouteRuntimeProvider>
+        <RouteRuntimeProvider meta={meta}>
+          <RouteAccessGate meta={meta}>{routeElement}</RouteAccessGate>
+        </RouteRuntimeProvider>
       </RouteMetaProvider>
     </RouteErrorBoundary>
   );

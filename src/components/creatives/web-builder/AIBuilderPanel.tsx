@@ -1381,7 +1381,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             selectionPinnedFile = selectedSourceFile;
           }
         }
-        try {
+        {
           const analysis = analyzeReactSite(vfsFiles);
           if (analysis.sectionMap) {
             siteAnalysisContext = analysis.sectionMap;
@@ -1429,7 +1429,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           });
           if (siteScope && resolvedSourceTargets.length === 0) throw new Error('Could not identify the requested site part in the page sources. Select it in Preview or name its component.');
           resolvedTargetFile = resolvedSourceTargets[0] ?? resolvedTargetFile;
-        } catch (error) { throw error; }
+        }
       } else if (currentCode) {
         // Fallback: detect React from currentCode if no vfsFiles available
         isReactProject = currentCode.includes('import ') && (
