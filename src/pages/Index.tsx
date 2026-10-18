@@ -432,6 +432,7 @@ const Index = () => {
         onAuthRequired={() => navigate("/auth")}
         onSiteConfirmed={handleConfirmedSite}
         badge="Introducing Affinity · Unison's AI App Builder"
+        chatGlow
         headline={<>Build your business with{" "}
           <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-lime-300 bg-clip-text text-transparent motion-safe:animate-pulse">
             Affinity

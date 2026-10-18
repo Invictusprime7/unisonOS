@@ -7862,6 +7862,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           </Button>
 
           {/* Inline project rename — invisible until a project is loaded. */}
+          <span className="shrink-0 text-foreground" aria-label="Affinity Builder">Affinity</span>
           {projectId && (
             <input
               value={projectDisplayName}
@@ -8066,7 +8067,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             size="icon"
             onClick={() => setAiPanelOpen(!aiPanelOpen)}
             className={cn("h-8 w-8 rounded-md", aiPanelOpen ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/[0.06] hover:text-white")}
-            title={aiPanelOpen ? "Close AI panel" : "Open AI panel"}
+            title={aiPanelOpen ? "Close Affinity panel" : "Open Affinity panel"}
+            aria-label={aiPanelOpen ? "Close Affinity panel" : "Open Affinity panel"}
           >
             <Sparkles className="h-4 w-4" />
           </Button>
