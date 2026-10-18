@@ -1,6 +1,6 @@
 {
   "servers": {
-    "supabase": {
+    "supabase-unison": {
       "type": "stdio",
       "command": "npx",
       "args": [
@@ -12,6 +12,10 @@
       "env": {
         "SUPABASE_ACCESS_TOKEN": "${input:supabaseAccessToken}"
       }
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=kzmzlvjdocvjcvkiyjfa&read_only=true&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching%2Cstorage"
     },
     "21st": {
       "type": "http",
