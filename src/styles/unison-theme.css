@@ -34,6 +34,19 @@
   color: hsl(var(--foreground));
 }
 
+.account-demo-status {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--ut-density-gap);
+  padding: var(--ut-section-space);
+  font-family: var(--ut-font-body);
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+}
+
 /* Existing Tailwind hover utilities must not turn UI controls into glowing cards. */
 @media (hover: hover) {
   [class*="hover:"]:hover,

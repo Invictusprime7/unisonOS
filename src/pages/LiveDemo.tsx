@@ -60,7 +60,7 @@ export default function LiveDemo() {
   }
 
   if (!launcherOpen && (!demoStatus || statusError || demoStatus.inProgress)) {
-    return <section className="min-h-screen bg-background text-foreground">
+    return <section className="account-demo-status">
       <p role="status">{statusError ? 'Your demo allowance could not be checked. Please try again.' : demoStatus?.inProgress ? 'Your demo generation is in progress. Return to the tab where you started it.' : 'Checking your free demo generation...'}</p>
       {statusError && <Button onClick={() => setStatusRefresh(value => value + 1)}>Try again</Button>}
       <Button variant="outline" onClick={goHome}>Go to Unison Home</Button>
