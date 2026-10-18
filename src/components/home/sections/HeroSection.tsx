@@ -20,6 +20,7 @@ interface HeroSectionProps {
   badge?: ReactNode;
   headline?: ReactNode;
   subtitle?: ReactNode;
+  chatGlow?: boolean;
 }
 
 const HOME_QUICK_ACTIONS: QuickAction[] = [
@@ -40,7 +41,7 @@ const HOME_QUICK_ACTIONS: QuickAction[] = [
   },
 ];
 
-export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange, badge, headline, subtitle }: HeroSectionProps) {
+export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange, badge, headline, subtitle, chatGlow = false }: HeroSectionProps) {
   const [discoveryActive, setDiscoveryActive] = useState(false);
 
   return (
@@ -157,6 +158,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               <Sparkles className="h-4 w-4 text-cyan-300" />
               <span>What would you like to build?</span>
             </div>
+            <div className={chatGlow ? "affinity-home-chat-glow" : undefined}>
             <AIAssistantCore
               key={user ? `site-discovery:${user.id}` : "site-discovery:anonymous"}
               appearance="unison"
@@ -194,6 +196,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               allowClearHistory={false}
               hideHeader
             />
+            </div>
             <p className="mt-2 text-center text-xs text-white/40">
               {launcherOpen || discoveryActive ? "Choose an option or reply in chat. Create your site when you're ready." : "Describe your idea or choose a starting point above"}
             </p>

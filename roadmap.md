@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Affinity naming
+- [x] Show Affinity in the visible Builder header and Wizard title; add a token-based glow around Home’s AI chat box. 13 Home/Wizard regressions pass; build OK. Signed-in visual verification remains unavailable (Home redirects to sign-in).
 - [x] Rename the active Wizard, Home chat, Builder chat, selected-element chat, commands, accessibility labels and related help text to Affinity; preserve technical identifiers and behavior. 21 Wizard/auth/workspace regression tests pass; sign-in demo shows Affinity without page errors. Authenticated Builder viewing remains blocked by the unavailable authoritative UNISON session.
 - [x] Bring the Affinity name into the Unison Home hero (badge, gradient headline, subtitle) with the same treatment as the Live Demo; Home-only overrides, shared hero component and demo copy untouched.
 
