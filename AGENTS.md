@@ -22,7 +22,7 @@
 
 - Service/recipe rules: `src/services/AGENTS.md`; provider rules: `supabase/functions/_shared/AGENTS.md`.
 - UNISON is the only backend: `src/integrations/supabase/env.ts` ignores other injected refs, `main.tsx` fails closed on identity mismatch, and backend changes deploy only via `.github/workflows/supabase-auto-update.yml`, so every schema change needs a timestamped `supabase/migrations` file (drizzle alone fails CI); why: Lovable tooling targets its built-in database.
-- Auth listeners stay synchronous; defer SDK/claims, bound onboarding. Reused route gates await sessions; events supersede initial reads. Handoffs skip Auth/Home/Demo; checkout/consent stay explicit. Why: prevent deadlocks and redirect loops.
+- Auth listeners synchronous; defer SDK/claims, bound onboarding. Gates await sessions; events win initial reads. Handoffs skip Auth/Home/Demo. Auth/callbacks share `authDestination` (Home or Demo). Why: prevent deadlocks and redirect drift.
 - Before app load, bridge only auth keys to sessionStorage on quota errors; never evict project data or edit the generated client. Why: full storage must not block sign-in; fallback lasts until the tab closes.
 
 - Builder preferences are optional local state enforced at request/execution boundaries; tools gate the menu, catalog/business settings gate their operations. Why: hiding controls cannot authorize disabled mutations.

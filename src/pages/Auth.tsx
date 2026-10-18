@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { claimGuestDemoIfNeeded } from "@/services/guestDemoClaim";
 import { ArrowLeft, Check, Sparkles, Zap } from "lucide-react";
+import { resolveAuthDestination } from "@/lib/authDestination";
 import "./Auth.css";
 
 const AuthLaunchDemoSequence = ({ duplicate = false }: { duplicate?: boolean }) => (
@@ -67,42 +68,6 @@ const Auth = () => {
 
   const newSignupRef = useRef(false);
 
-  // Successful sign-in opens Home, not a stale project/dashboard return link.
-  const resolvePostAuthDestination = async (userId: string, isNewSignup = false): Promise<string> => {
-    if (isNewSignup) return "/demo";
-    try {
-      const next = new URLSearchParams(window.location.search).get("next");
-      if (next?.startsWith("/") && !next.startsWith("//") && !next.includes("\\")) {
-        const pathname = new URL(next, window.location.origin).pathname;
-        if (["/demo", "/pricing", "/oauth/consent"].includes(pathname)) return next;
-      }
-      if (sessionStorage.getItem("checkout_plan")) {
-        sessionStorage.removeItem("checkout_plan");
-        return "/pricing";
-      }
-    } catch {
-      // Unavailable storage must not strand successful authentication.
-    }
-    const controller = new AbortController();
-    let lookupTimer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const lookup = supabase.from("onboarding_state").select("completed")
-        .eq("user_id", userId).abortSignal(controller.signal).maybeSingle()
-        .then(({ data, error }) => error ? "/home" : data?.completed ? "/home" : "/demo");
-      const fallback = new Promise<string>((resolve) => {
-        lookupTimer = setTimeout(() => {
-          resolve("/home");
-          controller.abort();
-        }, 4000);
-      });
-      return await Promise.race([lookup, fallback]);
-    } catch {
-      return "/home";
-    } finally {
-      clearTimeout(lookupTimer);
-    }
-  };
-
   useEffect(() => {
     let handled = false;
     let active = true;
@@ -115,7 +80,7 @@ const Auth = () => {
       redirectTimer = setTimeout(() => {
         // Legacy demo recovery must never be a navigation prerequisite.
         void claimGuestDemoIfNeeded(userId).catch(() => undefined);
-        void resolvePostAuthDestination(userId, isNewSignup)
+        void resolveAuthDestination(userId, isNewSignup)
           .then((dest) => {
           if (active) navigate(dest, { replace: true });
         }).catch(() => {
