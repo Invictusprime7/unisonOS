@@ -188,7 +188,7 @@ export function AIChatStream() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <CardTitle className="text-lg">AI Chat</CardTitle>
+            <CardTitle className="text-lg">Affinity</CardTitle>
             {isLoading && (
               <Badge variant="secondary" className="gap-1 text-xs">
                 <Loader2 className="h-3 w-3 animate-spin" />

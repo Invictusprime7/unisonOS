@@ -358,7 +358,7 @@ const InlineAIPanel: React.FC<InlineAIPanelProps> = ({
       {success && (
         <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-400">
           <CheckCircle2 className="w-3 h-3" />
-          <span role="status">Sent to the AI Builder — follow progress in the chat.</span>
+          <span role="status">Sent to Affinity — follow progress in the chat.</span>
         </div>
       )}
       {!error && !success && (

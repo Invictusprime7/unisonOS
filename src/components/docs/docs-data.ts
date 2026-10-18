@@ -50,7 +50,7 @@ Unison turns a few answers about your business into a finished, working website 
 Most tools give you a blank template and wish you luck. Unison starts from your business: what you do, who you serve, and what you want people to do when they arrive.
 
 **🚀 Launch a complete site**
-Answer four questions in the Launch Wizard and get a real multi-page site — written for your business, styled as one, with buttons that actually do something.
+Answer four questions in Affinity and get a real multi-page site — written for your business, styled as one, with buttons that actually do something.
 
 **✍️ Edit by describing**
 Tell the assistant what to change in plain English, or click any part of the page and edit it directly.
@@ -66,7 +66,7 @@ Go live on your own web address, then keep editing. Visitors see updates within 
 
 ## Your First Hour
 
-1. **Run the Launch Wizard** — four questions, one finished site.
+1. **Run Affinity** — four questions, one finished site.
 2. **Look through every page** — they are all written for your business already.
 3. **Fix the details** — real photos, real prices, real opening hours.
 4. **Switch on what you sell** — bookings, payments or enquiries.
@@ -118,7 +118,7 @@ Launch a client site in minutes, hand over a version you can reproduce exactly, 
 
 ## Quick Tip 💡
 
-Not listed? Pick the closest one in the Wizard. The pages and wording follow your business description, not the label.`,
+Not listed? Pick the closest one in Affinity. The pages and wording follow your business description, not the label.`,
       },
       {
         id: "dashboard-guide",
@@ -911,7 +911,7 @@ Running low? You can upgrade anytime or delete files you no longer need.
   },
   {
     id: "launch-wizard",
-    title: "Launch Wizard",
+    title: "Affinity site setup",
     icon: Rocket,
     description: "Answer a few questions, get a complete site",
     image: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&h=200&fit=crop",
@@ -922,7 +922,7 @@ Running low? You can upgrade anytime or delete files you no longer need.
         image: "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=600&h=300&fit=crop",
         content: `# Launching Your First Site 🚀
 
-The Launch Wizard turns a handful of answers into a finished, multi-page website — not a blank template you have to fill in yourself.
+Affinity turns a handful of answers into a finished, multi-page website — not a blank template you have to fill in yourself.
 
 ## The Four Questions
 
@@ -992,7 +992,7 @@ A style card is a complete design direction, not just a colour swap.
 
 Every card belongs to one of six families — **Modern, Bold, Editorial, Minimalist, Futuristic and Organic**. A family is a visual philosophy; each one holds several finished directions (for example Editorial includes Noir Atelier, a dark studio look made for salons and spas).
 
-Unison only offers a direction if it can build every part of your site — menu bar, banner, services, gallery, reviews, prices, contact and footer. Once chosen, your site stays in that family: reopening, editing with the AI Builder and publishing all keep the same family, and switching cards moves you cleanly to a new one.
+Unison only offers a direction if it can build every part of your site — menu bar, banner, services, gallery, reviews, prices, contact and footer. Once chosen, your site stays in that family: reopening, editing with Affinity and publishing all keep the same family, and switching cards moves you cleanly to a new one.
 
 ## What a Card Controls
 
@@ -1024,7 +1024,7 @@ Pick the card whose photography looks most like yours. Style and imagery carry e
   },
   {
     id: "ai-builder",
-    title: "AI Builder",
+    title: "Affinity",
     icon: Sparkles,
     description: "Edit your site by describing the change",
     image: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&h=200&fit=crop",
@@ -1276,8 +1276,8 @@ Existing work keeps running. You are prompted to upgrade before anything new is 
 export const quickLinks = [
   { title: "Welcome Guide", sectionId: "getting-started", articleId: "platform-overview" },
   { title: "What Unison Is For", sectionId: "getting-started", articleId: "who-uses-unison" },
-  { title: "Launch a Site", sectionId: "launch-wizard", articleId: "wizard-walkthrough" },
-  { title: "Edit with AI", sectionId: "ai-builder", articleId: "editing-with-ai" },
+  { title: "Launch with Affinity", sectionId: "launch-wizard", articleId: "wizard-walkthrough" },
+  { title: "Edit with Affinity", sectionId: "ai-builder", articleId: "editing-with-ai" },
   { title: "Publish & Domains", sectionId: "publishing", articleId: "publish-guide" },
   { title: "Style Cards", sectionId: "launch-wizard", articleId: "styles-and-look" },
   { title: "Build a Website", sectionId: "web-builder", articleId: "web-builder-intro" },

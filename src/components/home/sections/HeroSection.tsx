@@ -119,7 +119,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               "shadow-[0_0_20px_rgba(0,255,255,0.15)]"
             )}>
               <Sparkles className="h-3 w-3 mr-1.5" />
-              {badge ?? "AI-powered wizard · CRM + automation included"}
+              {badge ?? "Affinity · CRM + automation included"}
             </Badge>
           </motion.div>
 
@@ -141,7 +141,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
             transition={{ delay: 0.5, duration: 0.5 }}
             className="text-base sm:text-lg text-white/50 mb-8 max-w-2xl mx-auto leading-relaxed"
           >
-            {subtitle ?? "Tell Unison what your business needs. We’ll shape a complete site with booking, CRM, automations, and a live backend — no dev work required."}
+            {subtitle ?? "Tell Affinity what your business needs. We’ll shape a complete site with booking, CRM, automations, and a live backend — no dev work required."}
           </motion.p>
 
           {/* Floating AI chat replaces the primary site-building CTA */}
@@ -161,7 +161,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               key={user ? `site-discovery:${user.id}` : "site-discovery:anonymous"}
               appearance="unison"
               className={cn("transition-[height] duration-500 motion-reduce:transition-none", launcherOpen || discoveryActive ? "h-[min(740px,85dvh)]" : "h-[250px] sm:h-[270px]")}
-              placeholder="Tell Unison about your idea..."
+              placeholder="Tell Affinity about your idea..."
               quickActions={HOME_QUICK_ACTIONS}
               aiMode="site-discovery"
               persistenceKey={user ? siteDiscoveryMessagesKey(user.id) : undefined}

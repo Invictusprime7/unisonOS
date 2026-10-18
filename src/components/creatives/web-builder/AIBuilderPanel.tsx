@@ -1967,7 +1967,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             });
             if (editResult.candidate.status !== 'ready-for-commit' || !editResult.changeSet) {
               emitAgentEvent({ kind: 'plan', message: 'Could not finish writing the change', status: 'failed' });
-              throw new Error(editResult.candidate.diagnostics[0] ?? `App Builder stopped: ${editResult.stopReason}`);
+              throw new Error(editResult.candidate.diagnostics[0] ?? `Affinity stopped: ${editResult.stopReason}`);
             }
             const candidate = editResult.changeSet;
             emitAgentEvent({ kind: 'plan', message: `Wrote changes to ${candidate.fileOps.length} file${candidate.fileOps.length === 1 ? '' : 's'}`, status: 'ok' });
@@ -2034,14 +2034,14 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 },
               });
               if (generation.status !== 'ready-for-commit' || !generation.changeSet) {
-                throw new Error(generation.diagnostics[0] ?? 'App Builder could not author every requested page.');
+                throw new Error(generation.diagnostics[0] ?? 'Affinity could not author every requested page.');
               }
               canonicalCandidate = generation.changeSet;
               canonicalRouteOps = [...generation.routeOps];
               dedicatedPageGeneration = true;
               response = {
                 data: {
-                  content: `Unison App Builder prepared ${generation.outcomes.length} new page${generation.outcomes.length === 1 ? '' : 's'}.`,
+                  content: `Affinity prepared ${generation.outcomes.length} new page${generation.outcomes.length === 1 ? '' : 's'}.`,
                   actionType: 'canonical-page-generation',
                   filesDetected: canonicalCandidate.fileOps.map(operation => operation.path),
                 },
@@ -2050,7 +2050,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             } else {
               response = {
                 data: {
-                  content: editResult.summary ?? 'Unison App Builder prepared this source candidate.',
+                  content: editResult.summary ?? 'Affinity prepared this source candidate.',
                   actionType: 'canonical-source-edit',
                   filesDetected: candidate.fileOps.map(operation => operation.path),
                   guestDemoOperationId: editResult.guestDemoOperationId,
@@ -2731,7 +2731,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     )}>
       <header className="builder-header flex-wrap">
         <Sparkles className="text-primary" aria-hidden="true" />
-        <div className="builder-header-title"><h2>AI Builder</h2><p>{templateName || 'Your project'}</p></div>
+        <div className="builder-header-title"><h2>Affinity</h2><p>{templateName || 'Your project'}</p></div>
         <span role="status" className="text-muted-foreground">{isLoading || isFixing ? 'Thinking' : heldFiles || pendingPermissionAction ? 'Review' : 'Ready'}</span>
         <BuilderSettings open={settingsOpen} onToggle={() => setSettingsOpen(value => !value)} features={features} onChange={setFeatures} permissions={aiPermissions} onPermissionsChange={setAIPermissions} busy={isLoading || isFixing} />
         {onClose && <Button variant="link" size="icon" onClick={onClose} title="Close Builder" aria-label="Close Builder"><ChevronLeft /></Button>}
@@ -3063,9 +3063,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               void handleFixError({ type: 'runtime', message: prompt, timestamp: new Date() });
             }}
             onClearErrors={onClearErrors}
-            onApplyPatch={async () => ({ success: false, errors: ['Request a validated repair through AI Builder.'] })}
+            onApplyPatch={async () => ({ success: false, errors: ['Request a validated repair through Affinity.'] })}
             canAutoApplyPatch={false}
-            onReviewPatch={() => toast.info('Describe the repair in Builder chat to prepare a validated candidate.')}
+            onReviewPatch={() => toast.info('Describe the repair in Affinity chat to prepare a validated candidate.')}
             vfsFiles={vfsFiles}
             isFixing={isFixing}
           />}

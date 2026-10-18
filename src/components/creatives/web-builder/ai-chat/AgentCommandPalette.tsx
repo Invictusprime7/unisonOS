@@ -114,7 +114,7 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
       <CommandInput
-        placeholder={mode === 'font' ? 'Choose a font…' : mode === 'map' ? 'Search pages and buttons…' : mode === 'changes' ? 'Search changes…' : mode === 'catalog' ? 'Search items…' : mode === 'price' ? `New price for ${picked?.name ?? ''}, then Enter` : mode === 'image' ? `Image link for ${picked?.name ?? ''}, then Enter` : 'Type a command or ask Unison…'}
+        placeholder={mode === 'font' ? 'Choose a font…' : mode === 'map' ? 'Search pages and buttons…' : mode === 'changes' ? 'Search changes…' : mode === 'catalog' ? 'Search items…' : mode === 'price' ? `New price for ${picked?.name ?? ''}, then Enter` : mode === 'image' ? `Image link for ${picked?.name ?? ''}, then Enter` : 'Type a command or ask Affinity…'}
         value={query}
         onValueChange={setQuery}
         aria-label="Command"
@@ -122,7 +122,7 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
       <CommandList>
         <CommandEmpty>
           {mode === 'root' && query.trim()
-            ? <button type="button" className="underline" onClick={() => ask(query)}>Ask Unison: “{query}”</button>
+            ? <button type="button" className="underline" onClick={() => ask(query)}>Ask Affinity: “{query}”</button>
             : 'No matches.'}
         </CommandEmpty>
         {mode === 'root' && (
@@ -141,7 +141,7 @@ export function AgentCommandPalette({ files, onApply, onAsk, businessId, revisio
             </CommandGroup>
             {query.trim() && (
               <CommandGroup heading="Ask">
-                <CommandItem value={`ask ${query}`} onSelect={() => ask(query)}>Ask Unison: “{query}”</CommandItem>
+                <CommandItem value={`ask ${query}`} onSelect={() => ask(query)}>Ask Affinity: “{query}”</CommandItem>
               </CommandGroup>
             )}
           </>
