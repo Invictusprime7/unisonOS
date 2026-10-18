@@ -65,34 +65,41 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const signInFormRef = useRef<HTMLFormElement>(null);
 
-  // Resolve destination after sign-in/up: /onboarding for new users, /dashboard for returning.
-  // If the user was mid-checkout before authenticating, send them back to /pricing.
-  const resolvePostAuthDestination = async (userId: string, isNewSignup = false) => {
-    // Honor ?next= for OAuth consent and other same-origin redirects.
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const next = params.get("next");
-      if (next && next.startsWith("/") && !next.startsWith("//")) {
-        return next;
-      }
-    } catch {
-      // ignore
-    }
-    const checkoutPlan = sessionStorage.getItem("checkout_plan");
-    if (checkoutPlan) {
-      sessionStorage.removeItem("checkout_plan");
-      return "/pricing";
-    }
+  const newSignupRef = useRef(false);
+
+  // Successful sign-in opens Home, not a stale project/dashboard return link.
+  const resolvePostAuthDestination = async (userId: string, isNewSignup = false): Promise<string> => {
     if (isNewSignup) return "/demo";
     try {
-      const { data } = await supabase
-        .from("onboarding_state")
-        .select("completed")
-        .eq("user_id", userId)
-        .maybeSingle();
-      return data?.completed ? "/home" : "/demo";
+      const next = new URLSearchParams(window.location.search).get("next");
+      if (next?.startsWith("/") && !next.startsWith("//") && !next.includes("\\")) {
+        const pathname = new URL(next, window.location.origin).pathname;
+        if (["/demo", "/pricing", "/oauth/consent"].includes(pathname)) return next;
+      }
+      if (sessionStorage.getItem("checkout_plan")) {
+        sessionStorage.removeItem("checkout_plan");
+        return "/pricing";
+      }
+    } catch {
+      // Unavailable storage must not strand successful authentication.
+    }
+    const controller = new AbortController();
+    let lookupTimer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const lookup = supabase.from("onboarding_state").select("completed")
+        .eq("user_id", userId).abortSignal(controller.signal).maybeSingle()
+        .then(({ data, error }) => error ? "/home" : data?.completed ? "/home" : "/demo");
+      const fallback = new Promise<string>((resolve) => {
+        lookupTimer = setTimeout(() => {
+          resolve("/home");
+          controller.abort();
+        }, 4000);
+      });
+      return await Promise.race([lookup, fallback]);
     } catch {
       return "/home";
+    } finally {
+      clearTimeout(lookupTimer);
     }
   };
 
@@ -106,9 +113,9 @@ const Auth = () => {
       // Auth listeners execute under the SDK session lock. Database/auth work
       // must start on a later task, after that lock has been released.
       redirectTimer = setTimeout(() => {
-        void claimGuestDemoIfNeeded(userId)
-          .catch(() => ({ claimed: false, projectId: null }))
-          .then(() => resolvePostAuthDestination(userId, isNewSignup))
+        // Legacy demo recovery must never be a navigation prerequisite.
+        void claimGuestDemoIfNeeded(userId).catch(() => undefined);
+        void resolvePostAuthDestination(userId, isNewSignup)
           .then((dest) => {
           if (active) navigate(dest, { replace: true });
         }).catch(() => {
@@ -120,12 +127,12 @@ const Auth = () => {
       // Anonymous guest sessions must not trigger a redirect: protected routes
       // bounce them back to /auth, which would loop forever.
       if (session && session.user.is_anonymous !== true) {
-        scheduleRedirect(session.user.id, (event as string) === "SIGNED_UP");
+        scheduleRedirect(session.user.id, newSignupRef.current);
       }
     });
 
     void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && session.user.is_anonymous !== true) scheduleRedirect(session.user.id);
+      if (session && session.user.is_anonymous !== true) scheduleRedirect(session.user.id, newSignupRef.current);
     }).catch(() => {
       if (active) setLoading(false);
     });
@@ -146,11 +153,12 @@ const Auth = () => {
     const password = formData.get("signup-password") as string;
     const fullName = formData.get("full-name") as string;
 
+    newSignupRef.current = true;
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/onboarding`,
+        emailRedirectTo: `${window.location.origin}/auth?next=%2Fdemo`,
         data: {
           full_name: fullName,
         },
@@ -160,6 +168,7 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
+      newSignupRef.current = false;
       toast({
         title: "Sign up failed",
         description: error.message,

@@ -1,5 +1,5 @@
 # Architecture decisions
-- Vite unsets Babel breaking mode; browsers lack Node process.
+- Unset Babel breaking mode; browsers lack Node process.
 - Load Unison tokens after base CSS, bridge app roles in `src/styles/unison-theme.css`, and load font links in `main.tsx`; why: vendor values win without vendor edits or saved-site regeneration.
 
 - `LauncherWizard` is selection-only: it captures intent and invokes launch orchestration, but never authors or mutates VFS source.
@@ -22,10 +22,10 @@
 
 - Service/recipe rules: `src/services/AGENTS.md`; provider rules: `supabase/functions/_shared/AGENTS.md`.
 - UNISON is the only backend: `src/integrations/supabase/env.ts` ignores other injected refs, `main.tsx` fails closed on identity mismatch, and backend changes deploy only via `.github/workflows/supabase-auto-update.yml`, so every schema change needs a timestamped `supabase/migrations` file (drizzle alone fails CI); why: Lovable tooling targets its built-in database.
-- Auth state listeners stay synchronous and defer auth-backed queries/audits to a later task; why: awaiting SDK calls inside its session lock deadlocks successful sign-in.
+- Auth listeners are synchronous; defer SDK work, bound onboarding reads, and never await guest claims before navigation. Home replaces stale editor returns; demo/checkout/consent stay explicit. Why: avoid lock deadlocks and blocked sign-in.
 - Before app load, bridge only auth keys to sessionStorage on quota errors; never evict project data or edit the generated client. Why: full storage must not block sign-in; fallback lasts until the tab closes.
 
 - Builder preferences are optional local state enforced at request/execution boundaries; tools gate the menu, catalog/business settings gate their operations. Why: hiding controls cannot authorize disabled mutations.
 
 - Agent record updates use EditorCommand with observed fields; adapters own scoped writes/invalidation. Why: clicks and AI share one owner.
-- Edit gates block only compile/imports, stale/ownership, protected paths, data loss and binding execution; design/scope findings are advisory; theme requests use the theme lane. Why: policy blocks stopped valid edits.
+- Edit gates block only compile/imports, stale/ownership, protected paths, data loss and binding execution; design/scope findings are advisory; theme requests use the theme lane. Why: avoid policy dead ends.
