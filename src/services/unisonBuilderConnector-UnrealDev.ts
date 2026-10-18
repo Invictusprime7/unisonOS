@@ -2,6 +2,7 @@ import type {
   UnisonBuilderConnectorInput,
   UnisonBuilderTurnContext,
 } from '@/types/unisonBuilderConnector';
+import { readMaterializedDesignSources } from '@/services/app-builder/design/designSourceMaterializer';
 
 // Canonical Unison token roles (values are always supplied by the project's sealed theme).
 const TOKEN_NAMES = [
@@ -54,6 +55,7 @@ export function createUnisonBuilderContext(input: UnisonBuilderConnectorInput): 
       artDirectionPackId: registry?.artDirectionPackId ?? null,
       allowedImplementationIds: registry?.implementations.map(item => item.id) ?? [],
       projection: registry,
+      materializedRecipes: readMaterializedDesignSources(input.files),
     },
     designSystem: {
       tokenNames: TOKEN_NAMES, preserveSealedArtDirection: true,

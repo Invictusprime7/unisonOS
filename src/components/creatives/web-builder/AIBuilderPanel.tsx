@@ -102,7 +102,7 @@ import {
   type PersistedMessage,
 } from '@/services/aiHistoryStore';
 // Side-effect import: registers GHL skill pack with global registry
-import { isBuilderProviderUnavailable, isBuilderSessionError, runBuilderTurn, shouldOfferBuilderProviderRetry } from '@/services/builderBrainClient';
+import { isBuilderProviderUnavailable, isBuilderSessionError, releaseGuestDemoReservation, runBuilderTurn, shouldOfferBuilderProviderRetry } from '@/services/builderBrainClient';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
 import {
   envelopeRunIdFromResponse,
@@ -374,6 +374,7 @@ export interface ThinkingStep {
 export interface MessageMeta {
   actionType?: string;
   modelUsed?: string;
+  guestDemoOperationId?: string;
   filesDetected?: string[];
   warnings?: Array<{ severity: string; message: string }>;
   requiresApproval?: boolean;
@@ -613,7 +614,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   const [isApplyingPermissionAction, setIsApplyingPermissionAction] = useState(false);
   // Files the auto-apply guard held back. Without this the AI "resolved" a
   // rewrite that never materialized anywhere — now the user can still apply it.
-  const [heldFiles, setHeldFiles] = useState<{ files: Record<string, string>; deletions?: string[]; routeOps?: TopologyChange[]; candidate?: AICandidateChangeSet; reason: string } | null>(null);
+  const [heldFiles, setHeldFiles] = useState<{ files: Record<string, string>; deletions?: string[]; routeOps?: TopologyChange[]; candidate?: AICandidateChangeSet; guestDemoOperationId?: string; reason: string } | null>(null);
   const [isApplyingHeld, setIsApplyingHeld] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -982,6 +983,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   // Send message to AI
   const handleSend = async () => {
     if ((!input.trim() && droppedFiles.length === 0) || isLoading) return;
+    const guestDemoOperationId = crypto.randomUUID();
     try {
       if (isCatalogMutationRequest(input)) requireBuilderFeature(featuresRef.current, 'catalog');
       if (isImageGenerationRequest(input)) requireBuilderFeature(featuresRef.current, 'images');
@@ -1880,6 +1882,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             emitAgentEvent({ kind: 'plan', message: `Writing changes to ${page.filePath.split('/').pop()}`, status: 'running', path: page.filePath });
             const editResult = await unisonAppBuilder.edit({
               operationId: `builder:${generateId()}`,
+              guestDemoOperationId,
               attachmentContext: _fileContext,
               images: _attachments.length > 0
                 ? _attachments.map((a) => ({ name: a.name, data: a.data }))
@@ -2050,6 +2053,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   content: editResult.summary ?? 'Unison App Builder prepared this source candidate.',
                   actionType: 'canonical-source-edit',
                   filesDetected: candidate.fileOps.map(operation => operation.path),
+                  guestDemoOperationId: editResult.guestDemoOperationId,
                 },
                 error: null,
               };
@@ -2084,6 +2088,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               projectId: projectId ?? null,
               businessId: businessId ?? null,
               prompt: _userContent.slice(0, 8000),
+              operationId: guestDemoOperationId,
             },
             requestEnvelope: capabilityInterpretation.envelope,
             unisonContext,
@@ -2201,6 +2206,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         requiresApproval: response.data?.requiresApproval,
         removedFiles: response.data?.removedFiles,
         reviewSummary: response.data?.reviewSummary,
+        guestDemoOperationId: response.data?.guestDemoOperationId,
       };
 
       // The edge function returns { content, generatedImage?, imagePlacement? }
@@ -2329,12 +2335,12 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
         if (scopeBlockReason) {
           console.warn('[AIBuilderPanel] SCOPE BLOCK:', scopeBlockReason);
-          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, reason: `Edit held back: ${scopeBlockReason}` });
+          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: `Edit held back: ${scopeBlockReason}` });
           toast.warning(`⚠️ Edit held for review: ${scopeBlockReason}`);
           transactionVerdict = transactionVerdictLine('held-for-review', scopeBlockReason);
         } else if (!canAutoApply(permissionCategory)) {
           const permissionReason = `${permissionCategory[0].toUpperCase()}${permissionCategory.slice(1)} edits are set to review before apply.`;
-          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, reason: permissionReason });
+          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: permissionReason });
           toast.info('AI patch held for review', { description: permissionReason });
           transactionVerdict = transactionVerdictLine('held-for-review', permissionReason);
         } else if (shouldBlock) {
@@ -2342,7 +2348,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           console.warn('[AIBuilderPanel] Patch requires approval — NOT auto-applying');
           const heldReason = responseMeta?.warnings?.map((warning) => warning.message).filter(Boolean).join('; ')
             || 'The reviewer flagged this patch. Review the warnings, then apply.';
-          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, reason: heldReason });
+          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: heldReason });
           toast.warning('⚠️ AI patch flagged for review — apply it from the review card when ready');
           transactionVerdict = transactionVerdictLine('held-for-review', heldReason);
         } else {
@@ -2365,6 +2371,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 summary: responseMeta?.reviewSummary,
                 actionType: responseMeta?.actionType,
                 origin: `multi-file-task-${taskIndex + 1}`,
+                guestDemoOperationId: responseMeta.guestDemoOperationId,
                 deletions: task.deletions,
                 routeOps: taskIndex === sequentialTasks.length - 1 ? canonicalRouteOps : [],
                 candidate: canonicalCandidate,
@@ -2419,6 +2426,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               liveStep('error', 'AI edit was not applied', applyError);
               vfsEventBus.emit('ai:apply:error', { message: applyError, source: 'multi-file' });
               toast.error('AI edit was not applied', { description: applyError, duration: 8000 });
+              if (responseMeta?.guestDemoOperationId) {
+                void releaseGuestDemoReservation(responseMeta.guestDemoOperationId, 'canonical-commit-failed')
+                  .catch((error) => console.warn('[AIBuilderPanel] Guest reservation release failed', error));
+              }
               transactionVerdict = transactionVerdictLine('failed', applyError);
             }
 
@@ -2480,7 +2491,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       // AUTO-APPLY: Push generated code to VFS — prefer orchestrator for dep resolution
       if (!multiFileOutput && canonicalCandidate?.dataOps?.length) {
         requireBuilderFeature(featuresRef.current, 'catalog');
-        if (!canAutoApply('backend')) { setHeldFiles({ files: {}, candidate: canonicalCandidate, reason: 'Review catalog changes before applying.' }); return; }
+        if (!canAutoApply('backend')) { setHeldFiles({ files: {}, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: 'Review catalog changes before applying.' }); return; }
         markPreviewPending();
         const dataOutcome = await applyAIBuilderFiles(onApplyToVFS, {}, {
           prompt: userContent,
@@ -2489,6 +2500,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           candidate: canonicalCandidate,
           summary: responseMeta?.reviewSummary,
           actionType: responseMeta?.actionType,
+          guestDemoOperationId: responseMeta?.guestDemoOperationId,
         });
         if (dataOutcome.success) {
           const verification = await awaitPreviewVerification();
@@ -2497,7 +2509,16 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           vfsEventBus.emit('ai:apply:complete', { filesWritten: [], source: 'catalog-data' });
         } else {
           toast.error('Catalog changes were not applied', { description: dataOutcome.errors?.[0] });
+          if (responseMeta?.guestDemoOperationId) {
+            void releaseGuestDemoReservation(responseMeta.guestDemoOperationId, 'canonical-commit-failed')
+              .catch((error) => console.warn('[AIBuilderPanel] Guest reservation release failed', error));
+          }
         }
+      }
+
+      if (!multiFileOutput && !canonicalCandidate?.dataOps?.length && responseMeta?.guestDemoOperationId) {
+        void releaseGuestDemoReservation(responseMeta.guestDemoOperationId, 'no-canonical-mutation')
+          .catch((error) => console.warn('[AIBuilderPanel] Guest reservation release failed', error));
       }
 
     }
@@ -2973,15 +2994,16 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                     const deletions = heldFiles.deletions;
                     const routeOps = heldFiles.routeOps;
                     const candidate = heldFiles.candidate;
+                    const guestDemoOperationId = heldFiles.guestDemoOperationId;
                     setIsApplyingHeld(true);
-                    const outcome = await applyAIBuilderFiles(onApplyToVFS, pending, { origin: 'held-review', deletions, routeOps, candidate });
+                    const outcome = await applyAIBuilderFiles(onApplyToVFS, pending, { origin: 'held-review', deletions, routeOps, candidate, guestDemoOperationId });
                     setIsApplyingHeld(false);
                     if (outcome.success) {
                       setHeldFiles(null);
                       toast.success('Held changes applied to your project');
                     } else {
                       toast.error('Apply failed', { description: outcome.errors?.[0] });
-                      setHeldFiles({ files: pending, deletions, routeOps, candidate, reason: outcome.errors?.[0] ?? 'Apply failed.' });
+                      setHeldFiles({ files: pending, deletions, routeOps, candidate, guestDemoOperationId, reason: outcome.errors?.[0] ?? 'Apply failed.' });
                     }
                   }}
                 >
@@ -2991,7 +3013,13 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   type="button"
                   disabled={isApplyingHeld}
                   className="disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => setHeldFiles(null)}
+                  onClick={() => {
+                    setHeldFiles(null);
+                    if (heldFiles.guestDemoOperationId) {
+                      void releaseGuestDemoReservation(heldFiles.guestDemoOperationId, 'user-discard')
+                        .catch((error) => console.warn('[AIBuilderPanel] Guest reservation release failed', error));
+                    }
+                  }}
                 >
                   Discard
                 </button>

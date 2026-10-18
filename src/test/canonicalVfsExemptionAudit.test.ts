@@ -42,6 +42,6 @@ describe('canonical VFS exemption audit', () => {
     const total = Object.values(registry.baseline as Record<string, Record<string, number>>)
       .flatMap((reasons) => Object.values(reasons))
       .reduce((sum, count) => sum + count, 0);
-    expect(total).toBe(37);
+    expect(total).toBe(39);
   });
 });

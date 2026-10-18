@@ -55,11 +55,12 @@ describe('Navbar registry and emitted renderer parity', () => {
     const Registered = variant.component;
     const section = { id: 'navbar-proof', type: 'navbar', variantId: variant.id, props } as SectionEntry;
     const registryView = render(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />);
-    const expectedMarkup = registryView.container.innerHTML;
+    const expectedMarkup = registryView.container.querySelector('header[data-ut-variant]')?.outerHTML;
     registryView.unmount();
 
     const generatedView = render(<Navbar props={props} variantId={variant.id} />);
-    expect(normalizeRadixIds(generatedView.container.innerHTML)).toBe(normalizeRadixIds(expectedMarkup));
+    expect(normalizeRadixIds(generatedView.container.querySelector('header[data-ut-variant]')?.outerHTML ?? ''))
+      .toBe(normalizeRadixIds(expectedMarkup ?? ''));
     expect(generatedView.container.querySelector('[data-ut-mobile-navigation]')).toHaveAttribute('data-ut-mobile-navigation', 'radix');
     expect(generatedView.getByText('Book a consult')).toHaveAttribute('data-ut-intent', 'booking.create');
   });

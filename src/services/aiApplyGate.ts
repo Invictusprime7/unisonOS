@@ -50,6 +50,7 @@ export interface AiCommitContext {
   activePagePath: string;
   /** Exact isolated candidate accepted by the Composer gates. */
   candidate?: AICandidateChangeSet;
+  guestDemoOperationId?: string;
   /** Checkpoint label shown in the version list (usually the user's prompt). */
   label?: string;
 }
@@ -72,7 +73,10 @@ export function buildAiCandidatePatch(ctx: AiCommitContext): PatchPlan {
   }
   const patch: PatchPlan = {
     summary: ctx.label ? `AI · ${ctx.label}` : `AI candidate ${candidate.id}`,
-    operationIds: [`ai-candidate:${candidate.id}`],
+    operationIds: [
+      `ai-candidate:${candidate.id}`,
+      ...(ctx.guestDemoOperationId ? [`guest-demo:${ctx.guestDemoOperationId}`] : []),
+    ],
     fileOps: candidate.fileOps.map((operation) => operation.type === 'delete'
       ? { type: 'delete' as const, path: operation.path }
       : { type: operation.type, path: operation.path, contents: operation.content }),

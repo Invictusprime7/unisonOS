@@ -4,11 +4,11 @@ import { lazy, type ReactElement } from "react";
 import { Navigate } from "react-router-dom";
 
 import Auth from "@/pages/Auth";
+import Home from "@/pages/Home";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/NotFound";
 
 const Pricing = lazy(() => import("@/pages/Pricing"));
-const Index = lazy(() => import("@/pages/Index"));
 const CheckoutSuccess = lazy(() => import("@/pages/CheckoutSuccess"));
 const CheckoutCancel = lazy(() => import("@/pages/CheckoutCancel"));
 const WebBuilderPage = lazy(() => import("@/pages/WebBuilderPage"));
@@ -117,7 +117,7 @@ export const appRoutes: AppRouteConfig[] = [
   },
   {
     path: "/home",
-    element: withAsyncBoundary(<Index />),
+    element: withAsyncBoundary(<Home />),
     meta: {
       id: "home",
       title: "Home",
@@ -126,7 +126,6 @@ export const appRoutes: AppRouteConfig[] = [
       chrome: "legacy",
       requiresAuth: true,
       requiresWorkspace: true,
-      deprecatedAliasFor: "/dashboard",
     },
   },
   {

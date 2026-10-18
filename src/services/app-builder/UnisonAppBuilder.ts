@@ -226,6 +226,7 @@ export function createUnisonAppBuilder(
       }
       const composer = await runComposer({
         request: assembled.request,
+        guestDemoOperationId: input.guestDemoOperationId,
         baseFiles: { ...input.currentFiles },
         baseRevisionId: input.baseRevisionId ?? undefined,
         maxAttempts: 3,
@@ -252,6 +253,7 @@ export function createUnisonAppBuilder(
         },
         candidateFiles: composer.prepared?.nextFiles ?? input.currentFiles,
         stopReason: stopReason(composer.reason),
+        guestDemoOperationId: composer.guestDemoOperationId,
         changeSet: composer.prepared?.build.changeSet,
         summary: composer.response?.summary,
       };

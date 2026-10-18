@@ -61,6 +61,7 @@ import { FileActivityRibbon } from './ai-chat/FileActivityRibbon';
 import { emitAgentEvent, lineDelta } from '@/services/agent-runtime/agentEvents';
 import { buildSystemGraph, renderSystemGraphForPrompt } from '@/services/agent-runtime/systemGraph';
 import { AgentCommandPalette } from './ai-chat/AgentCommandPalette';
+import { BUILDER_FEATURE_DEFAULTS, BUILDER_FEATURE_KEY, readBuilderFeatures } from '@/services/builder/builderFeatures';
 import { CatalogPanel } from './ai-chat/CatalogPanel';
 import { agentOperations } from '@/services/agent-runtime/operations';
 import { dispatchBuilderOperation } from '@/services/unisonBuilderToolDispatch';
@@ -609,6 +610,14 @@ interface AIBuilderPanelProps {
 // ============================================================================
 // Dropped File Type
 // ============================================================================
+
+function readConfiguredBuilderFeatures() {
+  try {
+    return readBuilderFeatures(window.localStorage.getItem(BUILDER_FEATURE_KEY));
+  } catch {
+    return { ...BUILDER_FEATURE_DEFAULTS };
+  }
+}
 
 interface DroppedFile {
   id: string;
@@ -3822,7 +3831,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             </div>
           </ScrollArea>
 
-          <AgentCommandPalette files={vfsFiles ?? {}} onApply={onApplyToVFS} onAsk={setInput} businessId={businessId} revisionId={revisionId} />
+          <AgentCommandPalette files={vfsFiles ?? {}} onApply={onApplyToVFS} onAsk={setInput} businessId={businessId} revisionId={revisionId} features={readConfiguredBuilderFeatures()} />
           {agentTarget && (
             <div className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground" role="status" aria-live="polite">
               <span className="truncate">

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -30,8 +30,10 @@ const MARKER = 'UNISON GENERATED UI FOUNDATION';
  * Every installed component must have exactly one canonical route a generated
  * page is allowed to import, or the wizard can never reach it.
  */
-function installedComponentIds(): string[] {
-  const raw = readFileSync(resolve(process.cwd(), '.21st/design.json'), 'utf8');
+function installedComponentIds(): string[] | null {
+  const path = resolve(process.cwd(), '.21st/design.json');
+  if (!existsSync(path)) return null;
+  const raw = readFileSync(path, 'utf8');
   const parsed = JSON.parse(raw) as { components?: { installed?: unknown } };
   const installed = parsed.components?.installed;
   const ids = Array.isArray(installed) ? installed : [];
@@ -55,17 +57,22 @@ function routeFor(id: string): string | null {
   return null;
 }
 
-describe('generated UI component catalog', () => {
-  const installed = installedComponentIds();
+const installed = installedComponentIds();
+
+describe.skipIf(installed === null)('installed 21st.dev component routes', () => {
+  const installedIds = installed ?? [];
 
   it('reads a non-trivial installed component list from .21st/design.json', () => {
-    expect(installed.length).toBeGreaterThanOrEqual(40);
+    expect(installedIds.length).toBeGreaterThanOrEqual(40);
   });
 
   it('gives every installed component exactly one canonical import route', () => {
-    const unreachable = installed.filter((id) => routeFor(id) === null);
+    const unreachable = installedIds.filter((id) => routeFor(id) === null);
     expect(unreachable, `installed components with no canonical import route: ${unreachable.join(', ')}`).toEqual([]);
   });
+});
+
+describe('generated UI component catalog', () => {
 
   it('never routes the same component through two different paths', () => {
     const seen = new Map<string, string>();

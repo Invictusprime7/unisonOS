@@ -43,11 +43,11 @@ describe('Footer registry and emitted renderer parity', () => {
     const Registered = variant.component;
     const section = { id: 'footer-proof', type: 'footer', variantId: variant.id, props } as SectionEntry;
     const registryView = render(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />);
-    const expectedMarkup = registryView.container.innerHTML;
+    const expectedMarkup = registryView.container.querySelector('footer[data-ut-variant]')?.outerHTML;
     registryView.unmount();
 
     const generatedView = render(<Footer props={props} variantId={variant.id} />);
-    expect(generatedView.container.innerHTML).toBe(expectedMarkup);
+    expect(generatedView.container.querySelector('[data-ut-section-id] > footer[data-ut-variant]')?.outerHTML).toBe(expectedMarkup);
   });
 
   it('prefers explicit identity and preserves registered legacy layouts', () => {

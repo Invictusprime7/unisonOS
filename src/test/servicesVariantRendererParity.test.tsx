@@ -43,11 +43,11 @@ describe('Services registry and emitted renderer parity', () => {
     const Registered = variant.component;
     const section = { id: 'services-proof', type: 'services', variantId: variant.id, props } as SectionEntry;
     const registryView = render(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />);
-    const expectedMarkup = registryView.container.innerHTML;
+    const expectedMarkup = registryView.container.querySelector('section[data-ut-variant]')?.outerHTML;
     registryView.unmount();
 
     const generatedView = render(<Services props={props} variantId={variant.id} />);
-    expect(generatedView.container.innerHTML).toBe(expectedMarkup);
+    expect(generatedView.container.querySelector('section[data-ut-variant]')?.outerHTML).toBe(expectedMarkup);
   });
 
   it('prefers explicit identity and preserves legacy layouts', () => {

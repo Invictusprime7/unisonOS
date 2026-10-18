@@ -47,6 +47,10 @@ function getAdminClient(): SupabaseClient {
   return _adminClient;
 }
 
+export function getServiceRoleClient(): SupabaseClient {
+  return getAdminClient();
+}
+
 /**
  * Verify user JWTs with the public client and the request's bearer token.
  * `getClaims()` supports the backend signing-key system and verifies the JWT

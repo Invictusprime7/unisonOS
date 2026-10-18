@@ -8386,6 +8386,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                         },
                         activePagePath,
                         candidate: candidate.build.changeSet,
+                        guestDemoOperationId: applyMeta?.guestDemoOperationId,
                         label: applyMeta?.prompt ? applyMeta.prompt.slice(0, 120) : undefined,
                       }
                     : null;
@@ -8600,6 +8601,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                       },
                       activePagePath,
                       candidate: candidate.build.changeSet,
+                      guestDemoOperationId: applyMeta?.guestDemoOperationId,
                       label: applyMeta?.prompt ? applyMeta.prompt.slice(0, 120) : undefined,
                     }
                   : null;

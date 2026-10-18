@@ -68,6 +68,17 @@ export interface BuilderTurnOptions {
   timeoutMs?: number;
 }
 
+export async function releaseGuestDemoReservation(operationId: string, reason: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('ai-code-assistant', {
+    body: {
+      guestDemoAction: 'release',
+      operationId,
+      reason: reason.slice(0, 120),
+    },
+  });
+  if (error) throw new Error(error.message || 'Guest demo reservation release failed');
+}
+
 type BuilderSession = Awaited<ReturnType<typeof supabase.auth.refreshSession>>['data']['session'];
 
 // Wizard page batches invoke Lane B concurrently. A rejected access token can

@@ -40,11 +40,11 @@ describe('CTA registry and emitted renderer parity', () => {
     const Registered = variant.component;
     const section = { id: 'cta-proof', type: 'cta', variantId: variant.id, props } as SectionEntry;
     const registryView = render(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />);
-    const expectedMarkup = registryView.container.innerHTML;
+    const expectedMarkup = registryView.container.querySelector('[data-ut-variant]')?.outerHTML;
     registryView.unmount();
 
     const generatedView = render(<CTA props={props} variantId={variant.id} />);
-    expect(generatedView.container.innerHTML).toBe(expectedMarkup);
+    expect(generatedView.container.querySelector('[data-ut-section-id] > [data-ut-variant]')?.outerHTML).toBe(expectedMarkup);
     expect(generatedView.getByRole('link', { name: 'Book now' })).toHaveAttribute('data-ut-intent', 'booking.create');
   });
 

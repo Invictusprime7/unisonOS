@@ -45,6 +45,7 @@ import { buildTemplateJsonPrompt, buildTemplateHtmlPrompt, buildTemplateReactPro
 import { buildEditAssistantPrompt, buildDebugAssistantPrompt, buildGeneralBuilderPrompt } from "./prompts/builderPrompts.ts";
 import { buildDesignDirectorDirective } from "./prompts/designDirector.ts";
 import { buildUnisonDesignArchitectureDirective } from "../_shared/canonicalPipelinePrompt.ts";
+import type { GuestDemoUsageMeter } from '../_shared/guestDemo.ts';
 
 import { generateImageIfNeeded } from "./imageGeneration.ts";
 import { runProviderLoop } from "../_shared/aiProviderLoop.ts";
@@ -200,6 +201,7 @@ export function runAssistantOrchestrator(
   corsHeaders: Record<string, string>,
   userId?: string,
   signal?: AbortSignal,
+  guestUsageMeter?: GuestDemoUsageMeter,
 ): Promise<Response> {
   if (task.type === 'site_discovery') {
     return runSiteDiscoveryLane(parsed, task, corsHeaders, signal);
@@ -235,6 +237,7 @@ export function runAssistantOrchestrator(
       aiMessages, providerPlan, navPageGen: false,
       reasoningEffort: parsed.gatewayOptions?.reasoningEffort ?? (task.type === 'site_page_author' ? 'low' : 'medium'), signal,
       totalBudgetMs: Math.max(1, deadline - Date.now()),
+      guestUsageMeter,
     }));
   }
 
@@ -250,7 +253,7 @@ export function runAssistantOrchestrator(
     return runLaunchDeskLane(parsed, task, corsHeaders, signal);
   }
   // Source-generation and editing tasks use the builder lane.
-  return runBuilderLane(parsed, task, corsHeaders, userId, signal);
+  return runBuilderLane(parsed, task, corsHeaders, userId, signal, guestUsageMeter);
 }
 
 async function runSiteDiscoveryLane(
@@ -432,6 +435,7 @@ async function runBuilderLane(
   corsHeaders: Record<string, string>,
   userId?: string,
   signal?: AbortSignal,
+  guestUsageMeter?: GuestDemoUsageMeter,
 ): Promise<Response> {
   console.log(`[orchestrator] LANE B: ${task.type} (sub-behavior: ${
     task.type === 'debug_fix' ? 'builder_debug' :
@@ -570,7 +574,11 @@ async function runBuilderLane(
     parsed.unisonContext,
   );
   const complexContext = effectiveComplexity === 'complex' || effectiveComplexity === 'advanced';
-  const processedMessages = compactMessages(messages.filter(m => m.content !== undefined), complexContext ? 10 : 6, complexContext ? 30000 : 15000);
+  const processedMessages = compactMessages(
+    messages.filter((m): m is typeof m & { content: NonNullable<typeof m.content> } => m.content !== undefined),
+    complexContext ? 10 : 6,
+    complexContext ? 30000 : 15000,
+  );
 
   // Builder-priority VFS compaction (issue-aware)
   const issueHint = detectIssueHint(previewDiagnostics ?? undefined, memory?.goalCategory);
@@ -766,7 +774,7 @@ async function runBuilderLane(
   );
   console.log(`[orchestrator] provider primary=${providerPlan.primaryProvider || 'unavailable'} models=${providerPlan.gatewayModels.map((model) => model.id).join(',')}`);
   const pageDesignRequest = isPageDesignRequest(rawUserPromptText);
-  const enableCatalogTools = BUILDER_EDIT_TASKS.has(task.type) && !pageDesignRequest;
+  const enableCatalogTools = !guestUsageMeter && BUILDER_EDIT_TASKS.has(task.type) && !pageDesignRequest;
   if (pageDesignRequest) {
     // These requests can include several page bodies even when their wording is short.
     providerPlan.perModelTimeoutMs = Math.max(providerPlan.perModelTimeoutMs, 90_000);
@@ -787,6 +795,7 @@ async function runBuilderLane(
     tools: enableCatalogTools ? CATALOG_CHAT_TOOLS : undefined,
     toolChoice: enableCatalogTools ? 'auto' : undefined,
     signal,
+    guestUsageMeter,
   });
 
   if (providerResult.earlyError) {
@@ -910,6 +919,7 @@ async function runBuilderLane(
         reasoningEffort: effectiveReasoningEffort,
         allowDirectFallbacks: true,
         signal,
+        guestUsageMeter,
       });
       if (!contractRepairResult.earlyError && contractRepairResult.content) {
         const repairedContent = postProcessContent(contractRepairResult.content);
@@ -957,6 +967,7 @@ async function runBuilderLane(
         reasoningEffort: effectiveReasoningEffort,
         allowDirectFallbacks: true,
         signal,
+        guestUsageMeter,
       });
 
       if (!repairResult.earlyError && repairResult.content) {

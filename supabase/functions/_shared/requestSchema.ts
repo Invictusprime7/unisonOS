@@ -80,6 +80,7 @@ export const AIRequestSchema = z.object({
     projectId: z.string().max(64).nullish(),
     businessId: z.string().max(64).nullish(),
     prompt: z.string().max(8_000).nullish(),
+    operationId: z.string().uuid().optional(),
   }).optional(),
   skipResearch: z.boolean().optional(),
   templateAnalysis: z.string().max(20_000).optional(),

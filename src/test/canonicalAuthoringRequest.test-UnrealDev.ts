@@ -49,7 +49,7 @@ describe('canonical AI authorship request assembly', () => {
     expect(shouldUseCanonicalComposer(base)).toBe(true);
     expect(shouldUseCanonicalComposer({ ...base, isCatalogMutationRequest: true })).toBe(false);
     expect(shouldUseCanonicalComposer({ ...base, isLaunchPlanningRequest: true })).toBe(false);
-    expect(shouldUseCanonicalComposer({ ...base, hasAttachments: true })).toBe(false);
+    expect(shouldUseCanonicalComposer({ ...base, hasAttachments: true })).toBe(true);
     expect(shouldUseCanonicalComposer({ ...base, isReactProject: false })).toBe(false);
     expect(shouldUseCanonicalComposer({ ...base, isScopedEdit: true })).toBe(true);
   });
