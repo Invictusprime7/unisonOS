@@ -124,7 +124,7 @@
 - [x] Site-database gateway checks table structure (SCHEMA_INCOMPATIBLE) — needs GitHub deploy
 - [ ] Real CRUD against a provisioned site database — blocked: no provisioned site database
 - [x] Catalog/Content pages deep-link to filtered Records
-- [ ] Retire Playground record editing (ProductsSection/AssetsSection) — large refactor, next
+- [x] Retire Playground record editing (unused Products/Services editors removed; Assets uses Records editor)
 - [ ] Merge/remove `-UnrealDev` duplicates — needs owner decision per file
 - [ ] Signed-in edit → refresh → reopen → publish journey — blocked: UNISON session
 - [ ] Guest demo project hand-off to new account + Home resume
