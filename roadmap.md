@@ -2,6 +2,8 @@
 
 ## Affinity naming
 - [x] Rename the active Wizard, Home chat, Builder chat, selected-element chat, commands, accessibility labels and related help text to Affinity; preserve technical identifiers and behavior. 21 Wizard/auth/workspace regression tests pass; sign-in demo shows Affinity without page errors. Authenticated Builder viewing remains blocked by the unavailable authoritative UNISON session.
+- [x] Bring the Affinity name into the Unison Home hero (badge, gradient headline, subtitle) with the same treatment as the Live Demo; Home-only overrides, shared hero component and demo copy untouched.
+
 
 ## Active: Builder prompted-edit completion
 - [x] Fix futuristic color edits rejecting valid surface shadows (including layered and token-colored shadows); 24 regressions pass, including canonical edit → save → reload with unchanged page source. Real signed-in verification remains blocked by the unavailable UNISON session.
