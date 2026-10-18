@@ -1,5 +1,10 @@
 # Roadmap
 
+## Account-persistent Live Demo
+- [ ] Replace browser-only usage with account-owned, server-enforced demo allowance and canonical saved-generation completion.
+- [ ] Test one free generation, failure/retry, concurrent launches and persistent status read-back.
+- [ ] Verify deployed authoritative backend and live signed-in generation → saved draft → returning exhausted state; blocked until deployment/session available.
+
 ## Affinity naming
 - [x] Show Affinity in the visible Builder header and Wizard title; add a token-based glow around Home’s AI chat box. 13 Home/Wizard regressions pass; build OK. Signed-in visual verification remains unavailable (Home redirects to sign-in).
 - [x] Rename the active Wizard, Home chat, Builder chat, selected-element chat, commands, accessibility labels and related help text to Affinity; preserve technical identifiers and behavior. 21 Wizard/auth/workspace regression tests pass; sign-in demo shows Affinity without page errors. Authenticated Builder viewing remains blocked by the unavailable authoritative UNISON session.
