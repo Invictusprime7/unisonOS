@@ -39,14 +39,9 @@ export default function LiveDemo() {
     if (!loading && !user) navigate("/auth", { replace: true });
   }, [loading, navigate, user]);
 
-  const goHome = async () => {
-    if (user) {
-      // Leaving the demo finishes first-run, so later sign-ins open Unison Home.
-      await supabase.from("onboarding_state").upsert({ user_id: user.id, completed: true }, { onConflict: "user_id" })
-        .then(() => undefined, () => undefined);
-    }
-    navigate("/home");
-  };
+  // First-run only finishes when a project is generated (the launch marks it),
+  // so new users keep landing on the demo until then.
+  const goHome = () => navigate("/home");
 
   if (loading || !user) {
     return (
