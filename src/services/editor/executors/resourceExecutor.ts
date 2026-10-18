@@ -28,6 +28,18 @@ function defaultFieldFor(command: EditorCommand): string {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const SEED_SLUG_RE = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/i;
+/**
+ * Only a generated seed slug for a collection may be materialized on first edit.
+ * UUID-shaped ids, single-record resources and malformed identities are refused,
+ * so a stale or mistyped mark can never create an unintended record.
+ */
+export function mayMaterializeSeed(ref: ResourceEntityRef): boolean {
+  if (UUID_RE.test(ref.recordId) || !SEED_SLUG_RE.test(ref.recordId) || ref.recordId.length > 80) return false;
+  const def = getResource(ref.resourceKey);
+  return !!def && def.cardinality === 'collection';
+}
+
 /** Seed a created record with a human name derived from the element's mark slug. */
 function seedValuesFor(ref: ResourceEntityRef, values: Record<string, unknown>): Record<string, unknown> {
   const schema = getResource(ref.resourceKey)?.schema ?? [];
@@ -90,6 +102,9 @@ export async function executeResourceCommand(command: EditorCommand, ctx: Resour
   const values = valuesFor(command, parsed.field);
   const label = getResource(parsed.resourceKey)?.label ?? parsed.resourceKey;
   const recordId = await resolveRecordId(parsed, ctx);
+  if (!recordId && !mayMaterializeSeed(parsed)) {
+    return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: `This element points to a ${label} item that doesn't exist in this project, so nothing was changed.` };
+  }
   if (!recordId) {
     // WYSIWYG edits must never be gated on a manual save: materialize the
     // record from the element's identity and apply the edit in one write.
