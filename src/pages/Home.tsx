@@ -90,14 +90,18 @@ export default function Home() {
       </div>
 
       {recentProjects.length > 0 && (
-        <div className="space-y-3">
+        <div className="flex flex-col" style={{ gap: "var(--ut-density-gap)" }}>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recent projects</h2>
-          <ul className="divide-y divide-border rounded-lg border border-border">
+          <ul className="divide-y divide-border border border-border" style={{ borderRadius: "var(--ut-radius-base)" }}>
             {recentProjects.map((project) => (
-              <li key={project.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <li
+                key={project.id}
+                className="flex items-center justify-between"
+                style={{ gap: "var(--ut-density-gap)", padding: "var(--ut-density-padding)" }}
+              >
                 <span className="truncate text-sm font-medium text-foreground">{project.name || "Untitled project"}</span>
                 <Button variant="outline" size="sm" onClick={() => navigate(`/project/${project.id}`)}>
-                  <Play className="mr-1.5 h-3.5 w-3.5" />
+                  <Play className="mr-2 h-4 w-4" />
                   Resume
                 </Button>
               </li>
