@@ -1,11 +1,11 @@
 /** Unified Records read model. Original resource/record IDs remain the write address. */
-import { listRecordCollections, type CanonicalRecordKind } from './resourceRegistry';
+import { listRecordCollections, type RecordCollectionKind } from './resourceRegistry';
 import { queryResource } from './resourceRuntime';
 import type { ResourceContext, ResourceDefinition, ResourceRecord } from './resourceTypes';
 
 export interface UnifiedRecord {
   key: string;
-  kind: CanonicalRecordKind;
+  kind: RecordCollectionKind;
   resource: ResourceDefinition;
   record: ResourceRecord;
   title: string;

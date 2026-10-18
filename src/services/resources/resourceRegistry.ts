@@ -162,11 +162,17 @@ export function getResource(key: string): ResourceDefinition | null {
 }
 
 /** Records navigation is derived from the authorities above, not another registry. */
-export function listRecordCollections(): Array<{ kind: CanonicalRecordKind; label: string; resources: ResourceDefinition[] }> {
-  const resources = listResources();
-  return (['testimonials', 'projects', 'case-studies', 'faqs'] as const).map((kind) => ({
-    kind,
+/** Every collection family: four canonical record kinds plus each other registered collection under its own key. */
+export type RecordCollectionKind = CanonicalRecordKind | string;
+export function listRecordCollections(): Array<{ kind: RecordCollectionKind; label: string; resources: ResourceDefinition[] }> {
+  const resources = listResources().filter((def) => def.cardinality === 'collection');
+  const canonical = (['testimonials', 'projects', 'case-studies', 'faqs'] as const).map((kind) => ({
+    kind: kind as RecordCollectionKind,
     label: kind === 'case-studies' ? 'Case studies' : kind === 'faqs' ? 'FAQs' : kind === 'projects' ? 'Projects' : 'Testimonials',
     resources: resources.filter((def) => canonicalRecordKind(def) === kind),
   }));
+  const others = resources.filter((def) => !canonicalRecordKind(def))
+    .sort((a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key))
+    .map((def) => ({ kind: def.key as RecordCollectionKind, label: def.label, resources: [def] }));
+  return [...canonical, ...others];
 }
