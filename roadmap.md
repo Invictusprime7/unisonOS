@@ -48,6 +48,7 @@
 - [ ] Complete replacement acceptance before removing compatibility helpers outside Builder; requires a valid UNISON session and designated test project
 
 ## Sign-in recovery
+- [ ] Converge password/email/OAuth authentication to Home or Demo only; verify no return-path overrides.
 - [x] Stop reused route gates and pending launcher handoffs from looping sign-in; 22 auth regressions pass, sign-in stays open with a pending handoff, zero browser errors, build OK. Real-account verification remains below.
 - [x] Home redirects no longer wait for guest claims, onboarding reads time out safely, and stale project/dashboard return links no longer reopen automatically; first-time users still enter Live Demo. 24 auth regressions pass; signed-out browser stable and build OK. Real-account verification remains blocked by unavailable UNISON session.
 - [x] Recover auth-key quota errors with tab-persistent fallback, without deleting project data

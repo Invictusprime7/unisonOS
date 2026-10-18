@@ -84,6 +84,14 @@ describe('auth listener lock release', () => {
 });
 
 describe('post-auth Home entry', () => {
+  it.each(['/pricing', '/oauth/consent', '/demo', '/cloud', '/dashboard'])('ignores the %s return path for returning accounts', async (next) => {
+    window.history.replaceState({}, '', `/auth?next=${encodeURIComponent(next)}`);
+    sessionStorage.setItem('checkout_plan', 'pending-plan');
+    mocks.getSession.mockResolvedValue({ data: { session } });
+    render(<Auth />);
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/home', { replace: true }));
+    expect(mocks.navigate).toHaveBeenCalledTimes(1);
+  });
   it('opens Home even when legacy guest recovery never finishes', async () => {
     mocks.claimGuest.mockReturnValue(new Promise(() => {}));
     mocks.getSession.mockResolvedValue({ data: { session } });
