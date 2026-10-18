@@ -1,14 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
-import { ArrowRight, FolderKanban, LayoutDashboard } from "lucide-react";
+import { ArrowRight, FolderKanban, LayoutDashboard, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+
+interface RecentProject {
+  id: string;
+  name: string;
+  updated_at: string | null;
+}
 
 export default function Home() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -35,6 +42,22 @@ export default function Home() {
       navigate("/auth?next=%2Fhome", { replace: true });
     }
   }, [loading, navigate, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void supabase
+      .from("projects")
+      .select("id, name, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(6)
+      .then(({ data }) => {
+        if (active && data) setRecentProjects(data as RecentProject[]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   if (loading || !user) {
     return (
@@ -65,6 +88,23 @@ export default function Home() {
           Dashboard
         </Button>
       </div>
+
+      {recentProjects.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recent projects</h2>
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {recentProjects.map((project) => (
+              <li key={project.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <span className="truncate text-sm font-medium text-foreground">{project.name || "Untitled project"}</span>
+                <Button variant="outline" size="sm" onClick={() => navigate(`/project/${project.id}`)}>
+                  <Play className="mr-1.5 h-3.5 w-3.5" />
+                  Resume
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }
