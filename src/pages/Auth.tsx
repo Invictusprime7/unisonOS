@@ -112,7 +112,7 @@ const Auth = () => {
           .then((dest) => {
           if (active) navigate(dest, { replace: true });
         }).catch(() => {
-          if (active) navigate("/dashboard", { replace: true });
+          if (active) navigate("/home", { replace: true });
         });
       }, 0);
     };
