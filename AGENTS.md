@@ -1,5 +1,5 @@
 # Architecture decisions
-- Unset Babel breaking mode: no browser Node process.
+- Unset Babel breaking mode: browsers lack process.
 - Load Unison tokens after base CSS; bridge app roles in `src/styles/unison-theme.css`, font links in `main.tsx`. Why: vendor values win without vendor edits or site regeneration.
 
 - `LauncherWizard` captures intent and invokes orchestration, never authors or mutates VFS. Why: selection-only ownership.
