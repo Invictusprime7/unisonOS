@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Active: Builder prompted-edit completion
+- [ ] Fix canonical save queue rejecting file-only AI candidates after a newer non-overlapping save; verify preservation, candidate lineage and overlapping-change refusal
 - [x] Resolve prompted parts against visible-page source owners; site-wide navigation unions owners without guessing unrelated pages
 - [x] Preserve selected-element instructions and complete conversation context through canonical App Builder edits; interpretation failures close the pending turn and timers clear on every exit
 - [x] Verify source-owner resolution, incomplete-source rejection and canonical candidate/revision boundaries: 57 tests, both authority lints and preview build pass; durable save acceptance remains below
