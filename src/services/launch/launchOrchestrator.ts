@@ -16,6 +16,7 @@ import { validateTwentyFirstGenerationCoverage, summarizeCoverageReport } from '
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { withAccountDemoGeneration } from '@/services/accountDemoGeneration';
 import {
   businessSystems,
   type BusinessSystemType,
@@ -125,6 +126,7 @@ import { createWizardCompileArtifact } from '@/platform/core/snapshotSeal';
 import { resolveLaunchCapabilities } from '@/services/launch/launchCapabilities';
 
 export interface LaunchOrchestratorInput {
+  demoGeneration?: boolean;
   systemId: BusinessSystemType;
   template?: TemplateCardData;
   industry?: string;
@@ -219,6 +221,17 @@ function vfsFilesToVirtualNodes(vfsFiles: Record<string, string>): VirtualNode[]
 export async function runLaunchPipeline(
   submitted: LaunchOrchestratorInput,
   callbacks: LaunchOrchestratorCallbacks = {},
+): Promise<LaunchOrchestratorResult> {
+  if (submitted.demoGeneration) {
+    return withAccountDemoGeneration(operationId => runReservedLaunchPipeline(submitted, callbacks, operationId));
+  }
+  return runReservedLaunchPipeline(submitted, callbacks);
+}
+
+async function runReservedLaunchPipeline(
+  submitted: LaunchOrchestratorInput,
+  callbacks: LaunchOrchestratorCallbacks,
+  demoOperationId?: string,
 ): Promise<LaunchOrchestratorResult> {
   const baseline = submitted.template || getDefaultTemplateCardForIndustry(submitted.industry) || getDefaultTemplateCardFor(submitted.systemId);
   if (!baseline) throw new LaunchFatalError('No content baseline is available for this industry.');
@@ -772,7 +785,10 @@ export async function runLaunchPipeline(
         playground: materializedPlayground ?? undefined,
         activePagePath: artifacts.entryPoint,
       },
-      patch: legacyFilesToPatchPlan(vfsFiles),
+      patch: {
+        ...legacyFilesToPatchPlan(vfsFiles),
+        ...(demoOperationId ? { operationIds: [`account-demo:${demoOperationId}`] } : {}),
+      },
       options: {
         requirePreviewPass: false,
         requireReadinessPass: false,

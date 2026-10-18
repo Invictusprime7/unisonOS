@@ -21,6 +21,7 @@ interface HeroSectionProps {
   headline?: ReactNode;
   subtitle?: ReactNode;
   chatGlow?: boolean;
+  demoGeneration?: boolean;
 }
 
 const HOME_QUICK_ACTIONS: QuickAction[] = [
@@ -41,7 +42,7 @@ const HOME_QUICK_ACTIONS: QuickAction[] = [
   },
 ];
 
-export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange, badge, headline, subtitle, chatGlow = false }: HeroSectionProps) {
+export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange, badge, headline, subtitle, chatGlow = false, demoGeneration = false }: HeroSectionProps) {
   const [discoveryActive, setDiscoveryActive] = useState(false);
 
   return (
@@ -181,6 +182,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               selectionActive={launcherOpen}
               conversationContent={launcherOpen ? <LauncherWizard
                 open
+                demoGeneration={demoGeneration}
                 presentation="chat"
                 initialVisionPrompt={launchBrief}
                 onOpenChange={onLauncherOpenChange}
