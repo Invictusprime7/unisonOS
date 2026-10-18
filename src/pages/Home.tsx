@@ -19,16 +19,20 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
+    let receivedAuthEvent = false;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
+      receivedAuthEvent = true;
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
     void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!active) return;
+      if (!active || receivedAuthEvent) return;
       setUser(session?.user ?? null);
       setLoading(false);
+    }).catch(() => {
+      if (active && !receivedAuthEvent) setLoading(false);
     });
 
     return () => {

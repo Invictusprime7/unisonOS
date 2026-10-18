@@ -21,7 +21,9 @@ const LauncherHandoffRouteGuard = () => {
   const { setLaunch } = useLaunch();
 
   useEffect(() => {
-    if (location.pathname === "/web-builder") return;
+    // Preserve pending work without letting it hijack authentication.
+    if (["/web-builder", "/home", "/demo"].includes(location.pathname) ||
+      location.pathname === "/auth" || location.pathname.startsWith("/auth/")) return;
 
     const pendingHandoff = readLauncherHandoff();
     if (!pendingHandoff) return;
