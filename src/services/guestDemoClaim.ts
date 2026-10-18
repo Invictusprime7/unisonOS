@@ -38,7 +38,7 @@ export async function claimGuestDemoIfNeeded(currentUserId: string): Promise<Gue
   try {
     const { data, error } = await supabase.rpc('claim_guest_demo', { p_guest_user_id: guestUserId });
     if (error) return { claimed: false, projectId: null };
-    const result = data as { claimed?: boolean; project_id?: string | null } | null;
+    const result = data as { claimed?: boolean; project_id?: string | null; reason?: string } | null;
     if (result?.claimed) {
       window.localStorage.removeItem(GUEST_USER_STORAGE_KEY);
       return { claimed: true, projectId: result.project_id ?? null };
