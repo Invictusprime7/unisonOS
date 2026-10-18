@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Sparkles } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,10 @@ interface HeroSectionProps {
   launcherOpen: boolean;
   launchBrief: string | null;
   onLauncherOpenChange: (open: boolean) => void;
+  /** Optional overrides used by the Live Demo. */
+  badge?: ReactNode;
+  headline?: ReactNode;
+  subtitle?: ReactNode;
 }
 
 const HOME_QUICK_ACTIONS: QuickAction[] = [
@@ -36,7 +40,7 @@ const HOME_QUICK_ACTIONS: QuickAction[] = [
   },
 ];
 
-export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange }: HeroSectionProps) {
+export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange, badge, headline, subtitle }: HeroSectionProps) {
   const [discoveryActive, setDiscoveryActive] = useState(false);
 
   return (
@@ -115,7 +119,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               "shadow-[0_0_20px_rgba(0,255,255,0.15)]"
             )}>
               <Sparkles className="h-3 w-3 mr-1.5" />
-              AI-powered wizard · CRM + automation included
+              {badge ?? "AI-powered wizard · CRM + automation included"}
             </Badge>
           </motion.div>
 
@@ -126,8 +130,8 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
             transition={{ delay: 0.35, duration: 0.5 }}
             className="text-2xl sm:text-3xl md:text-4xl font-semibold mb-4 leading-snug tracking-normal text-white/60"
           >
-            Your business,{" "}
-            <span className="text-cyan-400/80">live in 60 seconds</span>
+            {headline ?? <>Your business,{" "}
+            <span className="text-cyan-400/80">live in 60 seconds</span></>}
           </motion.h1>
 
           {/* Sub */}
@@ -137,8 +141,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
             transition={{ delay: 0.5, duration: 0.5 }}
             className="text-base sm:text-lg text-white/50 mb-8 max-w-2xl mx-auto leading-relaxed"
           >
-            Tell Unison what your business needs. We’ll shape a complete site with booking,
-            CRM, automations, and a live backend — no dev work required.
+            {subtitle ?? "Tell Unison what your business needs. We’ll shape a complete site with booking, CRM, automations, and a live backend — no dev work required."}
           </motion.p>
 
           {/* Floating AI chat replaces the primary site-building CTA */}

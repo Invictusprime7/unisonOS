@@ -54,7 +54,7 @@ export default function LiveDemo() {
   const showChat = !demoUsed || launcherOpen;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background dark">
       <div className="flex justify-end" style={{ padding: "var(--ut-density-padding)" }}>
         <Button variant="outline" onClick={goHome}>
           <HomeIcon className="mr-2 h-4 w-4" />
@@ -73,6 +73,14 @@ export default function LiveDemo() {
             setLaunchBrief(brief);
             setLauncherOpen(true);
           }}
+          badge="Introducing Affinity · Unison's new Wizard AI"
+          headline={<span className="block text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-white">
+            Try a Live Demo in{" "}
+            <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-lime-300 bg-clip-text text-transparent motion-safe:animate-pulse">
+              Affinity
+            </span>
+          </span>}
+          subtitle="Affinity is Unison's AI App Builder. Describe your business and watch it plan, design and generate your site live — your first generation is free."
           launcherOpen={launcherOpen}
           launchBrief={launchBrief}
           onLauncherOpenChange={(open) => {
