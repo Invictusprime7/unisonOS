@@ -110,7 +110,7 @@
 - [x] Restaurant slice acceptance test: menu item name/price/image edit → record write scoped to project → invalidation carries projectId + sourceTables → other project untouched (previewExecutionConvergence.test.ts, 108 tests pass)
 - [x] Resource executor resolves default fields from the resource schema (menu image → image_url), never hardcoded guesses
 - [x] Dedicated-backend gateway contract extended to content entries + site profile (project-backend edge); client resourceRuntime no longer throws for non-catalog adapters — gateway is the authority
-- [ ] Deploy project-backend edge change via GitHub workflow; live signed-in slice check still open
+- [x] project-backend edge change live on UNISON (verified 2026-10-18: service boots and answers its auth check); live signed-in slice check still open
 - [x] WYSIWYG never gated on manual save: unmatched slug marks auto-create the record in one write (seeded name from the mark), "Save the site first" dead-end removed; 30 resource tests pass
 - [x] Finish click/AI conflict wiring: inline original text, loaded inspector fields, guarded undo, failed reads never auto-create duplicate records; record fields auto-apply on blur/toggle
 - [x] Cross-industry service integration: second product image, menu price/category, service duration, concurrent edits, unbound edits, safe undo and failed-write invalidation; persistent adapter fixtures, not live database proof
