@@ -30,14 +30,14 @@ export default function LiveDemo() {
 
   if (loading || !user) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground" role="status">
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground" role="status">
         Preparing your live demo...
       </div>
     );
   }
 
   return (
-    <section className="mx-auto flex min-h-[55vh] w-full max-w-3xl flex-col justify-center" style={{ gap: "var(--ut-density-gap)" }}>
+    <section className="mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center" style={{ gap: "var(--ut-density-gap)", padding: "var(--ut-section-space)" }}>
       <div className="flex flex-col" style={{ gap: "var(--ut-density-gap)" }}>
         <p className="text-sm font-medium uppercase text-primary">Live Demo</p>
         <h1 className="text-3xl font-semibold tracking-normal sm:text-4xl">Welcome to Unison.</h1>
@@ -49,15 +49,15 @@ export default function LiveDemo() {
 
       <div className="flex flex-col" style={{ gap: "var(--ut-density-gap)" }}>
         <div className="flex items-start" style={{ gap: "var(--ut-density-gap)" }}>
-          <Sparkles className="mt-1 h-4 w-4 shrink-0 text-primary" />
+          <Sparkles className="h-4 w-4 shrink-0 text-primary" />
           <p className="text-sm text-foreground">Tell the AI what you're building — it plans the pages, style and content with you.</p>
         </div>
         <div className="flex items-start" style={{ gap: "var(--ut-density-gap)" }}>
-          <Sparkles className="mt-1 h-4 w-4 shrink-0 text-primary" />
+          <Sparkles className="h-4 w-4 shrink-0 text-primary" />
           <p className="text-sm text-foreground">Watch your site appear in the live preview, then click anything to edit it.</p>
         </div>
         <div className="flex items-start" style={{ gap: "var(--ut-density-gap)" }}>
-          <Sparkles className="mt-1 h-4 w-4 shrink-0 text-primary" />
+          <Sparkles className="h-4 w-4 shrink-0 text-primary" />
           <p className="text-sm text-foreground">Save your project and pick it up any time from Unison Home.</p>
         </div>
       </div>
