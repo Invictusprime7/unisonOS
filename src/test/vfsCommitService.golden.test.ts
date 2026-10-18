@@ -1152,7 +1152,7 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     expect(aboutResult.vfsFiles['/src/pages/Home.tsx']).toContain('Home edit');
     expect(aboutResult.vfsFiles['/src/pages/About.tsx']).toContain('About edit');
     expect(aboutResult.candidateId).toBe('candidate-about');
-    expect((revisionStore.at(-1)?.patch_json.candidate as { baseRevisionId?: string }).baseRevisionId).toBe(homeResult.persistedRevisionId);
+    expect((revisionStore[revisionStore.length - 1]?.patch_json.candidate as { baseRevisionId?: string }).baseRevisionId).toBe(homeResult.persistedRevisionId);
 
     const rowsBeforeUnsafeRetries = revisionStore.length;
     await expect(commitMutation({
