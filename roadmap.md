@@ -128,3 +128,4 @@
 - [ ] Merge/remove `-UnrealDev` duplicates — needs owner decision per file
 - [ ] Signed-in edit → refresh → reopen → publish journey — blocked: UNISON session
 - [ ] Guest demo project hand-off to new account + Home resume
+- [x] Guest demo continuity: `claim_guest_demo` RPC (migration 20261018170000) transfers the guest's demo project + draft to the new account server-side and marks the session claimed (credits stop). Client stashes the anonymous user id, claims after signup/sign-in (best-effort, never blocks auth), and Home lists recent projects with Resume. Tests: guestDemoClaim.test.ts (5). Deploys via the GitHub UNISON workflow.
