@@ -222,11 +222,11 @@ function isLegalSurfaceShadow(name: string, value: string, contract: ThemeContra
 
 function isLegalSurfaceColor(value: string, contract: ThemeContract): boolean {
   if (/^(transparent|currentColor)$/.test(value) || /^#(?:[a-f\d]{3}|[a-f\d]{4}|[a-f\d]{6}|[a-f\d]{8})$/i.test(value)) return true;
-  const reference = value.match(/^hsl\(var\((--[a-z0-9-]+)\)(?: \/ (0(?:\.\d+)?|1))?\)$/);
+  const reference = value.match(/^hsl\(var\((--[a-z0-9-]+)\)(?: \/ (0(?:\.\d+)?|\.\d+|1))?\)$/);
   if (reference) return contract.tokenNames.includes(reference[1]) && themeTokenKind(reference[1]) === 'hsl';
-  const hsl = value.match(/^hsla?\((\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%(?:\s*\/\s*(0(?:\.\d+)?|1))?\)$/);
+  const hsl = value.match(/^hsla?\((\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%(?:\s*\/\s*(0(?:\.\d+)?|\.\d+|1))?\)$/);
   if (hsl) return +hsl[1] <= 360 && +hsl[2] <= 100 && +hsl[3] <= 100;
-  const rgb = value.match(/^rgba?\((\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)(?:\s*[/,]\s*(0(?:\.\d+)?|1))?\)$/);
+  const rgb = value.match(/^rgba?\((\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)(?:\s*[/,]\s*(0(?:\.\d+)?|\.\d+|1))?\)$/);
   return !!rgb && +rgb[1] <= 255 && +rgb[2] <= 255 && +rgb[3] <= 255;
 }
 
@@ -238,7 +238,7 @@ export function isLegalThemeTokenValue(name: string, value: string, contract: Th
   const refs = [...v.matchAll(/var\((--[a-z0-9-]+)\)/g)];
   if (refs.length) {
     if (refs.some(r => r[1] === name || !contract.tokenNames.includes(r[1]))) return false;
-    if (name.includes('surface-') && /^hsl\(var\(--[a-z0-9-]+\)(?: \/ (?:0(?:\.\d+)?|1))?\)$/.test(v)) return refs.every(r => themeTokenKind(r[1]) === 'hsl');
+    if (name.includes('surface-') && isLegalSurfaceColor(v, contract)) return true;
     return /^var\(--[a-z0-9-]+\)$/.test(v) && refs.every(r => themeTokenKind(name) === themeTokenKind(r[1]));
   }
   if ((THEME_COLOR_TOKENS as readonly string[]).includes(name)) {

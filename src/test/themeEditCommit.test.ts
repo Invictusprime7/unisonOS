@@ -57,9 +57,29 @@ import { THEME_PRESETS } from '@/components/onboarding/themePresets';
 import { themePresetToThemeTokens } from '@/components/onboarding/themePresetToTokens';
 
 
-import { decodeThemeEdit, isThemeOnlyRequest } from '@/services/theme/themeEdit';
+import { decodeThemeEdit, isThemeOnlyRequest, prepareThemeEdit } from '@/services/theme/themeEdit';
 import { readThemeOverrides } from '@/services/theme/themeTokenOverrides';
 describe('Theme edit canonical closure', () => {
+  it('saves and reloads futuristic color edits containing the reported elevation value', async () => {
+    const preset = THEME_PRESETS.find(p => p.id === 'futuristic');
+    if (!preset) throw new Error('Missing futuristic theme');
+    const compiled = commitToPipeline({ selections: { businessName: 'Future Studio', businessModel: 'appointment_service', industryOverlay: 'salon', systemType: 'booking', primaryGoal: 'book', secondaryGoals: [], needsBooking: true, wantsLeadCapture: false, primaryIntent: 'booking.create', requestedPages: ['home'], scaffoldMode: 'selected-pages', templateId: 'salon-premium', themePresetId: preset.id, themeTokens: themePresetToThemeTokens(preset) } }, 'wizard-launch');
+    const snapshot = compiled.siteBundleSnapshot;
+    const identity = { userId: '11111111-1111-4111-8111-111111111111', businessId: '22222222-2222-4222-8222-222222222222', projectId: '66666666-6666-4666-8666-666666666666', draftId: '77777777-7777-4777-8777-777777777777', revisionId: '', sessionId: 'futuristic-shadow' };
+    const shadow = '0 4px 14px hsl(0 0% 0% / 0.06)';
+    const patch = emptyPatchPlan('Change futuristic colors');
+    patch.themeEdit = { version: '1.0', snapshotId: snapshot.snapshotId, revisionId: null, set: { '--primary': '#1f6f4a', '--ut-surface-elevation': shadow }, reset: [] };
+    const result = await commitMutation({ source: 'theme-change', identity, current: { vfsFiles: snapshot.vfsFiles, siteBundleSnapshot: snapshot, playground: compiled.playground }, patch });
+    expect(result.status, JSON.stringify(result.diagnostics)).toBe('committed');
+    const restored = await loadLatestRevisionForProject(identity.projectId);
+    if (!restored?.siteBundleSnapshot) throw new Error('Theme revision did not reload');
+    expect(readThemeOverrides(restored.vfsFiles)).toMatchObject({ '--primary': '152.3 56.3% 27.8%', '--ut-surface-elevation': shadow });
+    for (const [path, source] of Object.entries(snapshot.vfsFiles)) {
+      if (path.endsWith('.tsx')) expect(restored.vfsFiles[path]).toBe(source);
+    }
+    const next = prepareThemeEdit(restored.vfsFiles, restored.siteBundleSnapshot, { version: '1.0', snapshotId: restored.siteBundleSnapshot.snapshotId, revisionId: restored.revisionId, set: { '--accent': '#1f6f4a' }, reset: [] }, restored.revisionId);
+    expect(readThemeOverrides(next.files)['--ut-surface-elevation']).toBe(shadow);
+  }, 30000);
   it('classifies appearance requests without taking over composition requests', () => {
     for (const text of ['make it darker', 'use Bold', 'soften the typography', 'Use Bold. Keep all text, pages, images, sections and layout unchanged.']) expect(isThemeOnlyRequest(text)).toBe(true);
     for (const text of ['add a dark gallery section', 'change the grid layout', "Change the main heading on the Home page to 'Timeless Craft, Modern Lines'", 'update the hero title to read Welcome']) expect(isThemeOnlyRequest(text)).toBe(false);
@@ -109,6 +129,6 @@ describe('Theme edit canonical closure', () => {
     expect(undo.status, JSON.stringify(undo.diagnostics)).toBe('committed');
     expect(undo.vfsFiles).toEqual(result.vfsFiles);
     const stale = commitMutation({ source: 'theme-change', identity: { ...identity, revisionId: next.persistedRevisionId! }, current: { vfsFiles: next.vfsFiles, siteBundleSnapshot: next.siteBundleSnapshot, playground: next.playground }, patch: nextPatch });
-    await expect(stale).rejects.toThrow('newer revision');
+    await expect(stale).rejects.toThrow('overlaps a newer saved revision');
   }, 30000);
 });

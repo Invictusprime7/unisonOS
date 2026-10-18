@@ -65,7 +65,7 @@ describe('themeTokenOverrides', () => {
 describe('typed theme values', () => {
   it('accepts the reported surface shadow and preserves it through override writes and reads', () => {
     const shadow = '0 4px 14px hsl(0 0% 0% / 0.06)';
-    const overrides = { '--ut-surface-elevation': shadow, '--ut-surface-elevation-hover': '0 8px 24px hsl(var(--primary) / 0.2)' };
+    const overrides = { '--ut-surface-elevation': shadow, '--ut-surface-elevation-hover': '0 8px 24px hsl(var(--primary) / 0.2)', '--ut-surface-stroke': 'hsl(var(--border) / .5)' };
     const ops = buildThemeOverrideFileOps({ files, overrides });
     const next = { ...files };
     for (const op of ops) if (op.type !== 'delete') next[op.path] = op.contents;
