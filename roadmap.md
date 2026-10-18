@@ -48,7 +48,7 @@
 - [ ] Complete replacement acceptance before removing compatibility helpers outside Builder; requires a valid UNISON session and designated test project
 
 ## Sign-in recovery
-- [ ] Fix Home redirect blocked by guest claims/onboarding reads or stale project-return links; preserve first-time Live Demo routing and verify regressions
+- [x] Home redirects no longer wait for guest claims, onboarding reads time out safely, and stale project/dashboard return links no longer reopen automatically; first-time users still enter Live Demo. 24 auth regressions pass; signed-out browser stable and build OK. Real-account verification remains blocked by unavailable UNISON session.
 - [x] Recover auth-key quota errors with tab-persistent fallback, without deleting project data
 - [x] Release auth listener locks before onboarding lookups and audit logging; reset loading on thrown sign-in errors; 11 regression tests pass
 - [ ] Confirm real-account sign-in reaches the workspace (available managed session targets a different backend; requires user sign-in)
