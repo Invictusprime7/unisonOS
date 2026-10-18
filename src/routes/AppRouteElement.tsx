@@ -3,6 +3,7 @@ import { RouteShellFrame } from "@/components/shell";
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { stashGuestDemoUser } from "@/services/guestDemoClaim";
 import { RouteMetaProvider } from "./RouteMetaContext";
 import { RouteRuntimeProvider } from "./RouteRuntimeContext";
 import { resolveRouteAccess } from "./routeAccessPolicy";
@@ -36,6 +37,7 @@ function RouteAccessGate({ meta, children }: { meta: AppRouteMeta; children: Rea
     let active = true;
     const applySession = (session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']) => {
       if (!active) return;
+      stashGuestDemoUser(session?.user?.id ?? null, session?.user?.is_anonymous === true);
       setSessionState({
         loading: false,
         authenticated: Boolean(session?.user && !session.user.is_anonymous),
