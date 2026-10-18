@@ -228,7 +228,7 @@ function queueDomainValue(value: unknown): string {
   }) ?? 'undefined';
 }
 
-function rebaseQueuedCommit(
+export function rebaseQueuedCommit(
   input: CommitMutationInput,
   latest: CommitMutationResult,
 ): { input: CommitMutationInput } | { coalesced: CommitMutationResult } {
