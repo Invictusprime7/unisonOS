@@ -285,7 +285,9 @@ export function rebaseQueuedCommit(
     checkDomain('composition', baseSnapshot?.meta?.designIntervention, snapshot?.meta?.designIntervention);
     checkDomain('page topology', baseSnapshot?.pageRegistry, snapshot?.pageRegistry);
     // A presentation projection can touch the rendered page, unlike token edits.
-    checkDomain('composition source', baseFiles, latestFiles);
+    if (input.options?.customizerPagePath || patch.presentationOps.some(op => op.type !== 'setMotionBudget')) {
+      checkDomain('composition source', baseFiles, latestFiles);
+    }
   }
   if (patch.bindingOps.length) {
     if (!input.current.playground || !latest.playground) domainConflicts.push('bindings (missing captured state)');
