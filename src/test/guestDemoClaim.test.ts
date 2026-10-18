@@ -1,4 +1,15 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const store = new Map<string, string>();
+vi.stubGlobal('window', {
+  localStorage: {
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+  },
+});
 
 const rpcMock = vi.fn();
 vi.mock('@/integrations/supabase/client', () => ({
