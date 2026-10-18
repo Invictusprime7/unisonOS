@@ -65,7 +65,7 @@ export const IntegrationsPanel = ({ onExport, onIntegrationConnect }: Integratio
     },
     {
       id: 'ai',
-      name: 'AI Assistant',
+      name: 'Affinity',
       description: 'Natural language editing',
       icon: Sparkles,
       color: 'text-purple-600',

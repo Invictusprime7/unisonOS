@@ -166,7 +166,7 @@ export const AIAssistantWidget: React.FC<AIAssistantWidgetProps> = ({
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5" />
           <span className="font-semibold text-sm">
-            {hasSelectedElement ? "Edit Element" : "AI Assistant"}
+            {hasSelectedElement ? "Affinity · Edit Element" : "Affinity"}
           </span>
           {hasSelectedElement && selectedElement.section && (
             <span className="text-xs bg-white/20 px-2 py-0.5 rounded">

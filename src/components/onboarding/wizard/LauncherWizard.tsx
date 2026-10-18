@@ -503,7 +503,7 @@ export const LauncherWizard = ({
                   <Sparkles className="h-3.5 w-3.5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold">Create a website</p>
+                  <p className="text-sm font-semibold">Affinity</p>
                   <p className="truncate text-xs text-muted-foreground">{STEP_META[currentStepIndex]?.sublabel}</p>
                 </div>
               </div>
@@ -566,7 +566,7 @@ export const LauncherWizard = ({
                 <div key={step} className="animate-fade-in">
                   {step === "industry" && (
                     <div className="mx-auto max-w-3xl space-y-7">
-                      {!isChat && <StepHeading title="Choose your business type" subtitle="This gives Unison the right starting point. You can fine-tune your site goals and pages next." />}
+                      {!isChat && <StepHeading title="Choose your business type" subtitle="This gives Affinity the right starting point. You can fine-tune your site goals and pages next." />}
                       {visionPrompt && (
                         <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
                           <p className="text-xs font-medium text-primary">Your site direction</p>
@@ -679,7 +679,7 @@ export const LauncherWizard = ({
       if (!next) reset();
     }}>
       <DialogContent className="max-h-[94dvh] w-[calc(100%-1rem)] max-w-[1040px] gap-0 overflow-hidden rounded-lg border-border bg-background p-0 text-foreground shadow-2xl sm:w-[calc(100%-3rem)]">
-        <DialogHeader className="sr-only"><DialogTitle>Launch your website</DialogTitle></DialogHeader>
+        <DialogHeader className="sr-only"><DialogTitle>Affinity</DialogTitle></DialogHeader>
         {content}
       </DialogContent>
     </Dialog>
