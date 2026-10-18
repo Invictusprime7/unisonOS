@@ -1133,10 +1133,16 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
       patch: legacyFilesToPatchPlan({ '/src/pages/Home.tsx': 'export default function Home(){return <h1>Home edit</h1>}' }, 'home edit'),
     });
     const about = commitMutation({
-      source: 'preview-toolbar',
+      source: 'ai-builder',
       identity: { ...IDENTITY, revisionId: launch.persistedRevisionId! },
       current: { vfsFiles: launch.vfsFiles, siteBundleSnapshot: launch.siteBundleSnapshot ?? undefined },
-      patch: legacyFilesToPatchPlan({ '/src/pages/About.tsx': 'export default function About(){return <h1>About edit</h1>}' }, 'about edit'),
+      patch: {
+        ...legacyFilesToPatchPlan({ '/src/pages/About.tsx': 'export default function About(){return <h1>About edit</h1>}' }, 'about edit'),
+        candidate: {
+          id: 'candidate-about', baseRevisionId: launch.persistedRevisionId ?? undefined,
+          origin: 'builder', knowledgeVersion: 'test', targetPages: ['/about'], attempt: 1,
+        },
+      },
     });
 
     const [homeResult, aboutResult] = await Promise.all([home, about]);
@@ -1145,6 +1151,32 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     expect(aboutResult.parentRevisionId).toBe(homeResult.persistedRevisionId);
     expect(aboutResult.vfsFiles['/src/pages/Home.tsx']).toContain('Home edit');
     expect(aboutResult.vfsFiles['/src/pages/About.tsx']).toContain('About edit');
+    expect(aboutResult.candidateId).toBe('candidate-about');
+    expect((revisionStore[revisionStore.length - 1]?.patch_json.candidate as { baseRevisionId?: string }).baseRevisionId).toBe(homeResult.persistedRevisionId);
+
+    const rowsBeforeUnsafeRetries = revisionStore.length;
+    await expect(commitMutation({
+      source: 'ai-builder',
+      identity: { ...IDENTITY, revisionId: launch.persistedRevisionId ?? '' },
+      current: { vfsFiles: launch.vfsFiles },
+      patch: {
+        ...legacyFilesToPatchPlan({ '/src/pages/About.tsx': baseFiles['/src/pages/About.tsx'] }, 'stale page creation'),
+        routeOps: [{ type: 'add_page', pageId: 'new-page', title: 'New', route: '/new' }],
+      },
+    })).rejects.toThrow('structured edit');
+    await expect(commitMutation({
+      source: 'ai-builder',
+      identity: { ...IDENTITY, revisionId: launch.persistedRevisionId ?? '' },
+      current: { vfsFiles: launch.vfsFiles },
+      patch: {
+        ...legacyFilesToPatchPlan({ '/src/pages/About.tsx': baseFiles['/src/pages/About.tsx'] }, 'wrong candidate base'),
+        candidate: {
+          id: 'wrong-base', baseRevisionId: 'another-revision', origin: 'builder',
+          knowledgeVersion: 'test', targetPages: ['/about'], attempt: 1,
+        },
+      },
+    })).rejects.toThrow('captured base revision');
+    expect(revisionStore).toHaveLength(rowsBeforeUnsafeRetries);
 
     const conflictingBase = {
       source: 'preview-toolbar' as const,
@@ -1157,7 +1189,14 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     });
     const secondHomeEdit = commitMutation({
       ...conflictingBase,
-      patch: legacyFilesToPatchPlan({ '/src/pages/Home.tsx': 'export default function Home(){return <h1>Second edit</h1>}' }, 'second overlapping edit'),
+      source: 'ai-builder',
+      patch: {
+        ...legacyFilesToPatchPlan({ '/src/pages/Home.tsx': 'export default function Home(){return <h1>Second edit</h1>}' }, 'second overlapping edit'),
+        candidate: {
+          id: 'candidate-home', baseRevisionId: aboutResult.persistedRevisionId ?? undefined,
+          origin: 'builder', knowledgeVersion: 'test', targetPages: ['/'], attempt: 1,
+        },
+      },
     });
     const [firstConflictResult, secondConflictResult] = await Promise.allSettled([firstHomeEdit, secondHomeEdit]);
 

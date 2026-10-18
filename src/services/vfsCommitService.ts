@@ -225,8 +225,13 @@ function rebaseQueuedFileOnlyCommit(
   latest: CommitMutationResult,
 ): { input: CommitMutationInput } | { coalesced: CommitMutationResult } {
   const patch = input.patch;
+  // Candidate metadata is provenance, not a structured side effect. File-only
+  // AI patches use the same exact-byte overlap check as direct editor saves.
+  if (patch.candidate && (patch.candidate.baseRevisionId ?? '') !== (input.identity.revisionId || '')) {
+    throw new Error('[VFSCommitService] AI candidate does not match its captured base revision. Reapply it to the latest version.');
+  }
   const structuredMutation = Boolean(
-    patch.candidate || patch.themeEdit || patch.routeOps?.length || patch.playgroundOps.length
+    patch.themeEdit || patch.routeOps?.length || patch.playgroundOps.length
     || patch.bindingOps.length || patch.dataOps.length || patch.backendOps.length
     || patch.presentationOps.length || patch.businessSystem || input.options?.customizerPagePath
     || input.options?.compositionUpgrade || input.options?.restoreRevisionId
@@ -262,7 +267,10 @@ function rebaseQueuedFileOnlyCommit(
   if (conflicts.length > 0) {
     throw new Error(`[VFSCommitService] This edit overlaps a newer saved revision at ${[...new Set(conflicts)].join(', ')}. Reload and reapply the change.`);
   }
-  if (fileOps.length === 0) {
+  if (fileOps.length === 0 && (!patch.candidate || (
+    latest.candidateId === patch.candidate.id
+    && (patch.operationIds ?? []).every((id) => latest.operationIds.includes(id))
+  ))) {
     return {
       coalesced: {
         ...latest,
@@ -285,7 +293,14 @@ function rebaseQueuedFileOnlyCommit(
         siteBundleSnapshot: snapshot ?? input.current.siteBundleSnapshot,
         playground: latest.playground ?? input.current.playground,
       },
-      patch: { ...patch, fileOps },
+      patch: {
+        ...patch,
+        fileOps,
+        candidate: patch.candidate ? {
+          ...patch.candidate,
+          baseRevisionId: latest.persistedRevisionId ?? undefined,
+        } : undefined,
+      },
       options: {
         ...input.options,
         industry: snapshot?.industry ?? input.options?.industry,
