@@ -38,6 +38,22 @@ describe('auth storage quota recovery', () => {
     expect(localStorage.getItem(key)).toBe('new-session');
     expect(sessionStorage.getItem(key)).toBeNull();
   });
+  it('restores the session from the cookie backup after a tab crash wipes both stores', () => {
+    simulateFullStorage();
+    localStorage.setItem(key, 'crash-session');
+    // Simulate a browser crash: sessionStorage dies with the tab, localStorage write never landed.
+    sessionStorage.clear();
+    restore?.();
+    restore = installAuthStorageQuotaRecovery(key, localStorage, sessionStorage);
+    expect(localStorage.getItem(key)).toBe('crash-session');
+  });
+  it('clears the cookie backup on sign-out', () => {
+    restore = installAuthStorageQuotaRecovery(key, localStorage, sessionStorage);
+    localStorage.setItem(key, 'test-session');
+    expect(document.cookie).toContain(`${key}__chunks`);
+    localStorage.removeItem(key);
+    expect(document.cookie).not.toContain(`${key}__bak0`);
+  });
   it('does not suppress unrelated storage errors', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
     restore = installAuthStorageQuotaRecovery(key, localStorage, sessionStorage);
