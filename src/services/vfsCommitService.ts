@@ -276,6 +276,7 @@ export function rebaseQueuedCommit(
     checkDomain('theme CSS', baseFiles['/src/index.css'], latestFiles['/src/index.css']);
     checkDomain('theme tokens', baseSnapshot?.themeTokens, snapshot?.themeTokens);
     checkDomain('theme selection', baseSnapshot?.meta?.themePresetId, snapshot?.meta?.themePresetId);
+    checkDomain('theme overrides', baseFiles['/.unison/theme-overrides.json'], latestFiles['/.unison/theme-overrides.json']);
   }
   if (patch.presentationOps.length || input.options?.customizerPagePath) {
     if (!baseSnapshot?.meta?.designIntervention || !snapshot?.meta?.designIntervention) {
@@ -283,6 +284,8 @@ export function rebaseQueuedCommit(
     }
     checkDomain('composition', baseSnapshot?.meta?.designIntervention, snapshot?.meta?.designIntervention);
     checkDomain('page topology', baseSnapshot?.pageRegistry, snapshot?.pageRegistry);
+    // A presentation projection can touch the rendered page, unlike token edits.
+    checkDomain('composition source', baseFiles, latestFiles);
   }
   if (patch.bindingOps.length) {
     if (!input.current.playground || !latest.playground) domainConflicts.push('bindings (missing captured state)');
