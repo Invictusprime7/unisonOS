@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Active: Builder prompted-edit completion
+- [x] Audit remaining VFSCommitService save blockers: replace blanket stale-structured refusals with captured dependency checks for typed page/theme/motion edits; retain conflicts, protected paths and reviewed-artifact safety. Identity/shape checks also run before no-op coalescing. 93 save/recovery/hydration regressions pass; preview build OK. Live signed-in acceptance remains blocked below.
 - [x] Fix canonical save queue rejecting file-only AI candidates after a newer non-overlapping save; 61 regressions pass, build OK; preserve unrelated source and candidate lineage, reject overlaps/structured side effects/mismatched candidate bases. Live signed-in project check remains blocked below.
 - [x] Resolve prompted parts against visible-page source owners; site-wide navigation unions owners without guessing unrelated pages
 - [x] Preserve selected-element instructions and complete conversation context through canonical App Builder edits; interpretation failures close the pending turn and timers clear on every exit

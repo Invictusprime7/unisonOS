@@ -1,5 +1,5 @@
 # Architecture decisions
-- Unset Babel breaking mode: browsers lack process.
+- Unset Babel breaking mode: browser.
 - Load Unison tokens after base CSS; bridge app roles in `src/styles/unison-theme.css`, font links in `main.tsx`. Why: vendor values win without vendor edits or site regeneration.
 
 - `LauncherWizard` captures intent and invokes orchestration, never authors or mutates VFS. Why: selection-only ownership.
@@ -27,5 +27,5 @@
 
 - Builder preferences are optional local state enforced at request/execution boundaries; tools gate the menu, catalog/business settings gate their operations. Why: hiding controls cannot authorize disabled mutations.
 
-- Agent record updates use EditorCommand with observed fields; adapters own scoped writes/invalidation. Why: clicks and AI share one owner.
-- Edit gates block only compile/imports, stale/ownership, protected paths, data loss and binding execution; design/scope findings are advisory; theme requests use the theme lane. Why: avoid policy dead ends.
+- Record updates use EditorCommand baselines; adapters own writes/invalidation. Why: clicks and AI share one owner.
+- Edit gates retain compile/imports, ownership, protected paths, data-loss and binding safety; design/scope is advisory. Queue rebase checks domain dependencies, not age; reviews remain revision-bound. Why: independent saves must not block edits.
