@@ -190,10 +190,51 @@ export function isEditableThemeToken(name: string): boolean {
     || /^--ut-(?:type-(?:display|title|lead)|weight-(?:display|body)|heading-(?:tracking|transform)|display-leading|radius-(?:base|lg|pill)|border-weight|rhythm-space|grid-gap|block-gap|card-padding|inline-gutter|stack-gap|motion-(?:duration|distance|stagger)|hover-(?:lift|scale)|surface-(?:fill|stroke|elevation|elevation-hover)|media-(?:frame-radius|filter))$/.test(name);
 }
 
+/** Parse shadow layers without splitting commas inside color functions. */
+function isLegalSurfaceShadow(name: string, value: string, contract: ThemeContract): boolean {
+  if (value === 'none' || value === '0') return true;
+  if (/^var\(--[a-z0-9-]+\)$/.test(value)) {
+    const reference = value.slice(4, -1);
+    return reference !== name && contract.tokenNames.includes(reference)
+      && /^--ut-surface-elevation(?:-hover)?$/.test(reference);
+  }
+  const layers = value.split(/,(?![^()]*\))/);
+  return layers.every(layer => {
+    const parts = layer.trim().match(/(?:hsla?|rgba?|var)\([^()]*?(?:var\(--[a-z0-9-]+\)[^()]*)?\)|[^\s]+/g) ?? [];
+    let inset = false;
+    let color = false;
+    const lengths: number[] = [];
+    for (const part of parts) {
+      if (part === 'inset' && !inset) { inset = true; continue; }
+      const length = part.match(/^(-?\d+(?:\.\d+)?)(px|rem|em)?$/);
+      if (length && (length[2] || Number(length[1]) === 0)) {
+        const number = Number(length[1]);
+        if (Math.abs(number) > (length[2] === 'px' ? 200 : 12)) return false;
+        lengths.push(number);
+        continue;
+      }
+      if (color || !isLegalSurfaceColor(part, contract)) return false;
+      color = true;
+    }
+    return lengths.length >= 2 && lengths.length <= 4 && (lengths.length < 3 || lengths[2] >= 0);
+  });
+}
+
+function isLegalSurfaceColor(value: string, contract: ThemeContract): boolean {
+  if (/^(transparent|currentColor)$/.test(value) || /^#(?:[a-f\d]{3}|[a-f\d]{4}|[a-f\d]{6}|[a-f\d]{8})$/i.test(value)) return true;
+  const reference = value.match(/^hsl\(var\((--[a-z0-9-]+)\)(?: \/ (0(?:\.\d+)?|1))?\)$/);
+  if (reference) return contract.tokenNames.includes(reference[1]) && themeTokenKind(reference[1]) === 'hsl';
+  const hsl = value.match(/^hsla?\((\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%(?:\s*\/\s*(0(?:\.\d+)?|1))?\)$/);
+  if (hsl) return +hsl[1] <= 360 && +hsl[2] <= 100 && +hsl[3] <= 100;
+  const rgb = value.match(/^rgba?\((\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)(?:\s*[/,]\s*(0(?:\.\d+)?|1))?\)$/);
+  return !!rgb && +rgb[1] <= 255 && +rgb[2] <= 255 && +rgb[3] <= 255;
+}
+
 export function isLegalThemeTokenValue(name: string, value: string, contract: ThemeContract): boolean {
   if (!isEditableThemeToken(name) || !isLegalTokenValue(value)) return false;
   const v = value.trim();
   if (/url\s*\(|!important|\\/i.test(v)) return false;
+  if (/^--ut-surface-elevation(?:-hover)?$/.test(name)) return isLegalSurfaceShadow(name, v, contract);
   const refs = [...v.matchAll(/var\((--[a-z0-9-]+)\)/g)];
   if (refs.length) {
     if (refs.some(r => r[1] === name || !contract.tokenNames.includes(r[1]))) return false;
@@ -209,7 +250,7 @@ export function isLegalThemeTokenValue(name: string, value: string, contract: Th
   if (name.endsWith('transform')) return /^(none|uppercase|lowercase|capitalize)$/.test(v);
   if (name === '--ut-display-leading') return Number(v) >= 0.8 && Number(v) <= 2;
   if (name === '--ut-hover-scale') return Number(v) >= 0.9 && Number(v) <= 1.1;
-  if (name.includes('surface-')) return /^(none|transparent|0)$/.test(v);
+  if (name.includes('surface-')) return /^(none|transparent|0)$/.test(v) || isLegalSurfaceColor(v, contract);
   if (name === '--ut-media-filter') return /^(none|grayscale\((?:0|1|0\.\d+)\)|sepia\((?:0|1|0\.\d+)\))$/.test(v);
   const size = v.match(/^(-?\d+(?:\.\d+)?)(px|rem|em|ms|s)$/);
   if (!size) return v === '0';
