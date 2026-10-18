@@ -37,7 +37,7 @@ export default function BusinessCatalog() {
             <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
           <nav className="flex flex-wrap gap-1 text-xs">
-            <Link to="/business/records">Records</Link>
+            <Link to={`/business/records?kind=${catalogKey ?? ""}`}>Open in Records</Link>
             {surfaces.map((s) => {
               const active = s.surfaceId === activeSurface?.surfaceId;
               return (

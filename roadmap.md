@@ -123,7 +123,8 @@
 - [x] Records lists every registered collection family
 - [x] Site-database gateway checks table structure (SCHEMA_INCOMPATIBLE) — needs GitHub deploy
 - [ ] Real CRUD against a provisioned site database — blocked: no provisioned site database
-- [ ] Catalog/Content pages as Records views; Playground record editing retired
+- [x] Catalog/Content pages deep-link to filtered Records
+- [ ] Retire Playground record editing (ProductsSection/AssetsSection) — large refactor, next
 - [ ] Merge/remove `-UnrealDev` duplicates — needs owner decision per file
 - [ ] Signed-in edit → refresh → reopen → publish journey — blocked: UNISON session
 - [ ] Guest demo project hand-off to new account + Home resume

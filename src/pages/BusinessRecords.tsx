@@ -27,7 +27,8 @@ export default function BusinessRecords() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [kind, setKind] = useState<RecordCollectionKind | 'all'>('all');
+  const [kind, setKind] = useState<RecordCollectionKind | 'all'>(() => params.get('kind') || 'all');
+  useEffect(() => { const next = new URLSearchParams(params); if (kind === 'all') next.delete('kind'); else next.set('kind', kind); if (next.toString() !== params.toString()) setParams(next, { replace: true }); }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
