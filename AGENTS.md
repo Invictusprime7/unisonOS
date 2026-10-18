@@ -1,8 +1,8 @@
 # Architecture decisions
 - Unset Babel breaking mode; browsers lack Node process.
-- Load Unison tokens after base CSS, bridge app roles in `src/styles/unison-theme.css`, and load font links in `main.tsx`; why: vendor values win without vendor edits or saved-site regeneration.
+- Load Unison tokens after base CSS; bridge app roles in `src/styles/unison-theme.css`, font links in `main.tsx`. Why: vendor values win without vendor edits or site regeneration.
 
-- `LauncherWizard` is selection-only: it captures intent and invokes launch orchestration, but never authors or mutates VFS source.
+- `LauncherWizard` captures intent and invokes orchestration, never authors or mutates VFS. Why: selection-only ownership.
 - `UnisonAppBuilder` is the sole fresh-launch application author: derive `AppBuildContract`, generate/repair one candidate, promote after site-wide closure.
 - The canonical platform owns topology/routes, capabilities/intents/bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation; never generate competing pages after App Builder authorship.
 - `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
