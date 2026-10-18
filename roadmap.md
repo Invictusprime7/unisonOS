@@ -117,3 +117,13 @@
 - [ ] Full ten-case M7 browser acceptance (booking availability, case-study publish, mounted save concurrency included): needs authoritative signed-in session and approved test projects
 - [ ] M3 data collisions: scoped live audit and approved migration needed before choosing/merging testimonial/project/FAQ record owners; no existing records moved or deleted
 - [ ] M4 safe removal of mounted Playground editing: replacement equivalence requires the signed-in acceptance above; useful operations stay mounted
+
+## Runtime Integrity & Preview Editing Validation (2026-10-18)
+- [x] First-edit creation limited to generated seed slugs on collections
+- [x] Records lists every registered collection family
+- [x] Site-database gateway checks table structure (SCHEMA_INCOMPATIBLE) — needs GitHub deploy
+- [ ] Real CRUD against a provisioned site database — blocked: no provisioned site database
+- [ ] Catalog/Content pages as Records views; Playground record editing retired
+- [ ] Merge/remove `-UnrealDev` duplicates — needs owner decision per file
+- [ ] Signed-in edit → refresh → reopen → publish journey — blocked: UNISON session
+- [ ] Guest demo project hand-off to new account + Home resume
