@@ -64,20 +64,22 @@ describe('Theme edit canonical closure', () => {
     const preset = THEME_PRESETS.find(p => p.id === 'futuristic');
     if (!preset) throw new Error('Missing futuristic theme');
     const compiled = commitToPipeline({ selections: { businessName: 'Future Studio', businessModel: 'appointment_service', industryOverlay: 'salon', systemType: 'booking', primaryGoal: 'book', secondaryGoals: [], needsBooking: true, wantsLeadCapture: false, primaryIntent: 'booking.create', requestedPages: ['home'], scaffoldMode: 'selected-pages', templateId: 'salon-premium', themePresetId: preset.id, themeTokens: themePresetToThemeTokens(preset) } }, 'wizard-launch');
-    const snapshot = compiled.siteBundleSnapshot;
     const identity = { userId: '11111111-1111-4111-8111-111111111111', businessId: '22222222-2222-4222-8222-222222222222', projectId: '66666666-6666-4666-8666-666666666666', draftId: '77777777-7777-4777-8777-777777777777', revisionId: '', sessionId: 'futuristic-shadow' };
+    const launched = buildCanonicalLaunchArtifacts({ generatedFiles: compiled.siteBundleSnapshot.vfsFiles, siteBundleSnapshot: compiled.siteBundleSnapshot, compileArtifact: compiled.compileArtifact, canonicalPlayground: compiled.playground, themePresetId: preset.id, templateId: 'salon-premium', systemType: 'booking', businessName: 'Future Studio', industry: 'salon', businessId: identity.businessId, projectId: identity.projectId });
+    const snapshot = launched.siteBundleSnapshot;
+    if (!snapshot) throw new Error('Missing launched snapshot');
     const shadow = '0 4px 14px hsl(0 0% 0% / 0.06)';
     const patch = emptyPatchPlan('Change futuristic colors');
     patch.themeEdit = { version: '1.0', snapshotId: snapshot.snapshotId, revisionId: null, set: { '--primary': '#1f6f4a', '--ut-surface-elevation': shadow }, reset: [] };
-    const result = await commitMutation({ source: 'theme-change', identity, current: { vfsFiles: snapshot.vfsFiles, siteBundleSnapshot: snapshot, playground: compiled.playground }, patch });
+    const result = await commitMutation({ source: 'theme-change', identity, current: { vfsFiles: launched.files, siteBundleSnapshot: snapshot, playground: compiled.playground }, patch });
     expect(result.status, JSON.stringify(result.diagnostics)).toBe('committed');
     const restored = await loadLatestRevisionForProject(identity.projectId);
-    if (!restored?.siteBundleSnapshot) throw new Error('Theme revision did not reload');
+    if (!restored || !result.siteBundleSnapshot) throw new Error('Theme revision did not reload');
     expect(readThemeOverrides(restored.vfsFiles)).toMatchObject({ '--primary': '152.3 56.3% 27.8%', '--ut-surface-elevation': shadow });
-    for (const [path, source] of Object.entries(snapshot.vfsFiles)) {
+    for (const [path, source] of Object.entries(launched.files)) {
       if (path.endsWith('.tsx')) expect(restored.vfsFiles[path]).toBe(source);
     }
-    const next = prepareThemeEdit(restored.vfsFiles, restored.siteBundleSnapshot, { version: '1.0', snapshotId: restored.siteBundleSnapshot.snapshotId, revisionId: restored.revisionId, set: { '--accent': '#1f6f4a' }, reset: [] }, restored.revisionId);
+    const next = prepareThemeEdit(restored.vfsFiles, result.siteBundleSnapshot, { version: '1.0', snapshotId: result.siteBundleSnapshot.snapshotId, revisionId: result.persistedRevisionId, set: { '--accent': '#1f6f4a' }, reset: [] }, result.persistedRevisionId);
     expect(readThemeOverrides(next.files)['--ut-surface-elevation']).toBe(shadow);
   }, 30000);
   it('classifies appearance requests without taking over composition requests', () => {
