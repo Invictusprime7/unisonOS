@@ -1,6 +1,7 @@
 # Architecture decisions
 - Unset Babel breaking mode: browser.
-- Load Unison tokens last; app effects use the theme bridge, shared hero decoration is opt-in. Why: protect vendor skins and Demo.
+- Load Unison tokens last; hero effects opt in via theme bridge. Why: protect vendor skins.
+- Demo counts settle with canonical revisions. Why: count only saved generations.
 
 - `LauncherWizard` captures intent and invokes orchestration, never authors or mutates VFS. Why: selection-only ownership.
 - `UnisonAppBuilder` is the sole fresh-launch application author: derive `AppBuildContract`, generate/repair one candidate, promote after site-wide closure.

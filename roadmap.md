@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Account-persistent Live Demo
-- [ ] Replace browser-only usage with account-owned, server-enforced demo allowance and canonical saved-generation completion.
-- [ ] Test one free generation, failure/retry, concurrent launches and persistent status read-back.
-- [ ] Verify deployed authoritative backend and live signed-in generation → saved draft → returning exhausted state; blocked until deployment/session available.
+- [x] Replace browser-only usage with account-owned reservation and canonical revision settlement; migration prepared for authoritative UNISON workflow, not applied to the unrelated built-in backend.
+- [x] Test one free generation, failed/discarded retry, duplicate reservations, expired/late commits, account isolation, permissions, rollback and persistent UI read-back; 40 tests pass across account Demo, Wizard, Home handoff and canonical launch suites. Preview build OK; signed-out Demo gates to Auth without page errors.
+- [ ] Deploy account demo migration through the existing UNISON GitHub workflow and verify live signed-in generation → saved draft → returning exhausted state; blocked: authoritative RPC is still missing (read-only HTTP 404/PGRST202), no deployment credentials or authoritative test session available.
 
 ## Affinity naming
 - [x] Show Affinity in the visible Builder header and Wizard title; add a token-based glow around Home’s AI chat box. 13 Home/Wizard regressions pass; build OK. Signed-in visual verification remains unavailable (Home redirects to sign-in).
