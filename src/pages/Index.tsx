@@ -432,12 +432,12 @@ const Index = () => {
         onAuthRequired={() => navigate("/auth")}
         onSiteConfirmed={handleConfirmedSite}
         badge="Introducing Affinity · Unison's AI App Builder"
-        headline={<span className="block text-2xl sm:text-3xl md:text-4xl font-semibold leading-snug tracking-normal text-white/70">
-          Build your business with{" "}
+        headline={<>Build your business with{" "}
           <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-lime-300 bg-clip-text text-transparent motion-safe:animate-pulse">
             Affinity
           </span>
-        </span>}
+        </>}
+
         subtitle="Affinity is Unison's AI App Builder. Describe what your business needs and watch it plan, design and generate a complete site — booking, CRM, automations and a live backend included."
         launcherOpen={launcherOpen}
         launchBrief={launchBrief}
