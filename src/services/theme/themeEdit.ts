@@ -69,7 +69,12 @@ export function prepareThemeEdit(files: Record<string, string>, snapshot: SiteBu
     // Unknown tokens are skipped (advisory); values are normalized first.
     if (!contract.tokenNames.includes(name) || !isEditableThemeToken(name)) continue;
     value = normalizeThemeTokenValue(name, value, (THEME_COLOR_TOKENS as readonly string[]).includes(name));
-    if (!isLegalThemeTokenValue(name, value, contract)) throw new Error(`I couldn't read "${raw}" as a value for ${name}. Try a color like #1f6f4a or a size like 12px.`);
+    if (!isLegalThemeTokenValue(name, value, contract)) {
+      const hint = /^--ut-surface-elevation(?:-hover)?$/.test(name)
+        ? 'Use a shadow with two offsets, an optional blur and spread, and a color, or none.'
+        : 'Use a supported color, size, or token reference for this property.';
+      throw new Error(`I couldn't read "${raw}" as a value for ${name}. ${hint}`);
+    }
     overrides[name] = value.trim();
   }
   validateThemeTypography({ ...readCompiledTokenValues(edit.presetId ? buildThemedIndexCss(preset) : files['/src/index.css'] ?? ''), ...overrides });
