@@ -1,6 +1,6 @@
 # Architecture decisions
 - Unset Babel breaking mode: browser.
-- Load Unison tokens after base CSS; bridge app roles in `src/styles/unison-theme.css`, font links in `main.tsx`. Why: vendor values win without vendor edits or site regeneration.
+- Load Unison tokens last; app effects use the theme bridge, shared hero decoration is opt-in. Why: protect vendor skins and Demo.
 
 - `LauncherWizard` captures intent and invokes orchestration, never authors or mutates VFS. Why: selection-only ownership.
 - `UnisonAppBuilder` is the sole fresh-launch application author: derive `AppBuildContract`, generate/repair one candidate, promote after site-wide closure.
