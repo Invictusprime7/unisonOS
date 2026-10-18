@@ -83,16 +83,16 @@ const Auth = () => {
       sessionStorage.removeItem("checkout_plan");
       return "/pricing";
     }
-    if (isNewSignup) return "/onboarding";
+    if (isNewSignup) return "/demo";
     try {
       const { data } = await supabase
         .from("onboarding_state")
         .select("completed")
         .eq("user_id", userId)
         .maybeSingle();
-      return data?.completed ? "/dashboard" : "/onboarding";
+      return data?.completed ? "/home" : "/demo";
     } catch {
-      return "/dashboard";
+      return "/home";
     }
   };
 
@@ -117,11 +117,15 @@ const Auth = () => {
       }, 0);
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) scheduleRedirect(session.user.id, (event as string) === "SIGNED_UP");
+      // Anonymous guest sessions must not trigger a redirect: protected routes
+      // bounce them back to /auth, which would loop forever.
+      if (session && session.user.is_anonymous !== true) {
+        scheduleRedirect(session.user.id, (event as string) === "SIGNED_UP");
+      }
     });
 
     void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) scheduleRedirect(session.user.id);
+      if (session && session.user.is_anonymous !== true) scheduleRedirect(session.user.id);
     }).catch(() => {
       if (active) setLoading(false);
     });

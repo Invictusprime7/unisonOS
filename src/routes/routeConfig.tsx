@@ -29,6 +29,7 @@ const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
 const ProjectSetup = lazy(() => import("@/pages/ProjectSetup"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
+const LiveDemo = lazy(() => import("@/pages/LiveDemo"));
 const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
 const AIChat = lazy(() => import("@/pages/AIChat"));
 const ExternalPreviewPage = lazy(() => import("@/pages/ExternalPreviewPage"));
@@ -480,6 +481,19 @@ export const appRoutes: AppRouteConfig[] = [
       chrome: "legacy",
       requiresAuth: true,
       primaryAction: "Launch system",
+    },
+  },
+  {
+    path: "/demo",
+    element: withAsyncBoundary(<LiveDemo />),
+    meta: {
+      id: "live-demo",
+      title: "Live Demo",
+      section: "onboarding",
+      shell: "onboarding",
+      chrome: "legacy",
+      requiresAuth: true,
+      primaryAction: "Start the live demo",
     },
   },
   {
