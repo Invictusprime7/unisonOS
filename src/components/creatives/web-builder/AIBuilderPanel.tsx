@@ -380,6 +380,8 @@ export interface MessageMeta {
   requiresApproval?: boolean;
   removedFiles?: string[];
   reviewSummary?: string;
+  /** Affinity explained it cannot fulfill (part of) the request */
+  outOfScope?: { reason: string; suggestedPatch?: string };
 }
 
 export interface Message {
@@ -2218,6 +2220,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         removedFiles: response.data?.removedFiles,
         reviewSummary: response.data?.reviewSummary,
         guestDemoOperationId: response.data?.guestDemoOperationId,
+        outOfScope: (response.data as { outOfScope?: { reason: string; suggestedPatch?: string } } | undefined)?.outOfScope,
       };
 
       // The edge function returns { content, generatedImage?, imagePlacement? }

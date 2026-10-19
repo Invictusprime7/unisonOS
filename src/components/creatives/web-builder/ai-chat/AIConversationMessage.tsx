@@ -322,6 +322,22 @@ export const AIConversationMessage: React.FC<Props> = ({ message, onViewEdits, o
               </div>
             )}
 
+            {/* Out-of-scope explanation — Affinity's honest "I can't, here's why" note */}
+            {message.meta?.outOfScope && !message.isStreaming && (
+              <div className="mb-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 mb-1">
+                  <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                  <span>Outside Affinity's current scope</span>
+                </div>
+                <p className="text-xs text-foreground/80 whitespace-pre-wrap">{message.meta.outOfScope.reason}</p>
+                {message.meta.outOfScope.suggestedPatch && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    To unlock this: {message.meta.outOfScope.suggestedPatch}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Warnings */}
             {message.meta?.warnings && message.meta.warnings.length > 0 && !message.isStreaming && (
               <div className="mb-2 space-y-1">
