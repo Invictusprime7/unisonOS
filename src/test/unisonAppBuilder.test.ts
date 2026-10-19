@@ -4,6 +4,7 @@ import { compileResolvedSiteDesignContext } from '@/services/launch/resolvedSite
 import { createUnisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { APP_BUILDER_PROTOCOL_VERSION, type AppBuildContract } from '@/services/app-builder/appBuilderContracts';
 import type { ComposerLoopResult } from '@/services/builder/aiRepairLoop';
+import { listContentTypes } from '@/services/cmsRecordService';
 
 vi.mock('@/services/cmsRecordService', () => ({ listContentTypes: vi.fn(async () => []) }));
 
@@ -121,6 +122,7 @@ describe('UnisonAppBuilder facade', () => {
     });
 
     expect(authorSite).toHaveBeenCalledOnce();
+    expect(listContentTypes).toHaveBeenCalledWith({ businessId: 'business-1', projectId: 'project-1', resource: 'content-types' });
     expect(result.candidate.status).toBe('ready-for-commit');
     expect(result.candidate.files['/src/pages/Home.tsx']).toContain('After');
     expect(result.candidateFiles).toBe(result.candidate.files);

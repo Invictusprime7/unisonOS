@@ -71,7 +71,11 @@ export function createUnisonAppBuilder(
 
   const service: UnisonAppBuilder = {
     async generate(input) {
-      return orchestrateAppBuild(input, { authorSite, runComposer, loadContentTypes: dependencies.loadContentTypes ?? listContentTypes });
+      return orchestrateAppBuild(input, {
+        authorSite,
+        runComposer,
+        loadContentTypes: dependencies.loadContentTypes ?? ((scope) => listContentTypes({ ...scope, resource: 'content-types' })),
+      });
     },
 
     async generatePages(input) {

@@ -1,10 +1,10 @@
 # Roadmap
 
 ## Active: Cross-file resource integration closure
-- [ ] Unify generated-slug identity resolution for editor reads and preview adoption; reject ambiguous matches without creating duplicates.
-- [ ] Load job-local CMS schemas into App Builder generation without UI/global registry dependence.
-- [ ] Preserve owner media and normalize pricing intervals during launch seeding.
-- [ ] Create Records entries from their registered schemas and support empty planned CMS collections.
+- [x] Unify generated-slug identity resolution for editor reads and preview adoption; reject ambiguous matches without creating duplicates. UUID identities remain unchanged; CMS titles and pricing adoption covered.
+- [x] Load job-local CMS schemas into App Builder generation without UI/global registry dependence; failed scoped reads stop authoring rather than reuse global state.
+- [x] Preserve owner product/service/testimonial/team media and team social links; normalize pricing intervals during launch seeding using scoped media inventory.
+- [x] Create Records entries from their registered schemas and support empty planned CMS collections through explicit New record; no implicit backend provisioning.
 - [ ] Verify focused integrations and publish the frontend requested by the owner.
 - [ ] Authoritative backend deployment and authenticated public read-back; blocked by unavailable UNISON workflow access/session. Never deploy into the unrelated managed database.
 - [ ] Atomic content/profile writes and full shared/dedicated schema/publication parity; requires authoritative migration validation and provisioned site-database acceptance.
