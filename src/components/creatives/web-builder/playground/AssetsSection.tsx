@@ -66,7 +66,7 @@ function SiteScanList({ group, businessId, projectId, onSaved }: { group: "catal
     const onMsg = (e: MessageEvent) => {
       // Accept scans only from a preview frame on this page.
       const fromPreview = Array.from(document.querySelectorAll("iframe")).some((f) => f.contentWindow === e.source);
-      if (!fromPreview) return;
+      if (!fromPreview || !isTrustedPreviewOrigin(e.origin)) return;
       const d = e.data as { type?: string; requestId?: string; items?: ScannedItem[]; css?: string };
       if (d?.type !== "ASSET_SCAN" || d.requestId !== requestId) return;
       setScan({ items: d.items ?? [], css: d.css ?? "" });
@@ -126,7 +126,7 @@ function SiteScanList({ group, businessId, projectId, onSaved }: { group: "catal
                 sandbox=""
                 className="pointer-events-none mt-2 w-full border border-border"
                 style={{ height: "12rem", background: "white" }}
-                srcDoc={`<!doctype html><html><head><style>${scan?.css ?? ""}</style><style>body{margin:0}</style></head><body>${it.html}</body></html>`}
+                srcDoc={`<!doctype html><html><head><style>${sanitizeCSS(scan?.css ?? "")}</style><style>body{margin:0}</style></head><body>${sanitizeHTML(it.html ?? "", { allowStyles: true })}</body></html>`}
               />
             )}
           </li>

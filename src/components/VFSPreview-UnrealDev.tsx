@@ -952,7 +952,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
   useEffect(() => {
     const handlePreviewMessage = (event: MessageEvent) => {
-      if (event.source !== getPreviewWindow()) return;
+      if (event.source !== getPreviewWindow() || !isTrustedPreviewOrigin(event.origin)) return;
       const data = event.data;
       if (!data?.type) return;
 

@@ -5,7 +5,8 @@
  * giving users a real "window" into their project.
  */
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
+import DOMPurify from "dompurify";
 import { cn } from "@/lib/utils";
 import { Clock, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -54,14 +55,14 @@ export function RecentProjectCard({
         {previewHtml ? (
           <iframe
             ref={iframeRef}
-            srcDoc={previewHtml}
+            srcDoc={safePreviewHtml}
             title={`Preview of ${name}`}
             className="absolute inset-0 w-[1280px] h-[800px] origin-top-left border-0 pointer-events-none"
             style={{
               transform: "scale(0.22)",
               transformOrigin: "top left",
             }}
-            sandbox="allow-scripts"
+            sandbox=""
             loading="lazy"
             tabIndex={-1}
           />
