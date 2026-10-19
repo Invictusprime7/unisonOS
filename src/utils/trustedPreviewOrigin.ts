@@ -18,5 +18,16 @@ export const TRUSTED_PREVIEW_ORIGIN_SOURCE = `function(origin) {
   return false;
 }`;
 
-// eslint-disable-next-line no-new-func
-export const isTrustedPreviewOrigin = new Function(`return (${TRUSTED_PREVIEW_ORIGIN_SOURCE});`)() as (origin: string) => boolean;
+const EXACT = ['codesandbox.io', 'unisontasks.com', 'unisonos.ai', 'unisonai.dev', 'unison-tasks.vercel.app', 'unisonai.vercel.app', 'unisonos.vercel.app', 'unison-tasks-official.vercel.app', 'unison-tasks.netlify.app'];
+const SUFFIXES = ['.codesandbox.io', '.csb.app', '.lovable.app', '.lovableproject.com', '.lovable.dev', '.unisontasks.com', '.unisonos.ai', '.unisonai.dev'];
+
+export function isTrustedPreviewOrigin(origin: string): boolean {
+  if (!origin || typeof origin !== 'string') return false;
+  if (origin === 'null') return true;
+  if (typeof window !== 'undefined' && origin === window.location.origin) return true;
+  const m = /^(https?):\/\/([^/:]+)(?::\d+)?$/.exec(origin);
+  if (!m) return false;
+  const host = m[2].toLowerCase();
+  if (m[1] === 'http') return host === 'localhost' || host === '127.0.0.1';
+  return EXACT.includes(host) || SUFFIXES.some((s) => host.endsWith(s));
+}

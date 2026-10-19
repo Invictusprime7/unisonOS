@@ -12,6 +12,7 @@
 export const CATALOG_HYDRATION_PATH = '/src/components/catalogHydration.ts';
 
 export const CATALOG_HYDRATION_MODULE = `import { useEffect, useRef, useState } from 'react';
+import { TRUSTED_PREVIEW_ORIGIN_SOURCE } from '@/utils/trustedPreviewOrigin';
 import { PUBLISHED_RUNTIME_CONFIG } from '@/unison/publishedRuntime';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,7 +180,7 @@ export function useSectionData(
 
     const onMessage = (event: MessageEvent) => {
       // Catalog data is only accepted from the builder hosting this preview.
-      if (event.source !== window.parent) return;
+      if ((event.source !== window.parent) || !(${TRUSTED_PREVIEW_ORIGIN_SOURCE})(event.origin)) return;
       const data: any = event.data;
       if (!data) return;
       if (data.type === 'CATALOG_BINDINGS_CHANGED') {
