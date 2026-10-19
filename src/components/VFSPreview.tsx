@@ -831,6 +831,15 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     }
   }, [clearDirectPreviewSelection, getPreviewWindow]);
 
+  const handleSandpackRunning = useCallback(() => {
+    if (timeoutRecoveryTimerRef.current !== null) {
+      window.clearTimeout(timeoutRecoveryTimerRef.current);
+      timeoutRecoveryTimerRef.current = null;
+    }
+    timeoutRecoveryCountRef.current = 0;
+    setSandpackTimeoutExhausted(false);
+  }, []);
+
   // Push the current Edit-mode state into the preview iframe.
   // Retries briefly to cover the brief window before the bridge boots.
   const pushEditModeState = useCallback((enabled: boolean) => {
@@ -959,6 +968,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       if (!data?.type) return;
 
       if (data.type === 'UNISON_PREVIEW_RENDER_READY') {
+        handleSandpackRunning();
         reportPreviewRunning();
         onReady?.();
         return;
@@ -1153,7 +1163,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
     window.addEventListener('message', handlePreviewMessage);
     return () => window.removeEventListener('message', handlePreviewMessage);
-  }, [builderSession.projectId, builderSession.runtimeContext?.projectId, onNavigate, onIntentTrigger, businessId, siteId, revisionId, onError, onReady, onElementSelect, onInlineTextCommit, enableSelection, getPreviewWindow, clearDirectPreviewSelection]);
+  }, [builderSession.projectId, builderSession.runtimeContext?.projectId, onNavigate, onIntentTrigger, businessId, siteId, revisionId, onError, onReady, onElementSelect, onInlineTextCommit, enableSelection, getPreviewWindow, clearDirectPreviewSelection, handleSandpackRunning]);
 
 
   
@@ -1218,11 +1228,6 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       timeoutRecoveryTimerRef.current = null;
       setSandpackKey((key) => key + 1);
     }, 700 * timeoutRecoveryCountRef.current);
-  }, []);
-
-  const handleSandpackRunning = useCallback(() => {
-    timeoutRecoveryCountRef.current = 0;
-    setSandpackTimeoutExhausted(false);
   }, []);
 
   const handleRetrySandpackConnection = useCallback(() => {

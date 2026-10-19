@@ -135,7 +135,12 @@ import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { deriveFilePath } from '@/services/routeNavigationService';
 import { createBuilderPage } from '@/types/pageRegistry';
 import { canonicalCandidateOutput } from '@/services/builder/canonicalCandidateOutput';
-import { findUnrequestedCopyChanges, findUnrequestedScopedSideEffects } from '@/services/builder/scopedEditContentGuard';
+import {
+  findUnrequestedCopyChanges,
+  findUnrequestedScopedSideEffects,
+  getUnrequestedNavigationSectionRemovalReason,
+  isNavigationPresentationPrompt,
+} from '@/services/builder/scopedEditContentGuard';
 
 import {
   planBusinessCapabilities,
@@ -608,7 +613,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     return () => setAiGenerationActive(false);
   }, [isLoading]);
   const [isFixing, setIsFixing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'code' | 'tools' | 'customize' | 'debug' | 'backend'>('code');
+  const [activeTab, setActiveTab] = useState<'code' | 'tools' | 'customize' | 'backend'>('code');
   useEffect(() => {
     if (!customizerAvailable && activeTab === 'customize') setActiveTab('code');
   }, [activeTab, customizerAvailable]);
@@ -2344,13 +2349,16 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           responseMeta.warnings?.some(w => w.severity === 'error');
 
         // Client-side scope enforcement for scoped edits
-        const isScopedTask = isSurgicalEdit || isBehavioralEdit || Boolean(selectionPinnedFile);
+        const isScopedTask = isSurgicalEdit || isBehavioralEdit || Boolean(selectionPinnedFile) || isNavigationPresentationPrompt(rawInput);
         const permissionCategory: AIEditPermissionCategory = isBehavioralEdit
           ? 'behavioral'
           : isSurgicalEdit
             ? 'surgical'
             : 'ui';
-        const scopeBlockReason = isScopedTask && !isFullAuto ? getScopedEditAutoApplyBlockReason({
+        const navigationStructureBlockReason = getUnrequestedNavigationSectionRemovalReason(
+          vfsFiles ?? {}, normalizedFiles, rawInput,
+        );
+        const scopeBlockReason = navigationStructureBlockReason ?? (isScopedTask && !isFullAuto ? getScopedEditAutoApplyBlockReason({
           files: normalizedFiles,
           originalFiles: vfsFiles ?? {},
           prompt: rawInput,
@@ -2358,7 +2366,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           existingFileKeys: vfsFiles ? Object.keys(vfsFiles) : [],
           pinnedBySelection: Boolean(selectionPinnedFile),
           targetText: selectionPinnedFile ? (selectedTarget?.text ?? null) : null,
-        }) : null;
+        }) : null);
 
         if (scopeBlockReason) {
           console.warn('[AIBuilderPanel] SCOPE BLOCK:', scopeBlockReason);
@@ -2766,7 +2774,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
       {/* Tab bar */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col min-h-0">
-        <TabsList className={cn('builder-nav w-full grid rounded-none h-9 bg-transparent px-1', customizerAvailable ? 'grid-cols-5' : 'grid-cols-4')}>
+        <TabsList className={cn('builder-nav w-full grid rounded-none h-9 bg-transparent px-1', customizerAvailable ? 'grid-cols-4' : 'grid-cols-3')}>
           <TabsTrigger
             value="code"
             className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
@@ -2791,19 +2799,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               Style
             </TabsTrigger>
           )}
-          <TabsTrigger
-            value="debug"
-            disabled={!features.repairs}
-            className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
-          >
-            <Bug className="w-3.5 h-3.5" />
-            Debug
-            {iframeErrors.length > 0 && (
-              <Badge variant="destructive" className="ml-1 h-4 min-w-[16px] px-1 text-[10px] flex items-center justify-center">
-                {iframeErrors.length}
-              </Badge>
-            )}
-          </TabsTrigger>
           <TabsTrigger
             value="backend"
             disabled={!features.capabilities}
@@ -2976,6 +2971,20 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 ))
               )}
               <AgentActivityFeed active={isLoading} />
+              {features.repairs && <DebugAgentPanel
+                embedded
+                iframeErrors={iframeErrors}
+                onFixError={handleFixError}
+                onDebugRequest={(prompt) => {
+                  void handleFixError({ type: 'runtime', message: prompt, timestamp: new Date() });
+                }}
+                onClearErrors={onClearErrors}
+                onApplyPatch={async () => ({ success: false, errors: ['Request a validated repair through Affinity.'] })}
+                canAutoApplyPatch={false}
+                onReviewPatch={() => toast.info('Describe the repair in Affinity chat to prepare a validated candidate.')}
+                vfsFiles={vfsFiles}
+                isFixing={isFixing}
+              />}
 
             </div>
           </ScrollArea>
@@ -3081,22 +3090,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           />}
         </TabsContent>
 
-        {/* Debug Tab */}
-        <TabsContent value="debug" className="flex-1 flex flex-col m-0 min-h-0 data-[state=inactive]:hidden">
-          {features.repairs && <DebugAgentPanel
-            iframeErrors={iframeErrors}
-            onFixError={handleFixError}
-            onDebugRequest={(prompt) => {
-              void handleFixError({ type: 'runtime', message: prompt, timestamp: new Date() });
-            }}
-            onClearErrors={onClearErrors}
-            onApplyPatch={async () => ({ success: false, errors: ['Request a validated repair through Affinity.'] })}
-            canAutoApplyPatch={false}
-            onReviewPatch={() => toast.info('Describe the repair in Affinity chat to prepare a validated candidate.')}
-            vfsFiles={vfsFiles}
-            isFixing={isFixing}
-          />}
-        </TabsContent>
       </Tabs>
     </div>
   );

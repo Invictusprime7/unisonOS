@@ -9,8 +9,10 @@ source (or, ideally, running it) — never from a prior session's memory.
 
 Restores the same revision and selected page.
 
-**Status:** Assessed Real (call-site trace, not a live browser run) — 2026-08-13.
-See Stage 0 in `roadmap-state.md`.
+**Status:** Assessed Partial (local persisted restore contract is tested; not
+a live browser or cross-device run) — 2026-10-18. Explicit project resume now
+keeps persisted revision identity/snapshot ahead of stale route hints; see
+Stage 0 in `roadmap-state.md`.
 
 ## 2. AI or manual edit -> validated commit -> cloud persistence -> refresh -> deterministic rollback
 

@@ -13,8 +13,8 @@ Status values: `Unknown`, `Assessed`, `Planned`, `In progress`, `Blocked`,
 
 ## Stage 0 — Project Spine Stabilization
 
-**Status:** Assessed (Real for the checked paths)
-**Last checked:** 2026-08-13
+**Status:** Assessed (local persisted restore path verified; full exit gate unverified)
+**Last checked:** 2026-10-18
 
 Exit gate: refresh, crash recovery, reopen, and cross-device access
 reproduce the latest committed project without route-state authority or
@@ -27,6 +27,21 @@ query param forces `isExplicitProjectResume`; no direct
 `builder_drafts.vfs_files`/metadata writes found outside
 `commitMutation`; trigger `assert_canonical_draft_projection` rejects
 divergence. See `references/unison-contracts.md` for detail.
+
+Current-pass evidence: the explicit-resume merge now puts persisted revision
+state after route hints, preventing stale route identity/snapshot from
+shadowing it. Regression: `src/test/webBuilderCanonicalRecovery.test.ts`.
+
+### S0-RESUME-AUTHORITY — Persisted revision wins explicit resume
+
+- **User outcome:** Reopening a saved project keeps its committed identity and snapshot rather than stale route metadata.
+- **Current evidence:** `WebBuilder.tsx`; focused tests in `webBuilderCanonicalRecovery.test.ts` (8), `projectRevisionHydration.test.ts` (6), `projectRuntimeEnvelope.test.ts` (6), and `webBuilderRevisionEffect.test.ts` (7).
+- **Canonical owner:** Persisted `site_revisions` state loaded by `vfsCommitService`; `WebBuilder` adoption and `ProjectRuntimeEnvelope` validation.
+- **Scope/non-scope:** Durable identity/snapshot/VFS win conflicting route data; route-only hints survive. No authenticated, cross-device, or publish parity claim.
+- **Dependencies/migration:** Existing revision loader and envelope; no schema migration or deployment.
+- **Acceptance:** Stale route project/draft/snapshot and VFS cannot override the persisted revision; focused regression passes. 27 Stage 0 tests pass.
+- **Rollback/removal:** Revert the merge precedence if compatibility regressions emerge; no legacy behavior removed.
+- **Status:** Verified (local contract only); Stage 0 exit gate remains unverified.
 
 Known partial: pre-first-commit builder state is in-memory only (expected
 — a project has no durable identity until its first `commitMutation`).
@@ -187,3 +202,10 @@ evidence) before this table is updated.
   verify-then-commit-fast, not commit-after-full-validation, for this
   workspace. Stage 2's remaining exit-gate gap is now only the RLS-level
   cross-tenant test.
+- **2026-10-18**: Re-audited Stage 0 explicit resume. Stale route metadata
+  could override persisted identity and snapshot while persisted VFS still
+  won. Reversed merge precedence and added a regression for stale identity/
+  snapshot plus route-only navigation hints. `webBuilderCanonicalRecovery`
+  (8 tests) and adjacent hydration/envelope tests (19) pass. Stage 0 remains
+  unverified for cross-device/session recovery and live publish/reopen
+  because no authoritative signed-in UNISON session is available.

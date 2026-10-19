@@ -26,6 +26,7 @@ import {
 } from '@/services/aiBuilderApply';
 
 export interface DebugAgentPanelProps {
+  embedded?: boolean;
   iframeErrors: Array<{ type: string; message: string; stack?: string; file?: string; line?: number; column?: number; timestamp: Date }>;
   onFixError?: (error: any) => void;
   /** Send a manual debug request through the authenticated Builder/Supabase lane. */
@@ -321,7 +322,7 @@ const InlineCommandApproval: React.FC<{
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export const DebugAgentPanel: React.FC<DebugAgentPanelProps> = ({
-  iframeErrors, onFixError, onDebugRequest, onClearErrors, onApplyPatch, canAutoApplyPatch = true, onReviewPatch, vfsFiles, isFixing,
+  embedded = false, iframeErrors, onFixError, onDebugRequest, onClearErrors, onApplyPatch, canAutoApplyPatch = true, onReviewPatch, vfsFiles, isFixing,
 }) => {
   const [input, setInput] = useState('');
   const [session, setSession] = useState<DebugSession | null>(null);
@@ -442,7 +443,7 @@ export const DebugAgentPanel: React.FC<DebugAgentPanelProps> = ({
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
+      {!embedded && <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <Bug className="w-4 h-4 text-destructive" />
           <span className="text-sm font-semibold text-foreground">Debug</span>
@@ -469,7 +470,7 @@ export const DebugAgentPanel: React.FC<DebugAgentPanelProps> = ({
             </button>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* Auto-fix banner when errors exist */}
       {hasErrors && (
@@ -479,6 +480,26 @@ export const DebugAgentPanel: React.FC<DebugAgentPanelProps> = ({
           onClear={() => onClearErrors?.()}
           isFixing={!!isFixing}
         />
+      )}
+      {embedded && session && (
+        <div className="flex items-center justify-end gap-2 px-3 py-1">
+          <Badge variant="outline" className={cn(
+            'text-[9px] h-4',
+            session.status === 'running' && 'border-primary/30 text-primary',
+            session.status === 'completed' && 'border-green-500/30 text-green-500',
+            session.status === 'failed' && 'border-destructive/30 text-destructive',
+          )}>
+            {session.status}
+          </Badge>
+          <button
+            onClick={handleReset}
+            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
+            title="Reset debug session"
+            aria-label="Reset debug session"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )}
 
       {/* Main scroll area */}
@@ -558,7 +579,7 @@ export const DebugAgentPanel: React.FC<DebugAgentPanelProps> = ({
       </ScrollArea>
 
       {/* Input bar */}
-      <div className="shrink-0 border-t border-border px-3 py-2 bg-muted/30">
+      {!embedded && <div className="shrink-0 border-t border-border px-3 py-2 bg-muted/30">
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -578,7 +599,7 @@ export const DebugAgentPanel: React.FC<DebugAgentPanelProps> = ({
             {isFixing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
           </Button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 };

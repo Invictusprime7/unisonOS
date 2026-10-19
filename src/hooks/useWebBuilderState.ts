@@ -8,7 +8,7 @@ import type { Canvas as FabricCanvas } from 'fabric';
 import { toast } from 'sonner';
 
 export type BuilderMode = 'select' | 'edit' | 'preview' | 'pan' | 'code';
-export type ViewMode = 'canvas' | 'code' | 'split';
+export type ViewMode = 'canvas' | 'code' | 'split' | 'changes';
 
 /**
  * Editor layer determines what powers the visual editing surface.

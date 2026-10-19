@@ -15,6 +15,19 @@ describe('AI Builder workspace switch', () => {
     expect(panel).toContain("if (!customizerAvailable && activeTab === 'customize') setActiveTab('code')");
   });
 
+  it('combines the guarded debug workspace into Chat and uses its single composer', () => {
+    const panel = read('src/components/creatives/web-builder/AIBuilderPanel.tsx');
+    const debugPanel = read('src/components/creatives/web-builder/DebugAgentPanel.tsx');
+
+    expect(panel).not.toContain('value="debug"');
+    expect(panel).toMatch(/\{features\.repairs && <DebugAgentPanel[\s\S]*?embedded/);
+    expect(panel).toContain('canAutoApplyPatch={false}');
+    expect(panel).toContain('onSend={handleSend}');
+    expect(debugPanel).toContain('embedded?: boolean');
+    expect(debugPanel).toContain('{!embedded && <div className="shrink-0 border-t border-border px-3 py-2 bg-muted/30">');
+    expect(debugPanel).toMatch(/\{!embedded && <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">/);
+  });
+
   it('renders the same parent-owned panels once and keeps standalone fallbacks out of AI mode', () => {
     const builder = read('src/components/creatives/WebBuilder.tsx');
 

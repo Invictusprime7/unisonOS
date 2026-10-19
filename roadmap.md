@@ -158,6 +158,7 @@
 
 ## Runtime Integrity & Preview Editing Validation (2026-10-18)
 - [x] First-edit creation limited to generated seed slugs on collections
+- [x] Explicit project resume gives persisted revision identity, snapshot, and VFS precedence over stale route metadata; canonical recovery regression passes; authenticated refresh/reopen remains blocked below.
 - [x] Records lists every registered collection family
 - [x] Site-database gateway checks table structure (SCHEMA_INCOMPATIBLE) — needs GitHub deploy
 - [ ] Real CRUD against a provisioned site database — blocked: no provisioned site database
