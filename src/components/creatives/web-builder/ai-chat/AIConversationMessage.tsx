@@ -9,9 +9,7 @@ import {
   Eye,
   ExternalLink,
   AlertTriangle,
-  XCircle,
   RefreshCw,
-  Loader2,
   Copy,
   Check,
 } from 'lucide-react';
