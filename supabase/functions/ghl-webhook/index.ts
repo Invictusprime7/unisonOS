@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
 
   const headers: Record<string, string> = {};
   req.headers.forEach((v, k) => {
-    if (!/^authorization$/i.test(k)) headers[k] = v;
+    if (!/^(authorization|apikey|x-ghl-signature|x-wh-signature|x-webhook-secret)$/i.test(k)) headers[k] = v;
   });
 
   const { data: inserted, error } = await supabase
@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       previous_stage_id: previousStageId,
       payload: body as unknown as Record<string, unknown>,
       headers,
-      signature: sigHeader,
+      signature: null,
     })
     .select('id, created_at')
     .single();
