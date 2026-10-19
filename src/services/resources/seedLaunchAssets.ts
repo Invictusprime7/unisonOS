@@ -59,8 +59,9 @@ export interface SeedLaunchAssetsResult { created: number; profileFields: string
 
 export function resolveProductCatalogSurface(
   industry: string | null | undefined,
-  product: Pick<CreatorProduct, 'name' | 'category' | 'tags' | 'fulfillmentType' | 'billingType'>,
+  product: Pick<CreatorProduct, 'name' | 'category' | 'tags' | 'fulfillmentType' | 'billingType' | 'catalogSurface'>,
 ): 'menu' | 'pricing' | 'products' {
+  if (product.catalogSurface) return product.catalogSurface;
   const normalizedIndustry = normalizeIndustryKey(String(industry ?? ''));
   if (normalizedIndustry === 'saas' && product.billingType === 'subscription') return 'pricing';
   if (normalizedIndustry !== 'restaurant') return 'products';
@@ -74,7 +75,7 @@ export function resolveProductCatalogSurface(
 
 export function resolveProductCatalogSurfaces(
   industry: string | null | undefined,
-  product: Pick<CreatorProduct, 'name' | 'category' | 'tags' | 'fulfillmentType' | 'billingType'>,
+  product: Pick<CreatorProduct, 'name' | 'category' | 'tags' | 'fulfillmentType' | 'billingType' | 'catalogSurface'>,
   enableProductCommerce = false,
 ): Array<'menu' | 'pricing' | 'products'> {
   const surface = resolveProductCatalogSurface(industry, product);
@@ -96,16 +97,19 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
         name: p.name,
         description: p.description,
         price: p.price,
+        active: p.status !== 'draft' && p.status !== 'archived' && p.visibility !== 'hidden',
         extra: surface === 'menu' ? {
           category: p.category,
           featured: p.featured,
           available: p.status !== 'draft' && p.status !== 'archived' && p.visibility !== 'hidden',
           sort_order: p.sortOrder,
+          currency: p.currency,
         } : surface === 'pricing' ? {
           billing_interval: p.billingInterval ?? 'monthly',
           highlighted: p.featured,
           sort_order: p.sortOrder,
-        } : undefined,
+          currency: p.currency,
+        } : { category: p.category, featured: p.featured, sort_order: p.sortOrder, currency: p.currency, inventory_count: p.stockQuantity },
       }))),
     ...Object.values(data.services ?? {}).map((s) => ({
       surface: 'services',
@@ -118,6 +122,7 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
         duration_minutes: s.duration,
         featured: s.featured,
         sort_order: s.sortOrder,
+        currency: s.currency,
       },
     })),
     ...Object.values(data.testimonials ?? {}).filter((t) => t.content?.trim()).map((t) => ({
@@ -140,7 +145,7 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
   if (info && profile) {
     const patch: Record<string, unknown> = {};
     const cur = profile as unknown as Record<string, unknown>;
-    for (const [k, v] of [['tagline', info.tagline], ['description', info.description], ['phone', info.phone], ['email', info.email], ['notificationEmail', info.notificationEmail]] as const) {
+    for (const [k, v] of [['name', info.businessName], ['tagline', info.tagline], ['description', info.description], ['phone', info.phone], ['email', info.email], ['notificationEmail', info.notificationEmail]] as const) {
       if (v && !cur[k]) patch[k] = v;
     }
     // Brand and contact details: only fill fields the business has not set.
@@ -203,6 +208,7 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
         businessId: input.businessId, projectId: input.projectId, contentTypeId: typeId, status: 'published',
         values: { title: plan.title, data: plan.data },
       });
+      titles.add(plan.title.toLowerCase());
       result.created += 1;
     }
   }
