@@ -44,9 +44,18 @@ describe('generation resource wiring', () => {
   it('includes selected cross-industry and dynamic CMS surfaces without inventing tables', () => {
     registerContentTypes([{ id: 'article-type', api_key: 'articles', field_schema: { fields: [{ key: 'body', type: 'textarea' }] } }]);
     try {
-      expect(buildRegisteredResourceContext()).toContain('content:articles → CMS articles');
-      expect(buildRegisteredResourceContext()).toContain('body:textarea');
+      const rows = [{ id: 'article-type', api_key: 'articles', field_schema: { fields: [{ key: 'body', type: 'textarea' }] } }];
+      expect(buildRegisteredResourceContext(rows)).toContain('content:articles → CMS articles');
+      expect(buildRegisteredResourceContext(rows)).toContain('body:textarea');
+      expect(buildRegisteredResourceContext()).not.toContain('content:articles');
       expect(buildIndustryIconContext('restaurant', [], [], ['portfolio'])).toContain('menu, portfolio');
+    } finally { registerContentTypes([]); }
+  });
+  it('does not leak another project CMS type into an explicitly scoped generation', () => {
+    registerContentTypes([{ id: 'other-type', api_key: 'private_notes' }]);
+    try {
+      expect(buildRegisteredResourceContext([{ id: 'current-type', api_key: 'articles' }])).not.toContain('private-notes');
+      expect(buildRegisteredResourceContext([])).not.toContain('private-notes');
     } finally { registerContentTypes([]); }
   });
   it.each(['products', 'menu', 'pricing'] as const)('honors explicit %s seed targets across industries', (catalogSurface) => {
