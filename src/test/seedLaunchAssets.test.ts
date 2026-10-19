@@ -92,4 +92,24 @@ describe('launch content seeding contract', () => {
     expect(mocks.createContentRecord).toHaveBeenCalledWith(expect.objectContaining({ contentTypeId: 'faq-old' }));
     expect(mocks.createContentRecord).toHaveBeenCalledWith(expect.objectContaining({ contentTypeId: 'case-old' }));
   });
+  it('fills owner-provided identity, email, hours and mission without overwriting existing profile facts', async () => {
+    const hours = [{ day: 'Monday', open: '09:00', close: '17:00' }];
+    mocks.loadBusinessProfile.mockResolvedValue({ name: '', email: '', hours: [], description: '' });
+    const data = createEmptyCreatorData('Owner Studio');
+    Object.assign(data.businessInfo, { email: 'owner@example.test', hours, description: 'Owner mission' });
+    await seedLaunchAssets({ businessId: 'business-1', creatorData: data });
+    expect(mocks.saveBusinessProfile).toHaveBeenCalledWith('business-1', {
+      name: 'Owner Studio', email: 'owner@example.test', hours, description: 'Owner mission',
+    });
+    mocks.saveBusinessProfile.mockClear();
+    mocks.loadBusinessProfile.mockResolvedValue({ name: 'Existing', email: 'existing@example.test', hours, description: 'Existing mission' });
+    await seedLaunchAssets({ businessId: 'business-1', creatorData: data });
+    expect(mocks.saveBusinessProfile).not.toHaveBeenCalled();
+  });
+  it('saves an explicitly targeted coaching pricing tier with currency and visibility intact', async () => {
+    const data = createEmptyCreatorData('Coach');
+    data.products.tier = { productId: 'tier', catalogSurface: 'pricing', name: 'Owner program', price: 95, currency: 'SEK', visibility: 'hidden', sortOrder: 2 };
+    await seedLaunchAssets({ businessId: 'business-1', projectId: 'project-1', industry: 'coaching', creatorData: data });
+    expect(mocks.createCatalogItem).toHaveBeenCalledWith('business-1', 'pricing', expect.objectContaining({ name: 'Owner program', price: 95, currency: 'SEK', active: false, sort_order: 2 }), 'project-1');
+  });
 });
