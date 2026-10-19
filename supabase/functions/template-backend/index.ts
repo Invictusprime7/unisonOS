@@ -81,6 +81,8 @@ serve(async (req) => {
         const { data: templates, error } = await supabase
           .from('templates')
           .select('id, redirects')
+          .eq('visibility', 'public')
+          .eq('status', 'published')
           .not('redirects', 'is', null);
 
         if (error) throw error;
@@ -164,6 +166,7 @@ serve(async (req) => {
         const { data: toPublish, error: publishError } = await supabase
           .from('templates')
           .select('id, scheduling')
+          .eq('owner_id', auth.user.id)
           .eq('status', 'draft')
           .not('scheduling', 'is', null);
 
@@ -176,7 +179,8 @@ serve(async (req) => {
             await supabase
               .from('templates')
               .update({ status: 'published', scheduling: { ...scheduling, publishAt: null } })
-              .eq('id', template.id);
+              .eq('id', template.id)
+              .eq('owner_id', auth.user.id);
             publishResults.push(template.id);
           }
         }
@@ -185,6 +189,7 @@ serve(async (req) => {
         const { data: toUnpublish, error: unpublishError } = await supabase
           .from('templates')
           .select('id, scheduling')
+          .eq('owner_id', auth.user.id)
           .eq('status', 'published')
           .not('scheduling', 'is', null);
 
@@ -197,7 +202,8 @@ serve(async (req) => {
             await supabase
               .from('templates')
               .update({ status: 'archived', scheduling: { ...scheduling, unpublishAt: null } })
-              .eq('id', template.id);
+              .eq('id', template.id)
+              .eq('owner_id', auth.user.id);
             unpublishResults.push(template.id);
           }
         }
