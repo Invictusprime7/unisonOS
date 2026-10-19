@@ -26,6 +26,9 @@ verify_jwt = true
 [functions.ai-code-assistant]
 verify_jwt = false
 
+[functions.generate-page]
+verify_jwt = false
+
 [functions.builder-request-interpreter]
 verify_jwt = false
 
