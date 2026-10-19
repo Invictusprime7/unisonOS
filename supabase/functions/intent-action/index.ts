@@ -6,6 +6,7 @@
 // @ts-nocheck - Supabase Edge Function types differ from local TS
 // deno-lint-ignore-file no-import-prefix
 
+import { publicBusinessWriteAllowed } from "../_shared/publicBusinessGate.ts";
 import { serve } from "serve";
 import { createClient } from "@supabase/supabase-js";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
@@ -153,6 +154,9 @@ serve(async (req) => {
     }
 
     const supabase = getSupabaseAdmin();
+    if (!(await publicBusinessWriteAllowed(supabase, req, businessId))) {
+      return errorResponse("This business is not accepting submissions", 403, corsHeaders);
+    }
     const bizSettings = await loadBusinessSettings(supabase, businessId);
     const email = data.email as string || "";
     const name = data.name as string || "";
