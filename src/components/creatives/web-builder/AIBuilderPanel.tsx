@@ -1980,9 +1980,8 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             const pageOps = candidate.routeOps.filter((operation) => operation.type === 'add_page');
             if (pageOps.length > 0) {
               const pageTargetsForGeneration = pageOps.map((operation) => {
-                const pageId = operation.pageId!;
-                const title = operation.title!;
-                const route = operation.route!;
+                const { pageId, title, route } = operation;
+                if (!pageId || !title || !route) throw new Error('Affinity returned an incomplete new-page target.');
                 const page = createBuilderPage(pageId, title, route, operation.pageType ?? 'custom', {
                   showInNav: operation.showInNav ?? true,
                   navOrder: operation.navOrder,
@@ -2005,7 +2004,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 operationId: `builder-pages:${generateId()}`,
                 connectorContext: { projectId, businessId, revisionId, catalogSummary: connectorCatalogSummary, registryContext: builderRegistryContext, requestEnvelope: capabilityInterpretation.envelope },
                 baseRevisionId: revisionId ?? null,
-                currentFiles: vfsFiles,
+                // Retain the scoped navigation edits from planning, but author
+                // new pages only once against the existing accepted site.
+                currentFiles: Object.fromEntries(Object.entries(editResult.candidateFiles)
+                  .filter(([path]) => path in vfsFiles)),
                 pages: pageTargetsForGeneration,
                 existingRoutes: pageTargets.map(({ title, route }) => ({ title, route })),
                 businessName: templateName?.trim() || 'Website',
@@ -2036,7 +2038,16 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               if (generation.status !== 'ready-for-commit' || !generation.changeSet) {
                 throw new Error(generation.diagnostics[0] ?? 'Affinity could not author every requested page.');
               }
-              canonicalCandidate = generation.changeSet;
+              canonicalCandidate = buildAICandidateChangeSet({
+                aiFiles: generation.candidateFiles,
+                baseFiles: vfsFiles,
+                baseRevisionId: revisionId ?? undefined,
+                origin: 'builder',
+                intent: 'in-builder-multi-page-generation',
+                targetPages: pageTargetsForGeneration.map(page => page.filePath),
+                routeOps: generation.routeOps,
+                resolveDependencies: false,
+              }).changeSet;
               canonicalRouteOps = [...generation.routeOps];
               dedicatedPageGeneration = true;
               response = {

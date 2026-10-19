@@ -204,7 +204,22 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
   const outcomes: PageAuthoringOutcome[] = [];
   const priorPages: Array<{ role: string; summary: string }> = [];
   let paused: ComposerStopReason | null = null;
+  // Builder additions do not author Home again: inherit its accepted source.
   let establishedLanguage: HomepageVisualLanguage | undefined;
+  if (candidateOrigin === 'builder') {
+    try {
+      const snapshot = JSON.parse(files['/.unison/site-bundle-snapshot.json'] ?? '{}');
+      const pages = snapshot.pageRegistry?.pages ?? {};
+      const homeId = snapshot.pageRegistry?.homePageId;
+      const home = pages[homeId] ?? Object.values(pages).find((page: any) => page.path === '/');
+      if (home?.filePath && typeof files[home.filePath] === 'string') {
+        establishedLanguage = extractHomepageVisualLanguage(files[home.filePath], homeId ?? 'home');
+      }
+    } catch { /* Missing snapshot is handled by the existing candidate gates. */ }
+    if (!establishedLanguage && files['/src/pages/Home.tsx']) {
+      establishedLanguage = extractHomepageVisualLanguage(files['/src/pages/Home.tsx'], 'home');
+    }
+  }
   // One universal planner assigns each page a distinct narrative + topology job.
   // A sealed plan from the AppBuildContract is authoritative; replanning here would fork the design.
   const compositionPlan = input.compositionPlan ?? planSiteComposition(

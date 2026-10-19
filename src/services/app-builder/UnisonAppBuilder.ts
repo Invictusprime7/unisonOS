@@ -32,6 +32,7 @@ import {
 import { orchestrateAppBuild } from './appBuilderOrchestrator';
 import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
+import { runBuilderTurn } from '@/services/builderBrainClient';
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
@@ -43,6 +44,7 @@ export interface UnisonAppBuilder {
 export interface UnisonAppBuilderDependencies {
   authorSite?: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
   runComposer?: (input: ComposerLoopInput) => Promise<ComposerLoopResult>;
+  invokePage?: import('@/services/builder/aiRepairLoop').ComposerInvoke;
 }
 
 function stopReason(reason: ComposerLoopResult['reason']): AppBuildCandidateStopReason {
@@ -142,6 +144,7 @@ export function createUnisonAppBuilder(
         budgetMs: input.budgetMs,
         concurrency: input.concurrency,
         onProgress: input.onProgress,
+        invoke: dependencies.invokePage ?? ((request, options) => runBuilderTurn(request, { ...options, functionName: 'generate-page' })),
         resolveDependencies: false,
         commitPage: async (files) => ({ files, revisionId: input.baseRevisionId }),
       });
