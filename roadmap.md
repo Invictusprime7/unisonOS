@@ -6,9 +6,9 @@
 - [x] Preserve owner product/service/testimonial/team media and team social links; normalize pricing intervals during launch seeding using scoped media inventory.
 - [x] Create Records entries from their registered schemas and support empty planned CMS collections through explicit New record; no implicit backend provisioning.
 - [x] Verify focused integrations: 113 tests pass across 10 suites; final generation rerun 14/14; preview build OK and public entry renders without page errors.
-- [ ] Publish frontend; publishing approval was declined, so no deployment occurred.
+- [x] Frontend publication requested on 2026-10-19 at https://unisonai.lovable.app; deployment completion is not confirmed.
 - [ ] Authoritative backend deployment and authenticated public read-back; blocked by unavailable UNISON workflow access/session. Never deploy into the unrelated managed database.
-- [ ] Atomic content/profile writes and full shared/dedicated schema/publication parity; requires authoritative migration validation and provisioned site-database acceptance.
+- [ ] Continue atomic content/profile write safety and shared/dedicated schema/publication parity; implement and test safe contract changes without modifying the unrelated managed database. Authoritative migration validation and provisioned site-database acceptance remain required.
 
 ## Affinity same-site page generation
 - [x] Wire requested pages to generate-page, reusing the authenticated Composer handler, accepted homepage source/design, and a combined page/navigation candidate through the existing canonical commit.
