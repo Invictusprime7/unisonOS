@@ -49,6 +49,14 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Authenticate before touching any event so outsiders learn nothing.
+  const caller = await verifyAuth(req);
+  if (!caller.user) {
+    return new Response(JSON.stringify({ error: caller.error || 'Unauthorized' }), {
+      status: caller.status || 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   const { data: event, error: evtErr } = await supabase
     .from('ghl_webhook_events')
     .select('*')
