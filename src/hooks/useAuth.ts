@@ -63,12 +63,13 @@ export function useAuth(): AuthState & AuthActions {
   // Initialize auth state
   useEffect(() => {
     let active = true;
+    let receivedAuthEvent = false;
     const auditTimers = new Set<ReturnType<typeof setTimeout>>();
     // Get initial session
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
-        if (!active) return;
+        if (!active || receivedAuthEvent) return;
         
         if (error) {
           setState(prev => ({ ...prev, loading: false, error }));
@@ -82,7 +83,7 @@ export function useAuth(): AuthState & AuthActions {
           error: null,
         });
       } catch (err) {
-        if (!active) return;
+        if (!active || receivedAuthEvent) return;
         setState(prev => ({ 
           ...prev, 
           loading: false, 
@@ -97,6 +98,7 @@ export function useAuth(): AuthState & AuthActions {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!active) return;
+        receivedAuthEvent = true;
         setState(prev => ({
           ...prev,
           user: session?.user ?? null,
@@ -281,7 +283,12 @@ export function useAuth(): AuthState & AuthActions {
 
   // Refresh session
   const refreshSession = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.refreshSession();
+    const { data: { session }, error } = await supabase.auth.refreshSession();
+    // Retryable failures are not sign-out; the SDK emits definitive removal.
+    if (error || !session) {
+      setState(prev => ({ ...prev, error: error ?? prev.error }));
+      return;
+    }
     setState(prev => ({
       ...prev,
       session,

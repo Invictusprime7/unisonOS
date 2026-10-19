@@ -101,10 +101,10 @@ export function installAuthStorageQuotaRecovery(authKey: string, primary: Storag
 
   prototype.getItem = function (key: string): string | null {
     if (this === primary && matches(key)) {
-      const bridged = get.call(fallback, key);
-      if (bridged !== null) return bridged;
       const local = get.call(this, key);
       if (local !== null) return local;
+      const bridged = get.call(fallback, key);
+      if (bridged !== null) return bridged;
       // Crash recovery: sessionStorage died with the tab; restore from the
       // cookie backup so the user is not signed out by a browser crash.
       const backup = readCookieBackup(key);

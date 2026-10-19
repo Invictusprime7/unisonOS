@@ -44,20 +44,6 @@ function dynamicImportRecoveryKey(): string {
   return `unison:dynamic-import-recovery:${window.location.pathname}`;
 }
 
-function recoverDynamicImportOnce(error: unknown): boolean {
-  if (!isDynamicImportFailure(error)) return false;
-
-  try {
-    const key = dynamicImportRecoveryKey();
-    if (window.sessionStorage.getItem(key)) return false;
-    window.sessionStorage.setItem(key, '1');
-    window.location.reload();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // ============================================
 // ERROR BOUNDARY COMPONENT
 // ============================================
@@ -81,10 +67,6 @@ export class RouteErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     const { onError, routeName } = this.props;
     const { errorId } = this.state;
-
-    if (recoverDynamicImportOnce(error)) {
-      return;
-    }
 
     // Log to console for development
     console.error('Route Error Boundary caught error:', error, errorInfo);

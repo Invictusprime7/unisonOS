@@ -5,24 +5,12 @@ import { Button } from "@/components/ui/button";
 import { LaunchDegradationNote } from "@/components/builder/LaunchDegradationNote";
 
 
-const WEB_BUILDER_MODULE_RETRY_KEY = "unison:web-builder-module-retry";
 type WebBuilderModule = typeof import("@/components/creatives/WebBuilder");
 
 const WebBuilder = lazy(async (): Promise<{ default: WebBuilderModule["WebBuilder"] }> => {
-  try {
-    const module = await import("@/components/creatives/WebBuilder");
-    window.sessionStorage.removeItem(WEB_BUILDER_MODULE_RETRY_KEY);
-    return { default: module.WebBuilder };
-  } catch (error) {
-    if (window.sessionStorage.getItem(WEB_BUILDER_MODULE_RETRY_KEY) !== "1") {
-      window.sessionStorage.setItem(WEB_BUILDER_MODULE_RETRY_KEY, "1");
-      window.location.reload();
-      return new Promise(() => undefined);
-    }
-
-    window.sessionStorage.removeItem(WEB_BUILDER_MODULE_RETRY_KEY);
-    throw error;
-  }
+  // Fail visibly; never reload the entire editing session automatically.
+  const module = await import("@/components/creatives/WebBuilder");
+  return { default: module.WebBuilder };
 });
 
 // Inner error boundary that catches VFS/WebBuilder-specific crashes

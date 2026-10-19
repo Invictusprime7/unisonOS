@@ -87,6 +87,8 @@
 - [ ] Complete replacement acceptance before removing compatibility helpers outside Builder; requires a valid UNISON session and designated test project
 
 ## Sign-in recovery
+- [x] Remove automatic chunk reloads and competing fetch-level sign-out; preserve newer auth events, retryable renewal sessions and cross-tab refreshed credentials.
+- [ ] Verify refresh/sign-in recovery on a saved UNISON project; blocked by unavailable authoritative signed-in session.
 - [x] Converge password/email/OAuth authentication to Home or Demo only; return-path/checkout overrides removed, callback audit no longer blocks entry. 20 regression tests pass; build OK. Real-account verification remains below.
 - [x] Stop reused route gates and pending launcher handoffs from looping sign-in; 22 auth regressions pass, sign-in stays open with a pending handoff, zero browser errors, build OK. Real-account verification remains below.
 - [x] Home redirects no longer wait for guest claims, onboarding reads time out safely, and stale project/dashboard return links no longer reopen automatically; first-time users still enter Live Demo. 24 auth regressions pass; signed-out browser stable and build OK. Real-account verification remains blocked by unavailable UNISON session.
