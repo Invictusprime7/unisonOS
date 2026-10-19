@@ -11,6 +11,7 @@
 - [ ] Continue atomic content/profile write safety and shared/dedicated schema/publication parity; implement and test safe contract changes without modifying the unrelated managed database. Authoritative migration validation and provisioned site-database acceptance remain required.
 - [x] Conditional site-profile override updates preserve unrelated fields and reject concurrent update/insert races; observed site-field expectations reach the write service. No schema or record changes applied.
 - [x] Dedicated publication checks accepted component reads and literal saved resource marks through an authenticated read-only gateway schema probe before hosting; incompatible/unconfirmed resources refuse publication. Shared backend routing unchanged.
+- [x] Verify concurrency/publication/resource integrations: 110 tests pass across eight suites; canonical VFS write lint passes. Live signed-in acceptance and deployment remain blocked below.
 - [ ] Extend shared content/account-profile commands with locked-row expected-value validation and verify full schema/publication parity; blocked by authoritative migration/deployment access and provisioned-site acceptance. Mixed account/site writes are not a single transaction.
 
 ## Affinity same-site page generation
