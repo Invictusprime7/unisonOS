@@ -43,3 +43,7 @@
 .builder-nav { border: 0; }
 .builder-nav [role=tab] { box-shadow: none; }
 .builder-nav [role=tab][data-state=active] { background: transparent; }
+.builder-reply { position: relative; color: hsl(var(--foreground)); font-family: var(--ut-font-sans); }
+.builder-reply-paragraphs { display: flex; flex-direction: column; gap: var(--ut-density-gap); overflow-wrap: anywhere; }
+.builder-reply-paragraphs p { margin: 0; white-space: pre-wrap; }
+.builder-reply-status { margin-block: calc(var(--ut-density-gap) / 2); overflow-wrap: anywhere; }

@@ -76,7 +76,7 @@ export function neutralizeModelSuccessClaim(text: string | null | undefined): st
     .replace(/^[\s.·•-]+/, '')
     .trim();
   // Nothing meaningful survived (e.g. the whole message was a success badge).
-  if (out.replace(/[^A-Za-z0-9]/g, '').length < 3) return '';
+  if (out.replace(/[^\p{L}\p{N}]/gu, '').length < 3) return '';
   return out;
 }
 

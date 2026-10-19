@@ -160,5 +160,6 @@
 - [x] Auth loop fix + Live Demo: Auth no longer redirects anonymous guest sessions (the /auth ↔ /dashboard loop source); post-auth destination is /demo for new/first-time users and /home for returning users (was /dashboard). New /demo page (LiveDemo.tsx) requires an account — signed-out visitors are sent to /auth?next=/demo first. Verified in preview: /auth stays stable, /demo gates to sign-in, no page errors.
 
 ## Affinity conversational intelligence (2026-10-19)
+- [x] Show public Affinity explanations automatically as paragraphs; retire collapsible reasoning/step UI and stop discarding Composer summaries. 30 reply/status/canonical-authoring regressions pass, including non-English prose and private-thinking separation. Signed-in generation remains blocked by the unavailable authoritative UNISON session.
 - Done: AFFINITY_REASONING prompt contract (Understanding → Plan → Result → Next step), language/length-agnostic interpreter rule, out-of-scope honesty contract, normalizer outOfScope metadata, chat panel out-of-scope note rendering. 62 edge tests pass, tsgo clean, build OK.
 - Remaining: deploy ai-code-assistant + builder-request-interpreter via .github/workflows/supabase-auto-update.yml; signed-in live verification.

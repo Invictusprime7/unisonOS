@@ -6,24 +6,18 @@
 import React, { useState } from 'react';
 import {
   Sparkles,
-  ChevronDown,
-  ChevronRight,
   Eye,
   ExternalLink,
   AlertTriangle,
-  CheckCircle2,
-  XCircle,
   RefreshCw,
-  Loader2,
-  Brain,
-  FileCode,
   Copy,
   Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { VFSEdit, IframeError, ThinkingStep, MessageMeta, Message as ConversationMessage } from '../AIBuilderPanel';
+import type { VFSEdit, IframeError, Message as ConversationMessage } from '../AIBuilderPanel';
+import { affinityReplyParagraphs } from './affinityReply';
 export type { ConversationMessage };
 
 interface Props {
@@ -35,117 +29,6 @@ interface Props {
 function formatTime(date: Date): string {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
-
-// ── Thinking Pipeline (collapsible) ─────────────────────────────
-const ThinkingPipeline: React.FC<{ steps: ThinkingStep[] }> = ({ steps }) => {
-  const [expanded, setExpanded] = useState(false);
-  if (!steps.length) return null;
-
-  const lastStep = steps[steps.length - 1];
-  const lastError = [...steps].reverse().find((step) => step.type === 'error');
-  const hasError = Boolean(lastError);
-  const isComplete = !hasError && lastStep.type === 'complete';
-  const activeCount = hasError || isComplete ? 0 : 1;
-  const stepIcons: Record<string, React.ReactNode> = {
-    analyzing: <Sparkles className="w-3 h-3 text-muted-foreground" />,
-    planning: <FileCode className="w-3 h-3 text-muted-foreground" />,
-    generating: <Loader2 className={cn('w-3 h-3 text-muted-foreground', activeCount > 0 && 'animate-spin')} />,
-    validating: <CheckCircle2 className="w-3 h-3 text-muted-foreground" />,
-    complete: <CheckCircle2 className="w-3 h-3 text-emerald-500" />,
-    error: <XCircle className="w-3 h-3 text-destructive" />,
-    reasoning: <Brain className="w-3 h-3 text-muted-foreground" />,
-  };
-
-  return (
-    <div className="mb-2">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        aria-expanded={expanded}
-        className="flex w-full items-center gap-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-        <span className="flex items-center gap-1.5">
-          {hasError ? (
-            <XCircle className="w-3 h-3 text-destructive" />
-          ) : isComplete ? (
-            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-          ) : (
-            <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
-          )}
-          <span className="font-medium text-foreground/90">
-            {hasError ? 'Thinking interrupted' : isComplete ? 'Thinking complete' : 'Thinking...'}
-          </span>
-        </span>
-
-        <span className="ml-auto min-w-0 truncate text-[10px] text-muted-foreground">
-          {hasError || isComplete ? `${steps.length} steps` : lastStep.message}
-        </span>
-      </button>
-
-      {expanded && (
-        <div className="pb-2 pl-1">
-          <div>
-            <div className="space-y-1.5 border-l border-border/70 pl-2.5">
-              {steps.map((step, index) => (
-                <div
-                  key={step.id}
-                  className="relative flex items-start gap-2.5 py-0.5 animate-in fade-in slide-in-from-top-1 duration-300"
-                  style={{ animationDelay: `${Math.min(index * 40, 240)}ms` }}
-                >
-                  <div className="absolute -left-[11px] top-[8px] h-1.5 w-1.5 rounded-full bg-border" />
-                  <div className="mt-0.5 text-muted-foreground">{stepIcons[step.type] || <Sparkles className="w-3 h-3" />}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-foreground/85 leading-relaxed">{step.message}</p>
-                    {step.details && (
-                      <p className="mt-0.5 text-[10px] text-muted-foreground font-mono truncate">{step.details}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {!isComplete && !hasError && (
-              <p className="mt-2 text-[10px] text-muted-foreground">Current: {lastStep.message}</p>
-            )}
-            {hasError && (
-              <p className="mt-2 text-[10px] text-destructive">Last issue: {lastError?.message}</p>
-            )}
-            {isComplete && (
-              <p className="mt-2 text-[10px] text-emerald-600 dark:text-emerald-400">{lastStep.message}</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ── Reasoning Block (collapsible) ─────────────────────────────
-const ReasoningBlock: React.FC<{ reasoning: string }> = ({ reasoning }) => {
-  const [show, setShow] = useState(false);
-  const charCount = reasoning.length;
-  return (
-    <div className="mb-2 rounded-xl border border-border/70 bg-muted/20 overflow-hidden">
-      <button
-        onClick={() => setShow(!show)}
-        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <Brain className="w-3.5 h-3.5 text-muted-foreground" />
-        <span className="font-medium text-foreground/90">Reasoning</span>
-        <span className="rounded-md border border-border/80 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
-          {(charCount / 1000).toFixed(1)}k chars
-        </span>
-        <span className="ml-auto text-[10px] text-muted-foreground/80">{show ? 'Hide' : 'Show'}</span>
-      </button>
-      {show && (
-        <div className="px-3 pb-3">
-          <pre className="max-h-52 overflow-y-auto rounded-lg border border-border/70 bg-background p-2.5 text-[11px] text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed">
-            {reasoning}
-          </pre>
-        </div>
-      )}
-    </div>
-  );
-};
 
 // ── File Edit List ─────────────────────────────────────────────
 const FileEditList: React.FC<{ edits: VFSEdit[]; onViewEdits?: (e: VFSEdit[]) => void }> = ({ edits, onViewEdits }) => (
@@ -188,16 +71,9 @@ export const AIConversationMessage: React.FC<Props> = ({ message, onViewEdits, o
     (message.meta?.actionType?.toLowerCase().includes('patch') ?? false) ||
     (message.edits?.length ?? 0) >= 6;
 
-  const hasLongContent = (message.content?.length ?? 0) > 420;
-  const showStickyStatus = hasLongContent && (Boolean(message.thinking?.length) || Boolean(message.taskPlan) || Boolean(message.claudeReasoning));
-
-  const statusLabel = message.isStreaming
-    ? 'Thinking...'
-    : message.meta?.requiresApproval
-      ? 'Review suggested'
-      : (message.thinking?.some((s) => s.type === 'error') ?? false)
-        ? 'Needs attention'
-        : 'Ready';
+  const lastError = [...(message.thinking ?? [])].reverse().find(step => step.type === 'error');
+  const currentStep = message.thinking?.[message.thinking.length - 1];
+  const paragraphs = affinityReplyParagraphs(message.content ?? '');
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
@@ -257,50 +133,17 @@ export const AIConversationMessage: React.FC<Props> = ({ message, onViewEdits, o
           </span>
         </div>
 
-        {/* AI Reasoning */}
-        {message.claudeReasoning && <ReasoningBlock reasoning={message.claudeReasoning} />}
-
-        {/* Task Plan */}
-
-        {/* Thinking Pipeline */}
-        {message.thinking && message.thinking.length > 0 && (
-          <ThinkingPipeline steps={message.thinking} />
+        {lastError && (
+          <p role="alert" className="builder-reply-status text-destructive">Last issue: {lastError.message}</p>
+        )}
+        {message.isStreaming && (
+          <p role="status" className="builder-reply-status text-muted-foreground">
+            {currentStep?.message || 'Preparing your reply…'}
+          </p>
         )}
 
-        {/* Streaming indicator */}
-        {message.isStreaming && !message.content && (
-          <div className="flex items-center gap-2 py-2">
-            <div className="flex gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
-            </div>
-            <span className="text-xs text-muted-foreground">Thinking...</span>
-          </div>
-        )}
-
-        {/* Main content card */}
-        {message.content && (
-          <div className={cn(
-            "relative bg-background border border-border/70 rounded-xl rounded-tl-md shadow-sm",
-            compactMode ? "px-3 py-2" : "px-4 py-3",
-          )}>
-            {showStickyStatus && (
-              <div className="sticky top-0 z-10 -mx-1 mb-2 rounded-md border border-border/70 bg-background/95 px-2 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/75">
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                  {message.isStreaming ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                  )}
-                  <span className="font-medium text-foreground/85">{statusLabel}</span>
-                  {message.meta?.actionType && (
-                    <span className="ml-auto rounded border border-border px-1.5 py-0.5">{message.meta.actionType}</span>
-                  )}
-                </div>
-              </div>
-            )}
-
+        {(message.content || message.edits?.length || message.meta?.outOfScope) && (
+          <div className="builder-reply">
             {/* Meta badges */}
             {message.meta && !message.isStreaming && (
               <div className="flex flex-wrap items-center gap-1.5 mb-2">
@@ -322,18 +165,14 @@ export const AIConversationMessage: React.FC<Props> = ({ message, onViewEdits, o
               </div>
             )}
 
-            {/* Out-of-scope explanation — Affinity's honest "I can't, here's why" note */}
             {message.meta?.outOfScope && !message.isStreaming && (
-              <div className="mb-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-                <div className="flex items-center gap-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 mb-1">
-                  <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                  <span>Outside Affinity's current scope</span>
-                </div>
-                <p className="text-xs text-foreground/80 whitespace-pre-wrap">{message.meta.outOfScope.reason}</p>
+              <div className="builder-reply-status text-muted-foreground">
+                <p>Outside Affinity's current scope</p>
+                {!message.content.includes(message.meta.outOfScope.reason) && (
+                  <p>{message.meta.outOfScope.reason}</p>
+                )}
                 {message.meta.outOfScope.suggestedPatch && (
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    To unlock this: {message.meta.outOfScope.suggestedPatch}
-                  </p>
+                  <p>To unlock this: {message.meta.outOfScope.suggestedPatch}</p>
                 )}
               </div>
             )}
@@ -355,22 +194,16 @@ export const AIConversationMessage: React.FC<Props> = ({ message, onViewEdits, o
               </div>
             )}
 
-            {/* Message text */}
-            <p className={cn(
-              "text-foreground/90 leading-relaxed whitespace-pre-wrap",
-              compactMode ? "text-[13px]" : "text-sm",
-            )}>
-              {message.content}
-            </p>
-
-            {/* Copy button on hover */}
-            <button
-              onClick={handleCopy}
-              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-muted"
-              title="Copy message"
-            >
-              {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-muted-foreground" />}
-            </button>
+            <div className="builder-reply-paragraphs">
+              {paragraphs.map((paragraph, index) => (
+                <p key={index}>{paragraph}</p>
+              ))}
+            </div>
+            {message.content && (
+              <Button variant="ghost" size="icon" onClick={handleCopy} aria-label="Copy message" title="Copy message">
+                {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+              </Button>
+            )}
 
             {/* File edits */}
             {message.edits && message.edits.length > 0 && (
@@ -389,7 +222,7 @@ export const AIConversationMessage: React.FC<Props> = ({ message, onViewEdits, o
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => onRetryError(message.error!)}
+                    onClick={() => { if (message.error) onRetryError(message.error); }}
                     className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                   >
                     <RefreshCw className="w-3 h-3" />
