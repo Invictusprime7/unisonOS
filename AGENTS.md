@@ -18,7 +18,7 @@
 - App Builder pages pass `pageStructureGate.ts` (nav, footer, body, media) via `pageCheck`; briefs lead with own target/archetype. Why: routers add no chrome.
 - Live-VFS commits absorb pending ops recorded before capture and advance the autosave baseline; pending ops conflict only off another base revision. Why: lagging baselines raised false conflicts.
 
-- Chat and Wizard share one launch plan (`src/services/launch/chatLaunchPlan.ts`): the chat brief prefills the Wizard, and `buildSyncedVisionBrief` puts final selections first; page briefs put composition target + design contract before that vision. Why: separate chat/Wizard inputs drifted and crowded out composition vocabulary.
+- Chat/Wizard share `src/services/launch/chatLaunchPlan.ts`; chat prefills Wizard; `buildSyncedVisionBrief` prioritizes final selections; page briefs lead with composition target/design contract. Why: prevent input drift and crowded-out design context.
 - Agent tools use enforced dispatch; proposals use `runBuilderAiMutation` → `commitMutation`. Capture live VFS/revision together; refuse stale preparation/selection. Resolve prompted parts to visible-page source owners; refuse only incomplete target reads. Why: guessed pages changed unrelated content.
 
 - Service/recipe rules: `src/services/AGENTS.md`; provider rules: `supabase/functions/_shared/AGENTS.md`.
