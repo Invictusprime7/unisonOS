@@ -87,13 +87,14 @@ export function resolveProductCatalogSurfaces(
     : [surface];
 }
 
-export async function seedLaunchAssets(input: { businessId: string; projectId?: string | null; industry?: string | null; enableProductCommerce?: boolean; creatorData?: CreatorData | null; assets?: Readonly<Record<string, AssetBundle>> }): Promise<SeedLaunchAssetsResult> {
+export async function seedLaunchAssets(input: { businessId: string; projectId?: string | null; industry?: string | null; enableProductCommerce?: boolean; creatorData?: CreatorData | null; assets?: Readonly<Record<string, AssetBundle>>; mediaAssets?: readonly { id: string; kind: string; url: string }[] }): Promise<SeedLaunchAssetsResult> {
   const data = input.creatorData;
   const result: SeedLaunchAssetsResult = { created: 0, profileFields: [] };
   if (!data) return result;
   const mediaUrl = (assetId: string | undefined): string | undefined => {
     const asset = assetId ? input.assets?.[assetId] : undefined;
-    const url = asset?.type === 'image' ? asset.storage.url : undefined;
+    const media = input.mediaAssets?.find((entry) => entry.id === assetId && entry.kind === 'image');
+    const url = asset?.type === 'image' ? asset.storage.url : media?.url;
     return url && /^https?:\/\//i.test(url) ? url : undefined;
   };
   const existing = await listCatalog(input.businessId, ['products', 'services', 'menu', 'pricing', 'testimonials'], input.projectId).catch(() => []);
