@@ -180,6 +180,18 @@ describe('Web Builder preview ownership', () => {
     expect(builder).toMatch(/onReady=\{\(\) => \{[\s\S]*?setIframeErrors\(\[\]\);/);
   });
 
+  it('recovers when Sandpack connects but the generated app never reports render-ready', () => {
+    const sharedPreview = readSource('src/components/VFSPreview.tsx');
+
+    expect(sharedPreview).toContain('MAX_SANDPACK_RENDER_RECOVERIES = 1');
+    expect(sharedPreview).toContain('PREVIEW_RENDER_READY_TIMEOUT_MS = 20_000');
+    expect(sharedPreview).toContain('renderReadyTimeoutRef.current = window.setTimeout');
+    expect(sharedPreview).toContain("data.type === 'UNISON_PREVIEW_RENDER_READY'");
+    expect(sharedPreview).toContain('if (renderReadyRef.current) return;');
+    expect(sharedPreview).toContain('renderWatchKeyRef.current === watchKey && renderReadyTimeoutRef.current !== null');
+    expect(sharedPreview).toContain("'Preview did not render'");
+  });
+
   it('keeps template thumbnails painted but non-executable', () => {
     const thumbnail = readSource('src/components/creatives/web-builder/TemplatePreviewThumbnail.tsx');
 
