@@ -28,7 +28,8 @@ describe('generation resource wiring', () => {
     expect(INDUSTRY_SEED_DATA_TARGETS[key]?.resourceKey).toBeUndefined();
   });
   it('exposes all editable registered catalogs to agent operations', () => {
-    expect(EDITABLE_CATALOG_SURFACES).toEqual(['services', 'products', 'menu', 'pricing', 'offers', 'testimonials', 'portfolio', 'availability']);
+    expect(EDITABLE_CATALOG_SURFACES).toEqual(['services', 'products', 'menu', 'pricing', 'offers', 'testimonials', 'portfolio']);
+    expect(EDITABLE_CATALOG_SURFACES).not.toContain('availability');
   });
   it('uses registered price and intent support for cart eligibility', () => {
     const text = buildIndustryIconContext('coaching', ['commerce'], ['cart.add'], ['menu', 'offers', 'pricing']);

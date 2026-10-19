@@ -72,7 +72,7 @@ export function buildIndustryAuthoringContext(industry: string, enabledCapabilit
     .filter((surface): surface is string => !!surface))];
   return [
     `INDUSTRY AUTHORING CONTRACT: canonical industry ${profile.industry} (${profile.name}). Keep this business identity even when the owner requests a focused feature.`,
-    `Industry seed data targets:\n${seedTargets.map(({ key, target }) => `- ${key} → ${target.target}`).join('\n')}`,
+    `Industry seed data targets:\n${seedTargets.map(({ key, target }) => `- ${key} → ${target.target}${target.resourceKey ? `; resource ${target.resourceKey}` : ''}${target.creatorDataPath ? `; CreatorData.${target.creatorDataPath}` : ''}`).join('\n')}`,
     `Industry catalog targets: ${industryCatalogs.join(', ') || 'none'}. Launch capabilities: ${enabledCapabilities.join(', ') || 'none'}.`,
     'Use owner-provided facts for prices, credentials, service areas, mission, and shipping terms; do not fabricate them. A focused user intent is additive to the selected industry: implement it with enabled capabilities and matching industry data; do not change the business category or invent unprovisioned tables, APIs, or controllers.',
   ].join('\n');
@@ -95,8 +95,8 @@ export function buildIndustryIconContext(
   }
   const seedDataKeys = new Set(getIndustryProfile(industry)?.seedDataKeys ?? []);
   const purchaseRequested = intents.some((intent) => intent === 'cart.add' || intent === 'cart.checkout');
-  // Focused commerce seeds an explicit products projection; it never turns a
-  // service, subscription plan or promotional offer into a payable record.
+  // Focused commerce may render a products projection, but eligibility is not
+  // evidence that a payable record has been created.
   if (enabledCapabilities.includes('commerce') && purchaseRequested) industrySurfaces.add('products');
   const searchableSurfaces = catalogSurfaces.filter((surface) => industrySurfaces.has(surface.surfaceId))
     .map((surface) => surface.surfaceId);
@@ -117,7 +117,7 @@ export function buildIndustryIconContext(
     'CANONICAL ICON CONTEXT: derive interactive icons from this contract, registered content surfaces, and content actually rendered on the page; industry identity alone does not authorize an action.',
     `Search: ${searchableSurfaces.length ? `Search is eligible for rendered, non-empty searchable content on ${searchableSurfaces.join(', ')}; omit the control on pages without such content.` : 'no searchable catalog surface is declared; omit search unless the page has another real searchable collection.'}`,
     `Cart: ${cartEnabled ? `ShoppingBag or ShoppingCart may represent cart actions for ${cartableSurfaces.join(', ')}; bind only to the requested cart intent and enabled commerce capability.` : 'omit shopping bag/cart actions: commerce requires both an enabled commerce capability and an explicit cart.add or cart.checkout intent with a cartable registered surface.'}`,
-    'Cart payloads use persisted product IDs from the explicit products checkout projection, never service IDs, plan IDs, offer IDs or authored fixture slugs; payment availability is verified separately. Keep booking programs on services and subscription tiers on pricing.',
+    'Cart payloads use persisted product IDs from the explicit products checkout projection, never service IDs, plan IDs, offer IDs or authored fixture slugs; omit cart controls until that projection exists, and verify payment availability separately. Keep booking programs on services and subscription tiers on pricing.',
     `Industry content affordances: ${affordances.join(', ') || 'none from the industry seed profile'}. Use only when the matching content is rendered; icons never imply an unprovisioned API, route, or capability.`,
     'Use only icon exports available through approved project dependencies, and give icon-only controls an accessible name.',
   ].join('\n');
