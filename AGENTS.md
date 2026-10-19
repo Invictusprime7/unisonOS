@@ -18,12 +18,12 @@
 - App Builder pages pass `pageStructureGate.ts` (nav, footer, body, media) via `pageCheck`; briefs lead with own target/archetype. Why: routers add no chrome.
 - Live-VFS commits absorb pending ops recorded before capture and advance the autosave baseline; pending ops conflict only off another base revision. Why: lagging baselines raised false conflicts.
 
-- Chat and Wizard share one launch plan (`src/services/launch/chatLaunchPlan.ts`): the chat brief prefills the Wizard, and `buildSyncedVisionBrief` puts final selections first; page briefs put composition target + design contract before that vision. Why: separate chat/Wizard inputs drifted and crowded out composition vocabulary.
+- Chat/Wizard share `src/services/launch/chatLaunchPlan.ts`; chat prefills Wizard; `buildSyncedVisionBrief` prioritizes final selections; page briefs lead with composition target/design contract. Why: prevent input drift and crowded-out design context.
 - Agent tools use enforced dispatch; proposals use `runBuilderAiMutation` → `commitMutation`. Capture live VFS/revision together; refuse stale preparation/selection. Resolve prompted parts to visible-page source owners; refuse only incomplete target reads. Why: guessed pages changed unrelated content.
 
 - Service/recipe rules: `src/services/AGENTS.md`; provider rules: `supabase/functions/_shared/AGENTS.md`.
 - UNISON is the only backend: `src/integrations/supabase/env.ts` ignores other injected refs, `main.tsx` fails closed on identity mismatch, and backend changes deploy only via `.github/workflows/supabase-auto-update.yml`, so every schema change needs a timestamped `supabase/migrations` file (drizzle alone fails CI); why: Lovable tooling targets its built-in database.
-- Auth listeners synchronous; defer SDK/claims, bound onboarding. Gates await sessions; events win initial reads. Handoffs skip Auth/Home/Demo. Auth/callbacks share `authDestination` (Home or Demo). Why: prevent deadlocks and redirect drift.
+- Auth listeners stay synchronous; events win initial reads; SDK alone invalidates refresh; tab bridges yield to persisted auth; chunk retries are explicit. Auth/callbacks go Home or Demo; handoffs skip both and Auth. Why: avoid deadlocks, stale sign-out and reloads.
 - Before app load, bridge only auth keys to sessionStorage on quota errors; never evict project data or edit the generated client. Why: full storage must not block sign-in; fallback lasts until the tab closes.
 
 - Builder preferences are optional local state enforced at request/execution boundaries; tools gate the menu, catalog/business settings gate their operations. Why: hiding controls cannot authorize disabled mutations.

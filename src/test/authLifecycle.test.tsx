@@ -5,12 +5,13 @@ const mocks = vi.hoisted(() => ({
   listeners: [] as Array<(event: string, session: unknown) => unknown>,
   navigate: vi.fn(), toast: vi.fn(), from: vi.fn(),
   claimGuest: vi.fn(),
-  getSession: vi.fn(), signInWithPassword: vi.fn(), audit: vi.fn(), securityAudit: vi.fn(),
+  getSession: vi.fn(), refreshSession: vi.fn(), signInWithPassword: vi.fn(), audit: vi.fn(), securityAudit: vi.fn(),
 }));
 vi.mock('@/services/guestDemoClaim', () => ({ claimGuestDemoIfNeeded: mocks.claimGuest }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: {
   auth: {
     getSession: mocks.getSession,
+    refreshSession: mocks.refreshSession,
     signInWithPassword: mocks.signInWithPassword,
     onAuthStateChange: (listener: (event: string, session: unknown) => unknown) => {
       mocks.listeners.push(listener);
@@ -39,6 +40,25 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('auth listener lock release', () => {
+  it('keeps sign-in when an older initial read finishes empty, but honors sign-out', async () => {
+    let finish: ((value: unknown) => void) | undefined;
+    mocks.getSession.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    const { result } = renderHook(() => useAuth());
+    act(() => { mocks.listeners[0]?.('SIGNED_IN', session); });
+    await act(async () => { finish?.({ data: { session: null }, error: null }); });
+    expect(result.current.user?.id).toBe('signed-in-user');
+    act(() => { mocks.listeners[0]?.('SIGNED_OUT', null); });
+    expect(result.current.user).toBeNull();
+  });
+
+  it('keeps the session on a retryable renewal failure', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session }, error: null });
+    mocks.refreshSession.mockResolvedValue({ data: { session: null }, error: new Error('temporarily offline') });
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.user?.id).toBe('signed-in-user'));
+    await act(async () => { await result.current.refreshSession(); });
+    expect(result.current.user?.id).toBe('signed-in-user');
+  });
   it('releases sign-in before querying onboarding and navigates only once', async () => {
     let lockHeld = false;
     mocks.from.mockImplementation(() => {

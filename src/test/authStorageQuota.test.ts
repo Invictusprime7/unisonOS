@@ -12,6 +12,12 @@ function simulateFullStorage() {
   restore = installAuthStorageQuotaRecovery(key, localStorage, sessionStorage);
 }
 describe('auth storage quota recovery', () => {
+  it('prefers credentials renewed in another tab over an older tab bridge', () => {
+    localStorage.setItem(key, 'renewed-session');
+    sessionStorage.setItem(key, 'old-refresh-token');
+    restore = installAuthStorageQuotaRecovery(key, localStorage, sessionStorage);
+    expect(localStorage.getItem(key)).toBe('renewed-session');
+  });
   it('preserves drafts and reload-persistent fallback credentials', () => {
     localStorage.setItem('unsaved-project', 'keep-source');
     localStorage.setItem('chat-history', 'keep-messages');
