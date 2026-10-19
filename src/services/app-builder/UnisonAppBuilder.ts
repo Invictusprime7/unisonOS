@@ -74,7 +74,7 @@ export function createUnisonAppBuilder(
       return orchestrateAppBuild(input, {
         authorSite,
         runComposer,
-        loadContentTypes: dependencies.loadContentTypes ?? ((scope) => listContentTypes({ ...scope, resource: 'content-types' })),
+        loadContentTypes: dependencies.loadContentTypes ?? ((scope) => listContentTypes(scope)),
       });
     },
 

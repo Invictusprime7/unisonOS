@@ -122,7 +122,7 @@ describe('UnisonAppBuilder facade', () => {
     });
 
     expect(authorSite).toHaveBeenCalledOnce();
-    expect(listContentTypes).toHaveBeenCalledWith({ businessId: 'business-1', projectId: 'project-1', resource: 'content-types' });
+    expect(listContentTypes).toHaveBeenCalledWith({ businessId: 'business-1', projectId: 'project-1' });
     expect(result.candidate.status).toBe('ready-for-commit');
     expect(result.candidate.files['/src/pages/Home.tsx']).toContain('After');
     expect(result.candidateFiles).toBe(result.candidate.files);
