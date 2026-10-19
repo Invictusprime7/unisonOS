@@ -32,6 +32,11 @@ export function RecentProjectCard({
   onClick,
 }: RecentProjectCardProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // Thumbnails render inert: scripts and handlers are stripped, styles kept.
+  const safePreviewHtml = useMemo(
+    () => (previewHtml ? DOMPurify.sanitize(previewHtml, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style', 'link'] }) : ''),
+    [previewHtml],
+  );
 
   const formattedDate = new Date(updatedAt).toLocaleDateString("en-US", {
     month: "short",
