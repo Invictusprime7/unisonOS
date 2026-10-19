@@ -1,5 +1,14 @@
 # Roadmap
 
+## Active: Cross-file resource integration closure
+- [ ] Unify generated-slug identity resolution for editor reads and preview adoption; reject ambiguous matches without creating duplicates.
+- [ ] Load job-local CMS schemas into App Builder generation without UI/global registry dependence.
+- [ ] Preserve owner media and normalize pricing intervals during launch seeding.
+- [ ] Create Records entries from their registered schemas and support empty planned CMS collections.
+- [ ] Verify focused integrations and publish the frontend requested by the owner.
+- [ ] Authoritative backend deployment and authenticated public read-back; blocked by unavailable UNISON workflow access/session. Never deploy into the unrelated managed database.
+- [ ] Atomic content/profile writes and full shared/dedicated schema/publication parity; requires authoritative migration validation and provisioned site-database acceptance.
+
 ## Affinity same-site page generation
 - [x] Wire requested pages to generate-page, reusing the authenticated Composer handler, accepted homepage source/design, and a combined page/navigation candidate through the existing canonical commit.
 - [x] Run page-generation, candidate-save, route-output, and authentication regressions: 99 tests pass; browser/server Composer contracts match; preview build OK.
