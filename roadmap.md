@@ -1,5 +1,10 @@
 # Roadmap
 
+## Database performance and running credits
+- [ ] Measure scoped running usage, database health, queries, indexes and scheduled work; distinguish built-in Cloud from authoritative UNISON.
+- [ ] Reduce verified avoidable request/payload overhead without changing data, freshness or canonical write ownership; run focused regressions.
+- [ ] Report measured drivers and remaining live/deployment/resource-approval blockers; no deletion or instance changes without approval.
+
 ## Account-persistent Live Demo
 - [x] Replace browser-only usage with account-owned reservation and canonical revision settlement; migration prepared for authoritative UNISON workflow, not applied to the unrelated built-in backend.
 - [x] Test one free generation, failed/discarded retry, duplicate reservations, expired/late commits, account isolation, permissions, rollback and persistent UI read-back; 40 tests pass across account Demo, Wizard, Home handoff and canonical launch suites. Preview build OK; signed-out Demo gates to Auth without page errors.
