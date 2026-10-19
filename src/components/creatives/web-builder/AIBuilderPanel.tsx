@@ -997,11 +997,11 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     // Capture the selected entity before clearing the UI chip; the AI turn
     // resolves this immutable selection against the same graph revision.
     const selectedTarget = agentTarget;
-    const requestState = captureBuilderRequestState(getCurrentRequestState?.() ?? imageContextRef.current.getCurrentRequestState?.() ?? { files: imageContextRef.current.vfsFiles ?? {}, revisionId: imageContextRef.current.revisionId ?? null, projectId: imageContextRef.current.projectId ?? null, businessId: imageContextRef.current.businessId ?? null });
+    let requestState = captureBuilderRequestState(getCurrentRequestState?.() ?? imageContextRef.current.getCurrentRequestState?.() ?? { files: imageContextRef.current.vfsFiles ?? {}, revisionId: imageContextRef.current.revisionId ?? null, projectId: imageContextRef.current.projectId ?? null, businessId: imageContextRef.current.businessId ?? null });
     // Keep all downstream analysis and authoring on this one source/identity tuple.
     const { files: requestFiles, revisionId: requestRevision, projectId: requestProject, businessId: requestBusiness } = requestState;
-    const vfsFiles = requestFiles;
-    const revisionId = requestRevision;
+    let vfsFiles = requestFiles;
+    let revisionId = requestRevision;
     const projectId = requestProject;
     const businessId = requestBusiness;
     const ensureCurrentRequest = () => assertBuilderRequestState(requestState, getCurrentRequestState?.() ?? requestState);
@@ -1113,7 +1113,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     // authoring lane may not write the stylesheet). Mixed requests apply the
     // theme part first, then continue with the layout/content part.
     const themeOnly = isThemeOnlyRequest(userContent);
-    const themeCue = /\b(colou?rs?|palette|primary|accent|font|typeface|typography|headings? font|rounder|corners|darker|lighter)\b/i.test(userContent);
+    // "primary"/"accent" alone are not theme words ("make the primary button
+    // say Book now"); they count only next to a color word.
+    const themeCue = /\b(colou?rs?|palette|(?:primary|accent)\s+(?:colou?r|hue|shade|tone)|font|typeface|typography|headings? font|rounder|corners|darker|lighter)\b/i.test(userContent);
     let themeApplied = false;
     if (onRequestThemeEdit && droppedFiles.length === 0 && (themeOnly || themeCue)) {
       try {
@@ -1125,6 +1127,17 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: `I couldn't apply that theme change: ${error instanceof Error ? error.message : 'unknown error'}. Tell me the color or font you want and I'll try again.`, timestamp: new Date() }]);
           setIsLoading(false);
           return;
+        }
+      }
+      if (themeApplied && !themeOnly) {
+        // The theme part of this request was just saved as a new revision by
+        // this same request. Continue the layout/content part on top of it
+        // instead of refusing it as "the site changed".
+        const latest = getCurrentRequestState?.() ?? imageContextRef.current.getCurrentRequestState?.();
+        if (latest && latest.projectId === requestState.projectId && latest.businessId === requestState.businessId) {
+          requestState = captureBuilderRequestState(latest);
+          vfsFiles = requestState.files;
+          revisionId = requestState.revisionId;
         }
       }
       if (themeOnly && themeApplied) {

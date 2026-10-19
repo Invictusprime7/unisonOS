@@ -3715,7 +3715,12 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         entryPoint: launchEntryPoint,
         adoption: commitAdoptionRecord(commit),
       });
-      if (commit.persistedRevisionId) setCurrentRevisionId(commit.persistedRevisionId);
+      if (commit.persistedRevisionId) {
+        // Sync the ref now: a mixed Affinity request continues on this revision
+        // in the same turn, before React re-renders.
+        currentRevisionIdRef.current = commit.persistedRevisionId;
+        setCurrentRevisionId(commit.persistedRevisionId);
+      }
       toast.success('Theme tokens applied');
       return true;
     } catch (err) {
