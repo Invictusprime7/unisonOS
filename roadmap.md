@@ -6,9 +6,13 @@
 - [x] Preserve owner product/service/testimonial/team media and team social links; normalize pricing intervals during launch seeding using scoped media inventory.
 - [x] Create Records entries from their registered schemas and support empty planned CMS collections through explicit New record; no implicit backend provisioning.
 - [x] Verify focused integrations: 113 tests pass across 10 suites; final generation rerun 14/14; preview build OK and public entry renders without page errors.
-- [ ] Publish frontend; publishing approval was declined, so no deployment occurred.
+- [x] Frontend publication requested on 2026-10-19 at https://unisonai.lovable.app; deployment completion is not confirmed.
 - [ ] Authoritative backend deployment and authenticated public read-back; blocked by unavailable UNISON workflow access/session. Never deploy into the unrelated managed database.
-- [ ] Atomic content/profile writes and full shared/dedicated schema/publication parity; requires authoritative migration validation and provisioned site-database acceptance.
+- [ ] Continue atomic content/profile write safety and shared/dedicated schema/publication parity; implement and test safe contract changes without modifying the unrelated managed database. Authoritative migration validation and provisioned site-database acceptance remain required.
+- [x] Conditional site-profile override updates preserve unrelated fields and reject concurrent update/insert races; observed site-field expectations reach the write service. No schema or record changes applied.
+- [x] Dedicated publication checks accepted component reads and literal saved resource marks through an authenticated read-only gateway schema probe before hosting; incompatible/unconfirmed resources refuse publication. Shared backend routing unchanged.
+- [x] Verify concurrency/publication/resource integrations: 110 tests pass across eight suites; canonical VFS write lint passes. Live signed-in acceptance and deployment remain blocked below.
+- [ ] Extend shared content/account-profile commands with locked-row expected-value validation and verify full schema/publication parity; blocked by authoritative migration/deployment access and provisioned-site acceptance. Mixed account/site writes are not a single transaction.
 
 ## Affinity same-site page generation
 - [x] Wire requested pages to generate-page, reusing the authenticated Composer handler, accepted homepage source/design, and a combined page/navigation candidate through the existing canonical commit.

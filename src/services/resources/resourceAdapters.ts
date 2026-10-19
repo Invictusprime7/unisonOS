@@ -114,7 +114,7 @@ export const businessProfileResourceAdapter: ResourceAdapter = {
         throw new Error('Conflict: these site details changed elsewhere. Reload the item and try again.');
       }
     }
-    const next = await saveSiteProfile(ctx.businessId, ctx.projectId, values as BusinessProfilePatch);
+    const next = await saveSiteProfile(ctx.businessId, ctx.projectId, values as BusinessProfilePatch, expected);
     if (!next) throw new Error('The business profile could not be saved.');
     return { ...next, id: next.businessId } as unknown as ResourceRecord;
   },
