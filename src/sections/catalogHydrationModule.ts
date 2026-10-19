@@ -9,10 +9,11 @@
  * `CATALOG_HYDRATE_RESPONSE` with the projected rows.
  */
 
+import { TRUSTED_PREVIEW_ORIGIN_SOURCE } from '@/utils/trustedPreviewOrigin';
+
 export const CATALOG_HYDRATION_PATH = '/src/components/catalogHydration.ts';
 
 export const CATALOG_HYDRATION_MODULE = `import { useEffect, useRef, useState } from 'react';
-import { TRUSTED_PREVIEW_ORIGIN_SOURCE } from '@/utils/trustedPreviewOrigin';
 import { PUBLISHED_RUNTIME_CONFIG } from '@/unison/publishedRuntime';
 
 // ─────────────────────────────────────────────────────────────────────────────
