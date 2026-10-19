@@ -13,8 +13,8 @@ import { getCmsResourceContract } from "../_shared/catalogSurfaceSummary.ts";
 import { decryptConnectedProjectSecret } from "../_shared/connectedProjectCrypto.ts";
 import { applyExpectedFilters } from "../_shared/recordCompareAndSet.ts";
 
-type Action = "list" | "get" | "create" | "update" | "delete";
-const ACTIONS: Action[] = ["list", "get", "create", "update", "delete"];
+type Action = "list" | "get" | "create" | "update" | "delete" | "check";
+const ACTIONS: Action[] = ["list", "get", "create", "update", "delete", "check"];
 
 /**
  * One tenant-scoped contract for every resource kind (guidebook §41–43):
@@ -134,11 +134,14 @@ serve(async (req) => {
   // Dedicated runtime schema contract: verify the provisioned table carries the
   // columns this contract writes before touching rows, so drift surfaces as one
   // explicit SCHEMA_INCOMPATIBLE error rather than failed individual writes.
-  const requiredColumns = ["id", ...(contract.contentType ? ["content_type", "title", "slug", "status", "data"] : Object.keys(contract.editableFields))];
+  const requiredColumns = [...new Set(["id", contract.sortField, ...(contract.contentType ? ["content_type", "title", "slug", "status", "data"] : Object.keys(contract.editableFields))])];
   const probe = await site.from(contract.sourceTable).select(requiredColumns.join(",")).limit(0);
   if (probe.error) {
     return json({ success: false, code: "SCHEMA_INCOMPATIBLE", error: `This site's database is missing the expected ${contract.sourceTable} structure.` }, 409);
   }
+  // Publication uses the same authenticated identity and column probe as CRUD,
+  // but never reads records, writes rows, or emits a mutation audit.
+  if (action === "check") return json({ success: true, data: { resource, compatible: true } });
 
   const table = contract.sourceTable;
   let recordId = body?.recordId ? String(body.recordId) : undefined;
