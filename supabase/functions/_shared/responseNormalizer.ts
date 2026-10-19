@@ -265,8 +265,10 @@ export function buildResponseBody(opts: {
   const autoWarnings = detectWarnings(opts.content) || [];
   const allWarnings = [...autoWarnings, ...(opts.reviewWarnings || [])];
 
+  const actionType = detectActionType(opts.content, opts.debugMode ?? false);
   const meta: RichResponseMeta = {
-    actionType: detectActionType(opts.content, opts.debugMode ?? false),
+    actionType,
+    outOfScope: detectOutOfScope(opts.content, actionType),
     filesDetected: fileInfo?.files,
     fileStatuses: fileInfo?.statuses,
     warnings: allWarnings.length > 0 ? allWarnings : undefined,
