@@ -6,7 +6,7 @@
  */
 
 import { AIRequestSchema } from "../_shared/requestSchema.ts";
-import { aiComposerRequestSchema } from "../_shared/aiComposerContract.ts";
+import { isCanonicalPageRequest } from '../generate-page/request.ts';
 import { classifyBuilderEditTask, classifyTask } from "../_shared/taskClassifier.ts";
 import { runAssistantOrchestrator } from "./orchestrator.ts";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
@@ -62,17 +62,8 @@ export async function handleAssistant(req: Request, pageGenerationOnly = false):
       return errorResponse(parseError || "Invalid request body", status, corsHeaders);
     }
 
-    if (pageGenerationOnly) {
-      const body = rawBody as { mode?: unknown; messages?: Array<{ role?: unknown; content?: unknown }> };
-      const message = body.messages?.length === 1 ? body.messages[0] : undefined;
-      let composer: unknown;
-      try { composer = typeof message?.content === 'string' ? JSON.parse(message.content) : null; } catch { composer = null; }
-      const request = aiComposerRequestSchema.safeParse(composer);
-      if (!request.success || message?.role !== 'user'
-        || !['site_page_author', 'site_page_repair'].includes(request.data.task)
-        || body.mode !== (request.data.task === 'site_page_author' ? 'site-page-author' : 'site-page-repair')) {
-        return errorResponse('Page generation requires a canonical page authoring or repair request.', 400, corsHeaders);
-      }
+    if (pageGenerationOnly && !isCanonicalPageRequest(rawBody)) {
+      return errorResponse('Page generation requires a canonical page authoring or repair request.', 400, corsHeaders);
     }
 
     const guestAction = rawBody as { guestDemoAction?: unknown; operationId?: unknown; reason?: unknown };

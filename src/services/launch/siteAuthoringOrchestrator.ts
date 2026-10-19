@@ -208,10 +208,12 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
   let establishedLanguage: HomepageVisualLanguage | undefined;
   if (candidateOrigin === 'builder') {
     try {
-      const snapshot = JSON.parse(files['/.unison/site-bundle-snapshot.json'] ?? '{}');
+      const snapshot = JSON.parse(files['/.unison/site-bundle-snapshot.json'] ?? '{}') as {
+        pageRegistry?: { homePageId?: string; pages?: Record<string, { path?: string; filePath?: string }> };
+      };
       const pages = snapshot.pageRegistry?.pages ?? {};
       const homeId = snapshot.pageRegistry?.homePageId;
-      const home = pages[homeId] ?? Object.values(pages).find((page: any) => page.path === '/');
+      const home = (homeId ? pages[homeId] : undefined) ?? Object.values(pages).find(page => page.path === '/');
       if (home?.filePath && typeof files[home.filePath] === 'string') {
         establishedLanguage = extractHomepageVisualLanguage(files[home.filePath], homeId ?? 'home');
       }
