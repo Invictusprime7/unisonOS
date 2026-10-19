@@ -28,7 +28,7 @@
 
 - Builder preferences are optional local state enforced at request/execution boundaries; tools gate the menu, catalog/business settings gate their operations. Why: hiding controls cannot authorize disabled mutations.
 
-- Records use EditorCommand baselines and adapter writes. Why: one owner.
+- Records use EditorCommand/adapter writes; generation schemas are job-scoped. Why: prevent cross-site leakage.
 - Edit gates retain compile/imports, ownership, protected paths, data-loss and binding safety; design/scope is advisory. Queue rebase checks domain dependencies, not age; reviews remain revision-bound. Why: independent saves must not block edits.
 
-- Affinity shows public summaries as paragraphs, never native thinking. Why: preserve explanations without private deliberation.
+- Affinity shows public paragraphs, never native thinking. Why: explanations without private deliberation.
