@@ -13,7 +13,6 @@ describe('R6 — legacy AI page generator surface stays deleted', () => {
     'src/components/creatives/AIPageGenerator.tsx',
     'src/components/creatives/PageRenderer.tsx',
     'src/hooks/usePageGenerator.ts',
-    'supabase/functions/generate-page/index.ts',
     'src/components/onboarding/SystemsAIPanel.tsx',
     'src/test/systemsAiPanelThemePipeline.test.ts',
     'src/utils/stripComposerTrailer.ts',
@@ -21,6 +20,13 @@ describe('R6 — legacy AI page generator surface stays deleted', () => {
 
   it.each(deleted)('%s does not exist', (path) => {
     expect(existsSync(path)).toBe(false);
+  });
+
+  it('page transport delegates to the existing canonical authenticated handler', () => {
+    const source = readFileSync('supabase/functions/generate-page/index.ts', 'utf8');
+    expect(source).toContain('handleAssistant(req, true)');
+    expect(source).not.toContain('PageRenderer');
+    expect(source).not.toContain('commitMutation');
   });
 
   it('/ai-generator redirects to the canonical builder', () => {

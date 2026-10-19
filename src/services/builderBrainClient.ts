@@ -61,7 +61,7 @@ export interface BuilderTurnInput {
 }
 
 export interface BuilderTurnOptions {
-  functionName?: 'ai-code-assistant' | 'wizard-site-composer';
+  functionName?: 'ai-code-assistant' | 'wizard-site-composer' | 'generate-page';
   /** Abort the in-flight invoke. */
   signal?: AbortSignal;
   /** Absolute budget across invocation, backoff, retries and raw fallback. */

@@ -1,5 +1,10 @@
 # Roadmap
 
+## Affinity same-site page generation
+- [x] Wire requested pages to generate-page, reusing the authenticated Composer handler, accepted homepage source/design, and a combined page/navigation candidate through the existing canonical commit.
+- [x] Run page-generation, candidate-save, route-output, and authentication regressions: 99 tests pass; browser/server Composer contracts match; preview build OK.
+- [ ] Deploy generate-page and the updated AI handler/contracts through the UNISON GitHub workflow; verify live generation → preview → reopen. Blocked by unavailable authoritative deployment access and signed-in session.
+
 ## Database performance and running credits
 - [x] Measure October 6–19 scoped usage: 242.33 requested running credits, of which XL compute is 207 for 167.1 instance-hours; built-in Cloud diagnostics do not measure authoritative UNISON. Query/index/cron audit documented in docs/DATABASE_COST_REVIEW_2026-10-19.md.
 - [x] Serialize Home refresh bursts with a trailing read; accepted-draft lookup reads one canonical row and legacy identity lookup excludes embedded snapshots. 19 focused regressions pass; preview build OK. No record, schema, schedule or instance changes.
