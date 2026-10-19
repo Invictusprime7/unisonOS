@@ -33,6 +33,8 @@ import { orchestrateAppBuild } from './appBuilderOrchestrator';
 import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
 import { runBuilderTurn } from '@/services/builderBrainClient';
+import { listContentTypes } from '@/services/cmsRecordService';
+import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
@@ -45,6 +47,7 @@ export interface UnisonAppBuilderDependencies {
   authorSite?: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
   runComposer?: (input: ComposerLoopInput) => Promise<ComposerLoopResult>;
   invokePage?: import('@/services/builder/aiRepairLoop').ComposerInvoke;
+  loadContentTypes?: (scope: { businessId: string; projectId: string }) => Promise<ContentTypeRow[]>;
 }
 
 function stopReason(reason: ComposerLoopResult['reason']): AppBuildCandidateStopReason {
@@ -68,7 +71,7 @@ export function createUnisonAppBuilder(
 
   const service: UnisonAppBuilder = {
     async generate(input) {
-      return orchestrateAppBuild(input, { authorSite, runComposer });
+      return orchestrateAppBuild(input, { authorSite, runComposer, loadContentTypes: dependencies.loadContentTypes ?? listContentTypes });
     },
 
     async generatePages(input) {

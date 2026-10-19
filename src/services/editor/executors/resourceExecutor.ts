@@ -1,6 +1,7 @@
 /** Resource lane: saved record fields go through ResourceRuntime only. */
 import { applyResourceOp, getResourceRecord, parseResourceProvenance, queryResource } from '@/services/resources/resourceRuntime';
 import { getResource } from '@/services/resources/resourceRegistry';
+import { PERSISTED_RESOURCE_ID, resolveResourceIdentity } from '@/services/resources/resourceIdentity';
 import { executeResourceCommandCompatible } from '@/services/project-backend/runtimeProtocol';
 import type { ResourceContext, ResourceEntityRef, ResourceRecord } from '@/services/resources/resourceTypes';
 import type { EditorCommand, EditorCommandResult } from '../editorCommandTypes';
@@ -26,7 +27,7 @@ function defaultFieldFor(command: EditorCommand): string {
     ?? 'name';
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = PERSISTED_RESOURCE_ID;
 
 const SEED_SLUG_RE = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/i;
 /**
@@ -67,11 +68,7 @@ async function resolveRecordId(ref: ResourceEntityRef, ctx: ResourceContext): Pr
   const records = Array.isArray(listed) ? listed
     : Array.isArray((listed as { data?: unknown })?.data) ? (listed as { data: ResourceRecord[] }).data
     : [];
-  const wanted = ref.recordId.toLowerCase();
-  const match = records.find((r) => String(r.id).toLowerCase() === wanted)
-    ?? records.find((r) => typeof r.slug === 'string' && r.slug.toLowerCase() === wanted)
-    ?? records.find((r) => typeof r.name === 'string' && r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') === wanted);
-  return match ? String(match.id) : null;
+  return resolveResourceIdentity(ref.recordId, records);
 }
 
 /** Expected-revision check: a field is stale when it no longer holds what the editor saw (and isn't already the new value). */

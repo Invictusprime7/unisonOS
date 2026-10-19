@@ -6,7 +6,7 @@ import type { DesignSourceBundle } from './design/DesignSourceBundle';
 import { materializeDesignSources, type DesignSourceMaterialization } from './design/designSourceMaterializer';
 import { getAllIndustries, getIndustryProfile } from '@/platform/core/industryMatrix';
 import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
-import { listResources } from '@/services/resources/resourceRegistry';
+import { listResources, type ContentTypeRow } from '@/services/resources/resourceRegistry';
 
 export interface AppBuilderGenerationContext {
   contract: AppBuildContract;
@@ -124,15 +124,15 @@ export function buildIndustryIconContext(
 }
 
 /** Read contract only: registered schemas do not authorize creation or payment. */
-export function buildRegisteredResourceContext(): string {
+export function buildRegisteredResourceContext(contentTypes: readonly ContentTypeRow[] = []): string {
   return [
     'REGISTERED RESOURCE CONTRACT: read and edit through agentOperations / ResourceRuntime with the current project and business scope; bind data-ut-resource to the returned persisted record ID and editable field. Labels and fixture slugs are not database IDs.',
-    ...listResources().map((resource) => `- ${resource.key} → ${resource.storage.table ?? `CMS ${resource.storage.contentType}`} (${resource.cardinality}); fields: ${resource.schema.map((field) => `${field.key}:${field.type}`).join(', ')}.`),
+    ...listResources(contentTypes).map((resource) => `- ${resource.key} → ${resource.storage.table ?? `CMS ${resource.storage.contentType}`} (${resource.cardinality}); fields: ${resource.schema.map((field) => `${field.key}:${field.type}`).join(', ')}.`),
     'CMS seed targets are planned, not installed: create their declared content types through the existing CMS command only when supplied content exists, then use returned type/entry IDs. Features, coverage, credentials and shipping copy never imply a new catalog or API.',
   ].join('\n');
 }
 
-export function buildAppBuilderGenerationContext(contract: AppBuildContract): AppBuilderGenerationContext {
+export function buildAppBuilderGenerationContext(contract: AppBuildContract, contentTypes: readonly ContentTypeRow[] = []): AppBuilderGenerationContext {
   const { business, runtime } = contract;
   const designSources = resolveDesignSourceBundle(contract);
   const materialization = materializeDesignSources(designSources);
@@ -148,7 +148,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract): Ap
     `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}.`,
     industryContext,
     iconContext,
-    buildRegisteredResourceContext(),
+    buildRegisteredResourceContext(contentTypes),
     logoContext,
     `Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.`,
     business.bindingGuide ? `Binding guide: ${business.bindingGuide}` : '',
