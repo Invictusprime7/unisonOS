@@ -56,6 +56,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AIConversationMessage } from './ai-chat/AIConversationMessage';
+import { affinityReply } from './ai-chat/affinityReply';
 import { AIConversationWelcome } from './ai-chat/AIConversationWelcome';
 import { LaunchReadinessCard } from './ai-chat/LaunchReadinessCard';
 import { AIConversationInput } from './ai-chat/AIConversationInput';
@@ -2322,7 +2323,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       }
       
       // Only validated candidates carry source. Chat/catalog text cannot write files.
-      let explanationText = neutralizeModelSuccessClaim(aiContent) || CANDIDATE_GENERATED_NOTICE;
+      const explanationText = affinityReply(aiContent);
       let multiFileOutput: Record<string, string> | null = null;
       let multiFileDeletions: string[] = [];
       let transactionVerdict: string | null = null;
@@ -2330,7 +2331,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         const preparedOutput = canonicalCandidateOutput(canonicalCandidate);
         multiFileOutput = preparedOutput.files;
         multiFileDeletions = preparedOutput.deletions;
-        explanationText = CANDIDATE_GENERATED_NOTICE;
       }
 
       // Prepared Composer candidates bypass compatibility response extraction.
