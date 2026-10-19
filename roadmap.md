@@ -1,5 +1,9 @@
 # Roadmap
 
+## Affinity same-site page generation
+- [ ] Wire requested pages to the canonical page-generation endpoint with existing site design/source inheritance and one canonical commit.
+- [ ] Run page-generation regressions; verify live generation → preview → reopen when an authoritative session and deployed endpoint are available.
+
 ## Database performance and running credits
 - [x] Measure October 6–19 scoped usage: 242.33 requested running credits, of which XL compute is 207 for 167.1 instance-hours; built-in Cloud diagnostics do not measure authoritative UNISON. Query/index/cron audit documented in docs/DATABASE_COST_REVIEW_2026-10-19.md.
 - [x] Serialize Home refresh bursts with a trailing read; accepted-draft lookup reads one canonical row and legacy identity lookup excludes embedded snapshots. 19 focused regressions pass; preview build OK. No record, schema, schedule or instance changes.
