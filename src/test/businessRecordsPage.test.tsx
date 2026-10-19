@@ -17,7 +17,7 @@ import { registerContentTypes } from '@/services/resources/resourceRegistry';
 describe('unified records page', () => {
   beforeEach(() => {
     vi.clearAllMocks(); registerContentTypes([]);
-    mocks.types.mockResolvedValue([{ id: 'faq-type', api_key: 'faqs' }]);
+    mocks.types.mockResolvedValue([{ id: 'faq-type', api_key: 'faqs', field_schema: { fields: [{ key: 'question', type: 'text' }, { key: 'answer', type: 'textarea' }] } }]);
     mocks.load.mockResolvedValue({ records: [{ key: 'content:faq#faq-row', kind: 'faqs', title: 'When do you ship?', resource: { key: 'content:faq', kind: 'content' }, record: { id: 'faq-row', status: 'draft' } }], errors: [] });
     mocks.create.mockResolvedValue({ id: 'created' });
   });

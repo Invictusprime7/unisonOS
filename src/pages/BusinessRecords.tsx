@@ -9,10 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RecordFieldsEditor } from '@/components/creatives/web-builder/RecordFieldsEditor';
 import { loadBusinessMemberships } from '@/services/businessMembership';
 import { listContentTypes, mutateContentRecord, transitionContentRecord } from '@/services/cmsRecordService';
-import { listRecordCollections, registerContentTypes, type RecordCollectionKind } from '@/services/resources/resourceRegistry';
+import { canonicalContentSlug, contentTypeToResource, listRecordCollections, registerContentTypes, resourceCreateDefaults, type RecordCollectionKind } from '@/services/resources/resourceRegistry';
 import { applyResourceOp, onResourceInvalidated } from '@/services/resources/resourceRuntime';
 import { SEED_CONTENT_TYPES } from '@/services/resources/seedLaunchAssets';
-import { getCatalogSurface } from '@/platform/core/catalogSurfaceRegistry';
 import { loadUnifiedRecords, type UnifiedRecord } from '@/services/resources/recordsProjection';
 import './BusinessRecords.css';
 
@@ -75,6 +74,14 @@ export default function BusinessRecords() {
   }), [projectId, scopedBusinessId]);
 
   const collections = listRecordCollections();
+  // Planned empty CMS collections become installed only on explicit New record.
+  for (const [key, seed] of Object.entries(SEED_CONTENT_TYPES)) {
+    const resource = contentTypeToResource({ api_key: key, display_name: seed.displayName, field_schema: { fields: seed.fields } });
+    if (resource && !collections.some((collection) => collection.resources.some((def) => def.key === resource.key))) {
+      const collectionKind = key === 'faq' ? 'faqs' : key === 'case-studies' ? key : resource.key;
+      if (!collections.some((collection) => collection.kind === collectionKind)) collections.push({ kind: collectionKind, label: seed.displayName, resources: [] });
+    }
+  }
   const active = records.find((record) => record.key === selected);
   const visible = records.filter((record) => (kind === 'all' || record.kind === kind) && `${record.title} ${record.kind}`.toLowerCase().includes(search.toLowerCase()));
   async function createRecord() {
@@ -82,16 +89,15 @@ export default function BusinessRecords() {
     setBusy(true);
     try {
       let def = collections.find((collection) => collection.kind === kind)?.resources[0];
-      if (!def && (kind === 'faqs' || kind === 'case-studies')) {
-        const key = kind === 'faqs' ? 'faq' : kind;
+      const key = canonicalContentSlug(kind.replace(/^content:/, ''));
+      if (!def && SEED_CONTENT_TYPES[key]) {
         const seed = SEED_CONTENT_TYPES[key];
         await mutateContentRecord({ action: 'content-type-create', businessId: scopedBusinessId, projectId, values: { apiKey: key.replace(/-/g, '_'), displayName: seed.displayName, fieldSchema: { fields: seed.fields } } });
         registerContentTypes(await listContentTypes({ businessId: scopedBusinessId, projectId }));
         def = listRecordCollections().find((collection) => collection.kind === kind)?.resources[0];
       }
       if (!def) throw new Error('This collection is not available yet.');
-      const defaults = getCatalogSurface(def.key)?.newRowDefaults;
-      const values = defaults ?? (kind === 'faqs' ? { title: 'New question', question: 'New question', answer: '' } : { title: 'New case study', body: '' });
+      const values = resourceCreateDefaults(def);
       await applyResourceOp({ op: 'create', resourceKey: def.key, values }, { businessId: scopedBusinessId, projectId, mode: 'builder' });
       setRevision((r) => r + 1);
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not create record.'); }

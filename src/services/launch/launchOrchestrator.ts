@@ -847,6 +847,7 @@ async function runReservedLaunchPipeline(
       industry: plan.industryProfile?.industry || plan.generationCategory,
       enableProductCommerce: plan.selections.sellsProducts,
       creatorData: (commit.result.playground ?? materializedPlayground)?.creatorData ?? null,
+      mediaAssets: appBuildContract.design.registryContext.assets,
     });
   } catch (error) {
     run.degrade(

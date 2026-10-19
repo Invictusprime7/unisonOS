@@ -21,6 +21,7 @@ vi.mock('@/services/project-backend/runtimeProtocol', () => ({
 }));
 
 import { executeResourceCommand } from '@/services/editor/executors/resourceExecutor';
+import { resolveResourceIdentity } from '@/services/resources/resourceIdentity';
 
 const ctx = { businessId: 'b1', projectId: 'p1', siteId: 's1', mode: 'builder' } as const;
 const REAL_ID = '11111111-2222-3333-4444-555555555555';
@@ -56,6 +57,14 @@ describe('resource executor slug resolution', () => {
       expect.objectContaining({ ref: expect.objectContaining({ recordId: REAL_ID }) }),
       ctx,
     );
+  });
+  it('rejects duplicate generated names without updating or creating a record', async () => {
+    runtime.queryResource.mockResolvedValueOnce([{ id: REAL_ID, name: 'Soup' }, { id: 'another-id', name: 'Soup' }]);
+    await expect(executeResourceCommand(setTextCommand('products#soup'), ctx)).rejects.toThrow('More than one saved item');
+    expect(runtime.applyResourceOp).not.toHaveBeenCalled();
+  });
+  it('resolves CMS title slugs to persisted identities', () => {
+    expect(resolveResourceIdentity('owner-story', [{ id: REAL_ID, title: 'Owner Story' }])).toBe(REAL_ID);
   });
 
   it('creates the record on the spot when no saved record matches the mark', async () => {
