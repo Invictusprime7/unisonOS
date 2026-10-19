@@ -1,5 +1,11 @@
 # Roadmap
 
+## Database performance and running credits
+- [x] Measure October 6–19 scoped usage: 242.33 requested running credits, of which XL compute is 207 for 167.1 instance-hours; built-in Cloud diagnostics do not measure authoritative UNISON. Query/index/cron audit documented in docs/DATABASE_COST_REVIEW_2026-10-19.md.
+- [x] Serialize Home refresh bursts with a trailing read; accepted-draft lookup reads one canonical row and legacy identity lookup excludes embedded snapshots. 19 focused regressions pass; preview build OK. No record, schema, schedule or instance changes.
+- [ ] Authoritative UNISON query plans and signed-in Home → project read-back; blocked by unavailable authoritative database diagnostics/session.
+- [ ] Reduce XL billed hours/size or background cron/storage growth; blocked by active-consumer/peak-load evidence and explicit pause/resize/retention approval. Investigate rising Cloud rollbacks first; no savings established.
+
 ## Account-persistent Live Demo
 - [x] Replace browser-only usage with account-owned reservation and canonical revision settlement; migration prepared for authoritative UNISON workflow, not applied to the unrelated built-in backend.
 - [x] Test one free generation, failed/discarded retry, duplicate reservations, expired/late commits, account isolation, permissions, rollback and persistent UI read-back; 40 tests pass across account Demo, Wizard, Home handoff and canonical launch suites. Preview build OK; signed-out Demo gates to Auth without page errors.

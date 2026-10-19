@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { listProjectsCompat } from "@/services/projectSchemaCompat";
 import { mergeWorkspaceProjects } from "@/services/cloudProjectDrafts";
+import { createCoalescedRefresh } from "@/services/coalescedRefresh";
 import { AlertCircle, Zap } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
@@ -112,6 +113,7 @@ const Index = () => {
   useEffect(() => {
     const userId = user?.id;
     if (!userId || !isSupabaseConfigured) return;
+    let disposed = false;
 
     // Remove the owner's empty shells (no saved version, no source, older than
     // an hour) once per visit before listing.
@@ -185,16 +187,17 @@ const Index = () => {
             canvas_data: { previewCode, html: previewCode },
           };
         });
-        setRecentProjects(projects);
+        if (!disposed) setRecentProjects(projects);
       } catch (err) {
         console.error('Failed to load recent projects:', err);
       } finally {
-        setLoadingProjects(false);
+        if (!disposed) setLoadingProjects(false);
       }
     };
 
-    void loadRecentProjects();
-    const onFocus = () => { void loadRecentProjects(); };
+    const refreshQueue = createCoalescedRefresh(loadRecentProjects);
+    void refreshQueue.refresh();
+    const onFocus = () => { void refreshQueue.refresh(); };
     window.addEventListener('focus', onFocus);
     const channel = supabase
       .channel(`home-recent-drafts:${userId}`)
@@ -203,15 +206,17 @@ const Index = () => {
         schema: 'public',
         table: 'builder_drafts',
         filter: `user_id=eq.${userId}`,
-      }, () => { void loadRecentProjects(); })
+      }, onFocus)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'projects',
         filter: `owner_id=eq.${userId}`,
-      }, () => { void loadRecentProjects(); })
+      }, onFocus)
       .subscribe();
     return () => {
+      disposed = true;
+      refreshQueue.dispose();
       window.removeEventListener('focus', onFocus);
       void supabase.removeChannel(channel);
     };
