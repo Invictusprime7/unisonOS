@@ -72,7 +72,7 @@ export const AIConversationMessage: React.FC<Props> = ({ message, onViewEdits, o
     (message.edits?.length ?? 0) >= 6;
 
   const lastError = [...(message.thinking ?? [])].reverse().find(step => step.type === 'error');
-  const currentStep = message.thinking?.at(-1);
+  const currentStep = message.thinking?.[message.thinking.length - 1];
   const paragraphs = affinityReplyParagraphs(message.content ?? '');
 
   const handleCopy = () => {
