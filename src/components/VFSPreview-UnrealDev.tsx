@@ -12,6 +12,7 @@
  * - Open in new tab
  */
 
+import { isTrustedPreviewOrigin } from "@/utils/trustedPreviewOrigin";
 import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle, useRef, useMemo, Component, type ReactNode, type ErrorInfo } from 'react';
 import { cn } from '@/lib/utils';
 import { 
@@ -952,7 +953,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
   useEffect(() => {
     const handlePreviewMessage = (event: MessageEvent) => {
-      if (event.source !== getPreviewWindow()) return;
+      if (event.source !== getPreviewWindow() || !isTrustedPreviewOrigin(event.origin)) return;
       const data = event.data;
       if (!data?.type) return;
 
