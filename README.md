@@ -51,6 +51,8 @@ Saving, loading the preview and verifying an interaction are separate outcomes. 
 
 Publishing has stricter readiness requirements than ordinary Builder saves or restoring an accepted revision. Missing business connections can block publishing without preventing continued editing.
 
+Dedicated-site publication verifies the required saved resource surfaces using a read-only database-structure check before contacting the hosting provider. Site-profile override saves use conditional writes to reject concurrent overwrites. Shared content commands and account-profile concurrency still need authoritative command updates; these safeguards are not a claim of complete database parity or live end-to-end verification.
+
 ## Current limits
 
 - Full live-site verification of click targeting, saved-record editing, preview read-back and undo remains open.

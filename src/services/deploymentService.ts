@@ -263,7 +263,7 @@ export async function deployToProvider(
         // never the currently mounted Records registry or unsaved caller files.
         const resources = new Set(compileGeneratedSiteRuntimeManifest({ snapshot: request.snapshot }).reads);
         for (const source of Object.values(request.files)) {
-          for (const match of source.matchAll(/data-ut-resource\s*=\s*["']([a-z0-9:_-]+)#/g)) resources.add(match[1]);
+          for (const match of source.matchAll(/data-ut-resource\s*=\s*(?:\{\s*)?["']([a-z0-9:_-]+)#/g)) resources.add(match[1]);
         }
         backendPreflight = await runDeployBackendPreflight({ projectId: request.projectId, resources: [...resources] });
         if (!backendPreflight.ok) {

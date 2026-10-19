@@ -9,6 +9,9 @@
 - [x] Frontend publication requested on 2026-10-19 at https://unisonai.lovable.app; deployment completion is not confirmed.
 - [ ] Authoritative backend deployment and authenticated public read-back; blocked by unavailable UNISON workflow access/session. Never deploy into the unrelated managed database.
 - [ ] Continue atomic content/profile write safety and shared/dedicated schema/publication parity; implement and test safe contract changes without modifying the unrelated managed database. Authoritative migration validation and provisioned site-database acceptance remain required.
+- [x] Conditional site-profile override updates preserve unrelated fields and reject concurrent update/insert races; observed site-field expectations reach the write service. No schema or record changes applied.
+- [x] Dedicated publication checks accepted component reads and literal saved resource marks through an authenticated read-only gateway schema probe before hosting; incompatible/unconfirmed resources refuse publication. Shared backend routing unchanged.
+- [ ] Extend shared content/account-profile commands with locked-row expected-value validation and verify full schema/publication parity; blocked by authoritative migration/deployment access and provisioned-site acceptance. Mixed account/site writes are not a single transaction.
 
 ## Affinity same-site page generation
 - [x] Wire requested pages to generate-page, reusing the authenticated Composer handler, accepted homepage source/design, and a combined page/navigation candidate through the existing canonical commit.
