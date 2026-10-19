@@ -102,6 +102,19 @@ export default async (req: Request) => {
       ? sanitizeString(contactId, 100)
       : null;
 
+    // A contact may only be enrolled into this business's automations.
+    if (normalizedContactId) {
+      const { data: ownedContact } = await supabase
+        .from("crm_contacts")
+        .select("id")
+        .eq("id", normalizedContactId)
+        .eq("business_id", normalizedBusinessId)
+        .maybeSingle();
+      if (!ownedContact) {
+        return errorResponse("This contact does not belong to this business", 403, publicCorsHeaders);
+      }
+    }
+
     // Verify business exists and get industry info
     const { data: business, error: bizError } = await supabase
       .from("businesses")
