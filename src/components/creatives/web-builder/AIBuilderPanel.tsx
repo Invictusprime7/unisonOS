@@ -1442,7 +1442,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               resolvedTargetFile = requestedPageTarget.filePath;
             }
           }
-          const siteScope = !requestedPageTarget && !selectedSourceFile && (capabilityInterpretation.envelope.scope.level === 'site' || /\b(across (?:the |all )?(?:site|pages)|site[ -]wide|whole site|every page|all pages)\b/i.test(rawInput));
+          // New-page requests ("add a case study page") are site-level but
+          // own no existing source part: they author a new file plus nav.
+          const createsPage = /\b(add|create|make|build|new|generate)\b[^.]{0,80}?\bpages?\b/i.test(rawInput);
+          const siteScope = !createsPage && !requestedPageTarget && !selectedSourceFile && (capabilityInterpretation.envelope.scope.level === 'site' || /\b(across (?:the |all )?(?:site|pages)|site[ -]wide|whole site|every page|all pages)\b/i.test(rawInput));
           resolvedSourceTargets = resolveEditSourceTargets(rawInput, analysis, {
             files: vfsFiles,
             pageFiles: pageTargets.map(page => page.filePath),
