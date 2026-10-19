@@ -67,10 +67,24 @@ Deno.serve(async (req) => {
     req.headers.get('x-wh-signature') ||
     req.headers.get('x-webhook-secret');
 
-  // Optional shared-secret check (recommended in GHL workflow webhook config)
-  if (sharedSecret && sigHeader !== sharedSecret) {
+  // Fail closed: without a configured secret no caller can be authenticated.
+  if (!sharedSecret) {
+    console.error('[ghl-webhook] GHL_WEBHOOK_SECRET is not configured; rejecting');
+    return new Response(JSON.stringify({ error: 'Webhook not configured' }), {
+      status: 503,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  if (!sigHeader || sigHeader !== sharedSecret) {
     return new Response(JSON.stringify({ error: 'Invalid signature' }), {
       status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if ((businessIdQuery && !uuidRe.test(businessIdQuery)) || (projectIdQuery && !uuidRe.test(projectIdQuery))) {
+    return new Response(JSON.stringify({ error: 'Invalid identifiers' }), {
+      status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
