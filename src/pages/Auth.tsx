@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { claimGuestDemoIfNeeded } from "@/services/guestDemoClaim";
 import { ArrowLeft, Check, Sparkles, Zap } from "lucide-react";
+import { resolveAuthDestination } from "@/lib/authDestination";
 import "./Auth.css";
 
 const AuthLaunchDemoSequence = ({ duplicate = false }: { duplicate?: boolean }) => (
@@ -64,36 +66,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const signInFormRef = useRef<HTMLFormElement>(null);
 
-  // Resolve destination after sign-in/up: /onboarding for new users, /dashboard for returning.
-  // If the user was mid-checkout before authenticating, send them back to /pricing.
-  const resolvePostAuthDestination = async (userId: string, isNewSignup = false) => {
-    // Honor ?next= for OAuth consent and other same-origin redirects.
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const next = params.get("next");
-      if (next && next.startsWith("/") && !next.startsWith("//")) {
-        return next;
-      }
-    } catch {
-      // ignore
-    }
-    const checkoutPlan = sessionStorage.getItem("checkout_plan");
-    if (checkoutPlan) {
-      sessionStorage.removeItem("checkout_plan");
-      return "/pricing";
-    }
-    if (isNewSignup) return "/onboarding";
-    try {
-      const { data } = await supabase
-        .from("onboarding_state")
-        .select("completed")
-        .eq("user_id", userId)
-        .maybeSingle();
-      return data?.completed ? "/dashboard" : "/onboarding";
-    } catch {
-      return "/dashboard";
-    }
-  };
+  const newSignupRef = useRef(false);
 
   useEffect(() => {
     let handled = false;
@@ -105,19 +78,26 @@ const Auth = () => {
       // Auth listeners execute under the SDK session lock. Database/auth work
       // must start on a later task, after that lock has been released.
       redirectTimer = setTimeout(() => {
-        void resolvePostAuthDestination(userId, isNewSignup).then((dest) => {
+        // Legacy demo recovery must never be a navigation prerequisite.
+        void claimGuestDemoIfNeeded(userId).catch(() => undefined);
+        void resolveAuthDestination(userId, isNewSignup)
+          .then((dest) => {
           if (active) navigate(dest, { replace: true });
         }).catch(() => {
-          if (active) navigate("/dashboard", { replace: true });
+          if (active) navigate("/home", { replace: true });
         });
       }, 0);
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) scheduleRedirect(session.user.id, (event as string) === "SIGNED_UP");
+      // Anonymous guest sessions must not trigger a redirect: protected routes
+      // bounce them back to /auth, which would loop forever.
+      if (session && session.user.is_anonymous !== true) {
+        scheduleRedirect(session.user.id, newSignupRef.current);
+      }
     });
 
     void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) scheduleRedirect(session.user.id);
+      if (session && session.user.is_anonymous !== true) scheduleRedirect(session.user.id, newSignupRef.current);
     }).catch(() => {
       if (active) setLoading(false);
     });
@@ -138,11 +118,12 @@ const Auth = () => {
     const password = formData.get("signup-password") as string;
     const fullName = formData.get("full-name") as string;
 
+    newSignupRef.current = true;
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/onboarding`,
+        emailRedirectTo: `${window.location.origin}/auth?next=%2Fdemo`,
         data: {
           full_name: fullName,
         },
@@ -152,6 +133,7 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
+      newSignupRef.current = false;
       toast({
         title: "Sign up failed",
         description: error.message,

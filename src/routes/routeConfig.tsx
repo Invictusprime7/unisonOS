@@ -1,15 +1,14 @@
 import { AsyncBoundary, AsyncRouteLoadingFallback } from "@/components/RouteErrorBoundary";
-import { UnisonLoadingMark } from "@/components/UnisonLoadingMark";
 import { CloudProvider } from "@/contexts/CloudContext";
 import { lazy, type ReactElement } from "react";
 import { Navigate } from "react-router-dom";
 
 import Auth from "@/pages/Auth";
+import Home from "@/pages/Index";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/NotFound";
 
 const Pricing = lazy(() => import("@/pages/Pricing"));
-const Index = lazy(() => import("@/pages/Index"));
 const CheckoutSuccess = lazy(() => import("@/pages/CheckoutSuccess"));
 const CheckoutCancel = lazy(() => import("@/pages/CheckoutCancel"));
 const WebBuilderPage = lazy(() => import("@/pages/WebBuilderPage"));
@@ -30,6 +29,7 @@ const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
 const ProjectSetup = lazy(() => import("@/pages/ProjectSetup"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
+const LiveDemo = lazy(() => import("@/pages/LiveDemo"));
 const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
 const AIChat = lazy(() => import("@/pages/AIChat"));
 const ExternalPreviewPage = lazy(() => import("@/pages/ExternalPreviewPage"));
@@ -70,7 +70,7 @@ export interface AppRouteConfig {
 const pageLoaderElement = (
   <div className="flex h-screen w-full items-center justify-center">
     <div className="text-center">
-      <UnisonLoadingMark size={40} className="mx-auto mb-4" />
+      <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
       <p className="text-muted-foreground">Loading...</p>
     </div>
   </div>
@@ -118,7 +118,7 @@ export const appRoutes: AppRouteConfig[] = [
   },
   {
     path: "/home",
-    element: withAsyncBoundary(<Index />),
+    element: withAsyncBoundary(<Home />),
     meta: {
       id: "home",
       title: "Home",
@@ -127,7 +127,6 @@ export const appRoutes: AppRouteConfig[] = [
       chrome: "legacy",
       requiresAuth: true,
       requiresWorkspace: true,
-      deprecatedAliasFor: "/dashboard",
     },
   },
   {
@@ -482,6 +481,19 @@ export const appRoutes: AppRouteConfig[] = [
       chrome: "legacy",
       requiresAuth: true,
       primaryAction: "Launch system",
+    },
+  },
+  {
+    path: "/demo",
+    element: withAsyncBoundary(<LiveDemo />),
+    meta: {
+      id: "live-demo",
+      title: "Live Demo",
+      section: "onboarding",
+      shell: "onboarding",
+      chrome: "legacy",
+      requiresAuth: true,
+      primaryAction: "Start the live demo",
     },
   },
   {

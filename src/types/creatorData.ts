@@ -11,6 +11,8 @@ import type { AssetRef, IntentId, PageId } from "./siteBundle";
 
 export interface CreatorProduct {
   productId: string;
+  /** Explicit saved catalog target; industry is only a default for old plans. */
+  catalogSurface?: 'products' | 'menu' | 'pricing';
   name: string;
   slug?: string;
   sku?: string;
@@ -27,8 +29,6 @@ export interface CreatorProduct {
   visibility?: "public" | "hidden" | "featured";
   billingType?: "one_time" | "subscription";
   billingInterval?: "week" | "month" | "quarter" | "year";
-  /** Explicit catalog target chosen at launch; overrides industry inference. */
-  catalogSurface?: "menu" | "pricing" | "products";
   ctaLabel?: string;
   checkoutLabel?: string;
   fulfillmentType?: "digital" | "physical" | "service" | "custom";
@@ -250,11 +250,28 @@ export interface CreatorData {
   faqs: Record<string, CreatorFaqItem>;
   gallery: Record<string, CreatorGalleryItem>;
   team: Record<string, CreatorTeamMember>;
+  articles?: Record<string, CreatorLongform>;
+  caseStudies?: Record<string, CreatorLongform>;
   collections: Record<string, CreatorCollection>;
   forms: Record<string, CreatorForm>;
   overlays: Record<string, CreatorOverlay>;
   businessInfo: CreatorBusinessInfo;
   componentInstances: Record<string, CreatorComponentInstance>;
+}
+
+export interface CreatorLongform {
+  title: string;
+  name?: string;
+  excerpt?: string;
+  description?: string;
+  category?: string;
+  author?: string;
+  date?: string;
+  readTime?: string;
+  body?: string;
+  client?: string;
+  results?: string;
+  image?: string;
 }
 
 // ============================================================================

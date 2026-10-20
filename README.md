@@ -41,6 +41,8 @@ Saved-record edits are separate from source revisions. A marked product or busin
 
 Preview-first consolidation preserves business operations and developer tools while retiring redundant editing paths. AI catalog tools use the same project-scoped record runtime as visual edits; a price or photo change does not rewrite unrelated matching text in source. Playground hydration is a compatibility read, not a source regeneration API.
 
+Generation reads the current project's content schemas independently of open Records screens. Records creation follows the selected collection's fields, including empty planned collections; editor and preview adoption reject ambiguous generated identities. Launch seeding preserves supplied media and normalizes pricing intervals. These integrations have focused regression coverage; authenticated generation-to-publication verification remains open.
+
 ## Preview and publishing
 
 The active website preview runs React source in Sandpack through the shared VFS preparation path. Canvas and Split are views of that project, not separate site generators. Fabric belongs to graphic/design tooling, not the website's rendering authority. Docker/static helpers are not automatic fallback previews for accepted sites.
@@ -48,6 +50,8 @@ The active website preview runs React source in Sandpack through the shared VFS 
 Saving, loading the preview and verifying an interaction are separate outcomes. The activity ribbon reports emitted file stages and preview signals; a “Preview updated” indicator is not proof that every route or checkout was tested. Current in-preview checks are read-only and limited to the displayed route. Local Playwright tooling is available; a hosted browser worker is not yet integrated.
 
 Publishing has stricter readiness requirements than ordinary Builder saves or restoring an accepted revision. Missing business connections can block publishing without preventing continued editing.
+
+Dedicated-site publication verifies the required saved resource surfaces using a read-only database-structure check before contacting the hosting provider. Site-profile override saves use conditional writes to reject concurrent overwrites. Shared content commands and account-profile concurrency still need authoritative command updates; these safeguards are not a claim of complete database parity or live end-to-end verification.
 
 ## Current limits
 

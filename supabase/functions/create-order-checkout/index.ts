@@ -1,4 +1,5 @@
 import { serve } from "serve";
+import { verifyAuth } from "../_shared/auth.ts";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
@@ -122,7 +123,13 @@ serve(async (req) => {
 
     const normalizedBusinessId = typeof businessId === "string" ? sanitizeString(businessId, 100) : "";
     const normalizedSessionId = typeof sessionId === "string" ? sanitizeString(sessionId, 200) : "";
-    const normalizedUserId = typeof userId === "string" ? sanitizeString(userId, 100) : undefined;
+    // The order owner comes only from the verified sign-in, never the body.
+    void userId;
+    let normalizedUserId: string | undefined;
+    if (req.headers.get("authorization")?.startsWith("Bearer ")) {
+      const auth = await verifyAuth(req);
+      normalizedUserId = auth.user?.id;
+    }
     const normalizedCustomerEmail = typeof customerEmail === "string"
       ? sanitizeString(customerEmail, 255).toLowerCase()
       : undefined;

@@ -35,8 +35,9 @@ export async function findLatestBuilderDraftProjectionForProject({
     .select('id, last_revision_id, updated_at')
     .eq('user_id', resolvedUserId)
     .eq('project_id', projectId)
+    .not('last_revision_id', 'is', null)
     .order('updated_at', { ascending: false })
-    .limit(50);
+    .limit(1);
   if (businessId) query = query.eq('business_id', businessId);
 
   const { data, error } = await query;
@@ -80,7 +81,7 @@ export async function findBuilderDraftIdForProject({
 
   const { data, error } = await supabase
     .from('builder_drafts')
-    .select('id, project_id, business_id, metadata, updated_at')
+    .select('id, project_id, business_id, updated_at, metaProjectId:metadata->>projectId, metaProject_id:metadata->>project_id, metaLinkedProjectId:metadata->>linkedProjectId, metaName:metadata->>name, metaProjectName:metadata->>projectName, metaBusinessName:metadata->>business_name')
     .eq('user_id', resolvedUserId)
     .order('updated_at', { ascending: false })
     .limit(50);
@@ -94,11 +95,10 @@ export async function findBuilderDraftIdForProject({
 
   if (projectId) {
     const exactMatch = rows.find((row) => {
-      const metadata = (row.metadata || {}) as Record<string, unknown>;
       const linkedProjectIds = [
-        metadata.projectId,
-        metadata.project_id,
-        metadata.linkedProjectId,
+        row.metaProjectId,
+        row.metaProject_id,
+        row.metaLinkedProjectId,
       ]
         .map((value) => (typeof value === 'string' ? value : null))
         .filter((value): value is string => Boolean(value));
@@ -117,11 +117,10 @@ export async function findBuilderDraftIdForProject({
   }
 
   const nameMatch = rows.find((row) => {
-    const metadata = (row.metadata || {}) as Record<string, unknown>;
     const draftName = String(
-      metadata.name ||
-      metadata.projectName ||
-      metadata.business_name ||
+      row.metaName ||
+      row.metaProjectName ||
+      row.metaBusinessName ||
       '',
     ).trim().toLowerCase();
 

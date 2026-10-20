@@ -117,3 +117,13 @@
 - [ ] Full ten-case M7 browser acceptance (booking availability, case-study publish, mounted save concurrency included): needs authoritative signed-in session and approved test projects
 - [ ] M3 data collisions: scoped live audit and approved migration needed before choosing/merging testimonial/project/FAQ record owners; no existing records moved or deleted
 - [ ] M4 safe removal of mounted Playground editing: replacement equivalence requires the signed-in acceptance above; useful operations stay mounted
+
+## Active: Post-restore recovery (commit 8704cda6d reverted non-Home work)
+- [ ] Batch 1 Security: restore publicBusinessGate, trustedPreviewOrigin, endpoint auth/ownership gates (create-lead, intent-*, automation-event, chat, create-order-checkout, ghl-*, template-*), preview origin checks
+- [ ] Batch 2 Auth/routing: useAuth, authSessionRecovery, authStorageQuota, Auth/AuthCallback destinations, routeAccessPolicy, routeConfig Home/Demo routes
+- [ ] Batch 3 AI/generation: UnisonAppBuilder job-scoped schemas, generate-page transport, guest metering, scopedEditContentGuard, responseNormalizer out-of-scope, builderPrompts guidance
+- [ ] Batch 4 Resources/DB/assets: resourceRegistry job-local projection, BusinessRecords/Catalog, recordsProjection, catalogOps, resourceExecutor identity, previewAssetScan, seedLaunchAssets, businessProfileService, deploymentService, project-backend check action, builderDraftBridge
+- [ ] Batch 5 Revision/preview/theme: vfsCommitService typed rebase, WebBuilder resume precedence, VFSPreview Sandpack recovery, vite Babel defs, themeTokenOverrides shadow parsing, themeEdit errors
+- [ ] Batch 6 Tests/docs/scripts: restore removed test coverage, README/AGENTS/roadmap entries, exemption registry, lint allowlist
+- [ ] Delete 39 dead -UnrealDev parallel files + 3 dead SocialIcon.tsx duplicates (keep vendor design-system tree intact)
+- [ ] Full verification: vitest, tsgo, build log

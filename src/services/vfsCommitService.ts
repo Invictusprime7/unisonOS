@@ -220,24 +220,98 @@ export class CommitRejectedError extends Error {
 const DRAFT_COMMIT_TAILS = new Map<string, Promise<void>>();
 const LATEST_QUEUED_COMMITS = new Map<string, CommitMutationResult>();
 
-function rebaseQueuedFileOnlyCommit(
+/** Compare domain values without depending on object insertion order. */
+function queueDomainValue(value: unknown): string {
+  return JSON.stringify(value, (_key, item: unknown) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+    return Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)));
+  }) ?? 'undefined';
+}
+
+export function rebaseQueuedCommit(
   input: CommitMutationInput,
   latest: CommitMutationResult,
 ): { input: CommitMutationInput } | { coalesced: CommitMutationResult } {
   const patch = input.patch;
-  const structuredMutation = Boolean(
-    patch.candidate || patch.themeEdit || patch.routeOps?.length || patch.playgroundOps.length
-    || patch.bindingOps.length || patch.dataOps.length || patch.backendOps.length
-    || patch.presentationOps.length || patch.businessSystem || input.options?.customizerPagePath
-    || input.options?.compositionUpgrade || input.options?.restoreRevisionId
-    || input.options?.reviewedComposition || input.options?.reviewedArtifact,
-  );
-  if (structuredMutation || patch.fileOps.length === 0 || input.source === 'wizard-launch' || input.source === 'system-restore') {
-    throw new Error('[VFSCommitService] A newer revision was accepted before this structured edit. Reload and reapply it to the latest version.');
+  // Candidate metadata is provenance, not a structured side effect. File-only
+  // AI patches use the same exact-byte overlap check as direct editor saves.
+  if (patch.candidate && (patch.candidate.baseRevisionId ?? '') !== (input.identity.revisionId || '')) {
+    throw new Error('[VFSCommitService] AI candidate does not match its captured base revision. Reapply it to the latest version.');
   }
-
+  if (latest.identity.projectId !== input.identity.projectId
+    || latest.identity.businessId !== input.identity.businessId
+    || latest.identity.draftId !== input.identity.draftId
+    || latest.identity.userId !== input.identity.userId) {
+    throw new Error('[VFSCommitService] The queued save belongs to a different project or account. Nothing was overwritten.');
+  }
   const baseFiles = input.current.vfsFiles;
   const latestFiles = latest.vfsFiles;
+  const baseSnapshot = input.current.siteBundleSnapshot as SiteBundleSnapshot | undefined;
+  const snapshot = latest.siteBundleSnapshot;
+  const domainConflicts: string[] = [];
+  const checkDomain = (label: string, before: unknown, after: unknown) => {
+    if (queueDomainValue(before) !== queueDomainValue(after)) domainConflicts.push(label);
+  };
+  // Re-run typed edits against the latest state only when their dependencies
+  // are unchanged. A newer content save is not a topology/theme/binding edit.
+  if (patch.routeOps?.length) {
+    if (!input.current.playground?.pageRegistry || !latest.playground?.pageRegistry
+      || !baseSnapshot?.pageRegistry || !snapshot?.pageRegistry) {
+      domainConflicts.push('page topology (missing captured registry)');
+    } else {
+      const { version: _baseVersion, ...baseRegistry } = input.current.playground.pageRegistry;
+      const { version: _latestVersion, ...latestRegistry } = latest.playground.pageRegistry;
+      checkDomain('page topology', baseRegistry, latestRegistry);
+      for (const op of patch.routeOps) {
+        const page = op.pageId ? baseRegistry.pages[op.pageId] : undefined;
+        if (page && (op.type === 'remove_page' || op.type === 'rename_page')) {
+          const path = page.filePath || deriveFilePath(page);
+          checkDomain(path, baseFiles[path], latestFiles[path]);
+        }
+      }
+    }
+  }
+  if (patch.themeEdit) {
+    if (!baseSnapshot || !snapshot) domainConflicts.push('theme (missing captured snapshot)');
+    checkDomain('theme CSS', baseFiles['/src/index.css'], latestFiles['/src/index.css']);
+    checkDomain('theme tokens', baseSnapshot?.themeTokens, snapshot?.themeTokens);
+    checkDomain('theme selection', baseSnapshot?.meta?.themePresetId, snapshot?.meta?.themePresetId);
+    checkDomain('theme overrides', baseFiles['/.unison/theme-overrides.json'], latestFiles['/.unison/theme-overrides.json']);
+  }
+  if (patch.presentationOps.length || input.options?.customizerPagePath) {
+    if (!baseSnapshot?.meta?.designIntervention || !snapshot?.meta?.designIntervention) {
+      domainConflicts.push('composition (missing captured design)');
+    }
+    checkDomain('composition', baseSnapshot?.meta?.designIntervention, snapshot?.meta?.designIntervention);
+    checkDomain('page topology', baseSnapshot?.pageRegistry, snapshot?.pageRegistry);
+    // A presentation projection can touch the rendered page, unlike token edits.
+    if (input.options?.customizerPagePath || patch.presentationOps.some(op => op.type !== 'setMotionBudget')) {
+      checkDomain('composition source', baseFiles, latestFiles);
+    }
+  }
+  if (patch.bindingOps.length) {
+    if (!input.current.playground || !latest.playground) domainConflicts.push('bindings (missing captured state)');
+    checkDomain('bindings', input.current.playground?.bindings, latest.playground?.bindings);
+    // Binding projection can rewrite rendered markers; retain its source baseline.
+    checkDomain('binding source', baseFiles, latestFiles);
+  }
+  if (patch.playgroundOps.length || patch.dataOps.length || patch.backendOps.length || patch.businessSystem) {
+    checkDomain('operation source', baseFiles, latestFiles);
+    checkDomain('operation state', input.current.playground, latest.playground);
+    checkDomain('business capabilities', baseSnapshot?.businessSystem, snapshot?.businessSystem);
+  }
+  if (input.source === 'wizard-launch' || input.source === 'system-restore'
+    || input.options?.compositionUpgrade || input.options?.restoreRevisionId
+    || input.options?.reviewedComposition || input.options?.reviewedArtifact) {
+    domainConflicts.push('reviewed launch or restore');
+  }
+  if (domainConflicts.length) {
+    throw new Error(`[VFSCommitService] This edit overlaps a newer saved revision in ${[...new Set(domainConflicts)].join(', ')}. Nothing was overwritten. Reapply on the latest version.`);
+  }
+  const hasStructuredOperations = Boolean(patch.themeEdit || patch.routeOps?.length
+    || patch.playgroundOps.length || patch.bindingOps.length || patch.dataOps.length
+    || patch.backendOps.length || patch.presentationOps.length || patch.businessSystem
+    || input.options?.customizerPagePath);
   const fileOps: PatchPlan['fileOps'] = [];
   const conflicts: string[] = [];
   for (const op of patch.fileOps) {
@@ -262,7 +336,10 @@ function rebaseQueuedFileOnlyCommit(
   if (conflicts.length > 0) {
     throw new Error(`[VFSCommitService] This edit overlaps a newer saved revision at ${[...new Set(conflicts)].join(', ')}. Reload and reapply the change.`);
   }
-  if (fileOps.length === 0) {
+  if (!hasStructuredOperations && fileOps.length === 0 && (!patch.candidate || (
+    latest.candidateId === patch.candidate.id
+    && (patch.operationIds ?? []).every((id) => latest.operationIds.includes(id))
+  ))) {
     return {
       coalesced: {
         ...latest,
@@ -274,7 +351,6 @@ function rebaseQueuedFileOnlyCommit(
     };
   }
 
-  const snapshot = latest.siteBundleSnapshot;
   return {
     input: {
       ...input,
@@ -285,7 +361,14 @@ function rebaseQueuedFileOnlyCommit(
         siteBundleSnapshot: snapshot ?? input.current.siteBundleSnapshot,
         playground: latest.playground ?? input.current.playground,
       },
-      patch: { ...patch, fileOps },
+      patch: {
+        ...patch,
+        fileOps,
+        candidate: patch.candidate ? {
+          ...patch.candidate,
+          baseRevisionId: latest.persistedRevisionId ?? undefined,
+        } : undefined,
+      },
       options: {
         ...input.options,
         industry: snapshot?.industry ?? input.options?.industry,
@@ -486,6 +569,9 @@ export async function commitMutation(
   const correlationId = newEditorCorrelationId();
   const startedAt = Date.now();
   try {
+    // Coalescing must never bypass the same identity/shape checks as a write.
+    assertBuilderIdentity(input.identity, 'commitMutation');
+    assertPatchPlan(input.patch, 'commitMutation');
     let result: CommitMutationResult;
     if (input.options?.dryRun) {
       result = await commitMutationInner(input);
@@ -501,7 +587,7 @@ export async function commitMutation(
         const latest = LATEST_QUEUED_COMMITS.get(queueKey);
         const preparation = latest?.persistedRevisionId
           && latest.persistedRevisionId !== (input.identity.revisionId || '')
-          ? rebaseQueuedFileOnlyCommit(input, latest)
+          ? rebaseQueuedCommit(input, latest)
           : { input };
         result = 'coalesced' in preparation
           ? preparation.coalesced

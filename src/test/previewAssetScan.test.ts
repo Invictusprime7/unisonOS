@@ -35,6 +35,13 @@ describe('preview asset scan bridge source', () => {
 });
 
 describe('preview asset scan persistence mapping', () => {
+  it('adopts a generated pricing slug by its saved identity rather than updating the slug', async () => {
+    resourceRuntime.parseResourceProvenance.mockReturnValue({ resourceKey: 'pricing', kind: 'catalog', recordId: 'studio-plan' });
+    resourceRuntime.queryResource.mockResolvedValue([{ id: 'saved-plan', name: 'Studio Plan' }]);
+    resourceRuntime.applyResourceOp.mockResolvedValue({ id: 'saved-plan' });
+    await persistScannedCatalogItem({ kind: 'pricing', businessId: 'business-1', projectId: 'project-1', index: 0, item: { name: 'Studio Plan', description: '', price: '95', image: null, resourceMark: 'pricing#studio-plan' } });
+    expect(resourceRuntime.applyResourceOp).toHaveBeenLastCalledWith(expect.objectContaining({ op: 'update', ref: expect.objectContaining({ resourceKey: 'pricing', recordId: 'saved-plan' }), values: expect.objectContaining({ price_cents: 9500 }) }), { businessId: 'business-1', projectId: 'project-1', mode: 'builder' });
+  });
   it('persists the full scanned menu schema through Resource Runtime', async () => {
     resourceRuntime.queryResource.mockResolvedValue([]);
     resourceRuntime.parseResourceProvenance.mockReturnValue(null);

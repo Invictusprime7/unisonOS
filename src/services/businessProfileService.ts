@@ -197,50 +197,33 @@ export async function loadSiteProfile(businessId: string, projectId?: string | n
 /** Account fields → permission-checked business command; site fields → this site only. */
 export async function saveSiteProfile(
   businessId: string, projectId: string | null | undefined, patch: BusinessProfilePatch,
-  observed?: Record<string, unknown>,
+  expected?: Record<string, unknown>,
 ): Promise<BusinessProfileDTO | null> {
   if (!projectId) return saveBusinessProfile(businessId, patch);
   const { account, site } = splitProfilePatch(patch);
   if (Object.keys(account).length) await saveBusinessProfile(businessId, account);
   if (Object.keys(site).length) {
-    const { data: cur } = await supabase.from('site_profiles').select('overrides').eq('project_id', projectId).maybeSingle();
-    const current = asObject<Record<string, unknown>>(cur?.overrides, {});
-    if (observed) {
-      // Compare against the merged profile the caller saw; any drift refuses
-      // the write before it can overwrite someone else's change.
+    const { data: cur, error: readError } = await supabase.from('site_profiles').select('overrides').eq('project_id', projectId).eq('business_id', businessId).maybeSingle();
+    if (readError) throw new Error(readError.message || 'This site’s details could not be loaded.');
+    if (expected) {
       const base = await loadBusinessProfile(businessId);
-      const merged = { ...(base as unknown as Record<string, unknown> | null), ...current } as Record<string, unknown>;
-      const drifted = Object.entries(observed).filter(([key, value]) => {
-        const seen = merged[key] ?? current[key];
-        return JSON.stringify(seen ?? null) !== JSON.stringify(value ?? null);
-      });
-      if (drifted.length) {
-        throw new Error(`Conflict: this site's details changed elsewhere (${drifted.map(([key]) => key).join(', ')}) — reload to see the latest, then edit again.`);
+      if (!base) throw new Error('This profile is no longer available.');
+      const current = mergeSiteProfile(base, cur?.overrides) as unknown as Record<string, unknown>;
+      if (Object.entries(expected).some(([key, seen]) => (SITE_PROFILE_FIELDS as readonly string[]).includes(key)
+        && JSON.stringify(current[key] ?? null) !== JSON.stringify(seen ?? null))) {
+        throw new Error('Conflict: these site details changed elsewhere. Reload the item and try again.');
       }
     }
-    const overrides = { ...current, ...site };
-    if (cur) {
-      // Conditional update: the overrides we read must still be current at
-      // write time, or a concurrent save won and this one must refuse.
-      const { data: written, error } = await supabase.from('site_profiles')
-        .update({ overrides: overrides as never })
-        .eq('project_id', projectId)
-        .eq('business_id', businessId)
-        .eq('overrides', current as never)
-        .select('project_id')
-        .maybeSingle();
-      if (error) throw new Error(error.message || 'This site’s details could not be saved.');
-      if (!written) throw new Error('Conflict: this site’s details changed elsewhere — reload to see the latest, then edit again.');
-    } else {
-      const { error } = await supabase.from('site_profiles')
-        .insert({ project_id: projectId, business_id: businessId, overrides: overrides as never })
-        .select('project_id')
-        .maybeSingle();
-      if (error) {
-        if (error.code === '23505') throw new Error('Conflict: this site’s details were just saved elsewhere — reload to see the latest, then edit again.');
-        throw new Error(error.message || 'This site’s details could not be saved.');
-      }
-    }
+    const overrides = { ...asObject<Record<string, unknown>>(cur?.overrides, {}), ...site };
+    // Compare the JSON snapshot inside UPDATE, not only before it. Inserts
+    // deliberately do not upsert: a concurrently created profile must survive.
+    let write = cur
+      ? supabase.from('site_profiles').update({ overrides: overrides as never }).eq('project_id', projectId).eq('business_id', businessId)
+      : supabase.from('site_profiles').insert({ project_id: projectId, business_id: businessId, overrides: overrides as never });
+    if (cur) write = cur.overrides == null ? write.is('overrides', null) : write.eq('overrides', cur.overrides);
+    const { data: saved, error } = await write.select('project_id').maybeSingle();
+    if (error?.code === '23505' || (!error && !saved)) throw new Error('Conflict: these site details changed elsewhere. Reload the item and try again.');
+    if (error) throw new Error(error.message || 'This site’s details could not be saved.');
   }
   return loadSiteProfile(businessId, projectId);
 }

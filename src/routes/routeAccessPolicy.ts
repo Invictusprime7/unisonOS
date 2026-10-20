@@ -10,6 +10,7 @@ export type RouteAccessRedirectReason =
 
 export interface RouteAccessState {
   isAuthenticated: boolean;
+  isAnonymousUser?: boolean;
   authLoading?: boolean;
   onboardingLoading?: boolean;
   needsOnboarding?: boolean;
@@ -51,7 +52,7 @@ export function resolveRouteAccess(meta: AppRouteMeta, state: RouteAccessState):
     return { kind: "loading" };
   }
 
-  if (requirements.requiresAuth && !state.isAuthenticated) {
+  if (requirements.requiresAuth && (!state.isAuthenticated || state.isAnonymousUser)) {
     return {
       kind: "redirect",
       redirectTo: "/auth",

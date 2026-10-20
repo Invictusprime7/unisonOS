@@ -101,6 +101,30 @@ Deno.test("preserves capable OpenAI models and applies actual model output limit
   }
 });
 
+Deno.test("allows metered planned calls to disable the transparent rate-limit retry", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = Deno.env.get("GEMINI_API_KEY");
+  let calls = 0;
+  Deno.env.set("GEMINI_API_KEY", "test-key");
+  globalThis.fetch = (async () => {
+    calls++;
+    return new Response("rate limited", { status: 429 });
+  }) as typeof fetch;
+  try {
+    const response = await createPlannedChatCompletion({
+      model: "google/gemini-3.8-flash",
+      messages: [{ role: "user", content: "Edit this page" }],
+      max_tokens: 1000,
+    }, undefined, false);
+    assertEquals(response.status, 429);
+    assertEquals(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) Deno.env.delete("GEMINI_API_KEY");
+    else Deno.env.set("GEMINI_API_KEY", originalKey);
+  }
+});
+
 function env(values: Record<string, string>): (name: string) => string | undefined {
   return (name) => values[name];
 }
