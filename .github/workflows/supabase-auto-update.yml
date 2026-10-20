@@ -18,6 +18,10 @@ on:
         description: 'Deploy all Edge Functions and push pending migrations'
         type: boolean
         default: false
+      base_sha:
+        description: 'Optional commit SHA to diff against for a targeted manual deployment'
+        type: string
+        required: false
 
 concurrency:
   group: supabase-deploy-unison
@@ -57,6 +61,8 @@ jobs:
 
       - name: Detect changes
         id: changes
+        env:
+          DEPLOY_BASE_SHA: ${{ inputs.base_sha }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force_deploy }}" = "true" ]; then
@@ -65,7 +71,11 @@ jobs:
             echo "functions=$funcs" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          BASE="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BASE="${DEPLOY_BASE_SHA}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
             BASE="$(git rev-parse HEAD~1)"
           fi
