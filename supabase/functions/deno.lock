@@ -1,8 +1,14 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@std/encoding@1": "1.0.11",
     "npm:@babel/parser@7.29.8": "7.29.8",
     "npm:@supabase/supabase-js@2": "2.89.0"
+  },
+  "jsr": {
+    "@std/encoding@1.0.11": {
+      "integrity": "e7cef2f0b3153bccc17431e7c864a1de03a4b6d9647389c43e08aaa775d37385"
+    }
   },
   "npm": {
     "@babel/helper-string-parser@7.29.7": {
