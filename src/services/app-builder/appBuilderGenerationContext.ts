@@ -108,15 +108,6 @@ export function buildIndustryIconContext(
   const cartEnabled = enabledCapabilities.includes('commerce') && purchaseRequested && cartableSurfaces.length > 0;
   const affordances = [
     seedDataKeys.has('menu_items') ? 'menu -> Utensils' : '',
-  // Safe cart eligibility: products are always cartable once commerce and an
-  // explicit cart intent exist; menu joins when it is a declared surface.
-  // Services, offers and pricing never take cart actions.
-  const cartableSurfaces = ['products', 'menu']
-    .filter((surface) => surface === 'products' || industrySurfaces.has(surface));
-  const purchaseRequested = intents.some((intent) => intent === 'cart.add' || intent === 'cart.checkout');
-  const cartEnabled = enabledCapabilities.includes('commerce') && purchaseRequested && cartableSurfaces.length > 0;
-  const affordances = [
-    seedDataKeys.has('menu_items') ? 'menu -> Utensils' : '',
     seedDataKeys.has('products') ? 'products -> Package' : '',
     seedDataKeys.has('pricing_tiers') ? 'pricing -> BadgeDollarSign' : '',
     seedDataKeys.has('services') && enabledCapabilities.includes('booking') ? 'services -> CalendarDays' : '',
