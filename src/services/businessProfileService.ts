@@ -197,19 +197,12 @@ export async function loadSiteProfile(businessId: string, projectId?: string | n
 /** Account fields → permission-checked business command; site fields → this site only. */
 export async function saveSiteProfile(
   businessId: string, projectId: string | null | undefined, patch: BusinessProfilePatch,
-<<<<<<<
-  observed?: Record<string, unknown>,
-=======
   expected?: Record<string, unknown>,
->>>>>>>
 ): Promise<BusinessProfileDTO | null> {
   if (!projectId) return saveBusinessProfile(businessId, patch);
   const { account, site } = splitProfilePatch(patch);
   if (Object.keys(account).length) await saveBusinessProfile(businessId, account);
   if (Object.keys(site).length) {
-<<<<<<<
-    const { data: cur } = await supabase.from('site_profiles').select('overrides').eq('project_id', projectId).maybeSingle();
-=======
     const { data: cur, error: readError } = await supabase.from('site_profiles').select('overrides').eq('project_id', projectId).eq('business_id', businessId).maybeSingle();
     if (readError) throw new Error(readError.message || 'This site’s details could not be loaded.');
     if (expected) {
@@ -233,7 +226,6 @@ export async function saveSiteProfile(
     if (error) throw new Error(error.message || 'This site’s details could not be saved.');
   }
   return loadSiteProfile(businessId, projectId);
->>>>>>>
     const current = asObject<Record<string, unknown>>(cur?.overrides, {});
     if (observed) {
       // Compare against the merged profile the caller saw; any drift refuses
