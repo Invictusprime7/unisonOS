@@ -19,25 +19,29 @@ export interface AppBuilderGenerationContext {
 export interface IndustrySeedDataTarget {
   target: string;
   catalogSurface?: string;
+  /** Registered resource that owns records for this seed key. */
+  resourceKey?: string;
+  /** CreatorData path the seed data is read from. */
+  creatorDataPath?: string;
 }
 
 export const INDUSTRY_SEED_DATA_TARGETS: Record<string, IndustrySeedDataTarget> = {
-  business_name: { target: 'BusinessProfile.name and CreatorData.businessInfo.businessName' },
-  business_email: { target: 'BusinessProfile.email and CreatorData.businessInfo.email' },
+  business_name: { target: 'BusinessProfile.name and CreatorData.businessInfo.businessName', resourceKey: 'business-profile', creatorDataPath: 'businessInfo.businessName' },
+  business_email: { target: 'BusinessProfile.email and CreatorData.businessInfo.email', resourceKey: 'business-profile', creatorDataPath: 'businessInfo.email' },
   features: { target: 'authored feature sections, not a product catalog' },
   pricing_tiers: { target: 'catalog.pricing / pricing_plans', catalogSurface: 'pricing' },
   services: { target: 'catalog.services / services', catalogSurface: 'services' },
-  operating_hours: { target: 'BusinessProfile.hours and CreatorData.businessInfo.hours' },
+  operating_hours: { target: 'BusinessProfile.hours and CreatorData.businessInfo.hours', resourceKey: 'business-profile', creatorDataPath: 'businessInfo.hours' },
   menu_items: { target: 'catalog.menu / menu_items', catalogSurface: 'menu' },
   service_areas: { target: 'owner-provided service-area content; do not invent coverage zones' },
-  programs: { target: 'catalog.services / services when represented as bookable programs', catalogSurface: 'services' },
-  credentials: { target: 'owner-supplied CreatorData.team and about-page content; never invent qualifications' },
-  specialties: { target: 'catalog.services categories and owner-supplied page content', catalogSurface: 'services' },
+  programs: { target: 'catalog.services / services when represented as bookable programs', catalogSurface: 'services', resourceKey: 'services', creatorDataPath: 'services' },
+  credentials: { target: 'owner-supplied CreatorData.team and about-page content; never invent qualifications', resourceKey: 'content:team', creatorDataPath: 'team' },
+  specialties: { target: 'catalog.services categories and owner-supplied page content', catalogSurface: 'services', resourceKey: 'services', creatorDataPath: 'services.category' },
   products: { target: 'catalog.products / products', catalogSurface: 'products' },
   shipping_info: { target: 'owner-supplied shipping policy content; do not invent shipping rules or APIs' },
-  portfolio_items: { target: 'CMS gallery content from CreatorData.gallery' },
-  mission_statement: { target: 'BusinessProfile.description and CreatorData.businessInfo.description' },
-  case_studies: { target: 'CMS case-studies content from CreatorData.caseStudies' },
+  portfolio_items: { target: 'CMS gallery content from CreatorData.gallery', resourceKey: 'content:gallery', creatorDataPath: 'gallery' },
+  mission_statement: { target: 'BusinessProfile.description and CreatorData.businessInfo.description', resourceKey: 'business-profile', creatorDataPath: 'businessInfo.description' },
+  case_studies: { target: 'CMS case-studies content from CreatorData.caseStudies', resourceKey: 'content:case-studies', creatorDataPath: 'caseStudies' },
 };
 
 export function getIndustrySeedDataTargets(industry: string): Array<{
