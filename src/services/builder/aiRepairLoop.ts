@@ -41,6 +41,7 @@ export interface ComposerLoopResult {
   ok: boolean;
   reason: ComposerStopReason;
   attempts: number;
+  guestDemoOperationId?: string;
   response?: AIComposerResponse;
   prepared?: PreparedCandidate;
   errors: string[];
@@ -48,6 +49,7 @@ export interface ComposerLoopResult {
 
 export interface ComposerLoopInput {
   request: AIComposerRequest;
+  guestDemoOperationId?: string;
   baseFiles: Record<string, string>;
   baseRevisionId?: string;
   preflight?: (changed: Record<string, string>) => Record<string, string>;
@@ -119,6 +121,9 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
     const { data, error } = await invoke({
       mode: AI_COMPOSER_MODES[request.task],
       messages: [{ role: 'user', content: JSON.stringify(request) }],
+      ...(input.guestDemoOperationId
+        ? { runContext: { operationId: input.guestDemoOperationId } }
+        : {}),
       gatewayOptions: {
         ...input.gatewayOptions,
         timeoutMs: Math.min(
@@ -207,7 +212,10 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
     lastPrepared = prepared;
     narrate('verification', prepared.ok ? 'Draft checks passed' : `Found ${prepared.errors.length} problem${prepared.errors.length === 1 ? '' : 's'}; fixing`, prepared.ok ? 'ok' : 'running');
     if (prepared.ok) {
-      return { ok: true, reason: 'accepted', attempts: attempt, response, prepared, errors: [] };
+      const guestDemoOperationId = typeof (data as { guestDemoOperationId?: unknown }).guestDemoOperationId === 'string'
+        ? (data as { guestDemoOperationId: string }).guestDemoOperationId
+        : undefined;
+      return { ok: true, reason: 'accepted', attempts: attempt, guestDemoOperationId, response, prepared, errors: [] };
     }
     lastErrors = prepared.errors;
     const failingPaths = new Set(prepared.gates.failures.map((f) => f.path));

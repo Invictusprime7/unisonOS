@@ -204,7 +204,27 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
   const outcomes: PageAuthoringOutcome[] = [];
   const priorPages: Array<{ role: string; summary: string }> = [];
   let paused: ComposerStopReason | null = null;
+  // Builder additions do not author Home again: inherit its accepted source.
   let establishedLanguage: HomepageVisualLanguage | undefined;
+  let referenceHomePath: string | undefined;
+  if (candidateOrigin === 'builder') {
+    try {
+      const snapshot = JSON.parse(files['/.unison/site-bundle-snapshot.json'] ?? '{}') as {
+        pageRegistry?: { homePageId?: string; pages?: Record<string, { path?: string; filePath?: string }> };
+      };
+      const pages = snapshot.pageRegistry?.pages ?? {};
+      const homeId = snapshot.pageRegistry?.homePageId;
+      const home = (homeId ? pages[homeId] : undefined) ?? Object.values(pages).find(page => page.path === '/');
+      if (home?.filePath && typeof files[home.filePath] === 'string') {
+        referenceHomePath = home.filePath;
+        establishedLanguage = extractHomepageVisualLanguage(files[home.filePath], homeId ?? 'home');
+      }
+    } catch { /* Missing snapshot is handled by the existing candidate gates. */ }
+    if (!establishedLanguage && files['/src/pages/Home.tsx']) {
+      referenceHomePath = '/src/pages/Home.tsx';
+      establishedLanguage = extractHomepageVisualLanguage(files['/src/pages/Home.tsx'], 'home');
+    }
+  }
   // One universal planner assigns each page a distinct narrative + topology job.
   // A sealed plan from the AppBuildContract is authoritative; replanning here would fork the design.
   const compositionPlan = input.compositionPlan ?? planSiteComposition(
@@ -260,11 +280,12 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       knowledgeQuery: `${input.businessName} ${page.role} ${page.title} ${page.route}`,
       baseFiles,
       baseRevisionId: revisionId,
-      sourceTargets: [page.filePath],
+      sourceTargets: [page.filePath, ...(referenceHomePath ? [referenceHomePath] : [])],
       routes,
       priorPages: priorPages.slice(-20),
       registryContext: input.registryContext,
       runtimeContext: [
+        referenceHomePath ? `Existing homepage ${referenceHomePath} is read-only design/API reference. Reuse its shared chrome, semantic tokens and imported component contracts; do not rewrite it or change the site's art direction.` : '',
         input.designContext
           ? `Industry ${input.designContext.contract.industry}; experience ${input.designContext.contract.experience}; forbidden implementations ${JSON.stringify(input.designContext.hardLegality.forbiddenImplementations)}.`
           : '',

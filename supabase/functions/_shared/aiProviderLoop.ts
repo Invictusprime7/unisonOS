@@ -14,6 +14,7 @@ import {
 import type { ChatCompletionRequest, ChatMessage } from "../_shared/ai/providerClient.ts";
 import type { ModelSpec } from './providerRouter.ts';
 import { DEFAULT_GEMINI_GATEWAY_MODEL, configuredComposerGeminiModel } from './geminiModel.ts';
+import type { GuestDemoUsageMeter } from './guestDemo.ts';
 
 export interface ProviderEarlyError {
   status: number;
@@ -43,6 +44,52 @@ export interface ProviderCallResult {
 
 const providerForRace = (id: string) =>
   id.startsWith('google/') || id.startsWith('gemini-') ? 'gemini' : 'openai';
+
+async function countGuestPromptTokens(
+  aiMessages: Array<{ role: string; content: unknown }>,
+  modelId: string,
+  signal: AbortSignal,
+): Promise<number> {
+  const apiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('UNISONGEMINI_API_KEY');
+  if (!apiKey) throw new Error('Guest demo Gemini token counter is unavailable');
+
+  const systemText = aiMessages
+    .filter((message) => message.role === 'system')
+    .map((message) => typeof message.content === 'string' ? message.content : JSON.stringify(message.content))
+    .join('\n\n');
+  const contents = aiMessages
+    .filter((message) => message.role !== 'system')
+    .map((message) => ({
+      role: message.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: typeof message.content === 'string' ? message.content : JSON.stringify(message.content) }],
+    }));
+  const model = modelId.replace(/^google\//, '');
+  let response: Response;
+  try {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:countTokens`, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        generateContentRequest: {
+          contents,
+          ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
+        },
+      }),
+      signal,
+    });
+  } catch (error) {
+    throw new Error(`Guest demo token count failed: ${error instanceof Error ? error.message : 'provider error'}`);
+  }
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => '')).slice(0, 180);
+    throw new Error(`Guest demo token count failed: ${response.status}${detail ? ` ${detail}` : ''}`);
+  }
+  const result = await response.json();
+  if (!Number.isSafeInteger(result.totalTokens) || result.totalTokens < 0) {
+    throw new Error('Guest demo token count failed: invalid provider response');
+  }
+  return result.totalTokens + aiMessages.length * 64 + 128;
+}
 
 export const PROVIDER_LOOP_TOTAL_BUDGET_MS = 145_000;
 
@@ -126,9 +173,31 @@ export async function runProviderLoop(opts: {
   signal?: AbortSignal;
   /** Remaining request budget, shared with Composer's format-repair turn. */
   totalBudgetMs?: number;
+  /** Enforces a persisted cost reservation for each guest provider call. */
+  guestUsageMeter?: GuestDemoUsageMeter;
 }): Promise<ProviderCallResult> {
-  const { aiMessages, providerPlan, reasoningEffort, allowDirectFallbacks = true, tools, toolChoice, signal } = opts;
-  const hasTools = Array.isArray(tools) && tools.length > 0;
+  const { aiMessages, providerPlan: requestedProviderPlan, reasoningEffort, allowDirectFallbacks = true, tools, toolChoice, signal, guestUsageMeter } = opts;
+  const guestOnly = Boolean(guestUsageMeter);
+  const requestedOutputTokens = requestedProviderPlan.gatewayModels.length
+    ? Math.max(...requestedProviderPlan.gatewayModels.map((model) => model.maxTokens))
+    : requestedProviderPlan.fallbackMaxTokens;
+  const guestOutputTokens = guestUsageMeter
+    ? Math.max(1, Math.min(guestUsageMeter.maxOutputTokens, requestedProviderPlan.fallbackMaxTokens, requestedOutputTokens))
+    : undefined;
+  const providerPlan: ProviderPlan = guestUsageMeter
+    ? {
+      ...requestedProviderPlan,
+      gatewayModels: [{
+        id: DEFAULT_GEMINI_GATEWAY_MODEL,
+        label: 'Gemini 3.8 Flash (guest demo)',
+        maxTokens: guestOutputTokens!,
+      }],
+      fallbackMaxTokens: guestOutputTokens!,
+      gatewayLeads: false,
+      raceGateway: false,
+    }
+    : requestedProviderPlan;
+  const hasTools = !guestOnly && Array.isArray(tools) && tools.length > 0;
   const effectiveToolChoice = hasTools ? (toolChoice ?? "auto") : undefined;
   let content = '';
   let lastError = '';
@@ -148,10 +217,10 @@ export async function runProviderLoop(opts: {
   const budgetRemaining = () => totalBudgetMs - (Date.now() - startedAt);
   const activeAttempts = new Set<() => void>();
   const geminiExclusive = isGeminiExclusiveProviderMode();
-  const hasDirectOpenAI = allowDirectFallbacks && !geminiExclusive && !directOnCooldown('openai') && Boolean(Deno.env.get('OPENAI_API_KEY'));
+  const hasDirectOpenAI = !guestOnly && allowDirectFallbacks && !geminiExclusive && !directOnCooldown('openai') && Boolean(Deno.env.get('OPENAI_API_KEY'));
   const hasDirectGemini = allowDirectFallbacks && !directOnCooldown('gemini') && Boolean(Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('UNISONGEMINI_API_KEY'));
-  // A configured managed fallback remains available if Gemini cannot answer.
-  const hasLastResortGateway = allowDirectFallbacks && Boolean(Deno.env.get('LOVABLE_API_KEY'));
+  // Guest actions use only models with a configured, enforceable price schedule.
+  const hasLastResortGateway = !guestOnly && allowDirectFallbacks && Boolean(Deno.env.get('LOVABLE_API_KEY'));
   // The managed gateway is the final safety net; a 20 s slice is not enough for
   // a real generation, so reserve a usable window for it.
   const lastResortReserveMs = hasLastResortGateway ? 30_000 : 0;
@@ -704,6 +773,7 @@ export async function runProviderLoop(opts: {
       }
 
       const attempt = createAttemptSignal(perModelMs);
+      let guestUsageReservation: { callId: string; inputTokenLimit: number; outputTokenLimit: number } | undefined;
       try {
         console.log(`[AI-Hybrid] Trying planned direct model ${model.label} (timeout: ${perModelMs / 1000}s, budget left: ${remaining / 1000}s)...`);
 
@@ -715,7 +785,18 @@ export async function runProviderLoop(opts: {
           toolChoice: effectiveToolChoice,
         });
 
-        const resp = await createPlannedChatCompletion(reqBody, attempt.signal);
+        if (guestUsageMeter) {
+          const inputTokenLimit = await countGuestPromptTokens(aiMessages, model.id, attempt.signal);
+          const outputTokenLimit = reqBody.max_completion_tokens ?? reqBody.max_tokens ?? model.maxTokens;
+          const callId = await guestUsageMeter.reserveProviderCall({
+            modelId: model.id,
+            inputTokenLimit,
+            outputTokenLimit,
+          });
+          guestUsageReservation = { callId, inputTokenLimit, outputTokenLimit };
+        }
+
+        const resp = await createPlannedChatCompletion(reqBody, attempt.signal, !guestOnly);
 
         if (resp.status === 429 || resp.status === 402) {
           const errText = await resp.text().catch(() => '');
@@ -776,6 +857,21 @@ export async function runProviderLoop(opts: {
           continue;
         }
 
+        if (guestUsageMeter && guestUsageReservation) {
+          const usage = data.usage ?? {};
+          const inputTokens = usage.prompt_tokens ?? usage.input_tokens;
+          const outputTokens = usage.completion_tokens ?? usage.output_tokens;
+          await guestUsageMeter.settleProviderCall({
+            callId: guestUsageReservation.callId,
+            inputTokens: Number.isSafeInteger(inputTokens) && inputTokens >= 0
+              ? inputTokens
+              : guestUsageReservation.inputTokenLimit,
+            outputTokens: Number.isSafeInteger(outputTokens) && outputTokens >= 0
+              ? outputTokens
+              : guestUsageReservation.outputTokenLimit,
+          });
+        }
+
         const message = data.choices?.[0]?.message ?? {};
         const parsedContent = message.content || '';
         const parsedToolCalls = Array.isArray(message.tool_calls) ? (message.tool_calls as RawToolCall[]) : undefined;
@@ -798,6 +894,7 @@ export async function runProviderLoop(opts: {
         break;
       } catch (err) {
         throwIfCancelled();
+        if (guestUsageMeter && err instanceof Error && err.message.startsWith('Guest demo')) throw err;
         if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
           console.warn(`[AI-Hybrid] ${model.label} timed out, trying next...`);
           recordProviderError(model.label, 'timeout');
@@ -829,7 +926,7 @@ export async function runProviderLoop(opts: {
   }
 
   // ── Phase 4: Direct Anthropic API ─────────────────────────────────────
-  if (!hasResponse() && allowDirectFallbacks) {
+  if (!guestOnly && !hasResponse() && allowDirectFallbacks) {
     const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
     if (ANTHROPIC_API_KEY) {
       const remaining = budgetRemaining();
@@ -886,7 +983,7 @@ export async function runProviderLoop(opts: {
   }
 
   // ── Phase 5: Managed gateway retry, only if it was not already tried first ──
-  if (!hasResponse() && hasLastResortGateway && !gatewayTriedFirst) {
+  if (!guestOnly && !hasResponse() && hasLastResortGateway && !gatewayTriedFirst) {
     const remaining = budgetRemaining();
     if (remaining >= 8_000) await runManagedGatewayAttempt('Managed gateway fallback', remaining - 2_000);
   }
