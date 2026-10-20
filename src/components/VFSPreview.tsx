@@ -1413,7 +1413,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
             </div>
             <h3 className="text-sm font-semibold text-foreground">Preview waiting for app files</h3>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Start from a template or ask AI Builder to create a page. The preview will compile as soon as a real React entry or page file exists.
+              Start from a template or ask Affinity to create a page. The preview will compile as soon as a real React entry or page file exists.
             </p>
           </div>
         </div>
@@ -1598,7 +1598,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
               <Zap className="h-8 w-8 mx-auto text-muted-foreground" />
               <h3 className="text-sm font-semibold">Preview idle</h3>
               <p className="text-xs text-muted-foreground">
-                No SiteBundleSnapshot is bound to this draft yet. Launch the wizard or ask the AI Builder to generate the first page — the canonical preview will hydrate automatically.
+                No SiteBundleSnapshot is bound to this draft yet. Ask Affinity to generate the first page — the canonical preview will hydrate automatically.
               </p>
             </div>
           </div>
