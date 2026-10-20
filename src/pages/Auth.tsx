@@ -27,7 +27,7 @@ const AuthLaunchDemoSequence = ({ duplicate = false }: { duplicate?: boolean }) 
     <div className="pt-1">
       <div className="auth-demo-floating-divider mx-auto mb-2 h-1 w-14 rounded-full bg-cyan-300/70 shadow-[0_0_12px_rgba(103,232,249,0.45)]" aria-hidden="true" />
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">Launcher Wizard</span>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">Affinity</span>
         <span className="text-[10px] text-cyan-300">Step 1 of 4</span>
       </div>
       <div className="grid grid-cols-4 gap-2 text-center">
@@ -236,10 +236,10 @@ const Auth = () => {
             <span className="text-cyan-300">Launch with confidence</span>
           </p>
           <p className="mt-4 max-w-md text-base leading-7 text-slate-300">
-            Tell Unison what your business needs. See it live.
+            Tell Affinity what your business needs. See it live.
           </p>
         </div>
-        <section aria-label="AI chat and Launcher Wizard demo" className="relative z-10 w-full max-w-lg overflow-hidden bg-[#0d1324]/95 shadow-[0_16px_48px_rgba(0,0,0,0.2)]">
+        <section aria-label="Affinity chat demo" className="relative z-10 w-full max-w-lg overflow-hidden bg-[#0d1324]/95 shadow-[0_16px_48px_rgba(0,0,0,0.2)]">
           <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-cyan-300" />
@@ -250,7 +250,7 @@ const Auth = () => {
               Live demo
             </span>
           </div>
-          <div className="auth-launch-demo-viewport h-[220px] overflow-hidden" aria-label="A sample AI conversation flows into the Launcher Wizard">
+          <div className="auth-launch-demo-viewport h-[220px] overflow-hidden" aria-label="A sample Affinity conversation flows into site setup">
             <div className="auth-launch-demo-track">
               <AuthLaunchDemoSequence />
               <AuthLaunchDemoSequence duplicate />

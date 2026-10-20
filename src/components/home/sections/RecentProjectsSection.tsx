@@ -140,7 +140,7 @@ export function RecentProjectsSection({ projects, loading, onStartLauncher }: Re
                 >
                   <Zap className="h-6 w-6 mb-2" />
                   <span className="text-xs font-medium">New Site</span>
-                  <span className="text-[10px] text-white/20 mt-0.5">Wizard launcher</span>
+                  <span className="text-[10px] text-white/20 mt-0.5">Affinity</span>
                 </button>
               </div>
             )}

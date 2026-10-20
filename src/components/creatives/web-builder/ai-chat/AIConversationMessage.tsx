@@ -246,7 +246,7 @@ export const AIConversationMessage: React.FC<Props> = ({ message, onViewEdits, o
       <div className="flex-1 min-w-0">
         {/* Header */}
         <div className={cn("flex items-center gap-2 mb-1", compactMode && "mb-0.5")}>
-          <span className="text-xs font-semibold text-foreground">Unison AI</span>
+          <span className="text-xs font-semibold text-foreground">Affinity</span>
           {message.meta?.modelUsed && (
             <Badge variant="secondary" className="text-[9px] h-4 px-1.5 font-mono">
               {message.meta.modelUsed.split('/').pop()}

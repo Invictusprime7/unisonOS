@@ -101,7 +101,7 @@ const Index = () => {
       console.error("[Home] Could not restore confirmed site brief.", error);
       toast({
         title: "Couldn't restore your site plan",
-        description: "Your saved homepage conversation is still available. Please confirm the brief again to reopen the Wizard.",
+        description: "Your saved homepage conversation is still available. Please confirm the brief again to reopen Affinity.",
         variant: "destructive",
       });
     }
@@ -292,7 +292,7 @@ const Index = () => {
     } catch (error) {
       console.error("[Home] Could not persist confirmed site brief.", error);
       toast({
-        title: "Wizard opened, but couldn't save your progress",
+        title: "Affinity opened, but couldn't save your progress",
         description: "Keep this page open to continue. Your AI conversation is saved on this device.",
         variant: "destructive",
       });
@@ -432,6 +432,13 @@ const Index = () => {
         user={user}
         onAuthRequired={() => navigate("/auth")}
         onSiteConfirmed={handleConfirmedSite}
+        badge="Introducing Affinity · Unison's AI App Builder"
+        chatGlow
+        headline={<>Build your business with{" "}
+          <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-lime-300 bg-clip-text text-transparent motion-safe:animate-pulse">
+            Affinity
+          </span>
+        </>}
         launcherOpen={launcherOpen}
         launchBrief={launchBrief}
         onLauncherOpenChange={(open) => {

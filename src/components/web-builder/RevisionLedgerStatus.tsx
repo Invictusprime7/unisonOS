@@ -235,7 +235,7 @@ export default function RevisionLedgerStatus({
                 ) : autoResyncOnDrift && identity ? (
                   'Drift detected — auto-resync queued.'
                 ) : (
-                  'Live VFS hash differs from the latest ledger row. Re-commit through the AI Builder or layout fast-path to resync.'
+                  'Live VFS hash differs from the latest ledger row. Re-commit through Affinity or layout fast-path to resync.'
                 )}
               </div>
             )}
