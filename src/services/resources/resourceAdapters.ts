@@ -8,8 +8,11 @@ import {
   createCmsRecord, listCmsRecords, removeCmsRecord, updateCmsRecord,
   createContentRecord, getContentRecord, listContentRecords, updateContentRecord,
 } from '@/services/cmsRecordService';
+import { supabase as rawSupabase } from '@/integrations/supabase/client';
 import { loadSiteProfile, saveSiteProfile, type BusinessProfilePatch } from '@/services/businessProfileService';
-import type { ResourceAdapter, ResourceAdapterId, ResourceDefinition, ResourceRecord } from './resourceTypes';
+import type { ResourceAdapter, ResourceAdapterId, ResourceContext, ResourceDefinition, ResourceRecord } from './resourceTypes';
+
+const supabase: any = rawSupabase;
 
 function withId(r: Record<string, unknown>): ResourceRecord {
   return { ...r, id: String(r.id ?? '') };
@@ -120,8 +123,62 @@ export const businessProfileResourceAdapter: ResourceAdapter = {
   },
 };
 
+function requireProjectScope(ctx: ResourceContext, def: ResourceDefinition): asserts ctx is ResourceContext & { projectId: string } {
+  if (!ctx.projectId) throw new Error('CRM records require a selected project.');
+  if (!def.storage.table) throw new Error(`${def.label} has no CRM table binding.`);
+}
+
+export const crmResourceAdapter: ResourceAdapter = {
+  async query(def, ctx) {
+    requireProjectScope(ctx, def);
+    const { data, error } = await supabase
+      .from(def.storage.table)
+      .select('*')
+      .eq('project_id', ctx.projectId)
+      .eq('business_id', ctx.businessId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    return (data ?? []).map(withId) as ResourceRecord[];
+  },
+  async get(def, ctx, id) {
+    requireProjectScope(ctx, def);
+    const { data, error } = await supabase
+      .from(def.storage.table)
+      .select('*')
+      .eq('id', id)
+      .eq('project_id', ctx.projectId)
+      .eq('business_id', ctx.businessId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? withId(data) : null;
+  },
+  async create() {
+    throw new Error('CRM records are created by project intake and CRM workflows.');
+  },
+  async update(def, ctx, id, values, expected) {
+    requireProjectScope(ctx, def);
+    const safeValues = filterWritableValues(def, values);
+    if (!Object.keys(safeValues).length) throw new Error(`No editable ${def.label.toLowerCase()} fields were provided.`);
+    let query = supabase
+      .from(def.storage.table)
+      .update({ ...safeValues, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('project_id', ctx.projectId)
+      .eq('business_id', ctx.businessId);
+    if (expected && Object.prototype.hasOwnProperty.call(expected, 'updated_at')) {
+      query = query.eq('updated_at', expected.updated_at);
+    }
+    const { data, error } = await query.select('*').maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error(`This ${def.label.slice(0, -1).toLowerCase()} changed elsewhere or is no longer in this project. Refresh and try again.`);
+    return withId(data);
+  },
+};
+
 export const RESOURCE_ADAPTERS: Record<ResourceAdapterId, ResourceAdapter> = {
   catalog: catalogResourceAdapter,
   content: contentResourceAdapter,
   'business-profile': businessProfileResourceAdapter,
+  crm: crmResourceAdapter,
 };

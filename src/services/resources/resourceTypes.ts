@@ -3,13 +3,13 @@ import type { CatalogKind } from '@/platform/core/catalogSurfaceRegistry';
 /**
  * Unified Resource Runtime — type contracts (milestone 2026-10-08, Phase 1).
  *
- * Catalog, Content and Business Profile share these mechanics; each keeps its
- * own storage adapter, schema and semantics. Storage is never inferred from
- * `kind` — it is adapter-defined.
+ * Catalog, Content, Business Profile, and Cloud CRM share these mechanics;
+ * each keeps its own storage adapter, schema and semantics. Storage is never
+ * inferred from `kind` — it is adapter-defined.
  */
-export type ResourceKind = 'catalog' | 'content' | 'business-profile';
+export type ResourceKind = 'catalog' | 'content' | 'business-profile' | 'crm';
 export type ResourceCardinality = 'collection' | 'single-record';
-export type ResourceAdapterId = 'catalog' | 'content' | 'business-profile';
+export type ResourceAdapterId = 'catalog' | 'content' | 'business-profile' | 'crm';
 
 export type ResourceFieldType =
   | 'text' | 'textarea' | 'richtext' | 'number' | 'money' | 'money-cents'
@@ -71,7 +71,7 @@ export interface ResourceEntityRef {
   field?: string;
 }
 
-export type ResourceRuntimeMode = 'builder' | 'published';
+export type ResourceRuntimeMode = 'builder' | 'cloud' | 'published';
 
 export interface ResourceContext {
   businessId: string;

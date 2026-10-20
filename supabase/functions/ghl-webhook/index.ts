@@ -12,11 +12,13 @@
  * stage changes (e.g. opportunity moved, contact created).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { isValidUUID } from '../_shared/validate.ts';
+import { isUnresolvedGhlIdentifier } from './webhookIdentity.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, x-ghl-signature, x-wh-signature',
+    'authorization, x-client-info, apikey, content-type, x-ghl-signature, x-wh-signature, x-webhook-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -59,8 +61,8 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const businessIdQuery = url.searchParams.get('businessId');
-  const projectIdQuery = url.searchParams.get('projectId');
+  const businessIdQuery = url.searchParams.get('businessId')?.trim() || null;
+  const projectIdQuery = url.searchParams.get('projectId')?.trim() || null;
   const sharedSecret = Deno.env.get('GHL_WEBHOOK_SECRET');
   const sigHeader =
     req.headers.get('x-ghl-signature') ||
@@ -89,6 +91,33 @@ Deno.serve(async (req) => {
     });
   }
 
+  const configuredProjectId = Deno.env.get('GHL_PROJECT_ID');
+  if (!configuredProjectId || !isValidUUID(configuredProjectId)) {
+    return new Response(JSON.stringify({ error: 'Webhook project is not configured' }), {
+      status: 503,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (!projectIdQuery || !isValidUUID(projectIdQuery)) {
+    return new Response(JSON.stringify({ error: 'A valid projectId query parameter is required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  if (projectIdQuery !== configuredProjectId) {
+    return new Response(JSON.stringify({ error: 'Project scope does not match this GHL integration' }), {
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  if (businessIdQuery && !isValidUUID(businessIdQuery)) {
+    return new Response(JSON.stringify({ error: 'businessId must be a valid UUID' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   let body: GhlWebhookPayload;
   try {
     body = await req.json();
@@ -108,22 +137,49 @@ Deno.serve(async (req) => {
   const stageId = pick(body, 'stageId', 'stage_id', 'pipelineStageId');
   const previousStageId = pick(body, 'previousStageId', 'previous_stage_id');
 
+  if ([locationId, contactId, opportunityId].some(isUnresolvedGhlIdentifier)) {
+    return new Response(JSON.stringify({ error: 'Webhook contains an unresolved GoHighLevel merge field' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  if (eventType === 'contact.test_webhook' && (!locationId || !contactId)) {
+    return new Response(JSON.stringify({ error: 'Test events require locationId and contactId' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
-  // Resolve business_id: query param wins, else look up by GHL location mapping.
-  let businessId: string | null = businessIdQuery;
-  if (!businessId && locationId) {
-    const { data } = await supabase
-      .from('business_integrations')
-      .select('business_id')
-      .eq('provider', 'gohighlevel')
-      .eq('external_id', locationId)
-      .maybeSingle();
-    if (data?.business_id) businessId = data.business_id as string;
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('id, business_id')
+    .eq('id', projectIdQuery)
+    .maybeSingle();
+  if (projectError) {
+    console.error('[ghl-webhook] project lookup failed', projectError);
+    return new Response(JSON.stringify({ error: 'Could not resolve project scope' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
+  if (!project) {
+    return new Response(JSON.stringify({ error: 'Project not found' }), {
+      status: 404,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  if (businessIdQuery && businessIdQuery !== project.business_id) {
+    return new Response(JSON.stringify({ error: 'businessId does not match project scope' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const businessId = project.business_id as string | null;
 
   const headers: Record<string, string> = {};
   req.headers.forEach((v, k) => {

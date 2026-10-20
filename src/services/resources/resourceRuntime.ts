@@ -1,9 +1,8 @@
 /**
- * ResourceRuntime — the one read/write surface for catalog, content and the
- * business profile. Picks the adapter, enforces schema-writable fields, and
- * emits RESOURCE_INVALIDATED so live components rehydrate without a preview
- * remount. Catalog writes from the AI/command menu still go through
- * agentOperations, which delegates here for the same semantics.
+ * ResourceRuntime — the canonical read/write surface for catalog, content,
+ * business profile, and Cloud CRM. Picks the adapter, enforces schema-writable
+ * fields, and emits RESOURCE_INVALIDATED so live components rehydrate without
+ * a preview remount. CRM access is Cloud-only and project-scoped.
  */
 import { vfsEventBus } from '@/services/vfsEventBus';
 import { emitAgentEvent } from '@/services/agent-runtime/agentEvents';
@@ -16,12 +15,10 @@ import { flattenContentEntry } from './resourceAdapters';
 import type { ProjectBackendDescriptor } from '@/services/project-backend/projectBackendTypes';
 
 /**
- * Dedicated sites: every resource kind goes through the private project-backend
- * connection. The gateway is the authority on which resources a dedicated
- * database supports — unknown ones get a clean rejection there, never a
- * client-side special case per adapter.
+ * Dedicated sites route catalog resources through the private project-backend
+ * connection. Cloud CRM remains in the shared project-scoped CRM store.
  */
-function dedicated(d: ProjectBackendDescriptor | null, _def: ResourceDefinition, projectId?: string | null): projectId is string {
+function dedicated(d: ProjectBackendDescriptor | null, def: ResourceDefinition, projectId?: string | null): projectId is string {
   if (d?.mode !== 'dedicated') return false;
   return Boolean(projectId);
 }
@@ -57,6 +54,10 @@ export function onResourceInvalidated(listener: (inv: ResourceInvalidation) => v
 
 export async function queryResource(key: string, ctx: ResourceContext): Promise<ResourceRecord[]> {
   const def = defOrThrow(key);
+  if (def.kind === 'crm' && ctx.mode !== 'cloud') {
+    throw new Error('CRM records are only available in the Cloud workspace.');
+  }
+  if (def.kind === 'crm') return RESOURCE_ADAPTERS.crm.query(def, ctx);
   return withProjectBackend(ctx.projectId, async (d) => dedicated(d, def, ctx.projectId)
     ? ((await callProjectBackend<unknown[]>({ projectId: ctx.projectId, action: 'list', resource: def.key })) ?? []).map((row) => rec(row, def))
     : RESOURCE_ADAPTERS[def.storage.adapter].query(def, ctx), ctx.siteId);
@@ -64,6 +65,10 @@ export async function queryResource(key: string, ctx: ResourceContext): Promise<
 
 export async function getResourceRecord(key: string, ctx: ResourceContext, id: string): Promise<ResourceRecord | null> {
   const def = defOrThrow(key);
+  if (def.kind === 'crm' && ctx.mode !== 'cloud') {
+    throw new Error('CRM records are only available in the Cloud workspace.');
+  }
+  if (def.kind === 'crm') return RESOURCE_ADAPTERS.crm.get(def, ctx, id);
   return withProjectBackend(ctx.projectId, async (d) => {
     if (!dedicated(d, def, ctx.projectId)) return RESOURCE_ADAPTERS[def.storage.adapter].get(def, ctx, id);
     const r = await callProjectBackend({ projectId: ctx.projectId, action: 'get', resource: def.key, recordId: id });
@@ -112,30 +117,46 @@ export function validateResourceOp(op: ResourceDataOp): { ok: true; def: Resourc
 }
 
 export async function applyResourceOp(op: ResourceDataOp, ctx: ResourceContext): Promise<ResourceRecord | null> {
-  if (ctx.mode !== 'builder') throw new Error('Published sites cannot change records.');
+  if (ctx.mode === 'published') throw new Error('Published sites cannot change records.');
   const v = validateResourceOp(op);
   if (v.ok === false) throw new Error(v.reason);
   const { def } = v;
+  if (ctx.mode === 'cloud' && def.kind !== 'crm') {
+    throw new Error('Cloud record editing is only available for project CRM resources.');
+  }
+  if (def.kind === 'crm' && ctx.mode !== 'cloud') {
+    throw new Error('CRM records are only editable in the Cloud workspace.');
+  }
   // M0 telemetry: one mutation event per record write (key, op, record id).
   const correlationId = newEditorCorrelationId();
   const startedAt = Date.now();
   const adapter = RESOURCE_ADAPTERS[def.storage.adapter];
   let result: ResourceRecord | null;
   try {
-    result = await withProjectBackend(ctx.projectId, async (d) => {
-    if (dedicated(d, def, ctx.projectId)) {
-      const pid = ctx.projectId;
-      if (op.op === 'create') return rec(await callProjectBackend({ projectId: pid, action: 'create', resource: def.key, values: filterWritableValues(def, op.values) }), def);
-      if (op.op === 'update') return rec(await callProjectBackend({ projectId: pid, action: 'update', resource: def.key, recordId: op.ref.recordId, values: filterWritableValues(def, op.values), ...(op.expected ? { expected: op.expected } : {}) }), def);
-      await callProjectBackend({ projectId: pid, action: 'delete', resource: def.key, recordId: op.ref.recordId });
-      return null;
+    if (def.kind === 'crm') {
+      if (op.op === 'create') result = await adapter.create(def, ctx, filterWritableValues(def, op.values));
+      else if (op.op === 'update') result = await adapter.update(def, ctx, op.ref.recordId, filterWritableValues(def, op.values), op.expected);
+      else {
+        if (!adapter.delete) throw new Error(`${def.label} can't be deleted.`);
+        await adapter.delete(def, ctx, op.ref.recordId);
+        result = null;
+      }
+    } else {
+      result = await withProjectBackend(ctx.projectId, async (d) => {
+        if (dedicated(d, def, ctx.projectId)) {
+          const pid = ctx.projectId;
+          if (op.op === 'create') return rec(await callProjectBackend({ projectId: pid, action: 'create', resource: def.key, values: filterWritableValues(def, op.values) }), def);
+          if (op.op === 'update') return rec(await callProjectBackend({ projectId: pid, action: 'update', resource: def.key, recordId: op.ref.recordId, values: filterWritableValues(def, op.values), ...(op.expected ? { expected: op.expected } : {}) }), def);
+          await callProjectBackend({ projectId: pid, action: 'delete', resource: def.key, recordId: op.ref.recordId });
+          return null;
+        }
+        if (op.op === 'create') return adapter.create(def, ctx, filterWritableValues(def, op.values));
+        if (op.op === 'update') return adapter.update(def, ctx, op.ref.recordId, filterWritableValues(def, op.values), op.expected);
+        if (!adapter.delete) throw new Error(`${def.label} can't be deleted.`);
+        await adapter.delete(def, ctx, op.ref.recordId);
+        return null;
+      }, ctx.siteId);
     }
-    if (op.op === 'create') return adapter.create(def, ctx, filterWritableValues(def, op.values));
-    if (op.op === 'update') return adapter.update(def, ctx, op.ref.recordId, filterWritableValues(def, op.values), op.expected);
-    if (!adapter.delete) throw new Error(`${def.label} can't be deleted.`);
-    await adapter.delete(def, ctx, op.ref.recordId);
-    return null;
-    }, ctx.siteId);
   } catch (err) {
     recordMutationEvent({ correlationId, at: Date.now(), kind: 'resource-op', surface: 'resource-runtime', baseRevisionId: null, resultRevisionId: null, resourceKey: def.key, resourceOp: op.op, recordId: op.op === 'create' ? null : op.ref.recordId, ok: false, error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - startedAt });
     throw err;

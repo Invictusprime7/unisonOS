@@ -205,7 +205,7 @@ export function CRMOverview({ onNavigate, businessId, projectId }: CRMOverviewPr
       {businessId && <CRMActivityFeed businessId={businessId} />}
 
       {/* Live GHL workflow activity */}
-      <WorkflowActivityFeed businessId={businessId} />
+      <WorkflowActivityFeed projectId={projectId} />
 
       {/* Event-to-action rules */}
       <GhlReactionsManager businessId={businessId} />

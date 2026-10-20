@@ -27,29 +27,30 @@ export interface GhlWebhookEvent {
 }
 
 interface Options {
-  businessId?: string | null;
+  projectId?: string | null;
   limit?: number;
   eventTypes?: string[];
-  onEvent?: (event: GhlWebhookEvent) => void;
 }
 
 export function useGhlWebhookEvents({
-  businessId,
+  projectId,
   limit = 50,
   eventTypes,
-  onEvent,
 }: Options) {
   const [events, setEvents] = useState<GhlWebhookEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!businessId) return;
+    if (!projectId) {
+      setEvents([]);
+      return;
+    }
     setLoading(true);
     let q = supabase
       .from('ghl_webhook_events')
       .select('*')
-      .eq('business_id', businessId)
+      .eq('project_id', projectId)
       .order('created_at', { ascending: false })
       .limit(limit);
     if (eventTypes && eventTypes.length) q = q.in('event_type', eventTypes);
@@ -57,44 +58,21 @@ export function useGhlWebhookEvents({
     if (err) setError(err.message);
     else setEvents((data || []) as GhlWebhookEvent[]);
     setLoading(false);
-  }, [businessId, limit, eventTypes]);
+  }, [projectId, limit, eventTypes]);
 
   const markProcessed = useCallback(async (id: string) => {
+    if (!projectId) return;
     await supabase
       .from('ghl_webhook_events')
       .update({ processed: true, processed_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('project_id', projectId);
     setEvents((prev) =>
       prev.map((e) => (e.id === id ? { ...e, processed: true } : e)),
     );
-  }, []);
+  }, [projectId]);
 
   useEffect(() => { refresh(); }, [refresh]);
-
-  useEffect(() => {
-    if (!businessId) return;
-    const channel = supabase
-      .channel(`ghl-webhook-events-${businessId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ghl_webhook_events',
-          filter: `business_id=eq.${businessId}`,
-        },
-        (payload) => {
-          const evt = payload.new as GhlWebhookEvent;
-          if (eventTypes && eventTypes.length && !eventTypes.includes(evt.event_type)) {
-            return;
-          }
-          setEvents((prev) => [evt, ...prev].slice(0, limit));
-          onEvent?.(evt);
-        },
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [businessId, limit, eventTypes, onEvent]);
 
   return { events, loading, error, refresh, markProcessed };
 }

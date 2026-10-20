@@ -12,9 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, User, Target, Workflow, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGhlWebhookEvents, type GhlWebhookEvent } from "@/hooks/useGhlWebhookEvents";
+import { naturalLanguageEventLabel, naturalLanguageRecordLabel } from "@/services/resources/recordIdentity";
 
 interface WorkflowActivityFeedProps {
-  businessId?: string | null;
+  projectId?: string | null;
   limit?: number;
 }
 
@@ -43,22 +44,25 @@ function relativeTime(ts: string): string {
 
 function describeEvent(evt: GhlWebhookEvent): string {
   const p = evt.payload as Record<string, unknown> | null;
-  const name =
-    (p && (p["fullName"] || p["name"] || p["contactName"])) ||
-    evt.contact_id ||
-    "Unknown";
+  const name = naturalLanguageRecordLabel(p, evt.contact_id ? "Contact" : "Unknown contact");
   switch (evt.event_type) {
     case "ContactCreate":
     case "contact.create":
       return `Contact ${name} created`;
     case "OpportunityStageChange":
     case "opportunity.stage.change":
-      return `Opportunity moved${evt.previous_stage_id ? ` from ${evt.previous_stage_id}` : ""}${evt.stage_id ? ` → ${evt.stage_id}` : ""}`;
+      {
+        const stageName = naturalLanguageRecordLabel({ name: p?.stageName ?? p?.stage_name ?? p?.pipelineStageName }, "");
+        return stageName ? `Opportunity moved to ${stageName}` : "Opportunity stage changed";
+      }
     case "WorkflowFire":
     case "workflow.fire":
-      return `Workflow ${evt.workflow_id ?? ""} fired for ${name}`;
+      {
+        const workflowName = naturalLanguageRecordLabel({ name: p?.workflowName ?? p?.workflow_name }, "");
+        return `${workflowName || "Workflow"} started for ${name}`;
+      }
     default:
-      return `${evt.event_type}${evt.contact_id ? ` • ${name}` : ""}`;
+      return `${naturalLanguageEventLabel(evt.event_type)}${evt.contact_id ? ` • ${name}` : ""}`;
   }
 }
 
@@ -69,20 +73,9 @@ const FILTER_OPTIONS: { id: Filter; label: string; icon: typeof User }[] = [
   { id: "workflow", label: "Workflows", icon: Workflow },
 ];
 
-export function WorkflowActivityFeed({ businessId, limit = 25 }: WorkflowActivityFeedProps) {
+export function WorkflowActivityFeed({ projectId, limit = 25 }: WorkflowActivityFeedProps) {
   const [filter, setFilter] = useState<Filter>("all");
-  const { events, loading, refresh } = useGhlWebhookEvents({
-    businessId,
-    limit,
-    onEvent: (evt) => {
-      // Fire reactions runner asynchronously; failures are non-fatal.
-      import("@/integrations/supabase/client").then(({ supabase }) => {
-        supabase.functions.invoke("ghl-reactions-runner", {
-          body: { eventId: evt.id },
-        }).catch(() => {});
-      });
-    },
-  });
+  const { events, loading, refresh } = useGhlWebhookEvents({ projectId, limit });
 
   const visible = useMemo(() => {
     if (filter === "all") return events;
@@ -95,9 +88,6 @@ export function WorkflowActivityFeed({ businessId, limit = 25 }: WorkflowActivit
         <CardTitle className="flex items-center gap-2 text-lg">
           <Activity className="h-5 w-5 text-cyan-500" />
           Workflow Activity
-          <span className="text-xs font-normal text-muted-foreground">
-            (live)
-          </span>
         </CardTitle>
         <Button variant="ghost" size="sm" onClick={refresh} disabled={loading} title="Refresh">
           <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
@@ -126,8 +116,8 @@ export function WorkflowActivityFeed({ businessId, limit = 25 }: WorkflowActivit
           })}
         </div>
 
-        {!businessId ? (
-          <p className="text-sm text-muted-foreground">No business selected.</p>
+        {!projectId ? (
+          <p className="text-sm text-muted-foreground">No project selected.</p>
         ) : visible.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No {filter === "all" ? "" : `${filter} `}events yet. They will stream in here as soon as your GoHighLevel workflows fire.
@@ -155,7 +145,7 @@ export function WorkflowActivityFeed({ businessId, limit = 25 }: WorkflowActivit
                     <p className="text-sm font-medium truncate">{describeEvent(evt)}</p>
                     {evt.contact_id && (
                       <p className="text-xs text-muted-foreground truncate">
-                        contact: {evt.contact_id}
+                        Contact: {naturalLanguageRecordLabel(evt.payload, "Contact")}
                       </p>
                     )}
                   </div>

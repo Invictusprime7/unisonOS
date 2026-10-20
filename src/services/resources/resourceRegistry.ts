@@ -81,6 +81,49 @@ export const BUSINESS_PROFILE_RESOURCE: ResourceDefinition = {
   storage: { adapter: 'business-profile', table: 'businesses' },
 };
 
+const PROJECT_CRM_RESOURCES: ResourceDefinition[] = [
+  {
+    key: 'crm:contacts',
+    kind: 'crm',
+    cardinality: 'collection',
+    label: 'Contacts',
+    schema: [
+      { key: 'first_name', label: 'First name', type: 'text', editable: true },
+      { key: 'last_name', label: 'Last name', type: 'text', editable: true },
+      { key: 'email', label: 'Email', type: 'email', editable: true },
+      { key: 'phone', label: 'Phone', type: 'phone', editable: true },
+      { key: 'company', label: 'Company', type: 'text', editable: true },
+      { key: 'tags', label: 'Tags', type: 'tags', editable: true },
+      { key: 'source', label: 'Source', type: 'text', editable: true },
+    ],
+    storage: { adapter: 'crm', table: 'crm_contacts' },
+  },
+  {
+    key: 'crm:leads',
+    kind: 'crm',
+    cardinality: 'collection',
+    label: 'Leads',
+    schema: [
+      { key: 'title', label: 'Lead name', type: 'text', required: true, editable: true },
+      { key: 'contact_name', label: 'Contact name', type: 'text', editable: true },
+      { key: 'email', label: 'Email', type: 'email', editable: true },
+      { key: 'phone', label: 'Phone', type: 'phone', editable: true },
+      { key: 'company', label: 'Company', type: 'text', editable: true },
+      { key: 'status', label: 'Status', type: 'text', required: true, editable: false },
+      { key: 'value', label: 'Value', type: 'money', editable: true },
+      { key: 'source', label: 'Source', type: 'text', editable: true },
+      { key: 'intent', label: 'Intake type', type: 'text', editable: true },
+      { key: 'notes', label: 'Notes', type: 'textarea', editable: true },
+    ],
+    storage: { adapter: 'crm', table: 'crm_leads' },
+  },
+];
+
+/** CRM resources are registered for Cloud settings, not generated-site discovery. */
+export function listProjectCrmResources(): ResourceDefinition[] {
+  return PROJECT_CRM_RESOURCES;
+}
+
 /** Shape of a content_types row as returned by the cms-records function. */
 export interface ContentTypeRow {
   id?: string;
@@ -183,6 +226,8 @@ export function resourceCreateDefaults(def: ResourceDefinition): Record<string, 
 
 export function getResource(key: string): ResourceDefinition | null {
   if (key === BUSINESS_PROFILE_RESOURCE_KEY) return BUSINESS_PROFILE_RESOURCE;
+  const crmResource = PROJECT_CRM_RESOURCES.find((resource) => resource.key === key);
+  if (crmResource) return crmResource;
   if (key.startsWith('content:')) return contentDefs.get(`content:${canonicalContentSlug(key.slice('content:'.length))}`) ?? null;
   const surface = getCatalogSurface(key);
   return surface && surface.editableFields.length > 0 ? catalogSurfaceToResource(surface) : null;

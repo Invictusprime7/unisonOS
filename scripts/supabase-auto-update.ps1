@@ -130,7 +130,9 @@ STRIPE_WEBHOOK_SECRET=
 RESEND_API_KEY=
 
 # GoHighLevel CRM
-GHL_API_KEY=
+GOHIGHLEVEL_API_KEY=
+# Optional shared secret for inbound GoHighLevel webhook signature verification
+GHL_WEBHOOK_SECRET=
 GHL_LOCATION_ID=
 
 # Other APIs
@@ -151,6 +153,15 @@ ANTHROPIC_API_KEY=
                 $secrets[$key] = $value
             }
         }
+    }
+
+    if ($secrets.ContainsKey("GHL_API_KEY")) {
+        if ($secrets.ContainsKey("GOHIGHLEVEL_API_KEY") -and $secrets["GOHIGHLEVEL_API_KEY"] -ne $secrets["GHL_API_KEY"]) {
+            Write-Color Red "Both GHL_API_KEY and GOHIGHLEVEL_API_KEY are set with different values. Keep only GOHIGHLEVEL_API_KEY."
+            return
+        }
+        $secrets["GOHIGHLEVEL_API_KEY"] = $secrets["GHL_API_KEY"]
+        $secrets.Remove("GHL_API_KEY")
     }
     
     if ($secrets.Count -eq 0) {
@@ -173,9 +184,7 @@ ANTHROPIC_API_KEY=
     }
     
     try {
-        $secretsString = $secretArgs -join " "
-        $cmd = "supabase secrets set $secretsString"
-        Invoke-Expression $cmd
+        & supabase secrets set @secretArgs
         
         if ($LASTEXITCODE -eq 0) {
             Write-Color Green "✓ Secrets synced successfully!"

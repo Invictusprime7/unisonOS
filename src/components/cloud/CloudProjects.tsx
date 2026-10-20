@@ -2498,6 +2498,8 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                 <CloudDatabase
                   businessId={selectedBusiness.id}
                   businessName={selectedBusiness.name}
+                  projectId={selectedScopeProject?.id ?? null}
+                  projectName={selectedScopeProject?.name ?? 'No project selected'}
                 />
               )}
             </div>
