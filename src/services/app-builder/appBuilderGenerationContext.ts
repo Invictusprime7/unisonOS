@@ -130,14 +130,12 @@ export function buildIndustryIconContext(
  * Without rows, only the static launch seed types are described.
  */
 export function buildRegisteredResourceContext(rows?: ContentTypeRow[]): string {
-  const defs = (rows
-    ? rows.map((row) => contentTypeToResource(row))
-    : Object.entries(SEED_CONTENT_TYPES).map(([key, seed]) => contentTypeToResource({
-      api_key: key,
-      display_name: seed.displayName,
-      field_schema: { fields: seed.fields },
-    }))
-  ).filter((def): def is NonNullable<typeof def> => !!def);
+  // Without a scoped read there is no authoritative list — never fall back
+  // to the process-wide registry, which may hold another project's types.
+  if (!rows) return '';
+  const defs = rows
+    .map((row) => contentTypeToResource(row))
+    .filter((def): def is NonNullable<typeof def> => !!def);
   if (!defs.length) return '';
   return [
     'REGISTERED CONTENT RESOURCES: reference only these declared collections; never invent tables or CMS types.',
