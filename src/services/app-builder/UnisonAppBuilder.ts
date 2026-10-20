@@ -32,6 +32,9 @@ import {
 import { orchestrateAppBuild } from './appBuilderOrchestrator';
 import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
+import { listContentTypes } from '@/services/cmsRecordService';
+import { registerContentTypes } from '@/services/resources/resourceRegistry';
+import { buildRegisteredResourceContext } from './appBuilderGenerationContext';
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
