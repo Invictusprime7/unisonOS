@@ -52,6 +52,8 @@ export interface AiCommitContext {
   candidate?: AICandidateChangeSet;
   /** Checkpoint label shown in the version list (usually the user's prompt). */
   label?: string;
+  /** Reserved guest-demo operation carried into the same canonical revision. */
+  guestDemoOperationId?: string;
 }
 
 export function buildAiCandidatePatch(ctx: AiCommitContext): PatchPlan {
