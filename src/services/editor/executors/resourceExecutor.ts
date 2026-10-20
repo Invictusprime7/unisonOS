@@ -27,6 +27,20 @@ function defaultFieldFor(command: EditorCommand): string {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SEED_SLUG_RE = /^[a-z0-9][a-z0-9-_]{0,99}$/;
+
+/**
+ * First-edit record creation is authorized only for generated seed slugs on
+ * collection resources — never for saved-style UUIDs, malformed identities,
+ * unknown resources, or the single-record business profile.
+ */
+export function mayMaterializeSeed(ref: ResourceEntityRef): boolean {
+  const def = getResource(ref.resourceKey);
+  if (!def || def.cardinality !== 'collection') return false;
+  const id = String(ref.recordId ?? '');
+  if (!id || UUID_RE.test(id) || !SEED_SLUG_RE.test(id)) return false;
+  return true;
+}
 
 /** Seed a created record with a human name derived from the element's mark slug. */
 function seedValuesFor(ref: ResourceEntityRef, values: Record<string, unknown>): Record<string, unknown> {
