@@ -170,3 +170,26 @@ export function listRecordCollections(): Array<{ kind: CanonicalRecordKind; labe
     resources: resources.filter((def) => canonicalRecordKind(def) === kind),
   }));
 }
+
+/** Blank values for a new record, derived from the resource's declared schema. */
+export function resourceCreateDefaults(def: ResourceDefinition): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  for (const field of def.schema) {
+    if (!field.editable) continue;
+    if (field.key === 'title') {
+      values.title = `New ${def.storage.contentType ?? def.label ?? def.key}`;
+      continue;
+    }
+    switch (field.type) {
+      case 'boolean': values[field.key] = false; break;
+      case 'number':
+      case 'money':
+      case 'money-cents':
+      case 'rating': values[field.key] = 0; break;
+      case 'tags': values[field.key] = []; break;
+      case 'json': values[field.key] = {}; break;
+      default: values[field.key] = ''; break;
+    }
+  }
+  return values;
+}

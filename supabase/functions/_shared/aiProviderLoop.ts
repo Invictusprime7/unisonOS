@@ -11,7 +11,7 @@ import {
   normalizeOpenAIModel,
   toAnthropicMessages,
 } from "../_shared/ai/providerClient.ts";
-import type { ChatCompletionRequest } from "../_shared/ai/providerClient.ts";
+import type { ChatCompletionRequest, ChatMessage } from "../_shared/ai/providerClient.ts";
 import type { ModelSpec } from './providerRouter.ts';
 import { DEFAULT_GEMINI_GATEWAY_MODEL, configuredComposerGeminiModel } from './geminiModel.ts';
 

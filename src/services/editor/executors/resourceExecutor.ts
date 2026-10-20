@@ -27,6 +27,20 @@ function defaultFieldFor(command: EditorCommand): string {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SEED_SLUG_RE = /^[a-z0-9][a-z0-9-_]{0,99}$/;
+
+/**
+ * First-edit record creation is authorized only for generated seed slugs on
+ * collection resources — never for saved-style UUIDs, malformed identities,
+ * unknown resources, or the single-record business profile.
+ */
+export function mayMaterializeSeed(ref: ResourceEntityRef): boolean {
+  const def = getResource(ref.resourceKey);
+  if (!def || def.cardinality !== 'collection') return false;
+  const id = String(ref.recordId ?? '');
+  if (!id || UUID_RE.test(id) || !SEED_SLUG_RE.test(id)) return false;
+  return true;
+}
 
 /** Seed a created record with a human name derived from the element's mark slug. */
 function seedValuesFor(ref: ResourceEntityRef, values: Record<string, unknown>): Record<string, unknown> {
@@ -93,6 +107,11 @@ export async function executeResourceCommand(command: EditorCommand, ctx: Resour
   if (!recordId) {
     // WYSIWYG edits must never be gated on a manual save: materialize the
     // record from the element's identity and apply the edit in one write.
+    // Only generated seed slugs on collections may auto-create; anything else
+    // is an unresolved mark and must be rejected instead of invented.
+    if (!mayMaterializeSeed(parsed)) {
+      return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: `This ${label} isn't linked to a saved record yet — reload the site and try again.` };
+    }
     const created = await executeResourceCommandCompatible<ResourceRecord>(ctx, {
       kind: 'resource.mutate', resourceKey: parsed.resourceKey, action: 'create', values: seedValuesFor(parsed, values),
     }, () => applyResourceOp({ op: 'create', resourceKey: parsed.resourceKey, values: seedValuesFor(parsed, values) }, ctx)).catch(() => null);

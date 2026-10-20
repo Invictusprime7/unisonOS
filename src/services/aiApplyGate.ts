@@ -52,6 +52,8 @@ export interface AiCommitContext {
   candidate?: AICandidateChangeSet;
   /** Checkpoint label shown in the version list (usually the user's prompt). */
   label?: string;
+  /** Reserved guest-demo operation carried into the same canonical revision. */
+  guestDemoOperationId?: string;
 }
 
 export function buildAiCandidatePatch(ctx: AiCommitContext): PatchPlan {
@@ -72,7 +74,10 @@ export function buildAiCandidatePatch(ctx: AiCommitContext): PatchPlan {
   }
   const patch: PatchPlan = {
     summary: ctx.label ? `AI · ${ctx.label}` : `AI candidate ${candidate.id}`,
-    operationIds: [`ai-candidate:${candidate.id}`],
+    operationIds: [
+      `ai-candidate:${candidate.id}`,
+      ...(ctx.guestDemoOperationId ? [`guest-demo:${ctx.guestDemoOperationId}`] : []),
+    ],
     fileOps: candidate.fileOps.map((operation) => operation.type === 'delete'
       ? { type: 'delete' as const, path: operation.path }
       : { type: operation.type, path: operation.path, contents: operation.content }),

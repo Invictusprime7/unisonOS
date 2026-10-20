@@ -9,7 +9,7 @@ import { getCatalogSurface, getCatalogSurfaceByTable, type CatalogSourceTable, t
 import { applyResourceOp, queryResource } from '@/services/resources/resourceRuntime';
 import { executeEditorCommand } from '@/services/editor/editorCommandService';
 
-export const EDITABLE_CATALOG_SURFACES = ['products', 'services', 'menu_items', 'pricing_plans'] as const;
+export const EDITABLE_CATALOG_SURFACES = ['services', 'products', 'menu', 'pricing', 'offers', 'testimonials', 'portfolio'] as const;
 
 export interface CatalogItem {
   surfaceId: string;
