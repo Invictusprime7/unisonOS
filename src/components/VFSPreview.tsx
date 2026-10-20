@@ -15,6 +15,7 @@
 import { resolvePendingVfsConflicts } from '@/services/snapshotProjector';
 import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle, useRef, useMemo, Component, type ReactNode, type ErrorInfo } from 'react';
 import { cn } from '@/lib/utils';
+import { UnisonLoadingMark } from '@/components/UnisonLoadingMark';
 import { 
   RefreshCw, 
   ExternalLink, 
@@ -308,7 +309,7 @@ const SandpackDependencyProgress: React.FC<{ dependencyCount: number }> = ({ dep
 
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-md border border-border/70 bg-background/95 px-3 py-2 text-xs text-foreground shadow-sm backdrop-blur">
-      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+      <UnisonLoadingMark size={16} />
       <span>{progressLabel}</span>
       <span className="text-muted-foreground">({dependencyCount} modules)</span>
     </div>
