@@ -9,12 +9,8 @@ import { getCatalogSurface, getCatalogSurfaceByTable, listCatalogSurfaces, type 
 import { applyResourceOp, queryResource } from '@/services/resources/resourceRuntime';
 import { executeEditorCommand } from '@/services/editor/editorCommandService';
 
-<<<<<<<
-export const EDITABLE_CATALOG_SURFACES = ['services', 'products', 'menu', 'pricing', 'offers', 'testimonials', 'portfolio'] as const;
-=======
 export const EDITABLE_CATALOG_SURFACES = listCatalogSurfaces()
   .filter((surface) => surface.editableFields.length > 0).map((surface) => surface.surfaceId);
->>>>>>>
 
 export interface CatalogItem {
   surfaceId: string;

@@ -27,24 +27,9 @@ function defaultFieldFor(command: EditorCommand): string {
     ?? 'name';
 }
 
-<<<<<<<
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SEED_SLUG_RE = /^[a-z0-9][a-z0-9-_]{0,99}$/;
-=======
 const UUID_RE = PERSISTED_RESOURCE_ID;
 
 const SEED_SLUG_RE = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/i;
-/**
- * Only a generated seed slug for a collection may be materialized on first edit.
- * UUID-shaped ids, single-record resources and malformed identities are refused,
- * so a stale or mistyped mark can never create an unintended record.
- */
-export function mayMaterializeSeed(ref: ResourceEntityRef): boolean {
-  if (UUID_RE.test(ref.recordId) || !SEED_SLUG_RE.test(ref.recordId) || ref.recordId.length > 80) return false;
-  const def = getResource(ref.resourceKey);
-  return !!def && def.cardinality === 'collection';
-}
->>>>>>>
 
 /**
  * First-edit record creation is authorized only for generated seed slugs on

@@ -215,12 +215,10 @@ export function resourceCreateDefaults(def: ResourceDefinition): Record<string, 
       case 'rating': values[field.key] = 0; break;
       case 'tags': values[field.key] = []; break;
       case 'json': values[field.key] = {}; break;
-<<<<<<<
       default: values[field.key] = ''; break;
     }
   }
   return values;
-=======
 }
 
 /** Records navigation is derived from the authorities above, not another registry. */
@@ -237,5 +235,4 @@ export function listRecordCollections(): Array<{ kind: RecordCollectionKind; lab
     .sort((a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key))
     .map((def) => ({ kind: def.key as RecordCollectionKind, label: def.label, resources: [def] }));
   return [...canonical, ...others];
->>>>>>>
 }

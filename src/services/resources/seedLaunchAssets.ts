@@ -64,13 +64,9 @@ export function resolveProductCatalogSurface(
   industry: string | null | undefined,
   product: Pick<CreatorProduct, 'name' | 'category' | 'tags' | 'fulfillmentType' | 'billingType' | 'catalogSurface'>,
 ): 'menu' | 'pricing' | 'products' {
-<<<<<<<
   if (product.catalogSurface === 'menu' || product.catalogSurface === 'pricing' || product.catalogSurface === 'products') {
     return product.catalogSurface;
   }
-=======
-  if (product.catalogSurface) return product.catalogSurface;
->>>>>>>
   const normalizedIndustry = normalizeIndustryKey(String(industry ?? ''));
   if (normalizedIndustry === 'saas' && product.billingType === 'subscription') return 'pricing';
   if (normalizedIndustry !== 'restaurant') return 'products';
