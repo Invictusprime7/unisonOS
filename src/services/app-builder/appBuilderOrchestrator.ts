@@ -39,17 +39,10 @@ export async function orchestrateAppBuild(
   const startedAt = Date.now();
   const totalBudgetMs = input.budgetMs ?? 280_000;
   const authoringBudgetMs = Math.max(60_000, totalBudgetMs - CLOSURE_REPAIR_RESERVE_MS);
-<<<<<<<
-  const generation = buildAppBuilderGenerationContext(input.contract);
-  if (input.runtimeContext) {
-    generation.runtimeContext = [generation.runtimeContext, input.runtimeContext].filter(Boolean).join('\n');
-  }
-=======
   const contentTypes = dependencies.loadContentTypes
     ? await dependencies.loadContentTypes({ businessId: input.contract.identity.businessId, projectId: input.contract.identity.projectId })
     : [];
   const generation = buildAppBuilderGenerationContext(input.contract, contentTypes);
->>>>>>>
   const baseFiles = applyDesignSources(input.initialFiles, generation.materialization);
   const manifestSource = baseFiles['/.unison/design-source-manifest.json'];
   const contractPages = input.contract.design.resolvedSiteDesignContext.contract.pages;

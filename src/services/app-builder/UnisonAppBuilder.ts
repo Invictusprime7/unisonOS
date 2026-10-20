@@ -32,15 +32,9 @@ import {
 import { orchestrateAppBuild } from './appBuilderOrchestrator';
 import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
-<<<<<<<
-import { listContentTypes } from '@/services/cmsRecordService';
-import { registerContentTypes } from '@/services/resources/resourceRegistry';
-import { buildRegisteredResourceContext } from './appBuilderGenerationContext';
-=======
 import { runBuilderTurn } from '@/services/builderBrainClient';
 import { listContentTypes } from '@/services/cmsRecordService';
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
->>>>>>>
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
@@ -52,13 +46,8 @@ export interface UnisonAppBuilder {
 export interface UnisonAppBuilderDependencies {
   authorSite?: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
   runComposer?: (input: ComposerLoopInput) => Promise<ComposerLoopResult>;
-<<<<<<<
-  /** Job-scoped CMS schema read; defaults to the shared content service. */
-  loadContentTypes?: (scope: { businessId: string; projectId: string | null }) => Promise<Array<Record<string, unknown>>>;
-=======
   invokePage?: import('@/services/builder/aiRepairLoop').ComposerInvoke;
   loadContentTypes?: (scope: { businessId: string; projectId: string }) => Promise<ContentTypeRow[]>;
->>>>>>>
 }
 
 function stopReason(reason: ComposerLoopResult['reason']): AppBuildCandidateStopReason {
@@ -95,11 +84,6 @@ export function createUnisonAppBuilder(
       const resourceContext = buildRegisteredResourceContext(contentTypes);
       const scopedInput = resourceContext
         ? { ...input, runtimeContext: [input.runtimeContext, resourceContext].filter(Boolean).join('\n') }
-<<<<<<<
-        : input;
-      return orchestrateAppBuild(scopedInput, { authorSite, runComposer });
-
-=======
 
   const service: UnisonAppBuilder = {
     async generate(input) {
@@ -108,7 +92,6 @@ export function createUnisonAppBuilder(
         runComposer,
         loadContentTypes: dependencies.loadContentTypes ?? ((scope) => listContentTypes(scope)),
       });
->>>>>>>
     },
 
     async generatePages(input) {
