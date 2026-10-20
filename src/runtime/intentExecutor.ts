@@ -1097,7 +1097,7 @@ export async function executeIntent(
           (ctx.payload ?? {}) as Record<string, unknown>,
         );
         if (directive) {
-          executeGhlDirective(directive)
+          executeGhlDirective(directive, ctx.siteId)
             .then((r) => {
               if (r.ok) {
                 console.log(`[IntentExecutor] GHL ${r.action} fired for binding ${bindingId}`);

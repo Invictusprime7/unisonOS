@@ -33,8 +33,8 @@ const ghlListWorkflows: SkillTool = {
   description: 'List automation workflows for a GoHighLevel location.',
   inputSchema: {
     type: 'object',
-    properties: { locationId: { type: 'string' } },
-    required: ['locationId'],
+    properties: { projectId: { type: 'string' }, locationId: { type: 'string' } },
+    required: ['projectId', 'locationId'],
   },
   execute: async (input) => invokeCrm('getWorkflows', input as Record<string, unknown>),
 };
@@ -46,11 +46,12 @@ const ghlTriggerWorkflow: SkillTool = {
   inputSchema: {
     type: 'object',
     properties: {
+      projectId: { type: 'string' },
       workflowId: { type: 'string' },
       contactId: { type: 'string' },
       payload: { type: 'object' },
     },
-    required: ['workflowId', 'contactId'],
+    required: ['projectId', 'workflowId', 'contactId'],
   },
   execute: async (input) => invokeCrm('triggerWorkflow', input as Record<string, unknown>),
 };
@@ -62,10 +63,11 @@ const ghlUpsertContact: SkillTool = {
   inputSchema: {
     type: 'object',
     properties: {
+      projectId: { type: 'string' },
       locationId: { type: 'string' },
       contact: { type: 'object' },
     },
-    required: ['locationId', 'contact'],
+    required: ['projectId', 'locationId', 'contact'],
   },
   execute: async (input) => invokeCrm('upsertContact', input as Record<string, unknown>),
 };
@@ -77,13 +79,14 @@ const ghlCreateOpportunity: SkillTool = {
   inputSchema: {
     type: 'object',
     properties: {
+      projectId: { type: 'string' },
       locationId: { type: 'string' },
       pipelineId: { type: 'string' },
       stageId: { type: 'string' },
       contactId: { type: 'string' },
       opportunity: { type: 'object' },
     },
-    required: ['locationId', 'pipelineId', 'stageId'],
+    required: ['projectId', 'locationId', 'pipelineId', 'stageId'],
   },
   execute: async (input) => invokeCrm('createOpportunity', input as Record<string, unknown>),
 };

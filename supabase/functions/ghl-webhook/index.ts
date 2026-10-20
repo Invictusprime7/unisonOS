@@ -12,8 +12,7 @@
  * stage changes (e.g. opportunity moved, contact created).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-import { isValidUUID } from '../_shared/validate.ts';
-import { isUnresolvedGhlIdentifier } from './webhookIdentity.ts';
+import { isUnresolvedGhlIdentifier, sha256Hex } from './webhookIdentity.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,57 +62,14 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const businessIdQuery = url.searchParams.get('businessId')?.trim() || null;
   const projectIdQuery = url.searchParams.get('projectId')?.trim() || null;
-  const sharedSecret = Deno.env.get('GHL_WEBHOOK_SECRET');
   const sigHeader =
     req.headers.get('x-ghl-signature') ||
     req.headers.get('x-wh-signature') ||
     req.headers.get('x-webhook-secret');
 
-  // Fail closed: without a configured secret no caller can be authenticated.
-  if (!sharedSecret) {
-    console.error('[ghl-webhook] GHL_WEBHOOK_SECRET is not configured; rejecting');
-    return new Response(JSON.stringify({ error: 'Webhook not configured' }), {
-      status: 503,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-  if (!sigHeader || sigHeader !== sharedSecret) {
+  if (!sigHeader || sigHeader.trim().length < 32) {
     return new Response(JSON.stringify({ error: 'Invalid signature' }), {
       status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if ((businessIdQuery && !uuidRe.test(businessIdQuery)) || (projectIdQuery && !uuidRe.test(projectIdQuery))) {
-    return new Response(JSON.stringify({ error: 'Invalid identifiers' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  const configuredProjectId = Deno.env.get('GHL_PROJECT_ID');
-  if (!configuredProjectId || !isValidUUID(configuredProjectId)) {
-    return new Response(JSON.stringify({ error: 'Webhook project is not configured' }), {
-      status: 503,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (!projectIdQuery || !isValidUUID(projectIdQuery)) {
-    return new Response(JSON.stringify({ error: 'A valid projectId query parameter is required' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-  if (projectIdQuery !== configuredProjectId) {
-    return new Response(JSON.stringify({ error: 'Project scope does not match this GHL integration' }), {
-      status: 403,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-  if (businessIdQuery && !isValidUUID(businessIdQuery)) {
-    return new Response(JSON.stringify({ error: 'businessId must be a valid UUID' }), {
-      status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
@@ -155,10 +111,49 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
+  if (!locationId) {
+    return new Response(JSON.stringify({ error: 'A GoHighLevel locationId is required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const secretHash = await sha256Hex(sigHeader);
+  const { data: integration, error: integrationError } = await supabase
+    .from('project_integrations')
+    .select('id, project_id, business_id')
+    .eq('provider', 'gohighlevel')
+    .eq('external_location_id', locationId)
+    .eq('webhook_secret_hash', secretHash)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (integrationError) {
+    console.error('[ghl-webhook] integration lookup failed', integrationError);
+    return new Response(JSON.stringify({ error: 'Could not resolve integration scope' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  if (!integration) {
+    return new Response(JSON.stringify({ error: 'Invalid webhook credentials or location' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const projectId = integration.project_id as string;
+  const businessId = integration.business_id as string;
+  if ((projectIdQuery && projectIdQuery !== projectId) || (businessIdQuery && businessIdQuery !== businessId)) {
+    return new Response(JSON.stringify({ error: 'URL scope does not match the registered integration' }), {
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   const { data: project, error: projectError } = await supabase
     .from('projects')
     .select('id, business_id')
-    .eq('id', projectIdQuery)
+    .eq('id', projectId)
     .maybeSingle();
   if (projectError) {
     console.error('[ghl-webhook] project lookup failed', projectError);
@@ -173,14 +168,12 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-  if (businessIdQuery && businessIdQuery !== project.business_id) {
-    return new Response(JSON.stringify({ error: 'businessId does not match project scope' }), {
-      status: 400,
+  if (!project.business_id || businessId !== project.business_id) {
+    return new Response(JSON.stringify({ error: 'Registered project/business scope is invalid' }), {
+      status: 403,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-  const businessId = project.business_id as string | null;
-
   const headers: Record<string, string> = {};
   req.headers.forEach((v, k) => {
     if (!/^(authorization|apikey|x-ghl-signature|x-wh-signature|x-webhook-secret)$/i.test(k)) headers[k] = v;
@@ -190,7 +183,8 @@ Deno.serve(async (req) => {
     .from('ghl_webhook_events')
     .insert({
       business_id: businessId,
-      project_id: projectIdQuery,
+      project_id: projectId,
+      integration_id: integration.id,
       event_type: eventType,
       location_id: locationId,
       contact_id: contactId,

@@ -6,9 +6,8 @@
  * hardcoded knowledge.
  *
  * Transport: Streamable HTTP via mcp-lite + Hono.
- * All GHL calls are proxied through the existing `gohighlevel-crm` edge
- * function (which holds the GOHIGHLEVEL_API_KEY) so credentials never
- * leave the project.
+ * All GHL calls are proxied through the project-aware `gohighlevel-crm` edge
+ * function, which resolves credentials from the project integration registry.
  */
 
 import { Hono } from "npm:hono@4.6.3";
@@ -37,11 +36,11 @@ mcp.tool("ghl.workflow.list", {
   description: "List GHL automation workflows for a location.",
   inputSchema: {
     type: "object",
-    properties: { locationId: { type: "string" } },
-    required: ["locationId"],
+      properties: { projectId: { type: "string" }, locationId: { type: "string" } },
+    required: ["projectId", "locationId"],
   },
-  handler: async ({ locationId }: { locationId: string }) => {
-    const data = await callCrm("getWorkflows", { locationId });
+  handler: async ({ projectId, locationId }: { projectId: string; locationId: string }) => {
+    const data = await callCrm("getWorkflows", { projectId, locationId });
     return { content: [{ type: "text", text: JSON.stringify(data) }] };
   },
 });
@@ -51,13 +50,14 @@ mcp.tool("ghl.workflow.trigger", {
   inputSchema: {
     type: "object",
     properties: {
+      projectId: { type: "string" },
       workflowId: { type: "string" },
       contactId: { type: "string" },
       payload: { type: "object" },
     },
-    required: ["workflowId", "contactId"],
+    required: ["projectId", "workflowId", "contactId"],
   },
-  handler: async (args: { workflowId: string; contactId: string; payload?: Record<string, unknown> }) => {
+  handler: async (args: { projectId: string; workflowId: string; contactId: string; payload?: Record<string, unknown> }) => {
     const data = await callCrm("triggerWorkflow", args);
     return { content: [{ type: "text", text: JSON.stringify(data) }] };
   },
@@ -68,6 +68,7 @@ mcp.tool("ghl.contact.upsert", {
   inputSchema: {
     type: "object",
     properties: {
+      projectId: { type: "string" },
       locationId: { type: "string" },
       contact: {
         type: "object",
@@ -82,7 +83,7 @@ mcp.tool("ghl.contact.upsert", {
         },
       },
     },
-    required: ["locationId", "contact"],
+    required: ["projectId", "locationId", "contact"],
   },
   handler: async (args: Record<string, unknown>) => {
     const data = await callCrm("upsertContact", args as Record<string, unknown>);
@@ -95,6 +96,7 @@ mcp.tool("ghl.opportunity.create", {
   inputSchema: {
     type: "object",
     properties: {
+      projectId: { type: "string" },
       locationId: { type: "string" },
       pipelineId: { type: "string" },
       stageId: { type: "string" },
@@ -108,7 +110,7 @@ mcp.tool("ghl.opportunity.create", {
         },
       },
     },
-    required: ["locationId", "pipelineId", "stageId"],
+    required: ["projectId", "locationId", "pipelineId", "stageId"],
   },
   handler: async (args: Record<string, unknown>) => {
     const data = await callCrm("createOpportunity", args as Record<string, unknown>);
@@ -121,10 +123,11 @@ mcp.tool("ghl.contact.tag", {
   inputSchema: {
     type: "object",
     properties: {
+      projectId: { type: "string" },
       contactId: { type: "string" },
       tags: { type: "array", items: { type: "string" } },
     },
-    required: ["contactId", "tags"],
+    required: ["projectId", "contactId", "tags"],
   },
   handler: async (args: Record<string, unknown>) => {
     const data = await callCrm("addContactTag", args as Record<string, unknown>);

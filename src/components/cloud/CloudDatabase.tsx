@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { naturalLanguageEventLabel, naturalLanguageRecordLabel } from '@/services/resources/recordIdentity';
+import { ProjectGhlIntegration } from './ProjectGhlIntegration';
 import { listProjectCrmResources } from '@/services/resources/resourceRegistry';
 import { applyResourceOp, queryResource } from '@/services/resources/resourceRuntime';
 import type { ResourceDefinition, ResourceFieldDefinition, ResourceRecord } from '@/services/resources/resourceTypes';
@@ -320,6 +321,8 @@ export function CloudDatabase({ businessId, businessName, projectId, projectName
           </CardContent>
         </Card>
       ) : <>
+      <ProjectGhlIntegration projectId={projectId} businessId={businessId} />
+
       {/* ── Project row counts ─────────────────────────────────────── */}
       <Card className="border-white/5 bg-white/[0.02]">
         <CardHeader className="pb-3">

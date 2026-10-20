@@ -15,6 +15,7 @@ const ALLOWED_ACTIONS = new Set([
   "getTemplateData",
   "getWorkflows",
   "triggerWorkflow",
+  "updateContact",
   "upsertContact",
   "createOpportunity",
   "addContactTag",
@@ -22,6 +23,7 @@ const ALLOWED_ACTIONS = new Set([
 
 interface GhlRequestBody {
   action?: string;
+  projectId?: string;
   businessId?: string;
   contactId?: string;
   locationId?: string;
@@ -124,12 +126,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get("GOHIGHLEVEL_API_KEY");
-    if (!apiKey) {
-      console.error("[gohighlevel-crm] GOHIGHLEVEL_API_KEY not configured");
-      return errorResponse("CRM integration is not configured", 503, corsHeaders);
-    }
-
     const { data: body, error: parseError } = await safeParseBody<GhlRequestBody>(req, 16_384);
     if (parseError || !body) {
       const status = parseError?.includes("exceeds") ? 413 : 400;
@@ -138,8 +134,9 @@ Deno.serve(async (req) => {
 
     const action = sanitizeString(body.action || "", 80);
     const contactId = sanitizeString(body.contactId || "", 120);
-    const locationId = sanitizeString(body.locationId || "", 120);
-    const businessId = sanitizeString(body.businessId || "", 100);
+    let locationId = sanitizeString(body.locationId || "", 120);
+    const projectId = sanitizeString(body.projectId || "", 100);
+    let businessId = sanitizeString(body.businessId || "", 100);
     const workflowId = sanitizeString(body.workflowId || "", 120);
     const pipelineId = sanitizeString(body.pipelineId || "", 120);
     const stageId = sanitizeString(body.stageId || "", 120);
@@ -151,11 +148,31 @@ Deno.serve(async (req) => {
       return errorResponse("Invalid action", 400, corsHeaders);
     }
 
+    if (!isValidUUID(projectId)) {
+      return errorResponse("A valid projectId is required for GoHighLevel access", 400, corsHeaders);
+    }
+
     if (businessId && !isValidUUID(businessId)) {
       return errorResponse("businessId must be a valid UUID", 400, corsHeaders);
     }
 
-    if (!isInternalRequest && businessId) {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: project, error: projectError } = await admin
+      .from("projects")
+      .select("id, business_id, owner_id")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (projectError) {
+      console.error("[gohighlevel-crm] project lookup failed", projectError);
+      return errorResponse("Could not resolve project scope", 500, corsHeaders);
+    }
+    if (!project?.business_id) return errorResponse("Project has no business profile", 404, corsHeaders);
+    if (businessId && businessId !== project.business_id) {
+      return errorResponse("businessId does not match project scope", 403, corsHeaders);
+    }
+    businessId = project.business_id;
+
+    if (!isInternalRequest) {
       const auth = await verifyAuth(req);
       if (!auth.user) {
         return authError(auth.error || "Unauthorized", auth.status, corsHeaders);
@@ -164,25 +181,58 @@ Deno.serve(async (req) => {
       if (!access.allowed) {
         return authError(access.error || "Access denied", 403, corsHeaders);
       }
+      const isProjectOwner = project.owner_id === auth.user.id;
+      const { data: membership } = await admin
+        .from("project_members")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("user_id", auth.user.id)
+        .eq("role", "owner")
+        .maybeSingle();
+      if (!isProjectOwner && !membership) {
+        return authError("Access denied to this project", 403, corsHeaders);
+      }
     }
 
-    // Reads of CRM records are bound to a business the caller can access:
-    // the requested contact/location must already be linked to it.
-    const READ_ACTIONS = new Set(["getContact", "getContacts", "getCustomFields", "getLocation", "getTemplateData", "getWorkflows"]);
-    if (!isInternalRequest && READ_ACTIONS.has(action)) {
-      if (!businessId) return errorResponse("businessId is required", 400, corsHeaders);
-      const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-      const linked = async (column: "contact_id" | "location_id", value: string) => {
-        const { data } = await admin.from("ghl_webhook_events").select("id")
-          .eq("business_id", businessId).eq(column, value).limit(1).maybeSingle();
-        return Boolean(data);
-      };
-      if (contactId && !(await linked("contact_id", contactId))) {
-        return authError("This contact does not belong to your business", 403, corsHeaders);
-      }
-      if (locationId && !(await linked("location_id", locationId))) {
-        return authError("This location does not belong to your business", 403, corsHeaders);
-      }
+    if (!locationId && contactId) {
+      const { data: linkedContact } = await admin
+        .from("ghl_webhook_events")
+        .select("location_id")
+        .eq("project_id", projectId)
+        .eq("contact_id", contactId)
+        .not("location_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      locationId = typeof linkedContact?.location_id === "string" ? linkedContact.location_id : "";
+    }
+
+    const { data: connections, error: connectionError } = await admin
+      .from("project_integrations")
+      .select("id, external_location_id")
+      .eq("project_id", projectId)
+      .eq("business_id", businessId)
+      .eq("provider", "gohighlevel")
+      .eq("status", "active");
+    if (connectionError) {
+      console.error("[gohighlevel-crm] integration lookup failed", connectionError);
+      return errorResponse("Could not resolve project integration", 500, corsHeaders);
+    }
+    const integration = locationId
+      ? connections?.find((connection) => connection.external_location_id === locationId)
+      : connections?.length === 1 ? connections[0] : undefined;
+    if (!integration) {
+      return errorResponse("No active GoHighLevel integration matches this project and location", 409, corsHeaders);
+    }
+    locationId = integration.external_location_id;
+
+    const { data: apiKey, error: apiKeyError } = await admin.rpc("get_project_gohighlevel_api_key_internal", {
+      p_integration_id: integration.id,
+      p_project_id: projectId,
+    });
+    if (apiKeyError || typeof apiKey !== "string" || !apiKey) {
+      console.error("[gohighlevel-crm] Vault credential lookup failed", apiKeyError);
+      return errorResponse("GoHighLevel credentials are unavailable for this project", 503, corsHeaders);
     }
 
     console.log(
@@ -267,25 +317,18 @@ Deno.serve(async (req) => {
       case "triggerWorkflow": {
         if (!workflowId) return errorResponse("workflowId is required", 400, corsHeaders);
         if (!contactId) return errorResponse("contactId is required to trigger a workflow", 400, corsHeaders);
-        if (!isInternalRequest) {
-          // A signed-in caller may only trigger workflows for a contact that
-          // already belongs to a business they have access to.
-          if (!businessId) return errorResponse("businessId is required to trigger a workflow", 400, corsHeaders);
-          const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-          const { data: known } = await admin
-            .from("ghl_webhook_events")
-            .select("id")
-            .eq("business_id", businessId)
-            .eq("contact_id", contactId)
-            .limit(1)
-            .maybeSingle();
-          if (!known) return authError("This contact does not belong to your business", 403, corsHeaders);
-        }
         result = await postGhlJson(
           `/contacts/${encodeURIComponent(contactId)}/workflow/${encodeURIComponent(workflowId)}`,
           apiKey,
           { eventStartTime: new Date().toISOString(), ...extraPayload },
         );
+        break;
+      }
+
+      case "updateContact": {
+        if (!contactId) return errorResponse("contactId is required", 400, corsHeaders);
+        if (!contactPayload) return errorResponse("contact payload is required", 400, corsHeaders);
+        result = await postGhlJson(`/contacts/${encodeURIComponent(contactId)}`, apiKey, contactPayload, "PUT");
         break;
       }
 

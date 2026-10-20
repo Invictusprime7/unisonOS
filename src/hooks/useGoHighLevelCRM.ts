@@ -31,7 +31,7 @@ interface TemplateData {
   customFieldDefinitions?: Record<string, unknown>[];
 }
 
-export function useGoHighLevelCRM() {
+export function useGoHighLevelCRM(projectId?: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +41,7 @@ export function useGoHighLevelCRM() {
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('gohighlevel-crm', {
-        body: { action, ...params }
+        body: { action, projectId, ...params }
       });
 
       if (fnError) {
@@ -56,7 +56,7 @@ export function useGoHighLevelCRM() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   const getContact = useCallback(async (contactId: string) => {
     return callCRM('getContact', { contactId });

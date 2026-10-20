@@ -81,10 +81,12 @@ export function extractGhlDirective(
 
 export async function executeGhlDirective(
   directive: GhlBindingDirective,
+  projectId: string | null | undefined,
 ): Promise<GhlBridgeResult> {
+  if (!projectId) return { ok: false, action: directive.action, error: 'Project scope is required for GoHighLevel.' };
   try {
     const { data, error } = await supabase.functions.invoke('gohighlevel-crm', {
-      body: { action: directive.action, ...directive },
+      body: { action: directive.action, projectId, ...directive },
     });
     if (error) {
       console.warn('[GhlIntentBridge] Edge function error:', error.message);
