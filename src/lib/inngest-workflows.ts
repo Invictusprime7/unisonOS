@@ -63,7 +63,7 @@ export const dealStageWorkflow = inngest.createFunction(
         await step.sleep("wait-for-review-request", "7d");
         
         await step.run("request-review", async () => {
-          console.log(`Requesting review for deal ${dealId}`);
+          console.log(`Requesting review from ${contactEmail} for deal ${dealId}`);
           return { reviewRequested: true };
         });
       }
@@ -236,7 +236,7 @@ export const reviewRequestWorkflow = inngest.createFunction(
     await step.sleep("wait-for-review-timing", "2h");
 
     await step.run("send-review-request", async () => {
-      console.log(`Requesting review for booking ${bookingId}`);
+      console.log(`Requesting review for booking ${bookingId} from ${contactEmail}`);
       // Send email with review link
       return { reviewRequested: true };
     });
@@ -309,7 +309,7 @@ export const formSubmissionWorkflow = inngest.createFunction(
 
     // Step 2: Send confirmation
     await step.run("send-confirmation", async () => {
-      console.log(`Sending form confirmation`);
+      console.log(`Sending form confirmation to ${email}`);
       return { confirmed: true };
     });
 
@@ -362,7 +362,7 @@ export const cartAbandonmentWorkflow = inngest.createFunction(
     await step.sleep("wait-first-reminder", "1h");
 
     const firstReminder = await step.run("send-first-reminder", async () => {
-      console.log(`[CartAbandonment] First reminder for cart ${cartId}`);
+      console.log(`[CartAbandonment] First reminder for cart ${cartId} to ${customerEmail}`);
       // TODO: Send email with cart items and checkout link
       return { sent: true, type: "first" };
     });
@@ -413,7 +413,7 @@ export const orderFulfillmentWorkflow = inngest.createFunction(
 
     // Step 1: Immediate order confirmation
     await step.run("send-order-confirmation", async () => {
-      console.log(`[Order] Confirmation for order ${orderId}`);
+      console.log(`[Order] Confirmation for order ${orderId} to ${customerEmail}`);
       // TODO: Send order confirmation email
       return { confirmed: true };
     });
@@ -462,7 +462,7 @@ export const newsletterWelcomeWorkflow = inngest.createFunction(
 
     // Step 1: Immediate welcome email
     await step.run("send-welcome-email", async () => {
-      console.log(`[Newsletter] Welcome email`);
+      console.log(`[Newsletter] Welcome email to ${email}`);
       // TODO: Send welcome email with intro content
       return { sent: true, type: "welcome" };
     });
@@ -471,7 +471,7 @@ export const newsletterWelcomeWorkflow = inngest.createFunction(
     await step.sleep("wait-value-email", "3d");
 
     await step.run("send-value-email", async () => {
-      console.log(`[Newsletter] Value email`);
+      console.log(`[Newsletter] Value email to ${email}`);
       // TODO: Send helpful content/tips
       return { sent: true, type: "value" };
     });
@@ -480,7 +480,7 @@ export const newsletterWelcomeWorkflow = inngest.createFunction(
     await step.sleep("wait-engagement-email", "7d");
 
     await step.run("send-engagement-email", async () => {
-      console.log(`[Newsletter] Engagement email`);
+      console.log(`[Newsletter] Engagement email to ${email}`);
       // TODO: Send CTA or offer
       return { sent: true, type: "engagement" };
     });

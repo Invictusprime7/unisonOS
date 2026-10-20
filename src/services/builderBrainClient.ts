@@ -61,22 +61,11 @@ export interface BuilderTurnInput {
 }
 
 export interface BuilderTurnOptions {
-  functionName?: 'ai-code-assistant' | 'wizard-site-composer' | 'generate-page';
+  functionName?: 'ai-code-assistant' | 'wizard-site-composer';
   /** Abort the in-flight invoke. */
   signal?: AbortSignal;
   /** Absolute budget across invocation, backoff, retries and raw fallback. */
   timeoutMs?: number;
-}
-
-export async function releaseGuestDemoReservation(operationId: string, reason: string): Promise<void> {
-  const { error } = await supabase.functions.invoke('ai-code-assistant', {
-    body: {
-      guestDemoAction: 'release',
-      operationId,
-      reason: reason.slice(0, 120),
-    },
-  });
-  if (error) throw new Error(error.message || 'Guest demo reservation release failed');
 }
 
 type BuilderSession = Awaited<ReturnType<typeof supabase.auth.refreshSession>>['data']['session'];

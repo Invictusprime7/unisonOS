@@ -32,10 +32,6 @@ function renderVariant(id: VariantId, props = premiumSectionProps[id.split(':')[
   const Component = variant.component;
   return render(<Component section={{ id: 'proof', type: variant.sectionType, variantId: id, props } as SectionEntry} theme={theme} />);
 }
-function canonicalSectionMarkup(markup: string): string {
-  const wrapper = markup.match(/^<div data-ut-section-id="[^"]*"[^>]*>([\s\S]*)<\/div>$/);
-  return (wrapper?.[1] ?? markup).replace(/\b(id|for)="[^"]*"/g, '$1="__react_id__"');
-}
 describe('premium section registry to executable VFS', () => {
   it.each(variants)('$id renders the same canonical component and content', variant => {
     const section = { id: 'proof', type: variant.sectionType, variantId: variant.id, props: premiumSectionProps[variant.sectionType] } as SectionEntry;
@@ -47,8 +43,7 @@ describe('premium section registry to executable VFS', () => {
       './theme': themeModule, ['./recipes/' + component]: loadModule(recipe),
     }).default as React.ComponentType<{ props: unknown; variantId: string }>;
     const Registered = variant.component;
-    expect(canonicalSectionMarkup(renderToStaticMarkup(<Emitted props={section.props} variantId={variant.id} />)))
-      .toBe(canonicalSectionMarkup(renderToStaticMarkup(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />)));
+    expect(renderToStaticMarkup(<Emitted props={section.props} variantId={variant.id} />)).toBe(renderToStaticMarkup(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />));
     expect(files['/src/pages/Home.tsx']).toContain(variant.id);
     expect(recipe).not.toMatch(/from ["'](?:next|motion|https?:)/);
     expect(variant.source?.sourceUrl).toContain('21st.dev/');

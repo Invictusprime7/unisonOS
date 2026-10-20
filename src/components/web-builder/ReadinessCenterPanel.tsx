@@ -155,7 +155,7 @@ export const ReadinessCenterPanel: React.FC<ReadinessCenterPanelProps> = ({
     // ---- Wizard ---------------------------------------------------------
     const wizard: Section = {
       id: 'wizard',
-      title: 'Affinity',
+      title: 'Wizard',
       rows: [
         {
           label: 'Industry selected',
@@ -387,7 +387,8 @@ export const ReadinessCenterPanel: React.FC<ReadinessCenterPanelProps> = ({
       <CardContent className="space-y-3">
         {!manifest && !contract && (
           <p className="text-xs text-muted-foreground">
-            No launch-readiness manifest or compiled contract found. Run Affinity to populate this panel.
+            No launch-readiness manifest or compiled contract found. Run the System Launcher
+            wizard to populate this panel.
           </p>
         )}
 

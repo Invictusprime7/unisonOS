@@ -194,7 +194,7 @@ const MonacoEditor: React.FC<React.ComponentProps<typeof Editor>> = (props) => {
     // Register AI assistant command (Ctrl+Shift+A or Cmd+Shift+A)
     editor.addAction({
       id: 'ai-code-assistant',
-      label: 'Affinity',
+      label: 'AI Code Assistant',
       keybindings: [
         monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyA,
       ],

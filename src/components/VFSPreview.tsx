@@ -15,12 +15,12 @@
 import { resolvePendingVfsConflicts } from '@/services/snapshotProjector';
 import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle, useRef, useMemo, Component, type ReactNode, type ErrorInfo } from 'react';
 import { cn } from '@/lib/utils';
+import { UnisonLoadingMark } from '@/components/UnisonLoadingMark';
 import { 
   RefreshCw, 
   ExternalLink, 
   Wifi, 
   WifiOff, 
-  Loader2,
   Server,
   Terminal,
   ChevronDown,
@@ -79,8 +79,6 @@ interface PreviewCompileState {
 }
 
 const MAX_SANDPACK_TIMEOUT_RECOVERIES = 3;
-const MAX_SANDPACK_RENDER_RECOVERIES = 1;
-const PREVIEW_RENDER_READY_TIMEOUT_MS = 20_000;
 // Large generated multi-page sites can legitimately take longer than 45s on a
 // cold worker. Keep this aligned with Sandpack's own startup budget.
 const PREVIEW_ARTIFACT_COMPILE_TIMEOUT_MS = 180_000;
@@ -308,7 +306,7 @@ const SandpackDependencyProgress: React.FC<{ dependencyCount: number }> = ({ dep
 
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-md border border-border/70 bg-background/95 px-3 py-2 text-xs text-foreground shadow-sm backdrop-blur">
-      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+      <UnisonLoadingMark size={16} />
       <span>{progressLabel}</span>
       <span className="text-muted-foreground">({dependencyCount} modules)</span>
     </div>
@@ -384,7 +382,6 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   const [logs, setLogs] = useState<string[]>([]);
   const [sandpackKey, setSandpackKey] = useState(0);
   const [sandpackTimeoutExhausted, setSandpackTimeoutExhausted] = useState(false);
-  const [sandpackRenderExhausted, setSandpackRenderExhausted] = useState(false);
   const dependencySignatureRef = useRef<string | null>(null);
   const startAttemptedRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -395,10 +392,6 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   const navRetryTimerRef = useRef<number | null>(null);
   const timeoutRecoveryCountRef = useRef(0);
   const timeoutRecoveryTimerRef = useRef<number | null>(null);
-  const renderRecoveryCountRef = useRef(0);
-  const renderReadyRef = useRef(false);
-  const renderReadyTimeoutRef = useRef<number | null>(null);
-  const renderWatchKeyRef = useRef<string | null>(null);
   
   const localPreviewService = usePreviewService();
   const canUseContextPreview =
@@ -449,17 +442,9 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   useEffect(() => {
     timeoutRecoveryCountRef.current = 0;
     setSandpackTimeoutExhausted(false);
-    renderRecoveryCountRef.current = 0;
-    renderReadyRef.current = false;
-    renderWatchKeyRef.current = null;
-    setSandpackRenderExhausted(false);
     if (timeoutRecoveryTimerRef.current !== null) {
       window.clearTimeout(timeoutRecoveryTimerRef.current);
       timeoutRecoveryTimerRef.current = null;
-    }
-    if (renderReadyTimeoutRef.current !== null) {
-      window.clearTimeout(renderReadyTimeoutRef.current);
-      renderReadyTimeoutRef.current = null;
     }
   }, [filesSignature]);
 
@@ -846,41 +831,6 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     }
   }, [clearDirectPreviewSelection, getPreviewWindow]);
 
-  const handleSandpackRunning = useCallback(() => {
-    if (timeoutRecoveryTimerRef.current !== null) {
-      window.clearTimeout(timeoutRecoveryTimerRef.current);
-      timeoutRecoveryTimerRef.current = null;
-    }
-    timeoutRecoveryCountRef.current = 0;
-    setSandpackTimeoutExhausted(false);
-    if (renderReadyRef.current) return;
-    const watchKey = `${filesSignature}::${launchSignature}::${sandpackKey}`;
-    if (renderWatchKeyRef.current === watchKey && renderReadyTimeoutRef.current !== null) return;
-    renderWatchKeyRef.current = watchKey;
-    if (renderReadyTimeoutRef.current !== null) {
-      window.clearTimeout(renderReadyTimeoutRef.current);
-    }
-    renderReadyTimeoutRef.current = window.setTimeout(() => {
-      renderReadyTimeoutRef.current = null;
-      if (renderReadyRef.current || renderWatchKeyRef.current !== watchKey) return;
-      if (renderRecoveryCountRef.current < MAX_SANDPACK_RENDER_RECOVERIES) {
-        renderRecoveryCountRef.current += 1;
-        setSandpackKey((key) => key + 1);
-      } else {
-        setSandpackRenderExhausted(true);
-      }
-    }, PREVIEW_RENDER_READY_TIMEOUT_MS);
-  }, [filesSignature, launchSignature, sandpackKey]);
-
-  const handleSandpackError = useCallback((message: string) => {
-    renderWatchKeyRef.current = null;
-    if (renderReadyTimeoutRef.current !== null) {
-      window.clearTimeout(renderReadyTimeoutRef.current);
-      renderReadyTimeoutRef.current = null;
-    }
-    onError?.(message);
-  }, [onError]);
-
   // Push the current Edit-mode state into the preview iframe.
   // Retries briefly to cover the brief window before the bridge boots.
   const pushEditModeState = useCallback((enabled: boolean) => {
@@ -1009,25 +959,11 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       if (!data?.type) return;
 
       if (data.type === 'UNISON_PREVIEW_RENDER_READY') {
-        handleSandpackRunning();
-        renderReadyRef.current = true;
-        renderWatchKeyRef.current = null;
-        renderRecoveryCountRef.current = 0;
-        setSandpackRenderExhausted(false);
-        if (renderReadyTimeoutRef.current !== null) {
-          window.clearTimeout(renderReadyTimeoutRef.current);
-          renderReadyTimeoutRef.current = null;
-        }
         reportPreviewRunning();
         onReady?.();
         return;
       }
       if (data.type === 'UNISON_PREVIEW_RENDER_ERROR') {
-        renderWatchKeyRef.current = null;
-        if (renderReadyTimeoutRef.current !== null) {
-          window.clearTimeout(renderReadyTimeoutRef.current);
-          renderReadyTimeoutRef.current = null;
-        }
         const message = typeof data.error === 'string' ? data.error : 'The preview application failed to render.';
         reportPreviewError(message);
         onError?.(message);
@@ -1217,7 +1153,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
     window.addEventListener('message', handlePreviewMessage);
     return () => window.removeEventListener('message', handlePreviewMessage);
-  }, [builderSession.projectId, builderSession.runtimeContext?.projectId, onNavigate, onIntentTrigger, businessId, siteId, revisionId, onError, onReady, onElementSelect, onInlineTextCommit, enableSelection, getPreviewWindow, clearDirectPreviewSelection, handleSandpackRunning]);
+  }, [builderSession.projectId, builderSession.runtimeContext?.projectId, onNavigate, onIntentTrigger, businessId, siteId, revisionId, onError, onReady, onElementSelect, onInlineTextCommit, enableSelection, getPreviewWindow, clearDirectPreviewSelection]);
 
 
   
@@ -1259,10 +1195,6 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       dockerService.patchFile(entryPath, files[entryPath] || '');
     } else {
       // Force Sandpack remount
-      renderRecoveryCountRef.current = 0;
-      renderReadyRef.current = false;
-      renderWatchKeyRef.current = null;
-      setSandpackRenderExhausted(false);
       setSandpackKey(k => k + 1);
     }
   }, [backend, dockerService, files, launch]);
@@ -1288,6 +1220,11 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     }, 700 * timeoutRecoveryCountRef.current);
   }, []);
 
+  const handleSandpackRunning = useCallback(() => {
+    timeoutRecoveryCountRef.current = 0;
+    setSandpackTimeoutExhausted(false);
+  }, []);
+
   const handleRetrySandpackConnection = useCallback(() => {
     if (timeoutRecoveryTimerRef.current !== null) {
       window.clearTimeout(timeoutRecoveryTimerRef.current);
@@ -1295,23 +1232,12 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     }
     timeoutRecoveryCountRef.current = 0;
     setSandpackTimeoutExhausted(false);
-    renderRecoveryCountRef.current = 0;
-    renderReadyRef.current = false;
-    renderWatchKeyRef.current = null;
-    setSandpackRenderExhausted(false);
-    if (renderReadyTimeoutRef.current !== null) {
-      window.clearTimeout(renderReadyTimeoutRef.current);
-      renderReadyTimeoutRef.current = null;
-    }
     setSandpackKey((key) => key + 1);
   }, []);
 
   useEffect(() => () => {
     if (timeoutRecoveryTimerRef.current !== null) {
       window.clearTimeout(timeoutRecoveryTimerRef.current);
-    }
-    if (renderReadyTimeoutRef.current !== null) {
-      window.clearTimeout(renderReadyTimeoutRef.current);
     }
   }, []);
   
@@ -1487,7 +1413,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
             </div>
             <h3 className="text-sm font-semibold text-foreground">Preview waiting for app files</h3>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Start from a template or ask Affinity to create a page. The preview will compile as soon as a real React entry or page file exists.
+              Start from a template or ask AI Builder to create a page. The preview will compile as soon as a real React entry or page file exists.
             </p>
           </div>
         </div>
@@ -1517,7 +1443,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
                 {backend === 'docker' && <><Server className="h-3 w-3" /> Docker HMR</>}
                 {backend === 'local' && <><Server className="h-3 w-3" /> Local Vite</>}
                 {backend === 'sandpack' && <><Zap className="h-3 w-3" /> React Live</>}
-                {backend === 'loading' && <><Loader2 className="h-3 w-3 animate-spin" /> Starting...</>}
+                {backend === 'loading' && <><UnisonLoadingMark size={14} /> Starting...</>}
               </div>
             )}
             
@@ -1589,7 +1515,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         {backend === 'loading' && (
           <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
             <div className="text-center space-y-3">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+              <UnisonLoadingMark size={40} className="mx-auto" />
               <p className="text-sm text-muted-foreground">Starting Docker preview...</p>
             </div>
           </div>
@@ -1637,17 +1563,13 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
           </div>
         )}
 
-        {backend === 'sandpack' && !previewCompiling && !pipelineError && !emptyDraft && (sandpackTimeoutExhausted || sandpackRenderExhausted) && (
+        {backend === 'sandpack' && !previewCompiling && !pipelineError && !emptyDraft && sandpackTimeoutExhausted && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-background p-6">
             <div className="max-w-sm text-center space-y-3">
               <WifiOff className="h-8 w-8 mx-auto text-muted-foreground" />
-              <h3 className="text-sm font-semibold">
-                {sandpackRenderExhausted ? 'Preview did not render' : 'Preview runner did not connect'}
-              </h3>
+              <h3 className="text-sm font-semibold">Preview runner did not connect</h3>
               <p className="text-xs text-muted-foreground">
-                {sandpackRenderExhausted
-                  ? 'The preview runner connected, but the app did not finish rendering.'
-                  : 'The generated site is ready, but the in-browser preview runner could not finish its module connection.'}
+                The generated site is ready, but the in-browser preview runner could not finish its module connection.
               </p>
               <Button size="sm" onClick={handleRetrySandpackConnection}>
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -1661,7 +1583,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         {backend === 'sandpack' && previewCompiling && !hasCompiledPreview && (
           <div className="absolute inset-0 flex items-center justify-center bg-background p-6 z-10">
             <div className="max-w-sm text-center space-y-2">
-              <Loader2 className="h-8 w-8 mx-auto animate-spin text-muted-foreground" />
+              <UnisonLoadingMark size={40} className="mx-auto" />
               <h3 className="text-sm font-semibold">Preparing preview</h3>
               <p className="text-xs text-muted-foreground">
                 The builder shell is ready while the site runtime compiles in the background.
@@ -1676,14 +1598,14 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
               <Zap className="h-8 w-8 mx-auto text-muted-foreground" />
               <h3 className="text-sm font-semibold">Preview idle</h3>
               <p className="text-xs text-muted-foreground">
-                No SiteBundleSnapshot is bound to this draft yet. Ask Affinity to generate the first page — the canonical preview will hydrate automatically.
+                No SiteBundleSnapshot is bound to this draft yet. Launch the wizard or ask the AI Builder to generate the first page — the canonical preview will hydrate automatically.
               </p>
             </div>
           </div>
         )}
 
         {/* Sandpack In-Browser React Preview — the primary rendering engine */}
-        {backend === 'sandpack' && (!previewCompiling || hasCompiledPreview) && !pipelineError && !emptyDraft && !sandpackTimeoutExhausted && !sandpackRenderExhausted && (
+        {backend === 'sandpack' && (!previewCompiling || hasCompiledPreview) && !pipelineError && !emptyDraft && !sandpackTimeoutExhausted && (
           <SandpackErrorBoundary key={`boundary-${sandpackKey}`}>
             <SandpackProvider
               key={`sandpack-${sandpackKey}`}
@@ -1711,7 +1633,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
                 />
               </SandpackLayout>
               <SandpackErrorListener
-                onError={handleSandpackError}
+                onError={onError}
                 onTimeout={handleSandpackTimeout}
                 onRunning={handleSandpackRunning}
                 dependencies={sandpackDeps}

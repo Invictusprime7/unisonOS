@@ -20,31 +20,6 @@
   --ut-hover-illumination-mix: 82%;
 }
 
-.affinity-home-chat-glow {
-  border-radius: var(--ut-radius-base);
-  box-shadow: 0 0 var(--ut-border-weight) hsl(var(--secondary)),
-    0 0 var(--ut-density-gap) hsl(var(--secondary)),
-    0 0 var(--ut-density-padding) hsl(var(--primary));
-}
-
-.affinity-wizard-title {
-  margin: 0;
-  padding: var(--ut-density-padding);
-  font-family: var(--ut-font-body);
-  color: hsl(var(--foreground));
-}
-
-.account-demo-status {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: var(--ut-density-gap);
-  padding: var(--ut-section-space);
-  font-family: var(--ut-font-body);
-}
-
 /* Existing Tailwind hover utilities must not turn UI controls into glowing cards. */
 @media (hover: hover) {
   [class*="hover:"]:hover,

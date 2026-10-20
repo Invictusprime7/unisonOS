@@ -22,7 +22,6 @@
  * }
  */
 
-import { publicBusinessWriteAllowed } from "../_shared/publicBusinessGate.ts";
 import { serve } from "serve";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
@@ -975,18 +974,6 @@ serve(async (req: Request) => {
         }, 404, publicCorsHeaders);
     }
     
-    // A site-supplied id must belong to the chosen business, and anonymous
-    // writes are accepted only for businesses with a live published site.
-    if (siteId && body.businessId) {
-      const { data: siteRow } = await supabase.from("sites").select("business_id").eq("id", siteId).maybeSingle();
-      if (siteRow?.business_id && siteRow.business_id !== body.businessId) {
-        return secureJsonResponse({ ok: false, error: { code: "FORBIDDEN", message: "Site does not belong to this business" } }, 403, publicCorsHeaders);
-      }
-    }
-    if (!(await publicBusinessWriteAllowed(supabase, req, businessId))) {
-      return secureJsonResponse({ ok: false, error: { code: "FORBIDDEN", message: "This business is not accepting submissions" } }, 403, publicCorsHeaders);
-    }
-
     // Check usage limits
     const usageCheck = await checkUsageLimit(supabase, businessId);
     if (!usageCheck.allowed) {

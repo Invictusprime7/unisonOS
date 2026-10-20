@@ -263,7 +263,6 @@ export interface AppBuilderPageGenerationResult {
 
 export interface AppEditRequest {
   operationId: string;
-  guestDemoOperationId?: string;
   /** Durable upload links/extracted text; not a substitute for image vision. */
   attachmentContext?: string;
   images?: import('@/contracts/aiComposerContract').AIComposerRequest['images'];
@@ -340,7 +339,6 @@ export interface AppBuildResult {
 
 export interface AppEditResult extends AppBuildResult {
   baseRevisionId?: string | null;
-  guestDemoOperationId?: string;
   changeSet?: AICandidateChangeSet;
   summary?: string;
 }

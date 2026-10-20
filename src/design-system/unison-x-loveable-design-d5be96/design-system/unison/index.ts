@@ -14,7 +14,7 @@ export * from './contracts/creative-intent';
 export * from './contracts/project-overlay';
 export * from './contracts/project-artifact';
 export * from './runtime/interpret-creative-intent';
-export * from './runtime/design-seed';
+export * from '@/platform/core/generationSeed';
 export * from './runtime/resolve-art-direction';
 export * from './runtime/resolve-design-context';
 export * from './runtime/resolve-legal-implementations';

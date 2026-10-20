@@ -16,7 +16,6 @@ import { validateTwentyFirstGenerationCoverage, summarizeCoverageReport } from '
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { withAccountDemoGeneration } from '@/services/accountDemoGeneration';
 import {
   businessSystems,
   type BusinessSystemType,
@@ -126,7 +125,6 @@ import { createWizardCompileArtifact } from '@/platform/core/snapshotSeal';
 import { resolveLaunchCapabilities } from '@/services/launch/launchCapabilities';
 
 export interface LaunchOrchestratorInput {
-  demoGeneration?: boolean;
   systemId: BusinessSystemType;
   template?: TemplateCardData;
   industry?: string;
@@ -221,17 +219,6 @@ function vfsFilesToVirtualNodes(vfsFiles: Record<string, string>): VirtualNode[]
 export async function runLaunchPipeline(
   submitted: LaunchOrchestratorInput,
   callbacks: LaunchOrchestratorCallbacks = {},
-): Promise<LaunchOrchestratorResult> {
-  if (submitted.demoGeneration) {
-    return withAccountDemoGeneration(operationId => runReservedLaunchPipeline(submitted, callbacks, operationId));
-  }
-  return runReservedLaunchPipeline(submitted, callbacks);
-}
-
-async function runReservedLaunchPipeline(
-  submitted: LaunchOrchestratorInput,
-  callbacks: LaunchOrchestratorCallbacks,
-  demoOperationId?: string,
 ): Promise<LaunchOrchestratorResult> {
   const baseline = submitted.template || getDefaultTemplateCardForIndustry(submitted.industry) || getDefaultTemplateCardFor(submitted.systemId);
   if (!baseline) throw new LaunchFatalError('No content baseline is available for this industry.');
@@ -785,10 +772,7 @@ async function runReservedLaunchPipeline(
         playground: materializedPlayground ?? undefined,
         activePagePath: artifacts.entryPoint,
       },
-      patch: {
-        ...legacyFilesToPatchPlan(vfsFiles),
-        ...(demoOperationId ? { operationIds: [`account-demo:${demoOperationId}`] } : {}),
-      },
+      patch: legacyFilesToPatchPlan(vfsFiles),
       options: {
         requirePreviewPass: false,
         requireReadinessPass: false,
@@ -847,7 +831,6 @@ async function runReservedLaunchPipeline(
       industry: plan.industryProfile?.industry || plan.generationCategory,
       enableProductCommerce: plan.selections.sellsProducts,
       creatorData: (commit.result.playground ?? materializedPlayground)?.creatorData ?? null,
-      mediaAssets: appBuildContract.design.registryContext.assets,
     });
   } catch (error) {
     run.degrade(

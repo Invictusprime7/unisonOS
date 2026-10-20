@@ -430,7 +430,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
           {headerContent || (
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5" />
-              <span className="font-semibold">Affinity</span>
+              <span className="font-semibold">AI Assistant</span>
             </div>
           )}
           {allowClearHistory && messages.length > 0 && (
@@ -488,7 +488,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
               )} />
               <p className="text-sm">
                 {appearance === "unison"
-                  ? "Tell Affinity what you have in mind."
+                  ? "Tell Unison what you have in mind."
                   : "Start a conversation or try a quick action above"}
               </p>
             </div>
@@ -626,7 +626,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder={droppedFiles.length > 0 ? "Describe what to do with files..." : placeholder}
-            aria-label={appearance === "unison" ? "Describe what you want Affinity to build" : undefined}
+            aria-label={appearance === "unison" ? "Describe what you want Unison to build" : undefined}
             disabled={isLoading}
             className={cn(
               "sleek-scrollbar flex-1 min-h-[40px] max-h-[120px] resize-none",

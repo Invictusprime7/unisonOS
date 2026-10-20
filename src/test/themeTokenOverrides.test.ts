@@ -63,23 +63,6 @@ describe('themeTokenOverrides', () => {
 });
 
 describe('typed theme values', () => {
-  it('accepts the reported surface shadow and preserves it through override writes and reads', () => {
-    const shadow = '0 4px 14px hsl(0 0% 0% / 0.06)';
-    const overrides = { '--ut-surface-elevation': shadow, '--ut-surface-elevation-hover': '0 8px 24px hsl(var(--primary) / 0.2)', '--ut-surface-stroke': 'hsl(var(--border) / .5)' };
-    const ops = buildThemeOverrideFileOps({ files, overrides });
-    const next = { ...files };
-    for (const op of ops) if (op.type !== 'delete') next[op.path] = op.contents;
-    expect(readThemeOverrides(next)).toEqual(overrides);
-    expect(readCompiledTokenValues(next[INDEX_CSS_PATH], true)['--ut-surface-elevation']).toBe(shadow);
-  });
-  it('accepts layered shadows and rejects malformed shadows and unsafe references', () => {
-    for (const value of ['inset 0 0 0 1px hsl(var(--border)), 0 4px 14px rgba(0, 0, 0, 0.06)', '0 4px 14px #000000', 'none', 'var(--ut-surface-elevation-hover)']) {
-      expect(isLegalThemeTokenValue('--ut-surface-elevation', value, contract), value).toBe(true);
-    }
-    for (const value of ['0 4px -14px #000', '4px', 'hsl(0 0% 0%)', '0 4px 14px hsl(0 101% 0%)', '0 4px 14px hsl(var(--missing))', 'var(--ut-surface-elevation)', 'var(--primary)', '0 4px 14px #000; color: red', '0 4px 14px url(x)']) {
-      expect(isLegalThemeTokenValue('--ut-surface-elevation', value, contract), value).toBe(false);
-    }
-  });
   it('rejects invalid HSL, cross-type references, layout tokens, and incorrect time units', () => {
     for (const value of ['#fff', '0 101% 10%', '361 20% 10%', 'var(--ut-weight-display)', 'var(--primary)', 'hsl(var(--foreground))']) {
       expect(isLegalThemeTokenValue('--primary', value, contract), value).toBe(false);

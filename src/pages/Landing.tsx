@@ -1,5 +1,6 @@
 import { useEffect, lazy, Suspense } from "react";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
+import { UnisonLoadingMark } from "@/components/UnisonLoadingMark";
 
 // Preload the Index component to avoid loading delay after redirect
 const Index = lazy(() => import("./Index"));
@@ -8,7 +9,7 @@ const Index = lazy(() => import("./Index"));
 const LandingLoader = () => (
   <div className="h-screen w-full flex items-center justify-center bg-slate-900">
     <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+      <UnisonLoadingMark size={48} className="mx-auto mb-4" />
       <p className="text-slate-400">Loading Unison...</p>
     </div>
   </div>

@@ -63,27 +63,6 @@ describe('AI composer repair loop', () => {
     expect(invoke.mock.calls[0][0].gatewayOptions).toEqual(gatewayOptions);
   });
 
-  it('forwards one guest operation ID across the initial and repair Composer requests', async () => {
-    const guestDemoOperationId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-    const invoke = vi.fn()
-      .mockResolvedValueOnce(bad('/src/pages/Home.tsx'))
-      .mockResolvedValueOnce(good('/src/pages/Home.tsx', 'Repaired'));
-
-    const result = await runComposerRepairLoop({
-      request,
-      baseFiles: base,
-      invoke: invoke as never,
-      guestDemoOperationId,
-    });
-
-    expect(result.ok).toBe(true);
-    expect(invoke.mock.calls).toHaveLength(2);
-    expect(invoke.mock.calls.map(([input]) => input.runContext?.operationId)).toEqual([
-      guestDemoOperationId,
-      guestDemoOperationId,
-    ]);
-  });
-
   it("skips a repair turn when less than a minute is left", async () => {
     let clock = 100_000;
     const spy = vi.spyOn(Date, "now").mockImplementation(() => clock);

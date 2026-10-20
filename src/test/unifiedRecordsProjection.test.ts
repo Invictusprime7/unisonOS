@@ -8,7 +8,7 @@ afterEach(() => { registerContentTypes([]); vi.clearAllMocks(); });
 describe('unified records projection', () => {
   it('shows all four kinds together and retains exact write addresses without title-based deduplication', async () => {
     registerContentTypes([{ id: 'case-type', api_key: 'case_studies' }, { id: 'faq-type', api_key: 'faqs' }]);
-    mocks.query.mockImplementation(async (key) => key === 'testimonials' ? [{ id: 'review', author_name: 'Client' }] : key === 'portfolio' ? [{ id: 'project', title: 'Launch' }] : key === 'content:faq' ? [{ id: 'q1', question: 'Shipping?', title: 'Shipping?' }] : key === 'content:case-studies' ? [{ id: 'c1', title: 'Launch' }, { id: 'c2', title: 'Launch' }] : []);
+    mocks.query.mockImplementation(async (key) => key === 'testimonials' ? [{ id: 'review', author_name: 'Client' }] : key === 'portfolio' ? [{ id: 'project', title: 'Launch' }] : key === 'content:faq' ? [{ id: 'q1', question: 'Shipping?', title: 'Shipping?' }] : [{ id: 'c1', title: 'Launch' }, { id: 'c2', title: 'Launch' }]);
     const result = await loadUnifiedRecords(ctx);
     expect(result.errors).toEqual([]);
     expect(new Set(result.records.map((r) => r.kind))).toEqual(new Set(['testimonials', 'projects', 'case-studies', 'faqs']));

@@ -143,11 +143,11 @@ describe('Gallery registry and emitted renderer parity', () => {
     const Registered = variant.component;
     const section = { id: 'gallery-proof', type: 'gallery', variantId: variant.id, props } as SectionEntry;
     const registryView = render(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />);
-    const expectedMarkup = registryView.container.firstElementChild?.outerHTML;
+    const expectedMarkup = registryView.container.innerHTML;
     registryView.unmount();
 
     const generatedView = render(<Gallery props={props} variantId={variant.id} />);
-    expect(generatedView.container.querySelector('[data-ut-section-id] > section[data-ut-variant]')?.outerHTML).toBe(expectedMarkup);
+    expect(generatedView.container.innerHTML).toBe(expectedMarkup);
     fireEvent.click(screen.getByRole('button', { name: 'First result' }));
     expect(screen.getByRole('dialog', { name: 'First result' })).toBeVisible();
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowRight' });

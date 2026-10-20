@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RecordFieldsEditor } from '@/components/creatives/web-builder/RecordFieldsEditor';
 import { loadBusinessMemberships } from '@/services/businessMembership';
 import { listContentTypes, mutateContentRecord, transitionContentRecord } from '@/services/cmsRecordService';
-import { canonicalContentSlug, contentTypeToResource, listRecordCollections, registerContentTypes, resourceCreateDefaults, type RecordCollectionKind } from '@/services/resources/resourceRegistry';
+import { listRecordCollections, registerContentTypes, type CanonicalRecordKind } from '@/services/resources/resourceRegistry';
 import { applyResourceOp, onResourceInvalidated } from '@/services/resources/resourceRuntime';
 import { SEED_CONTENT_TYPES } from '@/services/resources/seedLaunchAssets';
+import { getCatalogSurface } from '@/platform/core/catalogSurfaceRegistry';
 import { loadUnifiedRecords, type UnifiedRecord } from '@/services/resources/recordsProjection';
 import './BusinessRecords.css';
 
@@ -26,8 +27,7 @@ export default function BusinessRecords() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [kind, setKind] = useState<RecordCollectionKind | 'all'>(() => params.get('kind') || 'all');
-  useEffect(() => { const next = new URLSearchParams(params); if (kind === 'all') next.delete('kind'); else next.set('kind', kind); if (next.toString() !== params.toString()) setParams(next, { replace: true }); }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [kind, setKind] = useState<CanonicalRecordKind | 'all'>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -74,14 +74,6 @@ export default function BusinessRecords() {
   }), [projectId, scopedBusinessId]);
 
   const collections = listRecordCollections();
-  // Planned empty CMS collections become installed only on explicit New record.
-  for (const [key, seed] of Object.entries(SEED_CONTENT_TYPES)) {
-    const resource = contentTypeToResource({ api_key: key, display_name: seed.displayName, field_schema: { fields: seed.fields } });
-    if (resource && !collections.some((collection) => collection.resources.some((def) => def.key === resource.key))) {
-      const collectionKind = key === 'faq' ? 'faqs' : key === 'case-studies' ? key : resource.key;
-      if (!collections.some((collection) => collection.kind === collectionKind)) collections.push({ kind: collectionKind, label: seed.displayName, resources: [] });
-    }
-  }
   const active = records.find((record) => record.key === selected);
   const visible = records.filter((record) => (kind === 'all' || record.kind === kind) && `${record.title} ${record.kind}`.toLowerCase().includes(search.toLowerCase()));
   async function createRecord() {
@@ -89,15 +81,16 @@ export default function BusinessRecords() {
     setBusy(true);
     try {
       let def = collections.find((collection) => collection.kind === kind)?.resources[0];
-      const key = canonicalContentSlug(kind.replace(/^content:/, ''));
-      if (!def && SEED_CONTENT_TYPES[key]) {
+      if (!def && (kind === 'faqs' || kind === 'case-studies')) {
+        const key = kind === 'faqs' ? 'faq' : kind;
         const seed = SEED_CONTENT_TYPES[key];
         await mutateContentRecord({ action: 'content-type-create', businessId: scopedBusinessId, projectId, values: { apiKey: key.replace(/-/g, '_'), displayName: seed.displayName, fieldSchema: { fields: seed.fields } } });
         registerContentTypes(await listContentTypes({ businessId: scopedBusinessId, projectId }));
         def = listRecordCollections().find((collection) => collection.kind === kind)?.resources[0];
       }
       if (!def) throw new Error('This collection is not available yet.');
-      const values = resourceCreateDefaults(def);
+      const defaults = getCatalogSurface(def.key)?.newRowDefaults;
+      const values = defaults ?? (kind === 'faqs' ? { title: 'New question', question: 'New question', answer: '' } : { title: 'New case study', body: '' });
       await applyResourceOp({ op: 'create', resourceKey: def.key, values }, { businessId: scopedBusinessId, projectId, mode: 'builder' });
       setRevision((r) => r + 1);
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not create record.'); }

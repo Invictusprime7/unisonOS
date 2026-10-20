@@ -43,7 +43,6 @@ import { DeployButton } from '@/components/DeployButton';
 import { CollapsiblePropertiesPanel } from "./web-builder/CollapsiblePropertiesPanel";
 import { CanvasDragDropService } from "@/services/canvasDragDropService";
 import { AIBuilderPanel, type VFSEdit, type IframeError } from "./web-builder/AIBuilderPanel";
-import { CodeChangesView } from './web-builder/CodeChangesView';
 import { AIEditHistoryMenu } from "./web-builder/AIEditHistoryMenu";
 import { pushSnapshot as pushAISnapshot, diffChangedPaths } from "@/services/aiHistoryStore";
 import {
@@ -375,7 +374,6 @@ import { useKeyboardShortcuts, defaultWebBuilderShortcuts } from "@/hooks/useKey
 import { useCanvasHistory } from "@/hooks/useCanvasHistory";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { useWebBuilderState } from "@/hooks/useWebBuilderState";
-import { vfsEventBus } from '@/services/vfsEventBus';
 import { useLaunch } from "@/contexts/useLaunchHooks";
 import { ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose, ArrowLeft, Download, SlidersHorizontal } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -550,7 +548,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const [persistedResumeState, setPersistedResumeState] = useState<WebBuilderRouteState | null>(null);
   const effectiveRouteState = useMemo<WebBuilderRouteState | null>(() => {
     if (isExplicitProjectResume) {
-      return mergeRouteStatePreservingFiles(routeState, persistedResumeState);
+      return mergeRouteStatePreservingFiles(persistedResumeState, routeState);
     }
     return mergeRouteStatePreservingFiles(pendingLauncherHandoff, launchRouteState, routeState);
   }, [isExplicitProjectResume, launchRouteState, pendingLauncherHandoff, persistedResumeState, routeState]);
@@ -683,11 +681,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editorCode, setEditorCode] = useState(CLEAR_CANVAS_JS_SEED);
   const [previewCode, setPreviewCode] = useState('');
-  const [codeChanges, setCodeChanges] = useState<{
-    beforeFiles: Record<string, string>;
-    afterFiles: Record<string, string>;
-    isLive: boolean;
-  } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const splitViewDropZoneRef = useRef<HTMLDivElement>(null);
   const livePreviewRef = useRef<VFSPreviewHandle | null>(null);
@@ -1892,24 +1885,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     resetToEmpty: vfsResetToEmpty,
     loadDefaultTemplate: vfsLoadDefaultTemplate,
   } = virtualFS;
-
-  useEffect(() => {
-    const unsubscribeStart = vfsEventBus.on('ai:apply:start', () => {
-      const files = getSandpackFiles();
-      setCodeChanges({ beforeFiles: files, afterFiles: files, isLive: true });
-    });
-    const unsubscribeComplete = vfsEventBus.on('ai:apply:complete', () => {
-      setCodeChanges((current) => current ? { ...current, isLive: false } : current);
-    });
-    const unsubscribeError = vfsEventBus.on('ai:apply:error', () => {
-      setCodeChanges((current) => current ? { ...current, isLive: false } : current);
-    });
-    return () => {
-      unsubscribeStart();
-      unsubscribeComplete();
-      unsubscribeError();
-    };
-  }, [getSandpackFiles]);
 
   // ──────────────────────────────────────────────────────────────
   // Unison Data Generator (Phase 1)
@@ -3740,12 +3715,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         entryPoint: launchEntryPoint,
         adoption: commitAdoptionRecord(commit),
       });
-      if (commit.persistedRevisionId) {
-        // Sync the ref now: a mixed Affinity request continues on this revision
-        // in the same turn, before React re-renders.
-        currentRevisionIdRef.current = commit.persistedRevisionId;
-        setCurrentRevisionId(commit.persistedRevisionId);
-      }
+      if (commit.persistedRevisionId) setCurrentRevisionId(commit.persistedRevisionId);
       toast.success('Theme tokens applied');
       return true;
     } catch (err) {
@@ -7878,22 +7848,20 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       <InteractiveElementHighlight isInteractiveMode={isInteractiveMode} />
 
       {/* Global builder toolbar */}
-      <div className="z-20 flex min-h-11 flex-shrink-0 flex-col gap-1 border-b border-white/[0.06] bg-[#0a0a14] px-2 py-1 lg:h-11 lg:flex-row lg:items-center lg:gap-1.5 lg:px-3 lg:py-0">
+      <div className="z-20 flex h-11 flex-shrink-0 items-center gap-1.5 border-b border-white/[0.06] bg-[#0a0a14] px-2 lg:px-3">
         {/* Left Section: AI Toggle, Back, Device, Mode */}
-        <div className="flex w-full items-center justify-between gap-1.5 lg:w-auto lg:justify-start lg:gap-2">
+        <div className="flex items-center gap-1.5 lg:gap-2">
           <Button
             variant="ghost"
             size="icon"
             onClick={handleBackNavigation}
-            className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
+            className="h-8 w-8 rounded-md text-white/55 hover:bg-white/[0.06] hover:text-white"
             title={`Go back to ${referrerPageName}${hasUnsavedChanges ? ' (unsaved changes will be auto-saved)' : ''} - Alt+←`}
-            aria-label="Go back"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
 
           {/* Inline project rename — invisible until a project is loaded. */}
-          <span className="shrink-0 text-foreground" aria-label="Affinity Builder">Affinity</span>
           {projectId && (
             <input
               value={projectDisplayName}
@@ -7909,41 +7877,38 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               disabled={renamingProject}
               placeholder="Untitled project"
               aria-label="Project name"
-              className="block h-8 max-w-[42vw] truncate rounded-md border border-transparent bg-transparent px-2 text-xs font-medium text-white/80 outline-none focus:border-white/10 lg:max-w-[180px]"
+              className="hidden h-8 max-w-[180px] truncate rounded-md border border-transparent bg-transparent px-2 text-xs font-medium text-white/80 outline-none hover:bg-white/[0.04] focus:border-white/10 focus:bg-white/[0.04] lg:block"
             />
           )}
 
           {/* Device + Mode + Tools — hidden on small screens (use bottom nav on mobile) */}
           <div className="hidden items-center gap-2 lg:flex">
           {/* Device Breakpoints */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 rounded-md bg-white/[0.035] p-0.5">
             <Button
-              variant="ghost"
+              variant={device === "desktop" ? "secondary" : "ghost"}
               size="icon"
               onClick={() => setDevice("desktop")}
-              className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
+              className={cn("h-7 w-7 rounded transition-colors", device === "desktop" ? "bg-white/10 text-white" : "text-white/40 hover:bg-white/[0.06] hover:text-white/80")}
               title="Desktop"
-              aria-label="Desktop preview"
             >
               <Monitor className="h-3.5 w-3.5" />
             </Button>
             <Button
-              variant="ghost"
+              variant={device === "tablet" ? "secondary" : "ghost"}
               size="icon"
               onClick={() => setDevice("tablet")}
-              className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
+              className={cn("h-7 w-7 rounded transition-colors", device === "tablet" ? "bg-white/10 text-white" : "text-white/40 hover:bg-white/[0.06] hover:text-white/80")}
               title="Tablet"
-              aria-label="Tablet preview"
             >
               <Tablet className="h-3.5 w-3.5" />
             </Button>
             <Button
-              variant="ghost"
+              variant={device === "mobile" ? "secondary" : "ghost"}
               size="icon"
               onClick={() => setDevice("mobile")}
-              className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
+              className={cn("h-7 w-7 rounded transition-colors", device === "mobile" ? "bg-white/10 text-white" : "text-white/40 hover:bg-white/[0.06] hover:text-white/80")}
               title="Mobile"
-              aria-label="Mobile preview"
             >
               <Smartphone className="h-3.5 w-3.5" />
             </Button>
@@ -7981,26 +7946,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           </div>{/* end hidden sm:flex device+mode+tools */}
         </div>
 
-        <div className="flex w-full items-center justify-start gap-4 overflow-x-auto border-t border-white/[0.04] px-1 pt-1 lg:hidden">
-          <div className="flex shrink-0 items-center gap-1">
-            {([
-              { id: 'desktop' as const, icon: Monitor, label: 'Desktop' },
-              { id: 'tablet' as const, icon: Tablet, label: 'Tablet' },
-              { id: 'mobile' as const, icon: Smartphone, label: 'Mobile' },
-            ]).map(({ id, icon: Icon, label }) => (
-              <Button
-                key={id}
-                variant="ghost"
-                size="icon"
-                onClick={() => setDevice(id)}
-                className="h-8 w-8 shrink-0 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
-                title={label}
-                aria-label={`${label} preview`}
-              >
-                <Icon className="h-4 w-4" />
-              </Button>
-            ))}
-          </div>
+        <div className="flex flex-1 justify-center lg:hidden">
           <SimpleModeToggle
             currentMode={builderMode === 'preview' ? 'preview' : 'select'}
             onModeChange={(mode) => {
@@ -8012,28 +7958,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 clearLivePreviewSelection();
               }
             }}
-            className="shrink-0"
+            className="min-w-0"
           />
-          <div className="flex shrink-0 items-center gap-1">
-            {([
-              { id: 'canvas' as const, icon: Square, label: 'Canvas' },
-              { id: 'code' as const, icon: FileCode, label: 'Code' },
-              { id: 'split' as const, icon: Layout, label: 'Split' },
-              { id: 'changes' as const, icon: GitBranch, label: 'Changes' },
-            ]).map(({ id, icon: Icon, label }) => (
-              <Button
-                key={id}
-                variant="ghost"
-                size="icon"
-                onClick={() => setViewMode(id)}
-                className="h-8 w-8 shrink-0 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
-                title={`${label} view`}
-                aria-label={`${label} view`}
-              >
-                <Icon className="h-4 w-4" />
-              </Button>
-            ))}
-          </div>
         </div>
 
         {/* Center Section: Floating Dock - hidden on small screens */}
@@ -8056,24 +7982,27 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         {/* Right Section: View Mode, Save, AI Activity, Right Panel Toggle */}
         <div className="hidden items-center gap-2 lg:flex">
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center rounded-md bg-white/[0.035] p-0.5">
             {([
               { id: 'canvas' as const, icon: Square, label: 'Canvas' },
               { id: 'code' as const, icon: FileCode, label: 'Code' },
               { id: 'split' as const, icon: Layout, label: 'Split' },
-              { id: 'changes' as const, icon: GitBranch, label: 'Changes' },
             ] as const).map(({ id, icon: Icon, label }) => {
+              const isActive = viewMode === id;
               return (
                 <button
                   key={id}
                   onClick={() => setViewMode(id)}
                   className={cn(
-                    'relative flex h-8 w-8 items-center justify-center rounded-md text-white/55 outline-none transition-colors hover:bg-transparent hover:text-white/55',
+                    'relative flex h-7 items-center justify-center gap-1.5 rounded px-2 text-[11px] font-medium outline-none transition-colors',
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-white/40 hover:bg-white/[0.06] hover:text-white/80',
                   )}
                   title={`${label} View`}
-                  aria-label={`${label} view`}
                 >
                   <Icon className="h-3.5 w-3.5" />
+                  <span className={cn('tracking-wide hidden lg:inline', isActive ? 'font-bold' : '')}>{label}</span>
                 </button>
               );
             })}
@@ -8102,13 +8031,13 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             </span>
             <Button
               variant="ghost"
-              size="icon"
+              size="sm"
               onClick={() => setSaveProjectDialogOpen(true)}
-              className="h-8 w-8 rounded-md p-0 text-white/55 hover:bg-transparent hover:text-white/55"
+              className="h-8 rounded-md px-2 text-white/55 hover:bg-white/[0.06] hover:text-white"
               title={currentTemplateName ? `Update "${currentTemplateName}"` : "Save to Projects"}
-              aria-label={currentTemplateName ? `Update ${currentTemplateName}` : "Save to Projects"}
             >
-              <Save className="h-4 w-4" />
+              <Save className="h-3.5 w-3.5 mr-1.5" />
+              <span className="text-xs font-medium">{currentTemplateName ? 'Save now' : 'Save'}</span>
             </Button>
             <DeployButton
               getFiles={() => getCurrentCanonicalBuildArtifacts()?.deployFiles || {}}
@@ -8118,7 +8047,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               systemId={activeSystemType}
               projectId={projectId ?? null}
               variant="ghost"
-              size="icon"
+              size="sm"
               onDeployComplete={(url) => {
                 toast.success('Site published!', {
                   description: `Live at ${url}`,
@@ -8136,9 +8065,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             variant="ghost"
             size="icon"
             onClick={() => setAiPanelOpen(!aiPanelOpen)}
-            className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
-            title={aiPanelOpen ? "Close Affinity panel" : "Open Affinity panel"}
-            aria-label={aiPanelOpen ? "Close Affinity panel" : "Open Affinity panel"}
+            className={cn("h-8 w-8 rounded-md", aiPanelOpen ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/[0.06] hover:text-white")}
+            title={aiPanelOpen ? "Close AI panel" : "Open AI panel"}
           >
             <Sparkles className="h-4 w-4" />
           </Button>
@@ -8151,9 +8079,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 setLeftPanelCollapsed(false);
               } else setLeftPanelCollapsed(!leftPanelCollapsed);
             }}
-            className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
+            className={cn("h-8 w-8 rounded-md", !leftPanelCollapsed ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/[0.06] hover:text-white")}
             title={aiPanelOpen ? "Open standalone Builder Tools" : leftPanelCollapsed ? "Show tools" : "Hide tools"}
-            aria-label={aiPanelOpen ? "Open standalone Builder Tools" : leftPanelCollapsed ? "Show tools" : "Hide tools"}
           >
             <Layers className="h-4 w-4" />
           </Button>
@@ -8166,9 +8093,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 setRightPanelCollapsed(false);
               } else setRightPanelCollapsed(!rightPanelCollapsed);
             }}
-            className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
+            className={cn("h-8 w-8 rounded-md", !rightPanelCollapsed ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/[0.06] hover:text-white")}
             title={aiPanelOpen ? "Open standalone Customizer" : rightPanelCollapsed ? "Show Properties Panel" : "Hide Properties Panel"}
-            aria-label={aiPanelOpen ? "Open standalone Customizer" : rightPanelCollapsed ? "Show Properties Panel" : "Hide Properties Panel"}
           >
             <Settings className="h-4 w-4" />
           </Button>
@@ -8180,9 +8106,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               setPlaygroundInitialBindingId(undefined);
               setPlaygroundModalOpen(true);
             }}
-            className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
+            className="h-8 w-8 rounded-md text-white/45 hover:bg-white/[0.06] hover:text-white"
             title="Open Creator's Playground"
-            aria-label="Open Creator's Playground"
           >
             <Play className="h-4 w-4" />
           </Button>
@@ -8190,9 +8115,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             variant="ghost"
             size="icon"
             onClick={() => setMobileActionsOpen(true)}
-            className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
+            className="h-8 w-8 rounded-md text-white/45 hover:bg-white/[0.06] hover:text-white"
             title="More project actions"
-            aria-label="More project actions"
           >
             <MoreHorizontal className="h-4 w-4" />
           </Button>
@@ -8462,7 +8386,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                         },
                         activePagePath,
                         candidate: candidate.build.changeSet,
-                        guestDemoOperationId: applyMeta?.guestDemoOperationId,
                         label: applyMeta?.prompt ? applyMeta.prompt.slice(0, 120) : undefined,
                       }
                     : null;
@@ -8499,14 +8422,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   }
 
                    const mergedFiles = outcome.committedFiles ?? beforeSnapshotFiles;
-                  setCodeChanges((current) => {
-                    const keepRunBaseline = current?.isLive === true;
-                    return {
-                      beforeFiles: keepRunBaseline ? current.beforeFiles : beforeSnapshotFiles,
-                      afterFiles: mergedFiles,
-                      isLive: keepRunBaseline,
-                    };
-                  });
                    // Keep the live revision ref in step immediately so a
                    // follow-up sequential task commits against this revision,
                    // not the pre-edit one (avoids the 40001 draft-pointer
@@ -8538,7 +8453,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   });
                   const syncedEntry = syncBuilderFromFiles(mergedFiles, activePagePath);
                   console.log('[WebBuilder] Entry file for preview:', syncedEntry?.entryPath || 'NOT FOUND');
-                  if (viewMode !== 'changes') setViewMode('canvas');
+                  setViewMode('canvas');
                   const changedPaths = diffChangedPaths(beforeSnapshotFiles, mergedFiles);
                   if (changedPaths.length > 0) {
                     const promptPreview = applyMeta?.prompt
@@ -8558,9 +8473,12 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   return { success: true, errors: [] };
                 }}
                 onOpenFile={(path) => { setViewMode('split'); openBuilderFile(path); }}
-                onViewEdits={() => {
-                  setViewMode('changes');
-                  setAiPanelOpen(false);
+                onViewEdits={(edits) => {
+                  // Switch to code view and highlight the edited files
+                  setViewMode('split');
+                  toast.info('View Edits', {
+                    description: `${edits.length} file(s) modified - check the file explorer`,
+                  });
                 }}
 
               />
@@ -8682,7 +8600,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                       },
                       activePagePath,
                       candidate: candidate.build.changeSet,
-                      guestDemoOperationId: applyMeta?.guestDemoOperationId,
                       label: applyMeta?.prompt ? applyMeta.prompt.slice(0, 120) : undefined,
                     }
                   : null;
@@ -8716,14 +8633,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 }
 
                  const mergedFiles = outcome.committedFiles ?? beforeFiles;
-                setCodeChanges((current) => {
-                  const keepRunBaseline = current?.isLive === true;
-                  return {
-                    beforeFiles: keepRunBaseline ? current.beforeFiles : beforeFiles,
-                    afterFiles: mergedFiles,
-                    isLive: keepRunBaseline,
-                  };
-                });
                 if (outcome.revisionId) {
                   currentRevisionIdRef.current = outcome.revisionId;
                   updateLaunch({ revisionId: outcome.revisionId });
@@ -8745,7 +8654,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   afterFiles: mergedFiles,
                 });
                 syncBuilderFromFiles(mergedFiles, activePagePath);
-                if (viewMode !== 'changes') setViewMode('canvas');
+                setViewMode('canvas');
                 setAiPanelOpen(false);
                 const changedPaths = diffChangedPaths(beforeFiles, mergedFiles);
                 if (changedPaths.length > 0) {
@@ -8766,7 +8675,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 return { success: true, errors: [] };
               }}
               onOpenFile={(path) => { setViewMode('split'); openBuilderFile(path); }}
-              onViewEdits={() => { setViewMode('changes'); setAiPanelOpen(false); }}
+              onViewEdits={() => { setViewMode('split'); setAiPanelOpen(false); }}
 
             />
           </div>
@@ -8934,10 +8843,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                         siteId={effectiveRouteState?.siteId ?? launch?.siteId ?? undefined}
                         revisionId={currentRevisionId || null}
                         onInlineTextCommit={handleInlineTextCommit}
-                        onReady={() => {
-                          console.log('[WebBuilder] VFSPreview ready');
-                          setIframeErrors([]);
-                        }}
+                        onReady={() => console.log('[WebBuilder] VFSPreview ready')}
                         onError={(err) => {
                           setIframeErrors(prev => {
                             const isDuplicate = prev.slice(-5).some(e => e.message === err);
@@ -8962,30 +8868,14 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   </div>
                 </div>
               );
-              if (viewMode === 'changes') {
-                return (
-                  <CodeChangesView
-                    beforeFiles={codeChanges?.beforeFiles ?? {}}
-                    afterFiles={codeChanges?.afterFiles ?? {}}
-                    isLive={codeChanges?.isLive ?? false}
-                  />
-                );
+              if (viewMode === 'canvas') {
+                return <div className="w-full h-full flex">{canvasPreviewPane}</div>;
               }
+              if (viewMode !== 'code' && viewMode !== 'split') return null;
               return (
-              <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
-                <div className={cn(
-                  "flex min-h-0 min-w-0 flex-col overflow-hidden",
-                  viewMode === 'canvas' || viewMode === 'split' ? 'flex-1' : 'hidden',
-                )}>
-                  {canvasPreviewPane}
-                </div>
-                <div className={cn(
-                  "flex min-h-0 min-w-0 flex-col overflow-hidden",
-                  viewMode === 'code' || viewMode === 'split' ? 'flex-1' : 'hidden',
-                )}>
-                <CodeViewErrorBoundary onFallbackClick={() => setViewMode('canvas')}>
-                  <VFSCodeView
-                  previewSlot={undefined}
+              <CodeViewErrorBoundary onFallbackClick={() => setViewMode('canvas')}>
+                <VFSCodeView
+                  previewSlot={viewMode === 'split' ? canvasPreviewPane : undefined}
                   historyDraftId={currentDraftId}
                   onTerminalPatch={onTerminalPatch}
                   getRevisionInfo={getTerminalRevisionInfo}
@@ -9040,10 +8930,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                     const snap = vfsSnapshotManager.createSnapshot(files, label, 'manual');
                     return snap.id;
                   }}
-                  />
-                </CodeViewErrorBoundary>
-                </div>
-              </div>
+                />
+              </CodeViewErrorBoundary>
               );
             })()}
           </div>
@@ -9337,7 +9225,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             setAiPanelOpen(next);
             if (next) { setLeftPanelCollapsed(true); setRightPanelCollapsed(true); }
           }}
-          className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40"
+          className={cn(
+            "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40 transition-colors",
+            aiPanelOpen ? "text-white after:absolute after:bottom-0 after:h-px after:w-5 after:bg-indigo-400" : "hover:text-white/70"
+          )}
         >
           <span className="text-base leading-none">⚡</span>
           <span className="text-[10px] font-medium">AI</span>
@@ -9351,7 +9242,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               setRightPanelCollapsed(true);
             } else setLeftPanelCollapsed(true);
           }}
-          className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40"
+          className={cn(
+            "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40 transition-colors",
+            !leftPanelCollapsed && !aiPanelOpen ? "text-white after:absolute after:bottom-0 after:h-px after:w-5 after:bg-indigo-400" : "hover:text-white/70"
+          )}
         >
           <Layers className="h-4 w-4" />
           <span className="text-[10px] font-medium">Tools</span>
@@ -9364,7 +9258,12 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             setLeftPanelCollapsed(true);
             setRightPanelCollapsed(true);
           }}
-          className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40"
+          className={cn(
+            "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40 transition-colors",
+            viewMode === 'canvas' && leftPanelCollapsed && !aiPanelOpen && rightPanelCollapsed
+              ? "text-white after:absolute after:bottom-0 after:h-px after:w-5 after:bg-indigo-400"
+              : "hover:text-white/70"
+          )}
         >
           <Square className="h-4 w-4" />
           <span className="text-[10px] font-medium">Canvas</span>
@@ -9376,7 +9275,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             setRightPanelCollapsed(!next);
             if (!next === false) { /* closing */ } else { setAiPanelOpen(false); setLeftPanelCollapsed(true); }
           }}
-          className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40"
+          className={cn(
+            "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40 transition-colors",
+            !rightPanelCollapsed ? "text-white after:absolute after:bottom-0 after:h-px after:w-5 after:bg-indigo-400" : "hover:text-white/70"
+          )}
         >
           <Settings className="h-4 w-4" />
           <span className="text-[10px] font-medium">Props</span>
@@ -9384,7 +9286,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         {/* Mobile actions */}
         <button
           onClick={() => setMobileActionsOpen(true)}
-          className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40"
+          className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 text-white/40 transition-colors hover:text-white/70"
         >
           <MoreHorizontal className="h-4 w-4" />
           <span className="text-[10px] font-medium">More</span>

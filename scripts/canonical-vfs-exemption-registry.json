@@ -32,8 +32,6 @@
     "webpage import into the workspace": "workspace-import",
     "code import into the workspace": "workspace-import",
     "editor working-buffer projection; persistence happens on commit": "editor-buffer",
-    "local-only text projection; durable revisions remain commitMutation-owned.": "editor-buffer",
-    "local-only visual text edit; durable revisions remain commitMutation-owned.": "editor-buffer",
     "dependency manifest write, not site content": "runtime-manifest",
     "write-back of canonical Unison runtime files, not user content": "runtime-manifest",
     "optimistic HMR projection; the same mutation is chained through commitMutation below": "optimistic-hmr"
@@ -49,8 +47,6 @@
       "hydration of the committed wizard handoff": 1,
       "rollback restore of the pre-mutation working set": 2,
       "editor working-buffer projection; persistence happens on commit": 1,
-      "local-only text projection; durable revisions remain commitMutation-owned.": 1,
-      "local-only visual text edit; durable revisions remain commitMutation-owned.": 1,
       "hydration of a saved draft into the working set": 2,
       "template import adoption, declared through the adoption record": 2,
       "local editor undo of a working-set snapshot": 1,

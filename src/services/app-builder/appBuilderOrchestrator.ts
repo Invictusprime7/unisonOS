@@ -9,12 +9,10 @@ import { evaluateDesignQuality } from './design/designQualityClosure';
 import { applyDesignSources } from './design/designSourceMaterializer';
 import { buildAppBuilderGenerationContext, reportDesignSourceUsage } from './appBuilderGenerationContext';
 import { findPageStructureIssues, pageStructureRequirement, verifiedPhotosFor } from './design/pageStructureGate';
-import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
 
 export interface AppBuilderOrchestratorDependencies {
   authorSite: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
   runComposer: (input: ComposerLoopInput) => Promise<ComposerLoopResult>;
-  loadContentTypes?: (scope: { businessId: string; projectId: string }) => Promise<ContentTypeRow[]>;
 }
 
 const CLOSURE_REPAIR_RESERVE_MS = 75_000;
@@ -39,10 +37,7 @@ export async function orchestrateAppBuild(
   const startedAt = Date.now();
   const totalBudgetMs = input.budgetMs ?? 280_000;
   const authoringBudgetMs = Math.max(60_000, totalBudgetMs - CLOSURE_REPAIR_RESERVE_MS);
-  const contentTypes = dependencies.loadContentTypes
-    ? await dependencies.loadContentTypes({ businessId: input.contract.identity.businessId, projectId: input.contract.identity.projectId })
-    : [];
-  const generation = buildAppBuilderGenerationContext(input.contract, contentTypes);
+  const generation = buildAppBuilderGenerationContext(input.contract);
   const baseFiles = applyDesignSources(input.initialFiles, generation.materialization);
   const manifestSource = baseFiles['/.unison/design-source-manifest.json'];
   const contractPages = input.contract.design.resolvedSiteDesignContext.contract.pages;

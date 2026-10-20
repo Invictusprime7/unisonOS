@@ -5006,16 +5006,14 @@ export function prepareSandpackFiles(
       || /<App\s+[^/\s>]/.test(savedBootstrap)));
   sandpackFiles['/index.tsx'] = preserveSavedBootstrap
     ? savedBootstrap + `\n// Saved provider tree owns mounting; report its actual DOM commit.
-const __reportSavedPreviewReady = () => {
+const __savedPreviewObserver = new MutationObserver(() => {
   const root = document.getElementById('root');
   if (root?.childElementCount) {
     window.parent.postMessage({ type: 'UNISON_PREVIEW_RENDER_READY' }, '*');
     __savedPreviewObserver.disconnect();
   }
-};
-const __savedPreviewObserver = new MutationObserver(__reportSavedPreviewReady);
+});
 __savedPreviewObserver.observe(document.body, { childList: true, subtree: true });
-__reportSavedPreviewReady();
 window.addEventListener('error', (event) => window.parent.postMessage({ type: 'UNISON_PREVIEW_RENDER_ERROR', error: event.message }, '*'));
 window.addEventListener('unhandledrejection', (event) => window.parent.postMessage({ type: 'UNISON_PREVIEW_RENDER_ERROR', error: String(event.reason?.message || event.reason) }, '*'));
 `

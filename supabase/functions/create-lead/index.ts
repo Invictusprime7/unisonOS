@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { publicBusinessWriteAllowed } from "../_shared/publicBusinessGate.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { sendResendEmail, DEFAULT_FROM_EMAIL } from "../_shared/resend.ts";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
@@ -138,10 +137,6 @@ serve(async (req) => {
     // Validate businessId format early to avoid DB 22P02 errors
     if (!isValidUUID(businessId)) {
       return errorResponse("Invalid business ID", 400, corsHeaders);
-    }
-
-    if (!(await publicBusinessWriteAllowed(supabase, req, businessId))) {
-      return errorResponse("This business is not accepting submissions", 403, corsHeaders);
     }
 
     // Validate email format

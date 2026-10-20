@@ -5,8 +5,7 @@
  * giving users a real "window" into their project.
  */
 
-import { useMemo, useRef } from "react";
-import DOMPurify from "dompurify";
+import { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Clock, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -32,11 +31,6 @@ export function RecentProjectCard({
   onClick,
 }: RecentProjectCardProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  // Thumbnails render inert: scripts and handlers are stripped, styles kept.
-  const safePreviewHtml = useMemo(
-    () => (previewHtml ? DOMPurify.sanitize(previewHtml, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style', 'link'] }) : ''),
-    [previewHtml],
-  );
 
   const formattedDate = new Date(updatedAt).toLocaleDateString("en-US", {
     month: "short",
@@ -60,14 +54,14 @@ export function RecentProjectCard({
         {previewHtml ? (
           <iframe
             ref={iframeRef}
-            srcDoc={safePreviewHtml}
+            srcDoc={previewHtml}
             title={`Preview of ${name}`}
             className="absolute inset-0 w-[1280px] h-[800px] origin-top-left border-0 pointer-events-none"
             style={{
               transform: "scale(0.22)",
               transformOrigin: "top left",
             }}
-            sandbox=""
+            sandbox="allow-scripts"
             loading="lazy"
             tabIndex={-1}
           />

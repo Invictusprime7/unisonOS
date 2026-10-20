@@ -54,13 +54,13 @@ describe("route navigation model", () => {
 
     expect(workspaceItems.map((item) => item.id)).toContain("dashboard");
     expect(workspaceItems.find((item) => item.id === "dashboard")?.isActive).toBe(true);
-    expect(workspaceItems.map((item) => item.id)).toContain("home");
+    expect(workspaceItems.map((item) => item.id)).not.toContain("home");
     expect(builderItems.map((item) => item.id)).toContain("web-builder");
     expect(builderItems.map((item) => item.id)).not.toContain("ai-generator");
   });
 
   it("creates primary shell navigation items with resolved params", () => {
-    expect(getPrimaryShellNavigationItem("workspace")?.href).toBe("/home");
+    expect(getPrimaryShellNavigationItem("workspace")?.href).toBe("/dashboard");
     expect(getPrimaryShellNavigationItem("project", "/project/p1", { id: "p1" })?.href).toBe("/project/p1");
     expect(getPrimaryShellNavigationItem("focus")).toBeNull();
   });

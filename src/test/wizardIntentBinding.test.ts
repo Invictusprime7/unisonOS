@@ -63,7 +63,7 @@ describe('wizard intent binding', () => {
   });
 
   it('defines industry guardrails for forbidden intents', () => {
-    expect(getIndustryIntentProfile('ecommerce')?.forbidden).toContain('quote.request');
+    expect(getIndustryIntentProfile('ecommerce')?.forbidden).toContain('booking.create');
     expect(getIndustryIntentProfile('salon')?.forbidden).toContain('quote.request');
     expect(getIndustryIntentProfile('contractor')?.required).toContain('quote.request');
   });

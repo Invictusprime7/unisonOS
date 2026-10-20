@@ -2,15 +2,28 @@ import { Suspense, lazy, Component, type ReactNode, type ErrorInfo } from "react
 import { VFSProvider } from "@/contexts/VFSContext";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { UnisonLoadingMark } from "@/components/UnisonLoadingMark";
 import { LaunchDegradationNote } from "@/components/builder/LaunchDegradationNote";
 
 
+const WEB_BUILDER_MODULE_RETRY_KEY = "unison:web-builder-module-retry";
 type WebBuilderModule = typeof import("@/components/creatives/WebBuilder");
 
 const WebBuilder = lazy(async (): Promise<{ default: WebBuilderModule["WebBuilder"] }> => {
-  // Fail visibly; never reload the entire editing session automatically.
-  const module = await import("@/components/creatives/WebBuilder");
-  return { default: module.WebBuilder };
+  try {
+    const module = await import("@/components/creatives/WebBuilder");
+    window.sessionStorage.removeItem(WEB_BUILDER_MODULE_RETRY_KEY);
+    return { default: module.WebBuilder };
+  } catch (error) {
+    if (window.sessionStorage.getItem(WEB_BUILDER_MODULE_RETRY_KEY) !== "1") {
+      window.sessionStorage.setItem(WEB_BUILDER_MODULE_RETRY_KEY, "1");
+      window.location.reload();
+      return new Promise(() => undefined);
+    }
+
+    window.sessionStorage.removeItem(WEB_BUILDER_MODULE_RETRY_KEY);
+    throw error;
+  }
 });
 
 // Inner error boundary that catches VFS/WebBuilder-specific crashes
@@ -81,7 +94,7 @@ const WebBuilderPage = () => (
           fallback={
             <div className="min-h-[100dvh] w-full flex items-center justify-center">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+                <UnisonLoadingMark size={40} className="mx-auto mb-4" />
                 <p className="text-muted-foreground">Loading Web Builder...</p>
               </div>
             </div>

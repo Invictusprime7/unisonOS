@@ -32,9 +32,6 @@ import {
 import { orchestrateAppBuild } from './appBuilderOrchestrator';
 import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
-import { runBuilderTurn } from '@/services/builderBrainClient';
-import { listContentTypes } from '@/services/cmsRecordService';
-import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
@@ -46,8 +43,6 @@ export interface UnisonAppBuilder {
 export interface UnisonAppBuilderDependencies {
   authorSite?: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
   runComposer?: (input: ComposerLoopInput) => Promise<ComposerLoopResult>;
-  invokePage?: import('@/services/builder/aiRepairLoop').ComposerInvoke;
-  loadContentTypes?: (scope: { businessId: string; projectId: string }) => Promise<ContentTypeRow[]>;
 }
 
 function stopReason(reason: ComposerLoopResult['reason']): AppBuildCandidateStopReason {
@@ -71,11 +66,7 @@ export function createUnisonAppBuilder(
 
   const service: UnisonAppBuilder = {
     async generate(input) {
-      return orchestrateAppBuild(input, {
-        authorSite,
-        runComposer,
-        loadContentTypes: dependencies.loadContentTypes ?? ((scope) => listContentTypes(scope)),
-      });
+      return orchestrateAppBuild(input, { authorSite, runComposer });
     },
 
     async generatePages(input) {
@@ -151,7 +142,6 @@ export function createUnisonAppBuilder(
         budgetMs: input.budgetMs,
         concurrency: input.concurrency,
         onProgress: input.onProgress,
-        invoke: dependencies.invokePage ?? ((request, options) => runBuilderTurn(request, { ...options, functionName: 'generate-page' })),
         resolveDependencies: false,
         commitPage: async (files) => ({ files, revisionId: input.baseRevisionId }),
       });
@@ -236,7 +226,6 @@ export function createUnisonAppBuilder(
       }
       const composer = await runComposer({
         request: assembled.request,
-        guestDemoOperationId: input.guestDemoOperationId,
         baseFiles: { ...input.currentFiles },
         baseRevisionId: input.baseRevisionId ?? undefined,
         maxAttempts: 3,
@@ -263,7 +252,6 @@ export function createUnisonAppBuilder(
         },
         candidateFiles: composer.prepared?.nextFiles ?? input.currentFiles,
         stopReason: stopReason(composer.reason),
-        guestDemoOperationId: composer.guestDemoOperationId,
         changeSet: composer.prepared?.build.changeSet,
         summary: composer.response?.summary,
       };

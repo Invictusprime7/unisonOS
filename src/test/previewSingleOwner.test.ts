@@ -37,12 +37,7 @@ describe('Web Builder preview ownership', () => {
     expect(codeView).not.toContain('<VFSPreview');
     expect(codeView).not.toContain('<SandpackProvider');
     expect(codeView).not.toContain('function InlinePreview');
-    expect(builder).toContain("viewMode === 'canvas' || viewMode === 'split' ? 'flex-1' : 'hidden'");
-    expect(builder).toContain("viewMode === 'code' || viewMode === 'split' ? 'flex-1' : 'hidden'");
-    expect(builder).toContain('flex min-h-0 min-w-0 flex-col overflow-hidden');
-    expect(builder).toContain('previewSlot={undefined}');
-    expect(builder).not.toContain("previewSlot={viewMode === 'split' ? canvasPreviewPane : undefined}");
-    expect(builder).not.toMatch(/syncBuilderFromFiles\(mergedFiles, activePagePath\);\s*setViewMode\('canvas'\);/);
+    expect(builder).toContain("(viewMode === 'canvas' || viewMode === 'split')");
     expect(builder).toContain("ref={viewMode === 'split' ? splitViewDropZoneRef : scrollContainerRef}");
   });
 
@@ -168,28 +163,6 @@ describe('Web Builder preview ownership', () => {
     expect(sharedPreview).toContain('absolute bottom-3 left-3');
     expect(sharedPreview).toContain('({dependencyCount} modules)');
     expect(sharedPreview).toContain('<SandpackDependencyProgress dependencyCount={Object.keys(sandpackDeps).length} />');
-  });
-
-  it('treats the generated app render-ready signal as recovery from a Sandpack timeout', () => {
-    const sharedPreview = readSource('src/components/VFSPreview.tsx');
-    const builder = readSource('src/components/creatives/WebBuilder.tsx');
-
-    expect(sharedPreview).toMatch(/data\.type === 'UNISON_PREVIEW_RENDER_READY'[\s\S]*?handleSandpackRunning\(\)[\s\S]*?reportPreviewRunning\(\)/);
-    expect(sharedPreview).toContain('window.clearTimeout(timeoutRecoveryTimerRef.current)');
-    expect(sharedPreview).toContain('timeoutRecoveryTimerRef.current = null;');
-    expect(builder).toMatch(/onReady=\{\(\) => \{[\s\S]*?setIframeErrors\(\[\]\);/);
-  });
-
-  it('recovers when Sandpack connects but the generated app never reports render-ready', () => {
-    const sharedPreview = readSource('src/components/VFSPreview.tsx');
-
-    expect(sharedPreview).toContain('MAX_SANDPACK_RENDER_RECOVERIES = 1');
-    expect(sharedPreview).toContain('PREVIEW_RENDER_READY_TIMEOUT_MS = 20_000');
-    expect(sharedPreview).toContain('renderReadyTimeoutRef.current = window.setTimeout');
-    expect(sharedPreview).toContain("data.type === 'UNISON_PREVIEW_RENDER_READY'");
-    expect(sharedPreview).toContain('if (renderReadyRef.current) return;');
-    expect(sharedPreview).toContain('renderWatchKeyRef.current === watchKey && renderReadyTimeoutRef.current !== null');
-    expect(sharedPreview).toContain("'Preview did not render'");
   });
 
   it('keeps template thumbnails painted but non-executable', () => {

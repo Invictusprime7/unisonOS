@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AIConversationMessage } from '@/components/creatives/web-builder/ai-chat/AIConversationMessage';
 import type { Message, ThinkingStep } from '@/components/creatives/web-builder/AIBuilderPanel';
@@ -12,6 +12,7 @@ function showPipeline(steps: Array<Pick<ThinkingStep, 'type' | 'message'>>) {
     thinking: steps.map((step, index) => ({ ...step, id: String(index), timestamp: new Date() })),
   };
   render(<AIConversationMessage message={message} />);
+  fireEvent.click(screen.getByRole('button', { name: /Thinking (interrupted|complete)/ }));
 }
 
 describe('AI conversation completion status', () => {
@@ -39,6 +40,6 @@ describe('AI conversation completion status', () => {
   it('does not describe an already applied edit as ready to apply', () => {
     showPipeline([{ type: 'complete', message: 'Applied to /src/pages/Shop.tsx' }]);
     expect(screen.queryByText('Ready to apply changes.')).not.toBeInTheDocument();
-    expect(screen.queryByText('Last issue: Applied to /src/pages/Shop.tsx')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Applied to /src/pages/Shop.tsx')).toHaveLength(2);
   });
 });

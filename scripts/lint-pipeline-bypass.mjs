@@ -169,8 +169,6 @@ const DESIGN_RESOLUTION_ALLOWLIST = new Set([
   // Read-only launch-context projection. It filters registry metadata for the
   // composer; it cannot compile or persist a canonical artifact.
   'src/services/launch/wizardRegistryAggregation.ts',
-  // Read-only verifier of compiler-materialized recipe bytes; it neither compiles nor seals.
-  'src/services/app-builder/design/designSourceMaterializer.ts',
   // Transitional: swap helper consumed by the compiler paths above.
   'src/utils/sectionSwapper.ts',
 ]);

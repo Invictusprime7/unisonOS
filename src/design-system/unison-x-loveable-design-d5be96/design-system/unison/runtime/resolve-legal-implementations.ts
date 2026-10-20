@@ -2,7 +2,7 @@ import type { ArtDirectionPack } from '../contracts/art-direction';
 import type { SectionType } from '../types';
 import { getGenerationVariantsForSection } from '../components/registry';
 import type { SectionVariant, VariantId } from '../components/types';
-import { childSeed, seededPick } from './design-seed';
+import { childSeed, seededPick } from '@/platform/core/generationSeed';
 import { deriveStatus } from './promotion-audit';
 
 export function listLegalImplementations(family: SectionType, pack?: ArtDirectionPack, pageRole?: string): SectionVariant[] {

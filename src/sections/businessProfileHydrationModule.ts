@@ -15,8 +15,6 @@
  *     `null` and callers preserve their seed props.
  */
 
-import { TRUSTED_PREVIEW_ORIGIN_SOURCE } from '@/utils/trustedPreviewOrigin';
-
 export const BUSINESS_PROFILE_HYDRATION_PATH = '/src/components/businessProfile.ts';
 
 export const BUSINESS_PROFILE_HYDRATION_MODULE = `import { useEffect, useState } from 'react';
@@ -101,7 +99,7 @@ export function useBusinessProfile(): BusinessProfileLive | null {
     } catch { /* noop */ }
 
     const onMessage = (event: MessageEvent) => {
-      if ((event.source !== window.parent) || !(${TRUSTED_PREVIEW_ORIGIN_SOURCE})(event.origin)) return;
+      if (event.source !== window.parent) return;
       const data = event.data as { type?: string; profile?: BusinessProfileLive | null } | null;
       if (!data || data.type !== 'BUSINESS_PROFILE_CHANGED') return;
       setProfile(data.profile ?? null);

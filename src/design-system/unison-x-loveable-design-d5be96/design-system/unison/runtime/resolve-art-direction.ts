@@ -28,7 +28,7 @@ import { resolvePageArchetype } from '../contracts/page-archetypes';
 import { normalizeIndustryKey } from '../contracts/industry-key';
 import type { WizardExperiencePreference } from '../contracts/selection';
 import { getGenerationVariantsForSection } from '../components/registry';
-import { childSeed, seededPick } from './design-seed';
+import { childSeed, seededPick } from '@/platform/core/generationSeed';
 
 export interface ArtDirectionResolutionRequest {
   sealedPackId?: string | null;

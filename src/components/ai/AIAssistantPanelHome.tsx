@@ -92,7 +92,7 @@ export const AIAssistantPanelHome: React.FC<AIAssistantPanelHomeProps> = ({
           </div>
           <div>
             <CardTitle className="text-lg flex items-center gap-2">
-              Affinity
+              AI Code Assistant
               <Badge variant="secondary" className="text-xs">
                 <Sparkles className="w-3 h-3 mr-1" />
                 Powered by AI

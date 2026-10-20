@@ -54,7 +54,8 @@ export default function ThemeTokenEditorPanel({
   if (!contract) {
     return (
       <div className="p-4 text-[11px] text-muted-foreground">
-        No sealed theme contract in this snapshot yet. Generate or open a site created with Affinity and the token editor becomes available.
+        No sealed theme contract in this snapshot yet. Generate or open a wizard-launched
+        site and the token editor becomes available.
       </div>
     );
   }

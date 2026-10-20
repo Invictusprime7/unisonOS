@@ -99,7 +99,7 @@ const Creatives = () => {
   const creativeTools = [
     { icon: Palette, title: "Design Studio", desc: "Professional design tools", path: "/design-studio" },
     { icon: Globe, title: "Web Builder", desc: "AI-powered websites", path: "/web-builder" },
-    { icon: Sparkles, title: "Launch a system", desc: "Built with Affinity", path: "/onboarding" }
+    { icon: Sparkles, title: "Launch a system", desc: "Wizard-generated business site", path: "/onboarding" }
   ];
 
   return (

@@ -121,29 +121,6 @@ export interface RichResponseMeta {
   reviewSummary?: string;
   /** Apply state for the frontend to track */
   applyState?: Record<string, unknown>;
-  /** Present when the AI explained it cannot fulfill (part of) the request */
-  outOfScope?: { reason: string; suggestedPatch?: string };
-}
-
-const OUT_OF_SCOPE_MARKERS = [
-  /outside (?:my|its) scope/i,
-  /out of scope/i,
-  /not installed on this site/i,
-  /missing capability/i,
-  /i cannot fulfill/i,
-  /i can't fulfill/i,
-];
-
-/**
- * Detect an out-of-scope explanation in an explanation-only reply.
- * Returns the reason sentence(s) so the UI can render a readable note.
- */
-function detectOutOfScope(content: string, actionType?: ActionType): { reason: string } | undefined {
-  if (actionType !== "explain" && actionType !== "suggest") return undefined;
-  if (!OUT_OF_SCOPE_MARKERS.some((m) => m.test(content))) return undefined;
-  // Keep the whole reply as the reason — it is already the AI's structured
-  // explanation (what / why / the patch needed), written for the user.
-  return { reason: content.slice(0, 4000) };
 }
 
 /**
@@ -265,10 +242,8 @@ export function buildResponseBody(opts: {
   const autoWarnings = detectWarnings(opts.content) || [];
   const allWarnings = [...autoWarnings, ...(opts.reviewWarnings || [])];
 
-  const actionType = detectActionType(opts.content, opts.debugMode ?? false);
   const meta: RichResponseMeta = {
-    actionType,
-    outOfScope: detectOutOfScope(opts.content, actionType),
+    actionType: detectActionType(opts.content, opts.debugMode ?? false),
     filesDetected: fileInfo?.files,
     fileStatuses: fileInfo?.statuses,
     warnings: allWarnings.length > 0 ? allWarnings : undefined,

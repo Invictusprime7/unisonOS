@@ -90,7 +90,6 @@ import {
 } from "./wizardCatalog";
 
 export interface LauncherWizardProps {
-  demoGeneration?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialVisionPrompt?: string | null;
@@ -126,7 +125,6 @@ const CHAT_GUIDANCE: Record<SelectionStep, string> = {
 };
 
 export const LauncherWizard = ({
-  demoGeneration = false,
   open,
   onOpenChange,
   initialVisionPrompt,
@@ -409,7 +407,6 @@ export const LauncherWizard = ({
     setLaunchStatus("Preparing your site…");
 
     const input: LaunchOrchestratorInput = {
-      demoGeneration,
       systemId,
       industry: selectedIndustry || undefined,
       visionPrompt: chatPlanRef.current
@@ -491,7 +488,6 @@ export const LauncherWizard = ({
   const currentStepIndex = stepOrder.indexOf(step);
   const content = (
     <>
-        {isChat && <h2 className="affinity-wizard-title">Affinity Wizard</h2>}
         {isChat && !guidedStep && !review && !isLaunching && <div className="space-y-4 p-3" aria-live="polite">
           {completedTurns.map((turn, index) => <div key={index} className="space-y-2">
             <p className="rounded-lg bg-white/5 p-3 text-sm text-white/80">{CHAT_GUIDANCE[turn.step]}</p>
@@ -507,7 +503,7 @@ export const LauncherWizard = ({
                   <Sparkles className="h-3.5 w-3.5" />
                 </span>
                 <div className="min-w-0">
-                  <h2 className="text-sm font-semibold">Affinity Wizard</h2>
+                  <p className="text-sm font-semibold">Create a website</p>
                   <p className="truncate text-xs text-muted-foreground">{STEP_META[currentStepIndex]?.sublabel}</p>
                 </div>
               </div>
@@ -570,7 +566,7 @@ export const LauncherWizard = ({
                 <div key={step} className="animate-fade-in">
                   {step === "industry" && (
                     <div className="mx-auto max-w-3xl space-y-7">
-                      {!isChat && <StepHeading title="Choose your business type" subtitle="This gives Affinity the right starting point. You can fine-tune your site goals and pages next." />}
+                      {!isChat && <StepHeading title="Choose your business type" subtitle="This gives Unison the right starting point. You can fine-tune your site goals and pages next." />}
                       {visionPrompt && (
                         <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
                           <p className="text-xs font-medium text-primary">Your site direction</p>
@@ -683,7 +679,7 @@ export const LauncherWizard = ({
       if (!next) reset();
     }}>
       <DialogContent className="max-h-[94dvh] w-[calc(100%-1rem)] max-w-[1040px] gap-0 overflow-hidden rounded-lg border-border bg-background p-0 text-foreground shadow-2xl sm:w-[calc(100%-3rem)]">
-        <DialogHeader className="sr-only"><DialogTitle>Affinity Wizard</DialogTitle></DialogHeader>
+        <DialogHeader className="sr-only"><DialogTitle>Launch your website</DialogTitle></DialogHeader>
         {content}
       </DialogContent>
     </Dialog>

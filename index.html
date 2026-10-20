@@ -48,9 +48,13 @@
     <div id="root">
       <div class="loading-placeholder">
         <div style="text-align: center; font-family: system-ui;">
-          <div
-            style="width: 48px; height: 48px; border: 4px solid #374151; border-radius: 50%; border-top: 4px solid #3b82f6; animation: spin 1s linear infinite; margin: 0 auto 16px;"
-          ></div>
+          <img
+            src="/unison-icon.png"
+            alt=""
+            aria-hidden="true"
+            class="loading-logo"
+            style="width: 64px; height: 64px; object-fit: contain; mix-blend-mode: screen; animation: spin 1.6s linear infinite; margin: 0 auto 16px;"
+          />
           <p style="color: #9ca3af; margin: 0;">Loading application...</p>
         </div>
       </div>
@@ -61,6 +65,9 @@
       @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .loading-logo { animation: none !important; }
       }
     </style>
 

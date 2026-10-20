@@ -5,12 +5,11 @@
  * from `catalogSurfaceRegistry`; Resource Runtime owns project-backend
  * routing, storage validation and one invalidation/event per saved record.
  */
-import { getCatalogSurface, getCatalogSurfaceByTable, listCatalogSurfaces, type CatalogSourceTable, type CatalogSurface } from '@/platform/core/catalogSurfaceRegistry';
+import { getCatalogSurface, getCatalogSurfaceByTable, type CatalogSourceTable, type CatalogSurface } from '@/platform/core/catalogSurfaceRegistry';
 import { applyResourceOp, queryResource } from '@/services/resources/resourceRuntime';
 import { executeEditorCommand } from '@/services/editor/editorCommandService';
 
-export const EDITABLE_CATALOG_SURFACES = listCatalogSurfaces()
-  .filter((surface) => surface.editableFields.length > 0).map((surface) => surface.surfaceId);
+export const EDITABLE_CATALOG_SURFACES = ['products', 'services', 'menu_items', 'pricing_plans'] as const;
 
 export interface CatalogItem {
   surfaceId: string;

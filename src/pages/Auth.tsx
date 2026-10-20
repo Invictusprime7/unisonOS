@@ -6,9 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { claimGuestDemoIfNeeded } from "@/services/guestDemoClaim";
 import { ArrowLeft, Check, Sparkles, Zap } from "lucide-react";
-import { resolveAuthDestination } from "@/lib/authDestination";
 import "./Auth.css";
 
 const AuthLaunchDemoSequence = ({ duplicate = false }: { duplicate?: boolean }) => (
@@ -29,7 +27,7 @@ const AuthLaunchDemoSequence = ({ duplicate = false }: { duplicate?: boolean }) 
     <div className="pt-1">
       <div className="auth-demo-floating-divider mx-auto mb-2 h-1 w-14 rounded-full bg-cyan-300/70 shadow-[0_0_12px_rgba(103,232,249,0.45)]" aria-hidden="true" />
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">Affinity</span>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">Launcher Wizard</span>
         <span className="text-[10px] text-cyan-300">Step 1 of 4</span>
       </div>
       <div className="grid grid-cols-4 gap-2 text-center">
@@ -66,7 +64,36 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const signInFormRef = useRef<HTMLFormElement>(null);
 
-  const newSignupRef = useRef(false);
+  // Resolve destination after sign-in/up: /onboarding for new users, /dashboard for returning.
+  // If the user was mid-checkout before authenticating, send them back to /pricing.
+  const resolvePostAuthDestination = async (userId: string, isNewSignup = false) => {
+    // Honor ?next= for OAuth consent and other same-origin redirects.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get("next");
+      if (next && next.startsWith("/") && !next.startsWith("//")) {
+        return next;
+      }
+    } catch {
+      // ignore
+    }
+    const checkoutPlan = sessionStorage.getItem("checkout_plan");
+    if (checkoutPlan) {
+      sessionStorage.removeItem("checkout_plan");
+      return "/pricing";
+    }
+    if (isNewSignup) return "/onboarding";
+    try {
+      const { data } = await supabase
+        .from("onboarding_state")
+        .select("completed")
+        .eq("user_id", userId)
+        .maybeSingle();
+      return data?.completed ? "/dashboard" : "/onboarding";
+    } catch {
+      return "/dashboard";
+    }
+  };
 
   useEffect(() => {
     let handled = false;
@@ -78,26 +105,19 @@ const Auth = () => {
       // Auth listeners execute under the SDK session lock. Database/auth work
       // must start on a later task, after that lock has been released.
       redirectTimer = setTimeout(() => {
-        // Legacy demo recovery must never be a navigation prerequisite.
-        void claimGuestDemoIfNeeded(userId).catch(() => undefined);
-        void resolveAuthDestination(userId, isNewSignup)
-          .then((dest) => {
+        void resolvePostAuthDestination(userId, isNewSignup).then((dest) => {
           if (active) navigate(dest, { replace: true });
         }).catch(() => {
-          if (active) navigate("/home", { replace: true });
+          if (active) navigate("/dashboard", { replace: true });
         });
       }, 0);
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // Anonymous guest sessions must not trigger a redirect: protected routes
-      // bounce them back to /auth, which would loop forever.
-      if (session && session.user.is_anonymous !== true) {
-        scheduleRedirect(session.user.id, newSignupRef.current);
-      }
+      if (session) scheduleRedirect(session.user.id, (event as string) === "SIGNED_UP");
     });
 
     void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && session.user.is_anonymous !== true) scheduleRedirect(session.user.id, newSignupRef.current);
+      if (session) scheduleRedirect(session.user.id);
     }).catch(() => {
       if (active) setLoading(false);
     });
@@ -118,12 +138,11 @@ const Auth = () => {
     const password = formData.get("signup-password") as string;
     const fullName = formData.get("full-name") as string;
 
-    newSignupRef.current = true;
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth?next=%2Fdemo`,
+        emailRedirectTo: `${window.location.origin}/onboarding`,
         data: {
           full_name: fullName,
         },
@@ -133,7 +152,6 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
-      newSignupRef.current = false;
       toast({
         title: "Sign up failed",
         description: error.message,
@@ -218,10 +236,10 @@ const Auth = () => {
             <span className="text-cyan-300">Launch with confidence</span>
           </p>
           <p className="mt-4 max-w-md text-base leading-7 text-slate-300">
-            Tell Affinity what your business needs. See it live.
+            Tell Unison what your business needs. See it live.
           </p>
         </div>
-        <section aria-label="Affinity chat demo" className="relative z-10 w-full max-w-lg overflow-hidden bg-[#0d1324]/95 shadow-[0_16px_48px_rgba(0,0,0,0.2)]">
+        <section aria-label="AI chat and Launcher Wizard demo" className="relative z-10 w-full max-w-lg overflow-hidden bg-[#0d1324]/95 shadow-[0_16px_48px_rgba(0,0,0,0.2)]">
           <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-cyan-300" />
@@ -232,7 +250,7 @@ const Auth = () => {
               Live demo
             </span>
           </div>
-          <div className="auth-launch-demo-viewport h-[220px] overflow-hidden" aria-label="A sample Affinity conversation flows into site setup">
+          <div className="auth-launch-demo-viewport h-[220px] overflow-hidden" aria-label="A sample AI conversation flows into the Launcher Wizard">
             <div className="auth-launch-demo-track">
               <AuthLaunchDemoSequence />
               <AuthLaunchDemoSequence duplicate />

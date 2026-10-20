@@ -46,11 +46,11 @@ describe('Testimonials registry and emitted renderer parity', () => {
     const Registered = variant.component;
     const section = { id: 'testimonials-proof', type: 'testimonials', variantId: variant.id, props } as SectionEntry;
     const registryView = render(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />);
-    const expectedMarkup = registryView.container.firstElementChild?.outerHTML;
+    const expectedMarkup = registryView.container.innerHTML;
     registryView.unmount();
 
     const generatedView = render(<Testimonials props={props} variantId={variant.id} />);
-    expect(generatedView.container.querySelector('[data-ut-section-id] > section[data-ut-variant]')?.outerHTML).toBe(expectedMarkup);
+    expect(generatedView.container.innerHTML).toBe(expectedMarkup);
   });
 
   it('prefers explicit identity and preserves legacy layout aliases', () => {

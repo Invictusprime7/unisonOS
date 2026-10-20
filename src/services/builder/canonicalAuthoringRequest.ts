@@ -33,7 +33,6 @@ export function shouldUseCanonicalComposer(input: {
   isLaunchPlanningRequest: boolean;
   isCatalogMutationRequest: boolean;
   hasVfs: boolean;
-  hasAttachments?: boolean;
   isScopedEdit?: boolean;
 }): boolean {
   // Scoped UI and behavioral edits need the same validated source protocol;

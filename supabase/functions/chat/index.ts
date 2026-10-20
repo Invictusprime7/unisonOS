@@ -28,13 +28,6 @@ serve(async (req) => {
     }
   } catch (_) { /* ignore */ }
 
-  // The assistant is a paid service: only signed-in callers may use it.
-  if (!userId) {
-    return new Response(JSON.stringify({ error: "Sign in to use the assistant." }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,

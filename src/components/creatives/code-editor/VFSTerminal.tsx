@@ -167,7 +167,7 @@ export function VFSTerminal({
         window.dispatchEvent(new CustomEvent('unison:builder-send', { detail: { prompt } }));
         appendLines([
           inputLine,
-          { id: `ai_${Date.now()}`, type: 'system', text: 'Sent to Affinity — follow progress in the chat.', timestamp: Date.now() },
+          { id: `ai_${Date.now()}`, type: 'system', text: 'Sent to the AI Builder — follow progress in the chat.', timestamp: Date.now() },
         ]);
       } else {
         appendLines([inputLine, ...result.lines]);

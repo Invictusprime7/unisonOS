@@ -261,7 +261,7 @@ const InlineAIPanel: React.FC<InlineAIPanelProps> = ({
       {/* Header */}
       <div className="flex items-center gap-1.5 mb-1.5">
         <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
-        <span className="text-[10px] font-semibold text-cyan-300 shrink-0">Affinity</span>
+        <span className="text-[10px] font-semibold text-cyan-300 shrink-0">AI Edit</span>
         <span className="text-[10px] text-white/40 truncate max-w-[160px]">
           {element.tagName?.toUpperCase()}
           {element.selector ? ` · ${element.selector.slice(0, 22)}` : ''}
@@ -269,7 +269,7 @@ const InlineAIPanel: React.FC<InlineAIPanelProps> = ({
         <button
           onClick={onClose}
           className="ml-auto text-white/30 hover:text-white/70 transition-colors"
-          title="Close Affinity panel"
+          title="Close AI panel"
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -358,7 +358,7 @@ const InlineAIPanel: React.FC<InlineAIPanelProps> = ({
       {success && (
         <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-400">
           <CheckCircle2 className="w-3 h-3" />
-          <span role="status">Sent to Affinity — follow progress in the chat.</span>
+          <span role="status">Sent to the AI Builder — follow progress in the chat.</span>
         </div>
       )}
       {!error && !success && (
@@ -761,7 +761,7 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground block">Generate with Affinity</Label>
+                  <Label className="text-xs text-muted-foreground block">Generate with AI</Label>
                   <Textarea
                     value={imagePrompt}
                     onChange={(e) => setImagePrompt(e.target.value)}
@@ -931,10 +931,10 @@ export const ElementFloatingToolbar: React.FC<ElementFloatingToolbarProps> = ({
                 ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                 : 'text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10',
             )}
-            title={isAIOpen ? 'Close Affinity panel' : 'Affinity — describe changes for this element'}
+            title={isAIOpen ? 'Close AI panel' : 'AI Edit — describe changes for this element'}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-semibold">Affinity</span>
+            <span className="text-[10px] font-semibold">AI</span>
           </Button>
         )}
 

@@ -51,11 +51,11 @@ describe('Contact registry and emitted renderer parity', () => {
     const Registered = variant.component;
     const section = { id: 'contact-proof', type: 'contact', variantId: variant.id, props } as SectionEntry;
     const registryView = render(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />);
-    const expectedMarkup = normalizeReactIds(registryView.container.querySelector('section[data-ut-variant]')?.outerHTML ?? registryView.container.innerHTML);
+    const expectedMarkup = normalizeReactIds(registryView.container.innerHTML);
     registryView.unmount();
 
     const generatedView = render(<Contact props={props} variantId={variant.id} />);
-    expect(normalizeReactIds(generatedView.container.querySelector('[data-ut-section-id] > section[data-ut-variant]')?.outerHTML ?? generatedView.container.innerHTML)).toBe(expectedMarkup);
+    expect(normalizeReactIds(generatedView.container.innerHTML)).toBe(expectedMarkup);
     expect(generatedView.container.querySelector('form')).toHaveAttribute('data-ut-intent', 'quote.request');
     expect(generatedView.getByPlaceholderText('Project details')).toHaveAttribute('name', 'project');
   });

@@ -6,7 +6,6 @@
  * the deployed bundle. Public values only — server secrets are never emitted.
  */
 import { projectBackendResolver } from './projectBackendResolver';
-import { callProjectBackend } from './projectBackendClient';
 import { buildRuntimeManifest, serializeRuntimeManifest, type UnisonRuntimeManifest } from './runtimeManifest';
 
 export interface DeployBackendPreflightResult {
@@ -42,25 +41,9 @@ export async function runDeployBackendPreflight(input: {
     return { ok: false, reason: 'This site’s backend is missing its public connection details.' };
   }
 
-  const resources = [...new Set(input.resources ?? [])].sort();
-  if (backend.mode === 'dedicated') {
-    try {
-      await Promise.all(resources.map(async (resource) => {
-        const result = await callProjectBackend<{ resource: string; compatible: boolean }>({
-          projectId: input.projectId, action: 'check', resource,
-        });
-        if (result?.compatible !== true || result.resource !== resource) {
-          throw new Error(`The database compatibility check did not confirm ${resource}.`);
-        }
-      }));
-    } catch (err) {
-      return { ok: false, reason: err instanceof Error ? err.message : 'The site’s database structure could not be verified.' };
-    }
-  }
-
   const manifest = buildRuntimeManifest({
     backend,
-    resources,
+    resources: input.resources ?? [],
     schemaVersion: input.schemaVersion,
   });
 

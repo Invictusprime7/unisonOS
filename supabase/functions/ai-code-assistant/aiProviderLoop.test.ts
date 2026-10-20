@@ -139,66 +139,6 @@ test('funded Gemini answers before configured Lovable or OpenAI fallbacks', asyn
   });
 });
 
-test('guest metering pins generation to priced Gemini and reconciles returned usage', async () => {
-  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
-    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
-    let tokenCountCalls = 0;
-    let tokenCountRequest: Record<string, unknown> | undefined;
-    let tokenCountApiKey: string | null = null;
-    const reservations: Array<{ modelId: string; inputTokenLimit: number; outputTokenLimit: number }> = [];
-    const settlements: Array<{ callId: string; inputTokens: number; outputTokens: number }> = [];
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
-      if (String(url).includes(':countTokens')) {
-        tokenCountCalls++;
-        tokenCountRequest = JSON.parse(String(init?.body));
-        tokenCountApiKey = new Headers(init?.headers).get('x-goog-api-key');
-        return new Response(JSON.stringify({ totalTokens: 420 }));
-      }
-      requests.push({ url: String(url), body: JSON.parse(String(init?.body)) });
-      return new Response(JSON.stringify({
-        model: 'gemini-3.8-flash',
-        choices: [{ message: { content: 'Guest page' } }],
-        usage: { prompt_tokens: 420, completion_tokens: 180 },
-      }));
-    }) as typeof fetch;
-
-    const result = await runProviderLoop({
-      aiMessages: [{ role: 'system', content: 'Use the supplied source only.' }, ...messages],
-      navPageGen: false,
-      tools: [{ type: 'function', function: { name: 'updateCatalogRow', parameters: { type: 'object' } } }],
-      providerPlan: {
-        ...hybridPlan,
-        gatewayLeads: true,
-        raceGateway: true,
-      },
-      guestUsageMeter: {
-        maxOutputTokens: 8192,
-        async reserveProviderCall(input) {
-          reservations.push(input);
-          return 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
-        },
-        async settleProviderCall(input) { settlements.push(input); },
-      },
-    });
-
-    assert(result.providerUsed === 'gemini' && result.content === 'Guest page', 'guest should receive the priced Gemini result');
-    assert(requests.length === 1 && requests[0].url.includes('generativelanguage.googleapis.com'), 'guest calls must not reach OpenAI or the managed gateway');
-    assert(tokenCountCalls === 1, 'guest cost reservation must count the complete prompt before generation');
-    const generationRequest = tokenCountRequest?.generateContentRequest as {
-      systemInstruction?: { parts?: Array<{ text?: string }> };
-      contents?: unknown[];
-    } | undefined;
-    assert(tokenCountApiKey === 'test', 'token counting must use the server-side Gemini key header');
-    assert(generationRequest?.systemInstruction?.parts?.[0]?.text === 'Use the supplied source only.', 'token counting must include the complete system instruction');
-    assert(generationRequest?.contents?.length === 1, 'token counting must include the user turn');
-    assert(requests[0].body.max_tokens === 1000, 'guest output must remain within the provider plan and policy cap');
-    assert(!('tools' in requests[0].body), 'guest requests must not forward unmetered catalog tools');
-    assert(reservations.length === 1 && reservations[0].modelId === 'google/gemini-3.8-flash', 'cost must be reserved for the exact priced model');
-    assert(reservations[0].inputTokenLimit > 420 && reservations[0].outputTokenLimit === 1000, 'reservation must include counted input and framing headroom');
-    assert(settlements.length === 1 && settlements[0].inputTokens === 420 && settlements[0].outputTokens === 180, 'actual provider usage must be reconciled');
-  });
-});
-
 test('hybrid fallbacks reach Lovable after Gemini and OpenAI failures', async () => {
   await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
     const calls: string[] = [];

@@ -6,13 +6,12 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { auditLogger } from '@/services/auditLogger';
-import { resolveAuthDestination } from '@/lib/authDestination';
 
 type CallbackStatus = 'loading' | 'success' | 'error';
 
@@ -24,13 +23,13 @@ interface CallbackState {
 
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [state, setState] = useState<CallbackState>({
     status: 'loading',
     message: 'Processing authentication...',
   });
 
   useEffect(() => {
-    let active = true;
     const handleCallback = async () => {
       try {
         // Get the hash fragment which contains the auth tokens
@@ -86,7 +85,7 @@ export default function AuthCallback() {
 
         // Handle signup/signin with tokens
         if (accessToken && refreshToken) {
-          const { data, error } = await supabase.auth.setSession({
+          const { error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
@@ -99,13 +98,23 @@ export default function AuthCallback() {
             return;
           }
 
-          if (!data.session || data.session.user.is_anonymous === true) {
-            setState({ status: 'error', message: 'Please sign in to your account.' });
-            return;
-          }
-          void auditLogger.log({ action: 'login', resourceType: 'user', metadata: { method: 'oauth' } }).catch(() => undefined);
-          const destination = await resolveAuthDestination(data.session.user.id, type === 'signup');
-          if (active) navigate(destination, { replace: true });
+          await auditLogger.log({
+            action: 'login',
+            resourceType: 'user',
+            metadata: { method: 'oauth' },
+          });
+
+          setState({
+            status: 'success',
+            message: type === 'signup' 
+              ? 'Account created successfully! Redirecting...'
+              : 'Signed in successfully! Redirecting...',
+            type: type || 'signin',
+          });
+
+          setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+          }, 1500);
           return;
         }
 
@@ -120,10 +129,22 @@ export default function AuthCallback() {
           return;
         }
 
-        if (session && session.user.is_anonymous !== true) {
-          void auditLogger.log({ action: 'login', resourceType: 'user', metadata: { method: 'email_confirmation' } }).catch(() => undefined);
-          const destination = await resolveAuthDestination(session.user.id, type === 'signup');
-          if (active) navigate(destination, { replace: true });
+        if (session) {
+          await auditLogger.log({
+            action: 'login',
+            resourceType: 'user',
+            metadata: { method: 'email_confirmation' },
+          });
+
+          setState({
+            status: 'success',
+            message: 'Email confirmed! Redirecting to dashboard...',
+            type: 'signup',
+          });
+
+          setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+          }, 1500);
           return;
         }
 
@@ -142,7 +163,6 @@ export default function AuthCallback() {
     };
 
     handleCallback();
-    return () => { active = false; };
   }, [navigate]);
 
   return (

@@ -51,16 +51,15 @@ describe('Supabase rejected-session recovery', () => {
     expect(clearLocalSession).not.toHaveBeenCalled();
   });
 
-  it.each([400, 401, 403, 429, 503])('leaves refresh status %s to the SDK without a competing sign-out', async (status) => {
+  it('clears an invalid refresh-token session', async () => {
     const clearLocalSession = vi.fn(async () => undefined);
     const fetchWithRecovery = createAuthRecoveryFetch(
       clearLocalSession,
-      vi.fn(async () => new Response(null, { status })) as unknown as typeof fetch,
+      vi.fn(async () => new Response(null, { status: 400 })) as unknown as typeof fetch,
     );
 
-    const response = await fetchWithRecovery('https://project.supabase.co/auth/v1/token?grant_type=refresh_token');
+    await fetchWithRecovery('https://project.supabase.co/auth/v1/token?grant_type=refresh_token');
 
-    expect(response.status).toBe(status);
-    expect(clearLocalSession).not.toHaveBeenCalled();
+    expect(clearLocalSession).toHaveBeenCalledTimes(1);
   });
 });

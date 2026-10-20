@@ -28,7 +28,7 @@ describe('canonical record collections and legacy aliases', () => {
       { id: 'reviews-old', api_key: 'reviews' },
       { id: 'projects-old', api_key: 'projects' },
     ]);
-    expect(listRecordCollections().map((c) => c.kind)).toEqual(['testimonials', 'projects', 'case-studies', 'faqs', 'offers', 'menu', 'pricing', 'products', 'services']);
+    expect(listRecordCollections().map((c) => c.kind)).toEqual(['testimonials', 'projects', 'case-studies', 'faqs']);
     expect(getResource('content:faqs')).toMatchObject({ key: 'content:faq', storage: { contentTypeId: 'faq-main', contentTypeIds: ['faq-main', 'faq-old'] } });
     expect(getResource('content:faq')?.schema.map((f) => f.key)).toEqual(['title', 'question', 'answer']);
     expect(getResource('content:case-study')?.storage.contentTypeIds).toEqual(['case-main', 'case-old']);

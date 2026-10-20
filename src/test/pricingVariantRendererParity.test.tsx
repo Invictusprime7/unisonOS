@@ -45,11 +45,11 @@ describe('Pricing registry and emitted renderer parity', () => {
     const Registered = variant.component;
     const section = { id: 'pricing-proof', type: 'pricing', variantId: variant.id, props } as SectionEntry;
     const registryView = render(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />);
-    const expectedMarkup = registryView.container.querySelector('section[data-ut-variant]')?.outerHTML;
+    const expectedMarkup = registryView.container.innerHTML;
     registryView.unmount();
 
     const generatedView = render(<Pricing props={props} variantId={variant.id} />);
-    expect(generatedView.container.querySelector('section[data-ut-variant]')?.outerHTML).toBe(expectedMarkup);
+    expect(generatedView.container.innerHTML).toBe(expectedMarkup);
     expect(generatedView.getByRole('link', { name: 'Reserve now' })).toHaveAttribute('data-ut-intent', 'booking.create');
   });
 

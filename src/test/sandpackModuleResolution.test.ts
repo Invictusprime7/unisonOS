@@ -41,8 +41,6 @@ createRoot(document.getElementById('root')!).render(<Router><SiteContext.Provide
     expect(files['/index.tsx']).toContain('HashRouter as Router');
     expect(files['/index.tsx']).not.toContain('__RouterGuard');
     expect(files['/index.tsx']).toContain('UNISON_PREVIEW_RENDER_READY');
-    expect(files['/index.tsx']).toContain('const __savedPreviewObserver = new MutationObserver(__reportSavedPreviewReady)');
-    expect(files['/index.tsx']).toContain('__savedPreviewObserver.observe(document.body, { childList: true, subtree: true });\n__reportSavedPreviewReady();');
     expect(files['/index.tsx']).toContain('__initUnisonPreviewNavBridge');
   });
   it('resolves multiline aliased component imports after flattening /src', () => {

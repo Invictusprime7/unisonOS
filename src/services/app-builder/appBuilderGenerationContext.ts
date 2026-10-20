@@ -6,7 +6,6 @@ import type { DesignSourceBundle } from './design/DesignSourceBundle';
 import { materializeDesignSources, type DesignSourceMaterialization } from './design/designSourceMaterializer';
 import { getAllIndustries, getIndustryProfile } from '@/platform/core/industryMatrix';
 import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
-import { listResources, type ContentTypeRow } from '@/services/resources/resourceRegistry';
 
 export interface AppBuilderGenerationContext {
   contract: AppBuildContract;
@@ -20,27 +19,25 @@ export interface AppBuilderGenerationContext {
 export interface IndustrySeedDataTarget {
   target: string;
   catalogSurface?: string;
-  resourceKey?: string;
-  creatorDataPath?: string;
 }
 
 export const INDUSTRY_SEED_DATA_TARGETS: Record<string, IndustrySeedDataTarget> = {
-  business_name: { target: 'BusinessProfile.name and CreatorData.businessInfo.businessName', resourceKey: 'business-profile', creatorDataPath: 'businessInfo.businessName' },
-  business_email: { target: 'BusinessProfile.email and CreatorData.businessInfo.email', resourceKey: 'business-profile', creatorDataPath: 'businessInfo.email' },
+  business_name: { target: 'BusinessProfile.name and CreatorData.businessInfo.businessName' },
+  business_email: { target: 'BusinessProfile.email and CreatorData.businessInfo.email' },
   features: { target: 'authored feature sections, not a product catalog' },
-  pricing_tiers: { target: 'catalog.pricing / pricing_plans', catalogSurface: 'pricing', resourceKey: 'pricing', creatorDataPath: 'products (catalogSurface: pricing)' },
-  services: { target: 'catalog.services / services', catalogSurface: 'services', resourceKey: 'services', creatorDataPath: 'services' },
-  operating_hours: { target: 'BusinessProfile.hours and CreatorData.businessInfo.hours', resourceKey: 'business-profile', creatorDataPath: 'businessInfo.hours' },
-  menu_items: { target: 'catalog.menu / menu_items', catalogSurface: 'menu', resourceKey: 'menu', creatorDataPath: 'products (catalogSurface: menu)' },
+  pricing_tiers: { target: 'catalog.pricing / pricing_plans', catalogSurface: 'pricing' },
+  services: { target: 'catalog.services / services', catalogSurface: 'services' },
+  operating_hours: { target: 'BusinessProfile.hours and CreatorData.businessInfo.hours' },
+  menu_items: { target: 'catalog.menu / menu_items', catalogSurface: 'menu' },
   service_areas: { target: 'owner-provided service-area content; do not invent coverage zones' },
-  programs: { target: 'catalog.services / services when represented as bookable programs', catalogSurface: 'services', resourceKey: 'services', creatorDataPath: 'services' },
-  credentials: { target: 'owner-supplied CreatorData.team and about-page content; never invent qualifications', resourceKey: 'content:team', creatorDataPath: 'team' },
-  specialties: { target: 'catalog.services categories and owner-supplied page content', catalogSurface: 'services', resourceKey: 'services', creatorDataPath: 'services.category' },
-  products: { target: 'catalog.products / products', catalogSurface: 'products', resourceKey: 'products', creatorDataPath: 'products (catalogSurface: products)' },
+  programs: { target: 'catalog.services / services when represented as bookable programs', catalogSurface: 'services' },
+  credentials: { target: 'owner-supplied CreatorData.team and about-page content; never invent qualifications' },
+  specialties: { target: 'catalog.services categories and owner-supplied page content', catalogSurface: 'services' },
+  products: { target: 'catalog.products / products', catalogSurface: 'products' },
   shipping_info: { target: 'owner-supplied shipping policy content; do not invent shipping rules or APIs' },
-  portfolio_items: { target: 'CMS gallery content from CreatorData.gallery', resourceKey: 'content:gallery', creatorDataPath: 'gallery' },
-  mission_statement: { target: 'BusinessProfile.description and CreatorData.businessInfo.description', resourceKey: 'business-profile', creatorDataPath: 'businessInfo.description' },
-  case_studies: { target: 'CMS case-studies content from CreatorData.caseStudies', resourceKey: 'content:case-studies', creatorDataPath: 'caseStudies' },
+  portfolio_items: { target: 'CMS gallery content from CreatorData.gallery' },
+  mission_statement: { target: 'BusinessProfile.description and CreatorData.businessInfo.description' },
+  case_studies: { target: 'CMS case-studies content from CreatorData.caseStudies' },
 };
 
 export function getIndustrySeedDataTargets(industry: string): Array<{
@@ -72,7 +69,7 @@ export function buildIndustryAuthoringContext(industry: string, enabledCapabilit
     .filter((surface): surface is string => !!surface))];
   return [
     `INDUSTRY AUTHORING CONTRACT: canonical industry ${profile.industry} (${profile.name}). Keep this business identity even when the owner requests a focused feature.`,
-    `Industry seed data targets:\n${seedTargets.map(({ key, target }) => `- ${key} → ${target.target}${target.resourceKey ? `; resource ${target.resourceKey}` : ''}${target.creatorDataPath ? `; CreatorData.${target.creatorDataPath}` : ''}`).join('\n')}`,
+    `Industry seed data targets:\n${seedTargets.map(({ key, target }) => `- ${key} → ${target.target}`).join('\n')}`,
     `Industry catalog targets: ${industryCatalogs.join(', ') || 'none'}. Launch capabilities: ${enabledCapabilities.join(', ') || 'none'}.`,
     'Use owner-provided facts for prices, credentials, service areas, mission, and shipping terms; do not fabricate them. A focused user intent is additive to the selected industry: implement it with enabled capabilities and matching industry data; do not change the business category or invent unprovisioned tables, APIs, or controllers.',
   ].join('\n');
@@ -82,27 +79,17 @@ export function buildIndustryIconContext(
   industry: string,
   enabledCapabilities: readonly string[],
   intents: readonly string[],
-  selectedSurfaces: readonly string[] = [],
 ): string {
-  const catalogSurfaces = listCatalogSurfaces();
-  const registeredSurfaces = new Set(catalogSurfaces.map((surface) => surface.surfaceId));
+  const registeredSurfaces = new Set(listCatalogSurfaces().map((surface) => surface.surfaceId));
   const industrySurfaces = new Set(getIndustrySeedDataTargets(industry)
     .map(({ target }) => target.catalogSurface)
     .filter((surface): surface is string => !!surface && registeredSurfaces.has(surface)));
-  for (const surface of catalogSurfaces) {
-    if (selectedSurfaces.some((key) => key === surface.surfaceId || surface.aliases.includes(key))
-      || enabledCapabilities.includes(`catalog.${surface.surfaceId}`)) industrySurfaces.add(surface.surfaceId);
-  }
   const seedDataKeys = new Set(getIndustryProfile(industry)?.seedDataKeys ?? []);
+  const searchableSurfaces = ['menu', 'pricing', 'products', 'services']
+    .filter((surface) => industrySurfaces.has(surface));
+  const cartableSurfaces = ['menu', 'products', 'services']
+    .filter((surface) => industrySurfaces.has(surface));
   const purchaseRequested = intents.some((intent) => intent === 'cart.add' || intent === 'cart.checkout');
-  // Focused commerce may render a products projection, but eligibility is not
-  // evidence that a payable record has been created.
-  if (enabledCapabilities.includes('commerce') && purchaseRequested) industrySurfaces.add('products');
-  const searchableSurfaces = catalogSurfaces.filter((surface) => industrySurfaces.has(surface.surfaceId))
-    .map((surface) => surface.surfaceId);
-  const cartableSurfaces = catalogSurfaces.filter((surface) => industrySurfaces.has(surface.surfaceId)
-    && surface.supportedIntents.includes('cart.add') && Boolean(surface.fields.price || surface.fields.priceCents))
-    .map((surface) => surface.surfaceId);
   const cartEnabled = enabledCapabilities.includes('commerce') && purchaseRequested && cartableSurfaces.length > 0;
   const affordances = [
     seedDataKeys.has('menu_items') ? 'menu -> Utensils' : '',
@@ -117,28 +104,17 @@ export function buildIndustryIconContext(
     'CANONICAL ICON CONTEXT: derive interactive icons from this contract, registered content surfaces, and content actually rendered on the page; industry identity alone does not authorize an action.',
     `Search: ${searchableSurfaces.length ? `Search is eligible for rendered, non-empty searchable content on ${searchableSurfaces.join(', ')}; omit the control on pages without such content.` : 'no searchable catalog surface is declared; omit search unless the page has another real searchable collection.'}`,
     `Cart: ${cartEnabled ? `ShoppingBag or ShoppingCart may represent cart actions for ${cartableSurfaces.join(', ')}; bind only to the requested cart intent and enabled commerce capability.` : 'omit shopping bag/cart actions: commerce requires both an enabled commerce capability and an explicit cart.add or cart.checkout intent with a cartable registered surface.'}`,
-    'Cart payloads use persisted product IDs from the explicit products checkout projection, never service IDs, plan IDs, offer IDs or authored fixture slugs; omit cart controls until that projection exists, and verify payment availability separately. Keep booking programs on services and subscription tiers on pricing.',
     `Industry content affordances: ${affordances.join(', ') || 'none from the industry seed profile'}. Use only when the matching content is rendered; icons never imply an unprovisioned API, route, or capability.`,
     'Use only icon exports available through approved project dependencies, and give icon-only controls an accessible name.',
   ].join('\n');
 }
 
-/** Read contract only: registered schemas do not authorize creation or payment. */
-export function buildRegisteredResourceContext(contentTypes: readonly ContentTypeRow[] = []): string {
-  return [
-    'REGISTERED RESOURCE CONTRACT: read and edit through agentOperations / ResourceRuntime with the current project and business scope; bind data-ut-resource to the returned persisted record ID and editable field. Labels and fixture slugs are not database IDs.',
-    ...listResources(contentTypes).map((resource) => `- ${resource.key} → ${resource.storage.table ?? `CMS ${resource.storage.contentType}`} (${resource.cardinality}); fields: ${resource.schema.map((field) => `${field.key}:${field.type}`).join(', ')}.`),
-    'CMS seed targets are planned, not installed: create their declared content types through the existing CMS command only when supplied content exists, then use returned type/entry IDs. Features, coverage, credentials and shipping copy never imply a new catalog or API.',
-  ].join('\n');
-}
-
-export function buildAppBuilderGenerationContext(contract: AppBuildContract, contentTypes: readonly ContentTypeRow[] = []): AppBuilderGenerationContext {
+export function buildAppBuilderGenerationContext(contract: AppBuildContract): AppBuilderGenerationContext {
   const { business, runtime } = contract;
   const designSources = resolveDesignSourceBundle(contract);
   const materialization = materializeDesignSources(designSources);
   const industryContext = buildIndustryAuthoringContext(business.industry, business.capabilities);
-  const iconContext = buildIndustryIconContext(business.industry, business.capabilities, business.intents,
-    contract.design.compositionPlan.pages.flatMap((page) => page.target.sectionOrder));
+  const iconContext = buildIndustryIconContext(business.industry, business.capabilities, business.intents);
   const logoContext = [
     `CANONICAL LOGO CONTRACT: brand mark source ${business.branding.brandMark.source.kind}.${business.branding.brandMark.source.field}; render only in ${business.branding.brandMark.placements.map(({ slotId }) => slotId).join(', ')} using the registered business-profile binding, never a hard-coded URL.`,
     `Preserve the logo's intrinsic ratio with object-fit: contain within ${business.branding.brandMark.image.maxWidthPx}x${business.branding.brandMark.image.maxHeightPx}px; use accessible name "${business.branding.brandMark.accessibleName}". If the profile has no logo, render the text wordmark "${business.branding.brandMark.missingAssetFallback.text}"; do not generate or source a replacement mark.`,
@@ -148,7 +124,6 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}.`,
     industryContext,
     iconContext,
-    buildRegisteredResourceContext(contentTypes),
     logoContext,
     `Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.`,
     business.bindingGuide ? `Binding guide: ${business.bindingGuide}` : '',

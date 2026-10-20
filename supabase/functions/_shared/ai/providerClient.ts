@@ -243,7 +243,6 @@ async function callOpenAICompatible(
   provider: "lovable" | "openai" | "gemini",
   request: ChatCompletionRequest,
   signal?: AbortSignal,
-  retryRateLimits = true,
 ): Promise<Response> {
   const apiKey = provider === "openai"
     ? Deno.env.get("OPENAI_API_KEY")
@@ -290,15 +289,12 @@ async function callOpenAICompatible(
     ? { "Lovable-API-Key": apiKey, "Content-Type": "application/json" }
     : { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
 
-  const requestInit: RequestInit = {
+  const response = await fetchWithShortRateLimitRetry(url, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
     signal,
-  };
-  const response = retryRateLimits
-    ? await fetchWithShortRateLimitRetry(url, requestInit, signal)
-    : await fetch(url, requestInit);
+  }, signal);
   return withProviderHeader(response, provider);
 }
 
@@ -427,13 +423,12 @@ export async function createChatCompletion(request: ChatCompletionRequest, signa
 export async function createPlannedChatCompletion(
   request: ChatCompletionRequest,
   signal?: AbortSignal,
-  retryRateLimits = true,
 ): Promise<Response> {
   const provider = requestedProvider(request.model);
   if (!provider || provider === "anthropic") {
     throw new Error(`Unsupported planned chat model: ${request.model ?? "unknown"}`);
   }
-  return callOpenAICompatible(provider, request, signal, retryRateLimits);
+  return callOpenAICompatible(provider, request, signal);
 }
 
 /**

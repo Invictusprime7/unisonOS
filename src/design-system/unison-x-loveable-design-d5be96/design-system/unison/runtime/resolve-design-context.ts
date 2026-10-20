@@ -14,7 +14,7 @@ import { compileSiteDesignContract, projectSiteDesignContract } from '../contrac
 import { THEME_FAMILIES } from '../contracts/theme-family';
 import type { SectionType } from '../types';
 import type { VariantId } from '../components/types';
-import { childSeed, deriveDesignSeed, seededPick } from './design-seed';
+import { childSeed, deriveDesignSeed, seededPick } from '@/platform/core/generationSeed';
 import { resolveUnisonArtDirection, type SealedArtDirection } from './resolve-art-direction';
 
 export const UNISON_DESIGN_SYSTEM_VERSION = '1.1.0';

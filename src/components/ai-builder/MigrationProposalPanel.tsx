@@ -117,7 +117,7 @@ export const MigrationProposalPanel: React.FC<Props> = ({ projectId, businessId,
         <div className="space-y-3 p-4">
           {rows.length === 0 && !loading && (
             <div className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
-              No proposals yet. When Affinity drafts a schema, edge-function, or config change,
+              No proposals yet. When the AI Builder drafts a schema, edge-function, or config change,
               it will appear here for your review.
             </div>
           )}

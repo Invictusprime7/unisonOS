@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { listProjectsCompat } from "@/services/projectSchemaCompat";
 import { mergeWorkspaceProjects } from "@/services/cloudProjectDrafts";
-import { createCoalescedRefresh } from "@/services/coalescedRefresh";
-import { AlertCircle, Zap } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
+import { UnisonLoadingMark } from "@/components/UnisonLoadingMark";
 import {
   clearSiteDiscoveryHandoff,
   readSiteDiscoveryHandoff,
@@ -101,7 +101,7 @@ const Index = () => {
       console.error("[Home] Could not restore confirmed site brief.", error);
       toast({
         title: "Couldn't restore your site plan",
-        description: "Your saved homepage conversation is still available. Please confirm the brief again to reopen Affinity.",
+        description: "Your saved homepage conversation is still available. Please confirm the brief again to reopen the Wizard.",
         variant: "destructive",
       });
     }
@@ -113,7 +113,6 @@ const Index = () => {
   useEffect(() => {
     const userId = user?.id;
     if (!userId || !isSupabaseConfigured) return;
-    let disposed = false;
 
     // Remove the owner's empty shells (no saved version, no source, older than
     // an hour) once per visit before listing.
@@ -187,17 +186,16 @@ const Index = () => {
             canvas_data: { previewCode, html: previewCode },
           };
         });
-        if (!disposed) setRecentProjects(projects);
+        setRecentProjects(projects);
       } catch (err) {
         console.error('Failed to load recent projects:', err);
       } finally {
-        if (!disposed) setLoadingProjects(false);
+        setLoadingProjects(false);
       }
     };
 
-    const refreshQueue = createCoalescedRefresh(loadRecentProjects);
-    void refreshQueue.refresh();
-    const onFocus = () => { void refreshQueue.refresh(); };
+    void loadRecentProjects();
+    const onFocus = () => { void loadRecentProjects(); };
     window.addEventListener('focus', onFocus);
     const channel = supabase
       .channel(`home-recent-drafts:${userId}`)
@@ -206,17 +204,15 @@ const Index = () => {
         schema: 'public',
         table: 'builder_drafts',
         filter: `user_id=eq.${userId}`,
-      }, onFocus)
+      }, () => { void loadRecentProjects(); })
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'projects',
         filter: `owner_id=eq.${userId}`,
-      }, onFocus)
+      }, () => { void loadRecentProjects(); })
       .subscribe();
     return () => {
-      disposed = true;
-      refreshQueue.dispose();
       window.removeEventListener('focus', onFocus);
       void supabase.removeChannel(channel);
     };
@@ -296,7 +292,7 @@ const Index = () => {
     } catch (error) {
       console.error("[Home] Could not persist confirmed site brief.", error);
       toast({
-        title: "Affinity opened, but couldn't save your progress",
+        title: "Wizard opened, but couldn't save your progress",
         description: "Keep this page open to continue. Your AI conversation is saved on this device.",
         variant: "destructive",
       });
@@ -386,7 +382,7 @@ const Index = () => {
     return (
       <div className="min-h-screen bg-[#0a0a12] flex items-center justify-center">
         <div className="text-center">
-          <Zap className="h-10 w-10 text-cyan-400 animate-pulse mx-auto mb-4 drop-shadow-[0_0_15px_rgba(0,255,255,0.6)]" />
+          <UnisonLoadingMark size={48} className="mx-auto mb-4 drop-shadow-[0_0_15px_rgba(0,255,255,0.6)]" />
           <p className="text-cyan-400 font-medium">Loading...</p>
         </div>
       </div>
@@ -436,18 +432,8 @@ const Index = () => {
         user={user}
         onAuthRequired={() => navigate("/auth")}
         onSiteConfirmed={handleConfirmedSite}
-        badge="Introducing Affinity · Unison's AI App Builder"
-        chatGlow
-        headline={<>Build your business with{" "}
-          <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-lime-300 bg-clip-text text-transparent motion-safe:animate-pulse">
-            Affinity
-          </span>
-        </>}
-
-        subtitle="Affinity is Unison's AI App Builder. Describe what your business needs and watch it plan, design and generate a complete site — booking, CRM, automations and a live backend included."
         launcherOpen={launcherOpen}
         launchBrief={launchBrief}
-
         onLauncherOpenChange={(open) => {
           setLauncherOpen(open);
           if (!open) {

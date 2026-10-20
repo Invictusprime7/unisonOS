@@ -7,7 +7,6 @@ export interface AIBuilderApplyMeta {
   summary?: string;
   actionType?: string;
   origin?: string;
-  guestDemoOperationId?: string;
   /** Explicit file removals, executed by the same candidate + VFS transaction. */
   deletions?: string[];
   /** Typed registry/route intent; the canonical compiler owns App.tsx. */

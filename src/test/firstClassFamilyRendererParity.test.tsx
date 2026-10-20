@@ -144,13 +144,6 @@ function emitFamily(sectionType: SectionType, variantId: string) {
   }, '/src/pages/Home.tsx');
 }
 
-function authoredVariantMarkup(container: HTMLElement): string {
-  const wrapper = container.querySelector('[data-ut-section-id]');
-  return wrapper?.firstElementChild?.outerHTML
-    ?? container.querySelector('[data-ut-variant]')?.outerHTML
-    ?? container.innerHTML;
-}
-
 describe.each(FAMILIES)('$sectionType emitted renderer parity', ({ sectionType, component, props }) => {
   const variants = getVariantsForSection(sectionType);
 
@@ -167,11 +160,11 @@ describe.each(FAMILIES)('$sectionType emitted renderer parity', ({ sectionType, 
 
     const section = { id: `${sectionType}-proof`, type: sectionType, variantId: variant.id, props } as SectionEntry;
     const registryView = render(<variant.component section={section} theme={theme} />);
-    const expectedMarkup = normalizeReactIds(authoredVariantMarkup(registryView.container));
+    const expectedMarkup = normalizeReactIds(registryView.container.innerHTML);
     registryView.unmount();
 
     const generatedView = render(<Emitted props={props} variantId={variant.id} />);
-    expect(normalizeReactIds(authoredVariantMarkup(generatedView.container))).toBe(expectedMarkup);
+    expect(normalizeReactIds(generatedView.container.innerHTML)).toBe(expectedMarkup);
     expect(expectedMarkup.length).toBeGreaterThan(0);
   });
 });

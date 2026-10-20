@@ -92,40 +92,4 @@ describe('launch content seeding contract', () => {
     expect(mocks.createContentRecord).toHaveBeenCalledWith(expect.objectContaining({ contentTypeId: 'faq-old' }));
     expect(mocks.createContentRecord).toHaveBeenCalledWith(expect.objectContaining({ contentTypeId: 'case-old' }));
   });
-  it('fills owner-provided identity, email, hours and mission without overwriting existing profile facts', async () => {
-    const hours = [{ day: 'Monday', open: '09:00', close: '17:00' }];
-    mocks.loadBusinessProfile.mockResolvedValue({ name: '', email: '', hours: [], description: '' });
-    const data = createEmptyCreatorData('Owner Studio');
-    Object.assign(data.businessInfo, { email: 'owner@example.test', hours, description: 'Owner mission' });
-    await seedLaunchAssets({ businessId: 'business-1', creatorData: data });
-    expect(mocks.saveBusinessProfile).toHaveBeenCalledWith('business-1', {
-      name: 'Owner Studio', email: 'owner@example.test', hours, description: 'Owner mission',
-    });
-    mocks.saveBusinessProfile.mockClear();
-    mocks.loadBusinessProfile.mockResolvedValue({ name: 'Existing', email: 'existing@example.test', hours, description: 'Existing mission' });
-    await seedLaunchAssets({ businessId: 'business-1', creatorData: data });
-    expect(mocks.saveBusinessProfile).not.toHaveBeenCalled();
-  });
-  it('saves an explicitly targeted coaching pricing tier with currency and visibility intact', async () => {
-    const data = createEmptyCreatorData('Coach');
-    data.products.tier = { productId: 'tier', catalogSurface: 'pricing', name: 'Owner program', price: 95, currency: 'SEK', visibility: 'hidden', sortOrder: 2 };
-    await seedLaunchAssets({ businessId: 'business-1', projectId: 'project-1', industry: 'coaching', creatorData: data });
-    expect(mocks.createCatalogItem).toHaveBeenCalledWith('business-1', 'pricing', expect.objectContaining({ name: 'Owner program', price: 95, currency: 'SEK', active: false, sort_order: 2 }), 'project-1');
-  });
-  it('preserves owner product, service and testimonial media from the scoped asset inventory', async () => {
-    const data = createEmptyCreatorData('Studio');
-    data.products.item = { productId: 'item', name: 'Print', price: 95, currency: 'SEK', imageAssetId: 'photo', sortOrder: 0 };
-    data.services.session = { serviceId: 'session', name: 'Session', imageAssetId: 'photo', bookable: true, sortOrder: 0 };
-    data.testimonials.review = { testimonialId: 'review', author: 'Owner supplied', content: 'Excellent', avatarAssetId: 'photo', sortOrder: 0 };
-    await seedLaunchAssets({ businessId: 'business-1', projectId: 'project-1', creatorData: data, mediaAssets: [{ id: 'photo', kind: 'image', url: 'https://assets.example.test/owner.jpg' }] });
-    expect(mocks.createCatalogItem).toHaveBeenCalledWith('business-1', 'products', expect.objectContaining({ image_url: 'https://assets.example.test/owner.jpg' }), 'project-1');
-    expect(mocks.createCatalogItem).toHaveBeenCalledWith('business-1', 'services', expect.objectContaining({ image_url: 'https://assets.example.test/owner.jpg' }), 'project-1');
-    expect(mocks.createCatalogItem).toHaveBeenCalledWith('business-1', 'testimonials', expect.objectContaining({ author_avatar_url: 'https://assets.example.test/owner.jpg' }), 'project-1');
-  });
-  it.each([['week', 'weekly'], ['month', 'monthly'], ['quarter', 'quarterly'], ['year', 'yearly']] as const)('normalizes %s pricing intervals to %s', async (billingInterval, expected) => {
-    const data = createEmptyCreatorData('Studio');
-    data.products.plan = { productId: 'plan', catalogSurface: 'pricing', name: 'Plan', price: 95, currency: 'SEK', billingInterval, sortOrder: 0 };
-    await seedLaunchAssets({ businessId: 'business-1', creatorData: data });
-    expect(mocks.createCatalogItem).toHaveBeenCalledWith('business-1', 'pricing', expect.objectContaining({ billing_interval: expected }), undefined);
-  });
 });

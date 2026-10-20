@@ -262,7 +262,7 @@ export const PropertyInspectorPanel: React.FC<PropertyInspectorPanelProps> = ({
           {/* Contextual AI edit */}
           {onContextualAIRequest && (
             <div>
-              <SectionLabel>Ask Affinity about this selection</SectionLabel>
+              <SectionLabel>Ask AI about this selection</SectionLabel>
               <div className="flex gap-1.5">
                 <Input
                   value={aiRequest}

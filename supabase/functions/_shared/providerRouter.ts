@@ -147,7 +147,7 @@ export function composerGeminiModel(readEnv: EnvReader): { id: string; label: st
   return { id: `google/${raw}`, label: raw };
 }
 
-function m(spec: { id: string; label: string }, maxTokens: number): ModelSpec {
+function m(spec: typeof MODELS[keyof typeof MODELS], maxTokens: number): ModelSpec {
   return { id: spec.id, maxTokens, label: spec.label };
 }
 

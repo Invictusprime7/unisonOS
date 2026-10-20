@@ -43,11 +43,22 @@ export function isRejectedRefreshTokenRequest(
 }
 
 export function createAuthRecoveryFetch(
-  _clearLocalSession: () => Promise<unknown>,
+  clearLocalSession: () => Promise<unknown>,
   nativeFetch: typeof fetch = fetch,
 ): typeof fetch {
-  // Only the SDK may classify refresh failures and remove sessions under its
-  // concurrency guards. A fetch-level sign-out can erase a newer session.
-  // Retain the callback argument for compatibility with the managed client.
-  return (input, init) => nativeFetch(input, init);
+  let recoveryInFlight = false;
+
+  return async (input, init) => {
+    const response = await nativeFetch(input, init);
+    // An access-token rejection can be recovered with the refresh token.
+    // Signing out here races the caller's refresh and deletes that credential.
+    const rejectedSession = isRejectedRefreshTokenRequest(input, response);
+    if (rejectedSession && !recoveryInFlight) {
+      recoveryInFlight = true;
+      void clearLocalSession().catch(() => undefined).finally(() => {
+        recoveryInFlight = false;
+      });
+    }
+    return response;
+  };
 }

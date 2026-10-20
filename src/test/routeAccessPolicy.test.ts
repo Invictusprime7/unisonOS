@@ -29,17 +29,6 @@ describe("route access policy", () => {
     });
   });
 
-  it("treats an anonymous Supabase session as unauthenticated on account routes", () => {
-    expect(resolveRouteAccess(meta("web-builder"), {
-      isAuthenticated: true,
-      isAnonymousUser: true,
-    })).toEqual({
-      kind: "redirect",
-      redirectTo: "/auth",
-      reason: "auth_required",
-    });
-  });
-
   it("keeps onboarding accessible while onboarding is incomplete", () => {
     expect(resolveRouteAccess(meta("onboarding"), {
       isAuthenticated: true,

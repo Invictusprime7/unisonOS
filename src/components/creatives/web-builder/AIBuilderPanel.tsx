@@ -56,7 +56,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AIConversationMessage } from './ai-chat/AIConversationMessage';
-import { affinityReply } from './ai-chat/affinityReply';
 import { AIConversationWelcome } from './ai-chat/AIConversationWelcome';
 import { LaunchReadinessCard } from './ai-chat/LaunchReadinessCard';
 import { AIConversationInput } from './ai-chat/AIConversationInput';
@@ -103,7 +102,7 @@ import {
   type PersistedMessage,
 } from '@/services/aiHistoryStore';
 // Side-effect import: registers GHL skill pack with global registry
-import { isBuilderProviderUnavailable, isBuilderSessionError, releaseGuestDemoReservation, runBuilderTurn, shouldOfferBuilderProviderRetry } from '@/services/builderBrainClient';
+import { isBuilderProviderUnavailable, isBuilderSessionError, runBuilderTurn, shouldOfferBuilderProviderRetry } from '@/services/builderBrainClient';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
 import {
   envelopeRunIdFromResponse,
@@ -135,12 +134,7 @@ import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { deriveFilePath } from '@/services/routeNavigationService';
 import { createBuilderPage } from '@/types/pageRegistry';
 import { canonicalCandidateOutput } from '@/services/builder/canonicalCandidateOutput';
-import {
-  findUnrequestedCopyChanges,
-  findUnrequestedScopedSideEffects,
-  getUnrequestedNavigationSectionRemovalReason,
-  isNavigationPresentationPrompt,
-} from '@/services/builder/scopedEditContentGuard';
+import { findUnrequestedCopyChanges, findUnrequestedScopedSideEffects } from '@/services/builder/scopedEditContentGuard';
 
 import {
   planBusinessCapabilities,
@@ -380,14 +374,11 @@ export interface ThinkingStep {
 export interface MessageMeta {
   actionType?: string;
   modelUsed?: string;
-  guestDemoOperationId?: string;
   filesDetected?: string[];
   warnings?: Array<{ severity: string; message: string }>;
   requiresApproval?: boolean;
   removedFiles?: string[];
   reviewSummary?: string;
-  /** Affinity explained it cannot fulfill (part of) the request */
-  outOfScope?: { reason: string; suggestedPatch?: string };
 }
 
 export interface Message {
@@ -613,7 +604,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     return () => setAiGenerationActive(false);
   }, [isLoading]);
   const [isFixing, setIsFixing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'code' | 'tools' | 'customize' | 'backend'>('code');
+  const [activeTab, setActiveTab] = useState<'code' | 'tools' | 'customize' | 'debug' | 'backend'>('code');
   useEffect(() => {
     if (!customizerAvailable && activeTab === 'customize') setActiveTab('code');
   }, [activeTab, customizerAvailable]);
@@ -622,7 +613,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   const [isApplyingPermissionAction, setIsApplyingPermissionAction] = useState(false);
   // Files the auto-apply guard held back. Without this the AI "resolved" a
   // rewrite that never materialized anywhere — now the user can still apply it.
-  const [heldFiles, setHeldFiles] = useState<{ files: Record<string, string>; deletions?: string[]; routeOps?: TopologyChange[]; candidate?: AICandidateChangeSet; guestDemoOperationId?: string; reason: string } | null>(null);
+  const [heldFiles, setHeldFiles] = useState<{ files: Record<string, string>; deletions?: string[]; routeOps?: TopologyChange[]; candidate?: AICandidateChangeSet; reason: string } | null>(null);
   const [isApplyingHeld, setIsApplyingHeld] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -991,7 +982,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   // Send message to AI
   const handleSend = async () => {
     if ((!input.trim() && droppedFiles.length === 0) || isLoading) return;
-    const guestDemoOperationId = crypto.randomUUID();
     try {
       if (isCatalogMutationRequest(input)) requireBuilderFeature(featuresRef.current, 'catalog');
       if (isImageGenerationRequest(input)) requireBuilderFeature(featuresRef.current, 'images');
@@ -1003,11 +993,11 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     // Capture the selected entity before clearing the UI chip; the AI turn
     // resolves this immutable selection against the same graph revision.
     const selectedTarget = agentTarget;
-    let requestState = captureBuilderRequestState(getCurrentRequestState?.() ?? imageContextRef.current.getCurrentRequestState?.() ?? { files: imageContextRef.current.vfsFiles ?? {}, revisionId: imageContextRef.current.revisionId ?? null, projectId: imageContextRef.current.projectId ?? null, businessId: imageContextRef.current.businessId ?? null });
+    const requestState = captureBuilderRequestState(getCurrentRequestState?.() ?? imageContextRef.current.getCurrentRequestState?.() ?? { files: imageContextRef.current.vfsFiles ?? {}, revisionId: imageContextRef.current.revisionId ?? null, projectId: imageContextRef.current.projectId ?? null, businessId: imageContextRef.current.businessId ?? null });
     // Keep all downstream analysis and authoring on this one source/identity tuple.
     const { files: requestFiles, revisionId: requestRevision, projectId: requestProject, businessId: requestBusiness } = requestState;
-    let vfsFiles = requestFiles;
-    let revisionId = requestRevision;
+    const vfsFiles = requestFiles;
+    const revisionId = requestRevision;
     const projectId = requestProject;
     const businessId = requestBusiness;
     const ensureCurrentRequest = () => assertBuilderRequestState(requestState, getCurrentRequestState?.() ?? requestState);
@@ -1119,9 +1109,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     // authoring lane may not write the stylesheet). Mixed requests apply the
     // theme part first, then continue with the layout/content part.
     const themeOnly = isThemeOnlyRequest(userContent);
-    // "primary"/"accent" alone are not theme words ("make the primary button
-    // say Book now"); they count only next to a color word.
-    const themeCue = /\b(colou?rs?|palette|(?:primary|accent)\s+(?:colou?r|hue|shade|tone)|font|typeface|typography|headings? font|rounder|corners|darker|lighter)\b/i.test(userContent);
+    const themeCue = /\b(colou?rs?|palette|primary|accent|font|typeface|typography|headings? font|rounder|corners|darker|lighter)\b/i.test(userContent);
     let themeApplied = false;
     if (onRequestThemeEdit && droppedFiles.length === 0 && (themeOnly || themeCue)) {
       try {
@@ -1133,17 +1121,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: `I couldn't apply that theme change: ${error instanceof Error ? error.message : 'unknown error'}. Tell me the color or font you want and I'll try again.`, timestamp: new Date() }]);
           setIsLoading(false);
           return;
-        }
-      }
-      if (themeApplied && !themeOnly) {
-        // The theme part of this request was just saved as a new revision by
-        // this same request. Continue the layout/content part on top of it
-        // instead of refusing it as "the site changed".
-        const latest = getCurrentRequestState?.() ?? imageContextRef.current.getCurrentRequestState?.();
-        if (latest && latest.projectId === requestState.projectId && latest.businessId === requestState.businessId) {
-          requestState = captureBuilderRequestState(latest);
-          vfsFiles = requestState.files;
-          revisionId = requestState.revisionId;
         }
       }
       if (themeOnly && themeApplied) {
@@ -1442,10 +1419,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               resolvedTargetFile = requestedPageTarget.filePath;
             }
           }
-          // New-page requests ("add a case study page") are site-level but
-          // own no existing source part: they author a new file plus nav.
-          const createsPage = /\b(add|create|make|build|new|generate)\b[^.]{0,80}?\bpages?\b/i.test(rawInput);
-          const siteScope = !createsPage && !requestedPageTarget && !selectedSourceFile && (capabilityInterpretation.envelope.scope.level === 'site' || /\b(across (?:the |all )?(?:site|pages)|site[ -]wide|whole site|every page|all pages)\b/i.test(rawInput));
+          const siteScope = !requestedPageTarget && !selectedSourceFile && (capabilityInterpretation.envelope.scope.level === 'site' || /\b(across (?:the |all )?(?:site|pages)|site[ -]wide|whole site|every page|all pages)\b/i.test(rawInput));
           resolvedSourceTargets = resolveEditSourceTargets(rawInput, analysis, {
             files: vfsFiles,
             pageFiles: pageTargets.map(page => page.filePath),
@@ -1906,7 +1880,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             emitAgentEvent({ kind: 'plan', message: `Writing changes to ${page.filePath.split('/').pop()}`, status: 'running', path: page.filePath });
             const editResult = await unisonAppBuilder.edit({
               operationId: `builder:${generateId()}`,
-              guestDemoOperationId,
               attachmentContext: _fileContext,
               images: _attachments.length > 0
                 ? _attachments.map((a) => ({ name: a.name, data: a.data }))
@@ -1991,7 +1964,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             });
             if (editResult.candidate.status !== 'ready-for-commit' || !editResult.changeSet) {
               emitAgentEvent({ kind: 'plan', message: 'Could not finish writing the change', status: 'failed' });
-              throw new Error(editResult.candidate.diagnostics[0] ?? `Affinity stopped: ${editResult.stopReason}`);
+              throw new Error(editResult.candidate.diagnostics[0] ?? `App Builder stopped: ${editResult.stopReason}`);
             }
             const candidate = editResult.changeSet;
             emitAgentEvent({ kind: 'plan', message: `Wrote changes to ${candidate.fileOps.length} file${candidate.fileOps.length === 1 ? '' : 's'}`, status: 'ok' });
@@ -2004,8 +1977,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             const pageOps = candidate.routeOps.filter((operation) => operation.type === 'add_page');
             if (pageOps.length > 0) {
               const pageTargetsForGeneration = pageOps.map((operation) => {
-                const { pageId, title, route } = operation;
-                if (!pageId || !title || !route) throw new Error('Affinity returned an incomplete new-page target.');
+                const pageId = operation.pageId!;
+                const title = operation.title!;
+                const route = operation.route!;
                 const page = createBuilderPage(pageId, title, route, operation.pageType ?? 'custom', {
                   showInNav: operation.showInNav ?? true,
                   navOrder: operation.navOrder,
@@ -2028,10 +2002,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 operationId: `builder-pages:${generateId()}`,
                 connectorContext: { projectId, businessId, revisionId, catalogSummary: connectorCatalogSummary, registryContext: builderRegistryContext, requestEnvelope: capabilityInterpretation.envelope },
                 baseRevisionId: revisionId ?? null,
-                // Retain the scoped navigation edits from planning, but author
-                // new pages only once against the existing accepted site.
-                currentFiles: Object.fromEntries(Object.entries(editResult.candidateFiles)
-                  .filter(([path]) => path in vfsFiles)),
+                currentFiles: vfsFiles,
                 pages: pageTargetsForGeneration,
                 existingRoutes: pageTargets.map(({ title, route }) => ({ title, route })),
                 businessName: templateName?.trim() || 'Website',
@@ -2060,23 +2031,14 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 },
               });
               if (generation.status !== 'ready-for-commit' || !generation.changeSet) {
-                throw new Error(generation.diagnostics[0] ?? 'Affinity could not author every requested page.');
+                throw new Error(generation.diagnostics[0] ?? 'App Builder could not author every requested page.');
               }
-              canonicalCandidate = buildAICandidateChangeSet({
-                aiFiles: generation.candidateFiles,
-                baseFiles: vfsFiles,
-                baseRevisionId: revisionId ?? undefined,
-                origin: 'builder',
-                intent: 'in-builder-multi-page-generation',
-                targetPages: pageTargetsForGeneration.map(page => page.filePath),
-                routeOps: generation.routeOps,
-                resolveDependencies: false,
-              }).changeSet;
+              canonicalCandidate = generation.changeSet;
               canonicalRouteOps = [...generation.routeOps];
               dedicatedPageGeneration = true;
               response = {
                 data: {
-                  content: `Affinity prepared ${generation.outcomes.length} new page${generation.outcomes.length === 1 ? '' : 's'}.`,
+                  content: `Unison App Builder prepared ${generation.outcomes.length} new page${generation.outcomes.length === 1 ? '' : 's'}.`,
                   actionType: 'canonical-page-generation',
                   filesDetected: canonicalCandidate.fileOps.map(operation => operation.path),
                 },
@@ -2085,10 +2047,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             } else {
               response = {
                 data: {
-                  content: editResult.summary ?? 'Affinity prepared this source candidate.',
+                  content: editResult.summary ?? 'Unison App Builder prepared this source candidate.',
                   actionType: 'canonical-source-edit',
                   filesDetected: candidate.fileOps.map(operation => operation.path),
-                  guestDemoOperationId: editResult.guestDemoOperationId,
                 },
                 error: null,
               };
@@ -2123,7 +2084,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               projectId: projectId ?? null,
               businessId: businessId ?? null,
               prompt: _userContent.slice(0, 8000),
-              operationId: guestDemoOperationId,
             },
             requestEnvelope: capabilityInterpretation.envelope,
             unisonContext,
@@ -2241,8 +2201,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         requiresApproval: response.data?.requiresApproval,
         removedFiles: response.data?.removedFiles,
         reviewSummary: response.data?.reviewSummary,
-        guestDemoOperationId: response.data?.guestDemoOperationId,
-        outOfScope: (response.data as { outOfScope?: { reason: string; suggestedPatch?: string } } | undefined)?.outOfScope,
       };
 
       // The edge function returns { content, generatedImage?, imagePlacement? }
@@ -2331,7 +2289,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       }
       
       // Only validated candidates carry source. Chat/catalog text cannot write files.
-      const explanationText = affinityReply(aiContent);
+      let explanationText = neutralizeModelSuccessClaim(aiContent) || CANDIDATE_GENERATED_NOTICE;
       let multiFileOutput: Record<string, string> | null = null;
       let multiFileDeletions: string[] = [];
       let transactionVerdict: string | null = null;
@@ -2339,6 +2297,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
         const preparedOutput = canonicalCandidateOutput(canonicalCandidate);
         multiFileOutput = preparedOutput.files;
         multiFileDeletions = preparedOutput.deletions;
+        explanationText = CANDIDATE_GENERATED_NOTICE;
       }
 
       // Prepared Composer candidates bypass compatibility response extraction.
@@ -2352,16 +2311,13 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           responseMeta.warnings?.some(w => w.severity === 'error');
 
         // Client-side scope enforcement for scoped edits
-        const isScopedTask = isSurgicalEdit || isBehavioralEdit || Boolean(selectionPinnedFile) || isNavigationPresentationPrompt(rawInput);
+        const isScopedTask = isSurgicalEdit || isBehavioralEdit || Boolean(selectionPinnedFile);
         const permissionCategory: AIEditPermissionCategory = isBehavioralEdit
           ? 'behavioral'
           : isSurgicalEdit
             ? 'surgical'
             : 'ui';
-        const navigationStructureBlockReason = getUnrequestedNavigationSectionRemovalReason(
-          vfsFiles ?? {}, normalizedFiles, rawInput,
-        );
-        const scopeBlockReason = navigationStructureBlockReason ?? (isScopedTask && !isFullAuto ? getScopedEditAutoApplyBlockReason({
+        const scopeBlockReason = isScopedTask && !isFullAuto ? getScopedEditAutoApplyBlockReason({
           files: normalizedFiles,
           originalFiles: vfsFiles ?? {},
           prompt: rawInput,
@@ -2369,16 +2325,16 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           existingFileKeys: vfsFiles ? Object.keys(vfsFiles) : [],
           pinnedBySelection: Boolean(selectionPinnedFile),
           targetText: selectionPinnedFile ? (selectedTarget?.text ?? null) : null,
-        }) : null);
+        }) : null;
 
         if (scopeBlockReason) {
           console.warn('[AIBuilderPanel] SCOPE BLOCK:', scopeBlockReason);
-          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: `Edit held back: ${scopeBlockReason}` });
+          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, reason: `Edit held back: ${scopeBlockReason}` });
           toast.warning(`⚠️ Edit held for review: ${scopeBlockReason}`);
           transactionVerdict = transactionVerdictLine('held-for-review', scopeBlockReason);
         } else if (!canAutoApply(permissionCategory)) {
           const permissionReason = `${permissionCategory[0].toUpperCase()}${permissionCategory.slice(1)} edits are set to review before apply.`;
-          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: permissionReason });
+          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, reason: permissionReason });
           toast.info('AI patch held for review', { description: permissionReason });
           transactionVerdict = transactionVerdictLine('held-for-review', permissionReason);
         } else if (shouldBlock) {
@@ -2386,7 +2342,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           console.warn('[AIBuilderPanel] Patch requires approval — NOT auto-applying');
           const heldReason = responseMeta?.warnings?.map((warning) => warning.message).filter(Boolean).join('; ')
             || 'The reviewer flagged this patch. Review the warnings, then apply.';
-          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: heldReason });
+          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, reason: heldReason });
           toast.warning('⚠️ AI patch flagged for review — apply it from the review card when ready');
           transactionVerdict = transactionVerdictLine('held-for-review', heldReason);
         } else {
@@ -2409,7 +2365,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 summary: responseMeta?.reviewSummary,
                 actionType: responseMeta?.actionType,
                 origin: `multi-file-task-${taskIndex + 1}`,
-                guestDemoOperationId: responseMeta.guestDemoOperationId,
                 deletions: task.deletions,
                 routeOps: taskIndex === sequentialTasks.length - 1 ? canonicalRouteOps : [],
                 candidate: canonicalCandidate,
@@ -2464,10 +2419,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               liveStep('error', 'AI edit was not applied', applyError);
               vfsEventBus.emit('ai:apply:error', { message: applyError, source: 'multi-file' });
               toast.error('AI edit was not applied', { description: applyError, duration: 8000 });
-              if (responseMeta?.guestDemoOperationId) {
-                void releaseGuestDemoReservation(responseMeta.guestDemoOperationId, 'canonical-commit-failed')
-                  .catch((error) => console.warn('[AIBuilderPanel] Guest reservation release failed', error));
-              }
               transactionVerdict = transactionVerdictLine('failed', applyError);
             }
 
@@ -2529,7 +2480,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       // AUTO-APPLY: Push generated code to VFS — prefer orchestrator for dep resolution
       if (!multiFileOutput && canonicalCandidate?.dataOps?.length) {
         requireBuilderFeature(featuresRef.current, 'catalog');
-        if (!canAutoApply('backend')) { setHeldFiles({ files: {}, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: 'Review catalog changes before applying.' }); return; }
+        if (!canAutoApply('backend')) { setHeldFiles({ files: {}, candidate: canonicalCandidate, reason: 'Review catalog changes before applying.' }); return; }
         markPreviewPending();
         const dataOutcome = await applyAIBuilderFiles(onApplyToVFS, {}, {
           prompt: userContent,
@@ -2538,7 +2489,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           candidate: canonicalCandidate,
           summary: responseMeta?.reviewSummary,
           actionType: responseMeta?.actionType,
-          guestDemoOperationId: responseMeta?.guestDemoOperationId,
         });
         if (dataOutcome.success) {
           const verification = await awaitPreviewVerification();
@@ -2547,16 +2497,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           vfsEventBus.emit('ai:apply:complete', { filesWritten: [], source: 'catalog-data' });
         } else {
           toast.error('Catalog changes were not applied', { description: dataOutcome.errors?.[0] });
-          if (responseMeta?.guestDemoOperationId) {
-            void releaseGuestDemoReservation(responseMeta.guestDemoOperationId, 'canonical-commit-failed')
-              .catch((error) => console.warn('[AIBuilderPanel] Guest reservation release failed', error));
-          }
         }
-      }
-
-      if (!multiFileOutput && !canonicalCandidate?.dataOps?.length && responseMeta?.guestDemoOperationId) {
-        void releaseGuestDemoReservation(responseMeta.guestDemoOperationId, 'no-canonical-mutation')
-          .catch((error) => console.warn('[AIBuilderPanel] Guest reservation release failed', error));
       }
 
     }
@@ -2769,7 +2710,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     )}>
       <header className="builder-header flex-wrap">
         <Sparkles className="text-primary" aria-hidden="true" />
-        <div className="builder-header-title"><h2>Affinity</h2><p>{templateName || 'Your project'}</p></div>
+        <div className="builder-header-title"><h2>AI Builder</h2><p>{templateName || 'Your project'}</p></div>
         <span role="status" className="text-muted-foreground">{isLoading || isFixing ? 'Thinking' : heldFiles || pendingPermissionAction ? 'Review' : 'Ready'}</span>
         <BuilderSettings open={settingsOpen} onToggle={() => setSettingsOpen(value => !value)} features={features} onChange={setFeatures} permissions={aiPermissions} onPermissionsChange={setAIPermissions} busy={isLoading || isFixing} />
         {onClose && <Button variant="link" size="icon" onClick={onClose} title="Close Builder" aria-label="Close Builder"><ChevronLeft /></Button>}
@@ -2777,7 +2718,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
       {/* Tab bar */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col min-h-0">
-        <TabsList className={cn('builder-nav w-full grid rounded-none h-9 bg-transparent px-1', customizerAvailable ? 'grid-cols-4' : 'grid-cols-3')}>
+        <TabsList className={cn('builder-nav w-full grid rounded-none h-9 bg-transparent px-1', customizerAvailable ? 'grid-cols-5' : 'grid-cols-4')}>
           <TabsTrigger
             value="code"
             className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
@@ -2802,6 +2743,19 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               Style
             </TabsTrigger>
           )}
+          <TabsTrigger
+            value="debug"
+            disabled={!features.repairs}
+            className="text-xs gap-1.5 rounded-none h-8 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground transition-colors"
+          >
+            <Bug className="w-3.5 h-3.5" />
+            Debug
+            {iframeErrors.length > 0 && (
+              <Badge variant="destructive" className="ml-1 h-4 min-w-[16px] px-1 text-[10px] flex items-center justify-center">
+                {iframeErrors.length}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger
             value="backend"
             disabled={!features.capabilities}
@@ -2974,20 +2928,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 ))
               )}
               <AgentActivityFeed active={isLoading} />
-              {features.repairs && <DebugAgentPanel
-                embedded
-                iframeErrors={iframeErrors}
-                onFixError={handleFixError}
-                onDebugRequest={(prompt) => {
-                  void handleFixError({ type: 'runtime', message: prompt, timestamp: new Date() });
-                }}
-                onClearErrors={onClearErrors}
-                onApplyPatch={async () => ({ success: false, errors: ['Request a validated repair through Affinity.'] })}
-                canAutoApplyPatch={false}
-                onReviewPatch={() => toast.info('Describe the repair in Affinity chat to prepare a validated candidate.')}
-                vfsFiles={vfsFiles}
-                isFixing={isFixing}
-              />}
 
             </div>
           </ScrollArea>
@@ -3033,16 +2973,15 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                     const deletions = heldFiles.deletions;
                     const routeOps = heldFiles.routeOps;
                     const candidate = heldFiles.candidate;
-                    const guestDemoOperationId = heldFiles.guestDemoOperationId;
                     setIsApplyingHeld(true);
-                    const outcome = await applyAIBuilderFiles(onApplyToVFS, pending, { origin: 'held-review', deletions, routeOps, candidate, guestDemoOperationId });
+                    const outcome = await applyAIBuilderFiles(onApplyToVFS, pending, { origin: 'held-review', deletions, routeOps, candidate });
                     setIsApplyingHeld(false);
                     if (outcome.success) {
                       setHeldFiles(null);
                       toast.success('Held changes applied to your project');
                     } else {
                       toast.error('Apply failed', { description: outcome.errors?.[0] });
-                      setHeldFiles({ files: pending, deletions, routeOps, candidate, guestDemoOperationId, reason: outcome.errors?.[0] ?? 'Apply failed.' });
+                      setHeldFiles({ files: pending, deletions, routeOps, candidate, reason: outcome.errors?.[0] ?? 'Apply failed.' });
                     }
                   }}
                 >
@@ -3052,13 +2991,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   type="button"
                   disabled={isApplyingHeld}
                   className="disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => {
-                    setHeldFiles(null);
-                    if (heldFiles.guestDemoOperationId) {
-                      void releaseGuestDemoReservation(heldFiles.guestDemoOperationId, 'user-discard')
-                        .catch((error) => console.warn('[AIBuilderPanel] Guest reservation release failed', error));
-                    }
-                  }}
+                  onClick={() => setHeldFiles(null)}
                 >
                   Discard
                 </button>
@@ -3093,6 +3026,22 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           />}
         </TabsContent>
 
+        {/* Debug Tab */}
+        <TabsContent value="debug" className="flex-1 flex flex-col m-0 min-h-0 data-[state=inactive]:hidden">
+          {features.repairs && <DebugAgentPanel
+            iframeErrors={iframeErrors}
+            onFixError={handleFixError}
+            onDebugRequest={(prompt) => {
+              void handleFixError({ type: 'runtime', message: prompt, timestamp: new Date() });
+            }}
+            onClearErrors={onClearErrors}
+            onApplyPatch={async () => ({ success: false, errors: ['Request a validated repair through AI Builder.'] })}
+            canAutoApplyPatch={false}
+            onReviewPatch={() => toast.info('Describe the repair in Builder chat to prepare a validated candidate.')}
+            vfsFiles={vfsFiles}
+            isFixing={isFixing}
+          />}
+        </TabsContent>
       </Tabs>
     </div>
   );

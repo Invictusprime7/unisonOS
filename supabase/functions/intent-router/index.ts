@@ -10,7 +10,6 @@
  * Every CoreIntent from published templates routes through here.
  */
 
-import { publicBusinessWriteAllowed } from "../_shared/publicBusinessGate.ts";
 import { serve } from "serve";
 import { createClient } from "@supabase/supabase-js";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
@@ -976,10 +975,6 @@ serve(async (req) => {
     // Validate businessId format (UUID)
     if (!isValidUUID(payload.businessId)) {
       return errorResponse("Invalid businessId format", 400, publicCorsHeaders);
-    }
-
-    if (!(await publicBusinessWriteAllowed(getSupabaseAdmin(), req, payload.businessId))) {
-      return errorResponse("This business is not accepting submissions", 403, publicCorsHeaders);
     }
 
     const result = await routeIntent(payload);

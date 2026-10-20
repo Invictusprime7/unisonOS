@@ -166,25 +166,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Reads of CRM records are bound to a business the caller can access:
-    // the requested contact/location must already be linked to it.
-    const READ_ACTIONS = new Set(["getContact", "getContacts", "getCustomFields", "getLocation", "getTemplateData", "getWorkflows"]);
-    if (!isInternalRequest && READ_ACTIONS.has(action)) {
-      if (!businessId) return errorResponse("businessId is required", 400, corsHeaders);
-      const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-      const linked = async (column: "contact_id" | "location_id", value: string) => {
-        const { data } = await admin.from("ghl_webhook_events").select("id")
-          .eq("business_id", businessId).eq(column, value).limit(1).maybeSingle();
-        return Boolean(data);
-      };
-      if (contactId && !(await linked("contact_id", contactId))) {
-        return authError("This contact does not belong to your business", 403, corsHeaders);
-      }
-      if (locationId && !(await linked("location_id", locationId))) {
-        return authError("This location does not belong to your business", 403, corsHeaders);
-      }
-    }
-
     console.log(
       "[gohighlevel-crm] action=%s contactId=%s locationId=%s internal=%s",
       action,

@@ -1,45 +1,6 @@
 # Roadmap
 
-## Active: Cross-file resource integration closure
-- [x] Unify generated-slug identity resolution for editor reads and preview adoption; reject ambiguous matches without creating duplicates. UUID identities remain unchanged; CMS titles and pricing adoption covered.
-- [x] Load job-local CMS schemas into App Builder generation without UI/global registry dependence; failed scoped reads stop authoring rather than reuse global state.
-- [x] Preserve owner product/service/testimonial/team media and team social links; normalize pricing intervals during launch seeding using scoped media inventory.
-- [x] Create Records entries from their registered schemas and support empty planned CMS collections through explicit New record; no implicit backend provisioning.
-- [x] Verify focused integrations: 113 tests pass across 10 suites; final generation rerun 14/14; preview build OK and public entry renders without page errors.
-- [x] Frontend publication requested on 2026-10-19 at https://unisonai.lovable.app; deployment completion is not confirmed.
-- [ ] Authoritative backend deployment and authenticated public read-back; blocked by unavailable UNISON workflow access/session. Never deploy into the unrelated managed database.
-- [ ] Continue atomic content/profile write safety and shared/dedicated schema/publication parity; implement and test safe contract changes without modifying the unrelated managed database. Authoritative migration validation and provisioned site-database acceptance remain required.
-- [x] Conditional site-profile override updates preserve unrelated fields and reject concurrent update/insert races; observed site-field expectations reach the write service. No schema or record changes applied.
-- [x] Dedicated publication checks accepted component reads and literal saved resource marks through an authenticated read-only gateway schema probe before hosting; incompatible/unconfirmed resources refuse publication. Shared backend routing unchanged.
-- [x] Verify concurrency/publication/resource integrations: 110 tests pass across eight suites; canonical VFS write lint passes. Live signed-in acceptance and deployment remain blocked below.
-- [ ] Extend shared content/account-profile commands with locked-row expected-value validation and verify full schema/publication parity; blocked by authoritative migration/deployment access and provisioned-site acceptance. Mixed account/site writes are not a single transaction.
-
-## Affinity same-site page generation
-- [x] Wire requested pages to generate-page, reusing the authenticated Composer handler, accepted homepage source/design, and a combined page/navigation candidate through the existing canonical commit.
-- [x] Run page-generation, candidate-save, route-output, and authentication regressions: 99 tests pass; browser/server Composer contracts match; preview build OK.
-- [ ] Deploy generate-page and the updated AI handler/contracts through the UNISON GitHub workflow; verify live generation → preview → reopen. Blocked by unavailable authoritative deployment access and signed-in session.
-
-## Database performance and running credits
-- [x] Measure October 6–19 scoped usage: 242.33 requested running credits, of which XL compute is 207 for 167.1 instance-hours; built-in Cloud diagnostics do not measure authoritative UNISON. Query/index/cron audit documented in docs/DATABASE_COST_REVIEW_2026-10-19.md.
-- [x] Serialize Home refresh bursts with a trailing read; accepted-draft lookup reads one canonical row and legacy identity lookup excludes embedded snapshots. 19 focused regressions pass; preview build OK. No record, schema, schedule or instance changes.
-- [ ] Authoritative UNISON query plans and signed-in Home → project read-back; blocked by unavailable authoritative database diagnostics/session.
-- [ ] Reduce XL billed hours/size or background cron/storage growth; blocked by active-consumer/peak-load evidence and explicit pause/resize/retention approval. Investigate rising Cloud rollbacks first; no savings established.
-
-## Account-persistent Live Demo
-- [x] Replace browser-only usage with account-owned reservation and canonical revision settlement; migration prepared for authoritative UNISON workflow, not applied to the unrelated built-in backend.
-- [x] Test one free generation, failed/discarded retry, duplicate reservations, expired/late commits, account isolation, permissions, rollback and persistent UI read-back; 40 tests pass across account Demo, Wizard, Home handoff and canonical launch suites. Preview build OK; signed-out Demo gates to Auth without page errors.
-- [ ] Deploy account demo migration through the existing UNISON GitHub workflow and verify live signed-in generation → saved draft → returning exhausted state; blocked: authoritative RPC is still missing (read-only HTTP 404/PGRST202), no deployment credentials or authoritative test session available.
-
-## Affinity naming
-- [x] Show Affinity in the visible Builder header and Wizard title; add a token-based glow around Home’s AI chat box. 13 Home/Wizard regressions pass; build OK. Signed-in visual verification remains unavailable (Home redirects to sign-in).
-- [x] Rename the active Wizard, Home chat, Builder chat, selected-element chat, commands, accessibility labels and related help text to Affinity; preserve technical identifiers and behavior. 21 Wizard/auth/workspace regression tests pass; sign-in demo shows Affinity without page errors. Authenticated Builder viewing remains blocked by the unavailable authoritative UNISON session.
-- [x] Bring the Affinity name into the Unison Home hero (badge, gradient headline, subtitle) with the same treatment as the Live Demo; Home-only overrides, shared hero component and demo copy untouched.
-
-
 ## Active: Builder prompted-edit completion
-- [x] Fix futuristic color edits rejecting valid surface shadows (including layered and token-colored shadows); 24 regressions pass, including canonical edit → save → reload with unchanged page source. Real signed-in verification remains blocked by the unavailable UNISON session.
-- [x] Audit remaining VFSCommitService save blockers: replace blanket stale-structured refusals with captured dependency checks for typed page/theme/motion edits; retain conflicts, protected paths and reviewed-artifact safety. Identity/shape checks also run before no-op coalescing. 93 save/recovery/hydration regressions pass; preview build OK. Live signed-in acceptance remains blocked below.
-- [x] Fix canonical save queue rejecting file-only AI candidates after a newer non-overlapping save; 61 regressions pass, build OK; preserve unrelated source and candidate lineage, reject overlaps/structured side effects/mismatched candidate bases. Live signed-in project check remains blocked below.
 - [x] Resolve prompted parts against visible-page source owners; site-wide navigation unions owners without guessing unrelated pages
 - [x] Preserve selected-element instructions and complete conversation context through canonical App Builder edits; interpretation failures close the pending turn and timers clear on every exit
 - [x] Verify source-owner resolution, incomplete-source rejection and canonical candidate/revision boundaries: 57 tests, both authority lints and preview build pass; durable save acceptance remains below
@@ -87,11 +48,6 @@
 - [ ] Complete replacement acceptance before removing compatibility helpers outside Builder; requires a valid UNISON session and designated test project
 
 ## Sign-in recovery
-- [x] Remove automatic chunk reloads and competing fetch-level sign-out; preserve newer auth events, retryable renewal sessions and cross-tab refreshed credentials.
-- [ ] Verify refresh/sign-in recovery on a saved UNISON project; blocked by unavailable authoritative signed-in session.
-- [x] Converge password/email/OAuth authentication to Home or Demo only; return-path/checkout overrides removed, callback audit no longer blocks entry. 20 regression tests pass; build OK. Real-account verification remains below.
-- [x] Stop reused route gates and pending launcher handoffs from looping sign-in; 22 auth regressions pass, sign-in stays open with a pending handoff, zero browser errors, build OK. Real-account verification remains below.
-- [x] Home redirects no longer wait for guest claims, onboarding reads time out safely, and stale project/dashboard return links no longer reopen automatically; first-time users still enter Live Demo. 24 auth regressions pass; signed-out browser stable and build OK. Real-account verification remains blocked by unavailable UNISON session.
 - [x] Recover auth-key quota errors with tab-persistent fallback, without deleting project data
 - [x] Release auth listener locks before onboarding lookups and audit logging; reset loading on thrown sign-in errors; 11 regression tests pass
 - [ ] Confirm real-account sign-in reaches the workspace (available managed session targets a different backend; requires user sign-in)
@@ -154,30 +110,10 @@
 - [x] Restaurant slice acceptance test: menu item name/price/image edit → record write scoped to project → invalidation carries projectId + sourceTables → other project untouched (previewExecutionConvergence.test.ts, 108 tests pass)
 - [x] Resource executor resolves default fields from the resource schema (menu image → image_url), never hardcoded guesses
 - [x] Dedicated-backend gateway contract extended to content entries + site profile (project-backend edge); client resourceRuntime no longer throws for non-catalog adapters — gateway is the authority
-- [x] project-backend edge change live on UNISON (verified 2026-10-18: service boots and answers its auth check); live signed-in slice check still open
+- [ ] Deploy project-backend edge change via GitHub workflow; live signed-in slice check still open
 - [x] WYSIWYG never gated on manual save: unmatched slug marks auto-create the record in one write (seeded name from the mark), "Save the site first" dead-end removed; 30 resource tests pass
 - [x] Finish click/AI conflict wiring: inline original text, loaded inspector fields, guarded undo, failed reads never auto-create duplicate records; record fields auto-apply on blur/toggle
 - [x] Cross-industry service integration: second product image, menu price/category, service duration, concurrent edits, unbound edits, safe undo and failed-write invalidation; persistent adapter fixtures, not live database proof
 - [ ] Full ten-case M7 browser acceptance (booking availability, case-study publish, mounted save concurrency included): needs authoritative signed-in session and approved test projects
 - [ ] M3 data collisions: scoped live audit and approved migration needed before choosing/merging testimonial/project/FAQ record owners; no existing records moved or deleted
 - [ ] M4 safe removal of mounted Playground editing: replacement equivalence requires the signed-in acceptance above; useful operations stay mounted
-
-## Runtime Integrity & Preview Editing Validation (2026-10-18)
-- [x] First-edit creation limited to generated seed slugs on collections
-- [x] Explicit project resume gives persisted revision identity, snapshot, and VFS precedence over stale route metadata; canonical recovery regression passes; authenticated refresh/reopen remains blocked below.
-- [x] Records lists every registered collection family
-- [x] Site-database gateway checks table structure (SCHEMA_INCOMPATIBLE) — needs GitHub deploy
-- [ ] Real CRUD against a provisioned site database — blocked: no provisioned site database
-- [x] Catalog/Content pages deep-link to filtered Records
-- [x] Retire Playground record editing (unused Products/Services editors removed; Assets uses Records editor)
-- [ ] Merge/remove `-UnrealDev` duplicates — needs owner decision per file
-- [ ] Signed-in edit → refresh → reopen → publish journey — blocked: UNISON session
-- [ ] Guest demo project hand-off to new account + Home resume
-- [x] Guest demo continuity: `claim_guest_demo` RPC (migration 20261018170000) transfers the guest's demo project + draft to the new account server-side and marks the session claimed (credits stop). Client stashes the anonymous user id, claims after signup/sign-in (best-effort, never blocks auth), and Home lists recent projects with Resume. Tests: guestDemoClaim.test.ts (5). Deploys via the GitHub UNISON workflow.
-- [x] Auth loop fix + Live Demo: Auth no longer redirects anonymous guest sessions (the /auth ↔ /dashboard loop source); post-auth destination is /demo for new/first-time users and /home for returning users (was /dashboard). New /demo page (LiveDemo.tsx) requires an account — signed-out visitors are sent to /auth?next=/demo first. Verified in preview: /auth stays stable, /demo gates to sign-in, no page errors.
-
-## Affinity conversational intelligence (2026-10-19)
-- [x] Expand registry-derived generation resource context, industry seed addresses and eligible cart surfaces; seven editable catalogs exposed to agent operations, explicit cross-industry menu/pricing/products seeds, typed longform collections and profile identity/metadata preservation. 114 regressions pass; build OK. No schema or existing record mutations. Signed-in generation → persisted records → preview → reopen remains unverified: available session targets the non-authoritative backend.
-- [x] Show public Affinity explanations automatically as paragraphs; retire collapsible reasoning/step UI and stop discarding Composer summaries. 30 reply/status/canonical-authoring regressions pass, including non-English prose and private-thinking separation. Signed-in generation remains blocked by the unavailable authoritative UNISON session.
-- Done: AFFINITY_REASONING prompt contract (Understanding → Plan → Result → Next step), language/length-agnostic interpreter rule, out-of-scope honesty contract, normalizer outOfScope metadata, chat panel out-of-scope note rendering. 62 edge tests pass, tsgo clean, build OK.
-- Remaining: deploy ai-code-assistant + builder-request-interpreter via .github/workflows/supabase-auto-update.yml; signed-in live verification.

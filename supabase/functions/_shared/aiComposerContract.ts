@@ -113,12 +113,8 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
     return [...keys].every(key => (a as Record<string, unknown>)[key] === (b as Record<string, unknown>)[key]);
   };
   const routeKeys = new Set<string>();
-  // Explicit additions are plans for App Builder, not permission to rewrite
-  // existing pages. The facade validates route collisions before generation.
-  const createsPages = /\b(create|add|make|build|generate|scaffold)\b[^.\n]{0,80}\bpages?\b/i.test(req.instruction ?? '');
   for (const op of response.routeOps ?? []) {
-    if (!(req.approvedRouteOps ?? []).some(approved => sameRouteOp(op, approved))
-      && !(createsPages && op.type === 'add_page')) {
+    if (!(req.approvedRouteOps ?? []).some(approved => sameRouteOp(op, approved))) {
       violations.push(`${op.type}:${op.pageId}: route operation is not approved for this request`);
     }
     const key = `${op.type}:${op.pageId}`;
@@ -128,10 +124,7 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
   if (!targets.size) violations.push('Builder source edits require explicit source targets');
   const seen = new Set<string>();
   for (const op of response.fileOps) {
-    const newPage = createsPages && op.type === 'create'
-      && /^\/src\/pages\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.tsx?$/.test(op.path)
-      && (response.routeOps ?? []).some(op => op.type === 'add_page');
-    if (!targets.has(op.path) && !newPage) violations.push(`${op.path}: outside this request's source targets`);
+    if (!targets.has(op.path)) violations.push(`${op.path}: outside this request's source targets`);
     if (seen.has(op.path)) violations.push(`${op.path}: duplicate file operation`);
     seen.add(op.path);
     const exists = Object.prototype.hasOwnProperty.call(req.files, op.path);

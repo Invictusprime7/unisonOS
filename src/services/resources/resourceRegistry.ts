@@ -126,13 +126,6 @@ const contentDefs = new Map<string, ResourceDefinition>();
 /** Replace the dynamic content definitions for the current business. */
 export function registerContentTypes(rows: ContentTypeRow[]): ResourceDefinition[] {
   contentDefs.clear();
-  for (const definition of projectContentTypes(rows)) contentDefs.set(definition.key, definition);
-  return [...contentDefs.values()];
-}
-
-/** Job-local projection; never changes the UI's current CMS registry. */
-export function projectContentTypes(rows: readonly ContentTypeRow[]): ResourceDefinition[] {
-  const definitions = new Map<string, ResourceDefinition>();
   // Prefer the canonical spelling for future creates; retain every historical
   // type ID for reads. Never dedupe entries by title or destroy their revisions.
   for (const r of [...rows].sort((a, b) => {
@@ -141,44 +134,24 @@ export function projectContentTypes(rows: readonly ContentTypeRow[]): ResourceDe
   })) {
     const d = contentTypeToResource(r);
     if (!d) continue;
-    const existing = definitions.get(d.key);
+    const existing = contentDefs.get(d.key);
     if (!existing) {
       d.storage.contentTypeIds = d.storage.contentTypeId ? [d.storage.contentTypeId] : [];
-      definitions.set(d.key, d);
+      contentDefs.set(d.key, d);
     } else {
       if (d.storage.contentTypeId && !existing.storage.contentTypeIds?.includes(d.storage.contentTypeId)) existing.storage.contentTypeIds?.push(d.storage.contentTypeId);
       for (const field of d.schema) if (!existing.schema.some((f) => f.key === field.key)) existing.schema.push(field);
     }
   }
-  return [...definitions.values()];
+  return [...contentDefs.values()];
 }
 
-export function listResources(contentTypes?: readonly ContentTypeRow[]): ResourceDefinition[] {
+export function listResources(): ResourceDefinition[] {
   return [
     ...listCatalogSurfaces().filter((s) => s.editableFields.length > 0).map(catalogSurfaceToResource),
-    ...(contentTypes === undefined ? [...contentDefs.values()] : projectContentTypes(contentTypes)),
+    ...contentDefs.values(),
     BUSINESS_PROFILE_RESOURCE,
   ];
-}
-
-/** Blank entry values belong to the selected schema, never another CMS family. */
-export function resourceCreateDefaults(def: ResourceDefinition): Record<string, unknown> {
-  const catalog = getCatalogSurface(def.key);
-  if (catalog) return { ...catalog.newRowDefaults };
-  const values: Record<string, unknown> = {};
-  for (const field of def.schema.filter((field) => field.editable)) {
-    if (field.key === 'title') values.title = `New ${def.label.toLowerCase()}`;
-    else if (field.type === 'boolean') values[field.key] = false;
-    else if (['number', 'rating', 'money', 'money-cents'].includes(field.type)) values[field.key] = 0;
-    else if (field.type === 'tags') values[field.key] = [];
-    else if (field.type === 'json') values[field.key] = {};
-    else values[field.key] = '';
-  }
-  if (def.storage.contentType === 'faq') {
-    values.title = 'New question';
-    if (def.schema.some((field) => field.key === 'question')) values.question = 'New question';
-  }
-  return values;
 }
 
 export function getResource(key: string): ResourceDefinition | null {
@@ -189,17 +162,11 @@ export function getResource(key: string): ResourceDefinition | null {
 }
 
 /** Records navigation is derived from the authorities above, not another registry. */
-/** Every collection family: four canonical record kinds plus each other registered collection under its own key. */
-export type RecordCollectionKind = CanonicalRecordKind | string;
-export function listRecordCollections(): Array<{ kind: RecordCollectionKind; label: string; resources: ResourceDefinition[] }> {
-  const resources = listResources().filter((def) => def.cardinality === 'collection');
-  const canonical = (['testimonials', 'projects', 'case-studies', 'faqs'] as const).map((kind) => ({
-    kind: kind as RecordCollectionKind,
+export function listRecordCollections(): Array<{ kind: CanonicalRecordKind; label: string; resources: ResourceDefinition[] }> {
+  const resources = listResources();
+  return (['testimonials', 'projects', 'case-studies', 'faqs'] as const).map((kind) => ({
+    kind,
     label: kind === 'case-studies' ? 'Case studies' : kind === 'faqs' ? 'FAQs' : kind === 'projects' ? 'Projects' : 'Testimonials',
     resources: resources.filter((def) => canonicalRecordKind(def) === kind),
   }));
-  const others = resources.filter((def) => !canonicalRecordKind(def))
-    .sort((a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key))
-    .map((def) => ({ kind: def.key as RecordCollectionKind, label: def.label, resources: [def] }));
-  return [...canonical, ...others];
 }

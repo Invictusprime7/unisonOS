@@ -4,9 +4,6 @@ import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.t
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
 import { safeParseBody, sanitizeString, isValidEmail } from "../_shared/validate.ts";
 
-// Cart sessions are bearer secrets: only unguessable random UUIDs are accepted.
-const UUID_SESSION = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 serve(async (req) => {
   const preflight = handleCorsPreflightRequest(req, publicCorsHeaders);
   if (preflight) {
@@ -35,7 +32,7 @@ serve(async (req) => {
     switch (action) {
       // CART OPERATIONS
       case 'addToCart': {
-        const sessionId = typeof data.sessionId === "string" && UUID_SESSION.test(data.sessionId) ? data.sessionId : "";
+        const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
         const productId = typeof data.productId === "string" ? sanitizeString(data.productId, 120) : "";
         const quantity = typeof data.quantity === "number" ? Math.max(1, Math.min(100, Math.trunc(data.quantity))) : 1;
         if (!sessionId || !productId) {
@@ -71,7 +68,7 @@ serve(async (req) => {
       }
 
       case 'getCart': {
-        const sessionId = typeof data.sessionId === "string" && UUID_SESSION.test(data.sessionId) ? data.sessionId : "";
+        const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
         if (!sessionId) {
           return errorResponse("sessionId is required", 400, publicCorsHeaders);
         }
@@ -96,7 +93,7 @@ serve(async (req) => {
       }
 
       case 'updateCartItem': {
-        const sessionId = typeof data.sessionId === "string" && UUID_SESSION.test(data.sessionId) ? data.sessionId : "";
+        const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
         const itemId = typeof data.itemId === "string" ? sanitizeString(data.itemId, 120) : "";
         const quantity = typeof data.quantity === "number" ? Math.max(0, Math.min(100, Math.trunc(data.quantity))) : 0;
         if (!itemId || !sessionId) {
@@ -118,7 +115,7 @@ serve(async (req) => {
       }
 
       case 'removeFromCart': {
-        const sessionId = typeof data.sessionId === "string" && UUID_SESSION.test(data.sessionId) ? data.sessionId : "";
+        const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
         const itemId = typeof data.itemId === "string" ? sanitizeString(data.itemId, 120) : "";
         if (!itemId || !sessionId) {
           return errorResponse("sessionId and itemId are required", 400, publicCorsHeaders);
@@ -129,7 +126,7 @@ serve(async (req) => {
       }
 
       case 'clearCart': {
-        const sessionId = typeof data.sessionId === "string" && UUID_SESSION.test(data.sessionId) ? data.sessionId : "";
+        const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
         // The session id is the visitor's private cart key; short or guessable
         // values are refused so one visitor cannot empty another's cart.
         if (!sessionId || sessionId.length < 16) {
@@ -142,7 +139,7 @@ serve(async (req) => {
 
       // ORDER/CHECKOUT OPERATIONS
       case 'createOrder': {
-        const sessionId = typeof data.sessionId === "string" && UUID_SESSION.test(data.sessionId) ? data.sessionId : "";
+        const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
         const customerEmail = typeof data.customerEmail === "string" ? sanitizeString(data.customerEmail, 254) : "";
         const customerName = typeof data.customerName === "string" ? sanitizeString(data.customerName, 160) : "";
         const shippingAddress = data.shippingAddress ?? null;
@@ -184,7 +181,7 @@ serve(async (req) => {
       }
 
       case 'getOrder': {
-        const sessionId = typeof data.sessionId === "string" && UUID_SESSION.test(data.sessionId) ? data.sessionId : "";
+        const sessionId = typeof data.sessionId === "string" ? sanitizeString(data.sessionId, 120) : "";
         const orderId = typeof data.orderId === "string" ? sanitizeString(data.orderId, 120) : "";
         if (!orderId || !sessionId) {
           return errorResponse("sessionId and orderId are required", 400, publicCorsHeaders);

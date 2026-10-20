@@ -3,7 +3,6 @@ import { getCatalogSurface } from '@/platform/core/catalogSurfaceRegistry';
 import { getResource } from './resourceRegistry';
 import { applyResourceOp, parseResourceProvenance, queryResource } from './resourceRuntime';
 import type { ResourceRecord } from './resourceTypes';
-import { PERSISTED_RESOURCE_ID, resolveResourceIdentity } from './resourceIdentity';
 
 export interface ScannedCatalogItem {
   name: string;
@@ -89,6 +88,12 @@ export function buildScannedCatalogValues(
     .map((key) => [key, values[key]]));
 }
 
+const SCAN_KIND_TO_SURFACE: Record<string, string> = {
+  menu: 'menu',
+  products: 'products',
+  services: 'services',
+};
+
 /** Persist a scan using the surface schema and the one canonical resource writer. */
 export async function persistScannedCatalogItem(input: {
   kind: string;
@@ -97,8 +102,8 @@ export async function persistScannedCatalogItem(input: {
   businessId: string;
   projectId?: string | null;
 }): Promise<ResourceRecord> {
-  const surface = getCatalogSurface(input.kind);
-  const surfaceId = surface?.surfaceId;
+  const surfaceId = SCAN_KIND_TO_SURFACE[input.kind];
+  const surface = surfaceId ? getCatalogSurface(surfaceId) : null;
   const definition = surfaceId ? getResource(surfaceId) : null;
   if (!surfaceId || !surface || !definition) throw new Error(`No catalog surface is registered for "${input.kind}".`);
 
@@ -106,16 +111,12 @@ export async function persistScannedCatalogItem(input: {
   const values = buildScannedCatalogValues(surface, input.item, input.index);
   const markedRef = parseResourceProvenance(input.item.resourceMark);
   const markedRecordId = markedRef?.resourceKey === surfaceId ? markedRef.recordId : null;
-  const rows = markedRecordId && PERSISTED_RESOURCE_ID.test(markedRecordId) ? [] : await queryResource(surfaceId, context);
+  const rows = markedRecordId ? [] : await queryResource(surfaceId, context);
   const titleField = surface.fields.title;
   const duplicateMatches = rows.filter((row) => String(row[titleField] ?? '').trim().toLowerCase() === input.item.name.trim().toLowerCase()
     && (!values.category || String(row[surface.fields.category ?? 'category'] ?? '').trim().toLowerCase() === String(values.category).trim().toLowerCase()));
   if (duplicateMatches.length > 1) throw new Error(`More than one ${surface.rowLabel} matches "${input.item.name}"; choose a specific item before saving.`);
-  const resolvedMark = markedRecordId
-    ? PERSISTED_RESOURCE_ID.test(markedRecordId) ? markedRecordId : resolveResourceIdentity(markedRecordId, rows)
-    : null;
-  if (markedRef && markedRef.resourceKey !== surfaceId) throw new Error('This item belongs to a different resource collection.');
-  const recordId = resolvedMark || duplicateMatches[0]?.id;
+  const recordId = markedRecordId || duplicateMatches[0]?.id;
   const saved = recordId
     ? await applyResourceOp({ op: 'update', ref: { resourceKey: surfaceId, kind: 'catalog', catalogKind: surface.catalogKind, recordId }, values }, context)
     : await applyResourceOp({ op: 'create', resourceKey: surfaceId, values }, context);

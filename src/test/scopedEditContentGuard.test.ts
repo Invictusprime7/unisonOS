@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  findUnrequestedCopyChanges,
-  findUnrequestedNavigationSectionRemovals,
-  findUnrequestedScopedSideEffects,
-  getUnrequestedNavigationSectionRemovalReason,
-} from '@/services/builder/scopedEditContentGuard';
+import { findUnrequestedCopyChanges, findUnrequestedScopedSideEffects } from '@/services/builder/scopedEditContentGuard';
 
 describe('scoped edit content guard', () => {
   it('rejects a form and new component added to a copy-only edit', () => {
@@ -28,32 +23,6 @@ export default function Hero() { return <section><p>Product designer</p><Contact
     const candidate = `export default function Hero() { return <section><p>Contact us</p><form><input /></form></section>; }`;
 
     expect(findUnrequestedScopedSideEffects(original, candidate, 'Add a contact form to the hero.')).toEqual([]);
-  });
-
-  it('blocks a navbar restyle that removes the existing hero section', () => {
-    const original = `<main><nav>Home</nav><section id="hero"><h1>Fresh ideas</h1></section><section id="services"><h2>Services</h2></section></main>`;
-    const candidate = `<main><nav className="fixed">Home</nav><section id="services"><h2>Services</h2></section></main>`;
-
-    expect(findUnrequestedNavigationSectionRemovals(original, candidate, 'Make the navbar float above the page content.'))
-      .toContain('hero');
-    expect(getUnrequestedNavigationSectionRemovalReason(
-      { '/src/pages/Home.tsx': original },
-      { '/src/pages/Home.tsx': candidate },
-      'Make the navbar float above the page content.',
-    )).toContain('hero');
-  });
-
-  it('allows hero removal when the navbar request explicitly asks for it', () => {
-    const original = `<main><nav>Home</nav><section id="hero"><h1>Fresh ideas</h1></section></main>`;
-    const candidate = `<main><nav className="fixed">Home</nav></main>`;
-
-    expect(findUnrequestedNavigationSectionRemovals(original, candidate, 'Make the navbar float and remove the hero section.'))
-      .toEqual([]);
-    expect(getUnrequestedNavigationSectionRemovalReason(
-      { '/src/pages/Home.tsx': original },
-      { '/src/pages/Home.tsx': candidate },
-      'Make the navbar float and remove the hero section.',
-    )).toBeNull();
   });
 
   it('blocks copy rewrites on a style-only request', () => {

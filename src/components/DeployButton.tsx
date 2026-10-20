@@ -200,14 +200,10 @@ export function DeployButton({
       {showProviderSelect ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant={variant}
-              size={size}
-              disabled={disabled || fileCount === 0}
-              aria-label={size === 'icon' ? 'Deploy' : undefined}
-            >
-              <Rocket className={size === 'icon' ? 'h-4 w-4' : 'h-4 w-4 mr-2'} />
-              {size === 'icon' ? <span className="sr-only">Deploy</span> : <>Deploy<ChevronDown className="h-4 w-4 ml-2" /></>}
+            <Button variant={variant} size={size} disabled={disabled || fileCount === 0}>
+              <Rocket className="h-4 w-4 mr-2" />
+              Deploy
+              <ChevronDown className="h-4 w-4 ml-2" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -231,10 +227,9 @@ export function DeployButton({
           size={size}
           disabled={disabled || fileCount === 0}
           onClick={() => handleOpenDialog('vercel')}
-          aria-label={size === 'icon' ? 'Deploy' : undefined}
         >
-          <Rocket className={size === 'icon' ? 'h-4 w-4' : 'h-4 w-4 mr-2'} />
-          {size === 'icon' ? <span className="sr-only">Deploy</span> : 'Deploy'}
+          <Rocket className="h-4 w-4 mr-2" />
+          Deploy
         </Button>
       )}
 
