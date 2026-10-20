@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
+import { mergeRouteStatePreservingFiles } from '@/components/creatives/web-builder/aiCodeHelpers';
 
 const source = ts.createSourceFile(
   'WebBuilder.tsx', readFileSync('src/components/creatives/WebBuilder.tsx', 'utf8'),
@@ -11,7 +12,7 @@ function executeCallback(anchor: string, dependencies: Record<string, unknown>, 
   const callbacks: ts.Expression[] = [];
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node)
-      && ['useCallback', 'useEffect'].includes(node.expression.getText(source))
+      && ['useCallback', 'useEffect', 'useMemo'].includes(node.expression.getText(source))
       && node.arguments[0]?.getText(source).includes(anchor)) callbacks.push(node.arguments[0]);
     ts.forEachChild(node, visit);
   };
@@ -31,6 +32,28 @@ const recovery = {
 };
 
 describe('WebBuilder canonical recovery authority', () => {
+  it('keeps persisted revision identity and snapshot ahead of stale route state on project resume', () => {
+    const persistedResumeState = {
+      projectId: 'project-persisted', draftId: 'draft-persisted',
+      siteBundleSnapshot: { snapshotId: 'snapshot-persisted' }, vfsFiles: committedFiles,
+    };
+    const routeState = {
+      projectId: 'project-route', draftId: 'draft-route',
+      siteBundleSnapshot: { snapshotId: 'snapshot-stale' }, vfsFiles: journalFiles,
+      startInPreview: true,
+    };
+    const effective = executeCallback('if (isExplicitProjectResume)', {
+      isExplicitProjectResume: true, mergeRouteStatePreservingFiles,
+      persistedResumeState, routeState, pendingLauncherHandoff: null, launchRouteState: null,
+    });
+
+    expect(effective).toMatchObject({
+      projectId: 'project-persisted', draftId: 'draft-persisted',
+      siteBundleSnapshot: { snapshotId: 'snapshot-persisted' },
+      vfsFiles: committedFiles, startInPreview: true,
+    });
+  });
+
   it.each([true, false])('hydrates canonical=%s without overriding committed authority', canonical => {
     const importBuilderFiles = vi.fn();
     const setPreviewCode = vi.fn();

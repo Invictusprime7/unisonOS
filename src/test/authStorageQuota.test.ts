@@ -12,6 +12,12 @@ function simulateFullStorage() {
   restore = installAuthStorageQuotaRecovery(key, localStorage, sessionStorage);
 }
 describe('auth storage quota recovery', () => {
+  it('prefers credentials renewed in another tab over an older tab bridge', () => {
+    localStorage.setItem(key, 'renewed-session');
+    sessionStorage.setItem(key, 'old-refresh-token');
+    restore = installAuthStorageQuotaRecovery(key, localStorage, sessionStorage);
+    expect(localStorage.getItem(key)).toBe('renewed-session');
+  });
   it('preserves drafts and reload-persistent fallback credentials', () => {
     localStorage.setItem('unsaved-project', 'keep-source');
     localStorage.setItem('chat-history', 'keep-messages');
@@ -37,6 +43,22 @@ describe('auth storage quota recovery', () => {
     localStorage.setItem(key, 'new-session');
     expect(localStorage.getItem(key)).toBe('new-session');
     expect(sessionStorage.getItem(key)).toBeNull();
+  });
+  it('restores the session from the cookie backup after a tab crash wipes both stores', () => {
+    simulateFullStorage();
+    localStorage.setItem(key, 'crash-session');
+    // Simulate a browser crash: sessionStorage dies with the tab, localStorage write never landed.
+    sessionStorage.clear();
+    restore?.();
+    restore = installAuthStorageQuotaRecovery(key, localStorage, sessionStorage);
+    expect(localStorage.getItem(key)).toBe('crash-session');
+  });
+  it('clears the cookie backup on sign-out', () => {
+    restore = installAuthStorageQuotaRecovery(key, localStorage, sessionStorage);
+    localStorage.setItem(key, 'test-session');
+    expect(document.cookie).toContain(`${key}__chunks`);
+    localStorage.removeItem(key);
+    expect(document.cookie).not.toContain(`${key}__bak0`);
   });
   it('does not suppress unrelated storage errors', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });

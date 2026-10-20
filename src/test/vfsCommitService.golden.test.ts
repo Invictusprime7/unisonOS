@@ -238,6 +238,9 @@ import {
   hashVfsFiles,
   restoreRevision,
   __resetPersistCircuitForTests,
+  rebaseQueuedCommit,
+  type CommitMutationInput,
+  type CommitMutationResult,
 } from '@/services/vfsCommitService';
 import { commitToPipeline } from '@/platform/core/commitToPipeline';
 import { runFullPreflight } from '@/services/runFullPreflight';
@@ -1133,10 +1136,16 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
       patch: legacyFilesToPatchPlan({ '/src/pages/Home.tsx': 'export default function Home(){return <h1>Home edit</h1>}' }, 'home edit'),
     });
     const about = commitMutation({
-      source: 'preview-toolbar',
+      source: 'ai-builder',
       identity: { ...IDENTITY, revisionId: launch.persistedRevisionId! },
       current: { vfsFiles: launch.vfsFiles, siteBundleSnapshot: launch.siteBundleSnapshot ?? undefined },
-      patch: legacyFilesToPatchPlan({ '/src/pages/About.tsx': 'export default function About(){return <h1>About edit</h1>}' }, 'about edit'),
+      patch: {
+        ...legacyFilesToPatchPlan({ '/src/pages/About.tsx': 'export default function About(){return <h1>About edit</h1>}' }, 'about edit'),
+        candidate: {
+          id: 'candidate-about', baseRevisionId: launch.persistedRevisionId ?? undefined,
+          origin: 'builder', knowledgeVersion: 'test', targetPages: ['/about'], attempt: 1,
+        },
+      },
     });
 
     const [homeResult, aboutResult] = await Promise.all([home, about]);
@@ -1145,6 +1154,32 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     expect(aboutResult.parentRevisionId).toBe(homeResult.persistedRevisionId);
     expect(aboutResult.vfsFiles['/src/pages/Home.tsx']).toContain('Home edit');
     expect(aboutResult.vfsFiles['/src/pages/About.tsx']).toContain('About edit');
+    expect(aboutResult.candidateId).toBe('candidate-about');
+    expect((revisionStore[revisionStore.length - 1]?.patch_json.candidate as { baseRevisionId?: string }).baseRevisionId).toBe(homeResult.persistedRevisionId);
+
+    const rowsBeforeUnsafeRetries = revisionStore.length;
+    await expect(commitMutation({
+      source: 'ai-builder',
+      identity: { ...IDENTITY, revisionId: launch.persistedRevisionId ?? '' },
+      current: { vfsFiles: launch.vfsFiles },
+      patch: {
+        ...legacyFilesToPatchPlan({ '/src/pages/About.tsx': baseFiles['/src/pages/About.tsx'] }, 'stale page creation'),
+        routeOps: [{ type: 'add_page', pageId: 'new-page', title: 'New', route: '/new' }],
+      },
+    })).rejects.toThrow('missing captured registry');
+    await expect(commitMutation({
+      source: 'ai-builder',
+      identity: { ...IDENTITY, revisionId: launch.persistedRevisionId ?? '' },
+      current: { vfsFiles: launch.vfsFiles },
+      patch: {
+        ...legacyFilesToPatchPlan({ '/src/pages/About.tsx': baseFiles['/src/pages/About.tsx'] }, 'wrong candidate base'),
+        candidate: {
+          id: 'wrong-base', baseRevisionId: 'another-revision', origin: 'builder',
+          knowledgeVersion: 'test', targetPages: ['/about'], attempt: 1,
+        },
+      },
+    })).rejects.toThrow('captured base revision');
+    expect(revisionStore).toHaveLength(rowsBeforeUnsafeRetries);
 
     const conflictingBase = {
       source: 'preview-toolbar' as const,
@@ -1157,7 +1192,14 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     });
     const secondHomeEdit = commitMutation({
       ...conflictingBase,
-      patch: legacyFilesToPatchPlan({ '/src/pages/Home.tsx': 'export default function Home(){return <h1>Second edit</h1>}' }, 'second overlapping edit'),
+      source: 'ai-builder',
+      patch: {
+        ...legacyFilesToPatchPlan({ '/src/pages/Home.tsx': 'export default function Home(){return <h1>Second edit</h1>}' }, 'second overlapping edit'),
+        candidate: {
+          id: 'candidate-home', baseRevisionId: aboutResult.persistedRevisionId ?? undefined,
+          origin: 'builder', knowledgeVersion: 'test', targetPages: ['/'], attempt: 1,
+        },
+      },
     });
     const [firstConflictResult, secondConflictResult] = await Promise.allSettled([firstHomeEdit, secondHomeEdit]);
 
@@ -1166,6 +1208,87 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     if (secondConflictResult.status === 'rejected') {
       expect(String(secondConflictResult.reason)).toContain('overlaps a newer saved revision');
     }
+  });
+
+  describe('structured queue dependency checks', () => {
+    function fixture(patch: Partial<CommitMutationInput['patch']>) {
+      const files = { '/src/pages/Home.tsx': 'home', '/src/pages/About.tsx': 'about', '/src/index.css': 'theme' };
+      const registry = { version: 1, pages: { home: { pageId: 'home', path: '/', filePath: '/src/pages/Home.tsx' } }, funnels: {} };
+      const snapshot = { pageRegistry: registry, themeTokens: { accent: 'original' }, meta: {
+        themePresetId: 'modern', designIntervention: { activeVariants: {}, motionBudget: 'restrained' },
+      } };
+      const playground = { pageRegistry: registry, bindings: {} };
+      const input = {
+        source: 'ai-builder', identity: { ...IDENTITY, revisionId: 'base' },
+        current: { vfsFiles: files, playground, siteBundleSnapshot: snapshot },
+        patch: { ...emptyPatchPlan(), ...patch },
+      } as unknown as CommitMutationInput;
+      const latest = {
+        identity: input.identity, persistedRevisionId: 'latest',
+        vfsFiles: { ...files, '/src/pages/About.tsx': 'new about' },
+        playground, siteBundleSnapshot: snapshot, diagnostics: [], operationIds: [], candidateId: null,
+      } as unknown as CommitMutationResult;
+      return { input, latest };
+    }
+
+    it('rebases page creation after an unrelated source save', () => {
+      const { input, latest } = fixture({ routeOps: [{ type: 'add_page', pageId: 'contact', title: 'Contact', route: '/contact' }],
+        fileOps: [{ type: 'create', path: '/src/pages/Contact.tsx', contents: 'contact' }] });
+      const prepared = rebaseQueuedCommit(input, latest);
+      expect('input' in prepared).toBe(true);
+      if ('input' in prepared) {
+        expect(prepared.input.identity.revisionId).toBe('latest');
+        expect(prepared.input.current.vfsFiles['/src/pages/About.tsx']).toBe('new about');
+        expect(prepared.input.patch.routeOps?.[0].pageId).toBe('contact');
+      }
+    });
+
+    it('rebases theme and motion edits without discarding their operations', () => {
+      for (const patch of [
+        { themeEdit: { version: '1.0' as const, snapshotId: 'snapshot', revisionId: 'base', set: { '--primary': 'red' }, reset: [] } },
+        { presentationOps: [{ type: 'setMotionBudget' as const, motionBudget: 'expressive' as const }] },
+      ]) {
+        const { input, latest } = fixture(patch);
+        const prepared = rebaseQueuedCommit(input, latest);
+        expect('input' in prepared).toBe(true);
+        if ('input' in prepared) expect(prepared.input.patch).toMatchObject(patch);
+      }
+    });
+
+    it('rejects a theme edit when newer theme CSS changed', () => {
+      const { input, latest } = fixture({ themeEdit: { version: '1.0', snapshotId: 'snapshot', revisionId: 'base', set: {}, reset: [] } });
+      latest.vfsFiles['/src/index.css'] = 'new theme';
+      expect(() => rebaseQueuedCommit(input, latest)).toThrow('theme CSS');
+    });
+
+    it('rejects page deletion when the target page has newer content', () => {
+      const { input, latest } = fixture({ routeOps: [{ type: 'remove_page', pageId: 'home' }] });
+      latest.vfsFiles['/src/pages/Home.tsx'] = 'new home';
+      expect(() => rebaseQueuedCommit(input, latest)).toThrow('/src/pages/Home.tsx');
+    });
+
+    it('rejects a topology edit after a newer topology change', () => {
+      const { input, latest } = fixture({ routeOps: [{ type: 'toggle_nav', pageId: 'home', showInNav: false }] });
+      latest.playground = { ...latest.playground, pageRegistry: { ...latest.playground?.pageRegistry, homePageId: 'other' } } as CommitMutationResult['playground'];
+      expect(() => rebaseQueuedCommit(input, latest)).toThrow('page topology');
+    });
+
+    it('keeps binding projection guarded when rendered source changed', () => {
+      const { input, latest } = fixture({ bindingOps: [{ type: 'unbindIntent', elementId: 'button' }] });
+      expect(() => rebaseQueuedCommit(input, latest)).toThrow('binding source');
+    });
+
+    it('rejects queue reuse across projects even for an identical no-op', () => {
+      const { input, latest } = fixture({});
+      latest.identity = { ...latest.identity, projectId: 'another-project' };
+      expect(() => rebaseQueuedCommit(input, latest)).toThrow('different project or account');
+    });
+
+    it('keeps reviewed restores tied to their reviewed revision', () => {
+      const { input, latest } = fixture({});
+      input.source = 'system-restore';
+      expect(() => rebaseQueuedCommit(input, latest)).toThrow('reviewed launch or restore');
+    });
   });
 
   it('chains five commits across sources and persists a revision per step', async () => {
