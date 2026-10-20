@@ -50,7 +50,6 @@ export interface AiCommitContext {
   activePagePath: string;
   /** Exact isolated candidate accepted by the Composer gates. */
   candidate?: AICandidateChangeSet;
-  guestDemoOperationId?: string;
   /** Checkpoint label shown in the version list (usually the user's prompt). */
   label?: string;
   /** Reserved guest-demo operation carried into the same canonical revision. */

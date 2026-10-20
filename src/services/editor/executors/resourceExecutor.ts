@@ -1,6 +1,7 @@
 /** Resource lane: saved record fields go through ResourceRuntime only. */
 import { applyResourceOp, getResourceRecord, parseResourceProvenance, queryResource } from '@/services/resources/resourceRuntime';
 import { getResource } from '@/services/resources/resourceRegistry';
+import { PERSISTED_RESOURCE_ID, resolveResourceIdentity } from '@/services/resources/resourceIdentity';
 import { executeResourceCommandCompatible } from '@/services/project-backend/runtimeProtocol';
 import type { ResourceContext, ResourceEntityRef, ResourceRecord } from '@/services/resources/resourceTypes';
 import type { EditorCommand, EditorCommandResult } from '../editorCommandTypes';
@@ -26,8 +27,24 @@ function defaultFieldFor(command: EditorCommand): string {
     ?? 'name';
 }
 
+<<<<<<<
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SEED_SLUG_RE = /^[a-z0-9][a-z0-9-_]{0,99}$/;
+=======
+const UUID_RE = PERSISTED_RESOURCE_ID;
+
+const SEED_SLUG_RE = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/i;
+/**
+ * Only a generated seed slug for a collection may be materialized on first edit.
+ * UUID-shaped ids, single-record resources and malformed identities are refused,
+ * so a stale or mistyped mark can never create an unintended record.
+ */
+export function mayMaterializeSeed(ref: ResourceEntityRef): boolean {
+  if (UUID_RE.test(ref.recordId) || !SEED_SLUG_RE.test(ref.recordId) || ref.recordId.length > 80) return false;
+  const def = getResource(ref.resourceKey);
+  return !!def && def.cardinality === 'collection';
+}
+>>>>>>>
 
 /**
  * First-edit record creation is authorized only for generated seed slugs on
@@ -69,11 +86,7 @@ async function resolveRecordId(ref: ResourceEntityRef, ctx: ResourceContext): Pr
   const records = Array.isArray(listed) ? listed
     : Array.isArray((listed as { data?: unknown })?.data) ? (listed as { data: ResourceRecord[] }).data
     : [];
-  const wanted = ref.recordId.toLowerCase();
-  const match = records.find((r) => String(r.id).toLowerCase() === wanted)
-    ?? records.find((r) => typeof r.slug === 'string' && r.slug.toLowerCase() === wanted)
-    ?? records.find((r) => typeof r.name === 'string' && r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') === wanted);
-  return match ? String(match.id) : null;
+  return resolveResourceIdentity(ref.recordId, records);
 }
 
 /** Expected-revision check: a field is stale when it no longer holds what the editor saw (and isn't already the new value). */
@@ -104,6 +117,9 @@ export async function executeResourceCommand(command: EditorCommand, ctx: Resour
   const values = valuesFor(command, parsed.field);
   const label = getResource(parsed.resourceKey)?.label ?? parsed.resourceKey;
   const recordId = await resolveRecordId(parsed, ctx);
+  if (!recordId && !mayMaterializeSeed(parsed)) {
+    return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: `This element points to a ${label} item that doesn't exist in this project, so nothing was changed.` };
+  }
   if (!recordId) {
     // WYSIWYG edits must never be gated on a manual save: materialize the
     // record from the element's identity and apply the edit in one write.

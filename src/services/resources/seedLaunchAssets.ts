@@ -11,6 +11,7 @@ import { createContentRecord, listContentRecords, listContentTypes, mutateConten
 import type { CreatorData, CreatorProduct } from '@/types/creatorData';
 import { normalizeIndustryKey } from '@/platform/core/industryMatrix';
 import { canonicalContentSlug } from './resourceRegistry';
+import type { AssetBundle } from '@/types/siteBundle';
 
 /** Content types a fresh launch can seed, mapped from CreatorData collections. */
 export const SEED_CONTENT_TYPES: Record<string, { displayName: string; fields: { key: string; label: string; type: string }[] }> = {
@@ -24,6 +25,8 @@ export const SEED_CONTENT_TYPES: Record<string, { displayName: string; fields: {
     { key: 'role', label: 'Role', type: 'text' },
     { key: 'bio', label: 'Bio', type: 'textarea' },
     { key: 'sort_order', label: 'Order', type: 'number' },
+    { key: 'avatar_url', label: 'Avatar', type: 'image' },
+    { key: 'social_links', label: 'Social links', type: 'json' },
   ] },
   gallery: { displayName: 'Gallery', fields: [
     { key: 'caption', label: 'Caption', type: 'text' },
@@ -61,9 +64,13 @@ export function resolveProductCatalogSurface(
   industry: string | null | undefined,
   product: Pick<CreatorProduct, 'name' | 'category' | 'tags' | 'fulfillmentType' | 'billingType' | 'catalogSurface'>,
 ): 'menu' | 'pricing' | 'products' {
+<<<<<<<
   if (product.catalogSurface === 'menu' || product.catalogSurface === 'pricing' || product.catalogSurface === 'products') {
     return product.catalogSurface;
   }
+=======
+  if (product.catalogSurface) return product.catalogSurface;
+>>>>>>>
   const normalizedIndustry = normalizeIndustryKey(String(industry ?? ''));
   if (normalizedIndustry === 'saas' && product.billingType === 'subscription') return 'pricing';
   if (normalizedIndustry !== 'restaurant') return 'products';
@@ -86,10 +93,16 @@ export function resolveProductCatalogSurfaces(
     : [surface];
 }
 
-export async function seedLaunchAssets(input: { businessId: string; projectId?: string | null; industry?: string | null; enableProductCommerce?: boolean; creatorData?: CreatorData | null }): Promise<SeedLaunchAssetsResult> {
+export async function seedLaunchAssets(input: { businessId: string; projectId?: string | null; industry?: string | null; enableProductCommerce?: boolean; creatorData?: CreatorData | null; assets?: Readonly<Record<string, AssetBundle>>; mediaAssets?: readonly { id: string; kind: string; url: string }[] }): Promise<SeedLaunchAssetsResult> {
   const data = input.creatorData;
   const result: SeedLaunchAssetsResult = { created: 0, profileFields: [] };
   if (!data) return result;
+  const mediaUrl = (assetId: string | undefined): string | undefined => {
+    const asset = assetId ? input.assets?.[assetId] : undefined;
+    const media = input.mediaAssets?.find((entry) => entry.id === assetId && entry.kind === 'image');
+    const url = asset?.type === 'image' ? asset.storage.url : media?.url;
+    return url && /^https?:\/\//i.test(url) ? url : undefined;
+  };
   const existing = await listCatalog(input.businessId, ['products', 'services', 'menu', 'pricing', 'testimonials'], input.projectId).catch(() => []);
   const have = new Set(existing.map((i) => `${i.surfaceId}:${i.name.trim().toLowerCase()}`));
   const plans: { surface: string; name: string; description?: string; price?: number | null; active?: boolean; extra?: Record<string, unknown> }[] = [
@@ -99,16 +112,20 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
         name: p.name,
         description: p.description,
         price: p.price,
+        active: p.status !== 'draft' && p.status !== 'archived' && p.visibility !== 'hidden',
         extra: surface === 'menu' ? {
+          image_url: mediaUrl(p.imageAssetId ?? p.images?.[0]?.assetId),
           category: p.category,
           featured: p.featured,
           available: p.status !== 'draft' && p.status !== 'archived' && p.visibility !== 'hidden',
           sort_order: p.sortOrder,
+          currency: p.currency,
         } : surface === 'pricing' ? {
-          billing_interval: p.billingInterval ?? 'monthly',
+          billing_interval: p.billingInterval ? ({ week: 'weekly', month: 'monthly', quarter: 'quarterly', year: 'yearly' } as const)[p.billingInterval] : p.billingType === 'one_time' ? 'one-time' : 'monthly',
           highlighted: p.featured,
           sort_order: p.sortOrder,
-        } : undefined,
+          currency: p.currency,
+        } : { image_url: mediaUrl(p.imageAssetId ?? p.images?.[0]?.assetId), category: p.category, featured: p.featured, sort_order: p.sortOrder, currency: p.currency, inventory_count: p.stockQuantity },
       }))),
     ...Object.values(data.services ?? {}).map((s) => ({
       surface: 'services',
@@ -117,15 +134,17 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
       price: s.price ?? null,
       active: s.visibility !== 'hidden',
       extra: {
+        image_url: mediaUrl(s.imageAssetId),
         category: s.category,
         duration_minutes: s.duration,
         featured: s.featured,
         sort_order: s.sortOrder,
+        currency: s.currency,
       },
     })),
     ...Object.values(data.testimonials ?? {}).filter((t) => t.content?.trim()).map((t) => ({
       surface: 'testimonials', name: t.author, description: t.content,
-      extra: { author_role: [t.role, t.company].filter(Boolean).join(', ') || undefined, rating: t.rating, sort_order: t.sortOrder },
+      extra: { author_avatar_url: mediaUrl(t.avatarAssetId), author_role: [t.role, t.company].filter(Boolean).join(', ') || undefined, rating: t.rating, sort_order: t.sortOrder },
     })),
   ];
   for (const p of plans) {
@@ -143,7 +162,7 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
   if (info && profile) {
     const patch: Record<string, unknown> = {};
     const cur = profile as unknown as Record<string, unknown>;
-    for (const [k, v] of [['tagline', info.tagline], ['description', info.description], ['phone', info.phone], ['email', info.email], ['notificationEmail', info.notificationEmail]] as const) {
+    for (const [k, v] of [['name', info.businessName], ['tagline', info.tagline], ['description', info.description], ['phone', info.phone], ['email', info.email], ['notificationEmail', info.notificationEmail]] as const) {
       if (v && !cur[k]) patch[k] = v;
     }
     // Brand and contact details: only fill fields the business has not set.
@@ -170,7 +189,7 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
     })),
     ...Object.values(data.team ?? {}).filter((m) => m.name?.trim()).map((m) => ({
       type: 'team', title: m.name,
-      data: { role: m.role, bio: m.bio, sort_order: m.sortOrder },
+      data: { role: m.role, bio: m.bio, sort_order: m.sortOrder, avatar_url: mediaUrl(m.avatarAssetId), social_links: m.socialLinks },
     })),
     ...Object.values(data.gallery ?? {}).filter((g) => g.caption?.trim() || g.assetId).map((g) => ({
       type: 'gallery', title: g.caption?.trim() || 'Gallery item',
@@ -206,6 +225,7 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
         businessId: input.businessId, projectId: input.projectId, contentTypeId: typeId, status: 'published',
         values: { title: plan.title, data: plan.data },
       });
+      titles.add(plan.title.toLowerCase());
       result.created += 1;
     }
   }
