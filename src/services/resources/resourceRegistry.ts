@@ -189,39 +189,6 @@ export function getResource(key: string): ResourceDefinition | null {
 }
 
 /** Records navigation is derived from the authorities above, not another registry. */
-export function listRecordCollections(): Array<{ kind: CanonicalRecordKind; label: string; resources: ResourceDefinition[] }> {
-  const resources = listResources();
-  return (['testimonials', 'projects', 'case-studies', 'faqs'] as const).map((kind) => ({
-    kind,
-    label: kind === 'case-studies' ? 'Case studies' : kind === 'faqs' ? 'FAQs' : kind === 'projects' ? 'Projects' : 'Testimonials',
-    resources: resources.filter((def) => canonicalRecordKind(def) === kind),
-  }));
-}
-
-/** Blank values for a new record, derived from the resource's declared schema. */
-export function resourceCreateDefaults(def: ResourceDefinition): Record<string, unknown> {
-  const values: Record<string, unknown> = {};
-  for (const field of def.schema) {
-    if (!field.editable) continue;
-    if (field.key === 'title') {
-      values.title = `New ${def.storage.contentType ?? def.label ?? def.key}`;
-      continue;
-    }
-    switch (field.type) {
-      case 'boolean': values[field.key] = false; break;
-      case 'number':
-      case 'money':
-      case 'money-cents':
-      case 'rating': values[field.key] = 0; break;
-      case 'tags': values[field.key] = []; break;
-      case 'json': values[field.key] = {}; break;
-      default: values[field.key] = ''; break;
-    }
-  }
-  return values;
-}
-
-/** Records navigation is derived from the authorities above, not another registry. */
 /** Every collection family: four canonical record kinds plus each other registered collection under its own key. */
 export type RecordCollectionKind = CanonicalRecordKind | string;
 export function listRecordCollections(): Array<{ kind: RecordCollectionKind; label: string; resources: ResourceDefinition[] }> {

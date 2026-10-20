@@ -29,8 +29,6 @@ export interface CreatorProduct {
   visibility?: "public" | "hidden" | "featured";
   billingType?: "one_time" | "subscription";
   billingInterval?: "week" | "month" | "quarter" | "year";
-  /** Explicit catalog target chosen at launch; overrides industry inference. */
-  catalogSurface?: "menu" | "pricing" | "products";
   ctaLabel?: string;
   checkoutLabel?: string;
   fulfillmentType?: "digital" | "physical" | "service" | "custom";

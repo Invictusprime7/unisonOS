@@ -35,7 +35,6 @@ export function shouldUseCanonicalComposer(input: {
   hasVfs: boolean;
   hasAttachments?: boolean;
   isScopedEdit?: boolean;
-  hasAttachments?: boolean;
 }): boolean {
   // Scoped UI and behavioral edits need the same validated source protocol;
   // a selected element changes context, not the authoring lane. Image
