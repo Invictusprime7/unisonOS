@@ -7,7 +7,6 @@ import { materializeDesignSources, type DesignSourceMaterialization } from './de
 import { getAllIndustries, getIndustryProfile } from '@/platform/core/industryMatrix';
 import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
 import { contentTypeToResource, type ContentTypeRow } from '@/services/resources/resourceRegistry';
-import { SEED_CONTENT_TYPES } from '@/services/resources/seedLaunchAssets';
 
 export interface AppBuilderGenerationContext {
   contract: AppBuildContract;
