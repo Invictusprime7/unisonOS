@@ -19,6 +19,15 @@ interface ProjectGhlIntegration {
   updated_at: string;
 }
 
+function describeSaveError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (!error || typeof error !== 'object') return String(error);
+  const details = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+  return [details.message, details.details, details.hint, details.code]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' · ') || 'Unknown Supabase error';
+}
+
 function toHex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -96,7 +105,7 @@ export function ProjectGhlIntegration({ projectId, businessId }: { projectId: st
       toast.success(data?.[0]?.integration_id ? 'Project integration saved' : 'Project integration updated');
     } catch (error) {
       toast.error('Could not save GoHighLevel integration', {
-        description: error instanceof Error ? error.message : String(error),
+        description: describeSaveError(error),
       });
     } finally {
       setSaving(false);
