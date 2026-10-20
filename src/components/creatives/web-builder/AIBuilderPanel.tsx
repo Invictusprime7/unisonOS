@@ -3093,25 +3093,6 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           />}
         </TabsContent>
 
-<<<<<<<
-        {/* Debug Tab */}
-        <TabsContent value="debug" className="flex-1 flex flex-col m-0 min-h-0 data-[state=inactive]:hidden">
-          {features.repairs && <DebugAgentPanel
-            iframeErrors={iframeErrors}
-            onFixError={handleFixError}
-            onDebugRequest={(prompt) => {
-              void handleFixError({ type: 'runtime', message: prompt, timestamp: new Date() });
-            }}
-            onClearErrors={onClearErrors}
-            onApplyPatch={async () => ({ success: false, errors: ['Request a validated repair through Affinity.'] })}
-            canAutoApplyPatch={false}
-            onReviewPatch={() => toast.info('Describe the repair in Affinity chat to prepare a validated candidate.')}
-            vfsFiles={vfsFiles}
-            isFixing={isFixing}
-          />}
-        </TabsContent>
-=======
->>>>>>>
       </Tabs>
     </div>
   );
