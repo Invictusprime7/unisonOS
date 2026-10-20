@@ -3,7 +3,7 @@
 ## Objective (as I understand it)
 1. Bring every section design and every registry entry up to 21st-equivalent standard (real 21st provenance, approved certification, portable recipe, `preferred` status).
 2. Only after equivalence is proven, delete the generic/legacy designs and the legacy rendering path.
-3. Then expand the design library, making full use of the 49 installed UI components recorded in `.21st/design.json`.
+3. Then expand the design library, making full use of the 49 installed UI components recorded in `DESIGNS/design.json`.
 
 Yes, this is clear. I agree with the direction, with three corrections below.
 
@@ -11,7 +11,7 @@ Yes, this is clear. I agree with the direction, with three corrections below.
 - 92 registered section designs. 36 carry 21st provenance, 31 are certified approved, 35 are marked `preferred`.
 - So roughly 56 designs are still generic/legacy and cannot be generated into sites today.
 - A second, older rendering path still exists: 15 hand-written section components (`src/sections/components/*`) wired through `src/sections/registry.ts`, separate from the variant registry.
-- `.21st/design.json` lists design tokens plus `src/components/ui` (50 files). It is a manifest of UI primitives and tokens — it is not a library of finished 21st blocks.
+- `DESIGNS/design.json` lists design tokens plus `src/components/ui` (50 files). It is a manifest of UI primitives and tokens — it is not a library of finished design blocks.
 
 ## My objections / corrections
 1. **Do not delete legacy before coverage is proven per family and per visual direction.** Every one of the 14 visual directions must resolve a certified design for every section family it declares. We hit exactly this failure recently ("no certified implementation for logo-cloud"). Removal must be gated by a passing coverage test, not by a date.

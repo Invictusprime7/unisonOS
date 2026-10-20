@@ -186,11 +186,11 @@ These systems should be **extended and consolidated**, not replaced.
 The current repository contains:
 
 ```text
-.21st/design.json
-.21st/DESIGN.md
+DESIGNS/design.json
+DESIGNS/DESIGN.md
 ```
 
-However, `.21st/design.json` currently declares only:
+However, `DESIGNS/design.json` currently declares only:
 
 ```json
 "sources": {
@@ -223,7 +223,7 @@ src/services/designImplementationRegistry.ts
 src/services/launch/wizardRegistryAggregation.ts
 ```
 
-Therefore the current `.21st` directory must not be mistaken for a functioning Wizard integration.
+Therefore the current `DESIGNS` directory must not be mistaken for a functioning Wizard integration.
 
 It is a starting point for intake/design context only.
 

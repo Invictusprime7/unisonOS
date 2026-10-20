@@ -26,7 +26,7 @@ import {
 const MARKER = 'UNISON GENERATED UI FOUNDATION';
 
 /**
- * `.21st/design.json` is the record of what the project actually installed.
+ * `DESIGNS/design.json` is the record of what the project actually installed.
  * Every installed component must have exactly one canonical route a generated
  * page is allowed to import, or the wizard can never reach it.
  */

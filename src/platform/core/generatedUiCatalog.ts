@@ -1,7 +1,7 @@
 /**
  * Generated UI Catalog (shadcn parity layer).
  *
- * `.21st/design.json` records every component installed in this workspace.
+ * `DESIGNS/design.json` records every component installed in this workspace.
  * Generated sites previously reached only a subset of them: the composition
  * vocabulary (Button/Card/layout/content/surface), the form controls and the
  * raw Radix facades. Everything else — alert, breadcrumb, calendar, carousel,
@@ -17,7 +17,7 @@
  */
 
 export interface GeneratedUiCatalogEntry {
-  /** shadcn/21st component id exactly as recorded in `.21st/design.json`. */
+  /** Component id exactly as recorded in `DESIGNS/design.json`. */
   id: string;
   /** Canonical import path a generated page must use. */
   importPath: string;
