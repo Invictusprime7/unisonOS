@@ -77,7 +77,7 @@ export function resolveProductCatalogSurface(
 
 export function resolveProductCatalogSurfaces(
   industry: string | null | undefined,
-  product: Pick<CreatorProduct, 'name' | 'category' | 'tags' | 'fulfillmentType' | 'billingType'>,
+  product: Pick<CreatorProduct, 'name' | 'category' | 'tags' | 'fulfillmentType' | 'billingType' | 'catalogSurface'>,
   enableProductCommerce = false,
 ): Array<'menu' | 'pricing' | 'products'> {
   const surface = resolveProductCatalogSurface(industry, product);
