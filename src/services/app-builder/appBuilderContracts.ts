@@ -191,6 +191,8 @@ export interface AppBuildRequest {
   baseRevisionId?: string | null;
   signal?: AbortSignal;
   budgetMs?: number;
+  /** Extra runtime context appended to the derived generation context. */
+  runtimeContext?: string;
   maxPages?: number;
   concurrency?: number;
   preflight?: (files: Record<string, string>) => Record<string, string>;
