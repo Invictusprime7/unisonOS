@@ -32,7 +32,7 @@ export const routeShellDefinitions: Record<RouteShell, RouteShellDefinition> = {
     shell: "workspace",
     label: "Workspace",
     description: "Business/workspace operations, shared assets, account settings, and team access.",
-    primaryRouteId: "home",
+    primaryRouteId: "dashboard",
     sections: ["workspace", "account"],
   },
   project: {

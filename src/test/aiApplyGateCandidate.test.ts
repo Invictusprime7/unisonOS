@@ -68,17 +68,9 @@ describe('AI candidate commit protocol', () => {
       .toEqual([{ type: 'requireCapability', capability: 'auth' }]);
   });
 
-  it('carries a reserved guest demo operation into the same canonical revision', () => {
-    const guestOperationId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-    const patch = buildAiCandidatePatch({
-      ...context(),
-      guestDemoOperationId: guestOperationId,
-    });
-
-    expect(patch.operationIds).toEqual([
-      'ai-candidate:candidate-1',
-      `guest-demo:${guestOperationId}`,
-    ]);
+  it('keeps live-demo reservations out of follow-up AI candidate commits', () => {
+    const patch = buildAiCandidatePatch(context());
+    expect(patch.operationIds).toEqual(['ai-candidate:candidate-1']);
   });
 
   it('rejects unknown backend operations before they can be silently skipped', () => {

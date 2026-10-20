@@ -164,6 +164,8 @@ const DESIGN_RESOLUTION_ALLOWLIST = new Set([
   // eligibility. None compiles components or writes canonical state.
   'src/services/builder/propertyInspectorModel.ts',
   'src/services/design/equivalenceLedger.ts',
+  // Read-only verification of already-materialized design source identities.
+  'src/services/app-builder/design/designSourceMaterializer.ts',
   'src/services/launch/twentyFirstCoverageGate.ts',
   'src/services/requestAIPageComposition.ts',
   // Read-only launch-context projection. It filters registry metadata for the

@@ -164,7 +164,9 @@ describe.each(FAMILIES)('$sectionType emitted renderer parity', ({ sectionType, 
     registryView.unmount();
 
     const generatedView = render(<Emitted props={props} variantId={variant.id} />);
-    expect(normalizeReactIds(generatedView.container.innerHTML)).toBe(expectedMarkup);
+    const generatedSection = generatedView.container.querySelector('[data-ut-section-id]');
+    expect(generatedSection).not.toBeNull();
+    expect(normalizeReactIds(generatedSection?.innerHTML ?? '')).toBe(expectedMarkup);
     expect(expectedMarkup.length).toBeGreaterThan(0);
   });
 });

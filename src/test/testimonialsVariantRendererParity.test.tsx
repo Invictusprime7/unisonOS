@@ -50,7 +50,9 @@ describe('Testimonials registry and emitted renderer parity', () => {
     registryView.unmount();
 
     const generatedView = render(<Testimonials props={props} variantId={variant.id} />);
-    expect(generatedView.container.innerHTML).toBe(expectedMarkup);
+    const generatedSection = generatedView.container.querySelector('[data-ut-section-id]');
+    expect(generatedSection).not.toBeNull();
+    expect(generatedSection?.innerHTML).toBe(expectedMarkup);
   });
 
   it('prefers explicit identity and preserves legacy layout aliases', () => {

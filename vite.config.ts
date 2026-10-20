@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
     // Babel 7 reads this Node-only feature flag during module initialization.
     // Replace only the flag, not process or the host environment.
     define: {
-      'process.env.BABEL_TYPES_8_BREAKING': 'false',
+      'process.env.BABEL_TYPES_8_BREAKING': 'undefined',
     },
     server: {
       host: "::",
@@ -117,7 +117,7 @@ export default defineConfig(({ mode }) => {
   optimizeDeps: {
     esbuildOptions: {
       define: {
-        'process.env.BABEL_TYPES_8_BREAKING': 'false',
+        'process.env.BABEL_TYPES_8_BREAKING': 'undefined',
       },
     },
     include: [

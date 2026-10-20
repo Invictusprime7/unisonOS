@@ -8,6 +8,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'supabase/config.toml'
       - 'supabase/migrations/**'
       - 'supabase/functions/**'
       - 'drizzle/migrations/**'
@@ -47,6 +48,9 @@ jobs:
           if [ -z "${SUPABASE_ACCESS_TOKEN}" ] || [ -z "${SUPABASE_PROJECT_ID}" ]; then
             echo "::error::SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_ID secrets are required."; exit 1
           fi
+          if [[ ! "${SUPABASE_ACCESS_TOKEN}" =~ ^sbp_.+ ]]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN must be a Supabase Personal Access Token beginning with sbp_. Update the GitHub secret; do not use a project API key."; exit 1
+          fi
           if [ "${SUPABASE_PROJECT_ID}" != "${EXPECTED_PROJECT_REF}" ]; then
             echo "::error::SUPABASE_PROJECT_ID does not match the authoritative UNISON project."; exit 1
           fi
@@ -71,7 +75,7 @@ jobs:
             exit 1
           fi
           if echo "$CHANGED" | grep -q '^supabase/migrations/'; then echo "migrations=true" >> "$GITHUB_OUTPUT"; else echo "migrations=false" >> "$GITHUB_OUTPUT"; fi
-          if echo "$CHANGED" | grep -q '^supabase/functions/\(_shared/\|deno.json\|import_map.json\)'; then
+          if echo "$CHANGED" | grep -Eq '^supabase/config\.toml$|^supabase/functions/(_shared/|deno\.json$|import_map\.json$)'; then
             funcs=$(find supabase/functions -mindepth 1 -maxdepth 1 -type d ! -name '_shared' ! -name 'node_modules' -printf '%f\n' | sort | tr '\n' ' ')
           else
             funcs=$(echo "$CHANGED" | sed -n 's#^supabase/functions/\([^/]*\)/.*#\1#p' | sort -u | while read -r f; do [ -d "supabase/functions/$f" ] && echo "$f"; done | tr '\n' ' ')

@@ -97,7 +97,7 @@ describe('Customizer draft persistence', () => {
     expect(saved.vfsFiles[path]).toBe(candidate.vfsFiles[path]);
     expect(saved.vfsFiles[path.replace(/\.[^.]+$/, '.customizer.css')]).toBe(':root { --primary: 0 100% 50%; }');
     expect(revisions).toHaveLength(before + 1);
-    await expect(commitMutation({ source: 'playground-edit', identity, current: { ...current, vfsFiles: { ...current.vfsFiles, '/src/change.txt': 'concurrent edit' } }, patch: emptyPatchPlan('Stale apply'), options: { reviewedComposition: { baseVfsHash: await hashVfsFiles(launched.files), candidate } } })).rejects.toThrow(/stale|newer revision/i);
+    await expect(commitMutation({ source: 'playground-edit', identity, current: { ...current, vfsFiles: { ...current.vfsFiles, '/src/change.txt': 'concurrent edit' } }, patch: emptyPatchPlan('Stale apply'), options: { reviewedComposition: { baseVfsHash: await hashVfsFiles(launched.files), candidate } } })).rejects.toThrow(/stale|newer .*revision/i);
     expect(revisions).toHaveLength(before + 1);
   }, 30000);
 });

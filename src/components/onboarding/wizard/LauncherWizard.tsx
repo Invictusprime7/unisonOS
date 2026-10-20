@@ -438,7 +438,7 @@ export const LauncherWizard = ({
     };
 
     try {
-      const result = await runLaunchPipeline(input, {
+      const callbacks = {
         onReview: candidate => new Promise<boolean>(resolve => {
           if (generation !== generationRef.current || !mountedRef.current) { resolve(false); return; }
           setReview(candidate);
@@ -450,7 +450,8 @@ export const LauncherWizard = ({
           latestProgressRef.current = snapshot;
           setProgress(snapshot);
         },
-      });
+      };
+      const result = await runLaunchPipeline({ ...input, demoGeneration }, callbacks);
       if (generation !== generationRef.current) return;
       setLaunch(result.launchState);
       navigate("/web-builder", {

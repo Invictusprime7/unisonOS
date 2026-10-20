@@ -59,7 +59,9 @@ describe('Navbar registry and emitted renderer parity', () => {
     registryView.unmount();
 
     const generatedView = render(<Navbar props={props} variantId={variant.id} />);
-    expect(normalizeRadixIds(generatedView.container.innerHTML)).toBe(normalizeRadixIds(expectedMarkup));
+      const generatedSection = generatedView.container.querySelector('[data-ut-section-id]');
+      expect(generatedSection).not.toBeNull();
+      expect(normalizeRadixIds(generatedSection?.innerHTML ?? '')).toBe(normalizeRadixIds(expectedMarkup));
     expect(generatedView.container.querySelector('[data-ut-mobile-navigation]')).toHaveAttribute('data-ut-mobile-navigation', 'radix');
     expect(generatedView.getByText('Book a consult')).toHaveAttribute('data-ut-intent', 'booking.create');
   });

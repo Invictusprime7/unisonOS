@@ -4,7 +4,6 @@ import { lazy, type ReactElement } from "react";
 import { Navigate } from "react-router-dom";
 
 import Auth from "@/pages/Auth";
-import Home from "@/pages/Index";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/NotFound";
 
@@ -118,7 +117,7 @@ export const appRoutes: AppRouteConfig[] = [
   },
   {
     path: "/home",
-    element: withAsyncBoundary(<Home />),
+    element: <Navigate to="/dashboard" replace />,
     meta: {
       id: "home",
       title: "Home",
@@ -127,6 +126,7 @@ export const appRoutes: AppRouteConfig[] = [
       chrome: "legacy",
       requiresAuth: true,
       requiresWorkspace: true,
+      deprecatedAliasFor: "/dashboard",
     },
   },
   {

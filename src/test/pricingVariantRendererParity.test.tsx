@@ -49,7 +49,9 @@ describe('Pricing registry and emitted renderer parity', () => {
     registryView.unmount();
 
     const generatedView = render(<Pricing props={props} variantId={variant.id} />);
-    expect(generatedView.container.innerHTML).toBe(expectedMarkup);
+    const generatedSection = generatedView.container.querySelector('[data-ut-section-id]');
+    expect(generatedSection).not.toBeNull();
+    expect(generatedSection?.innerHTML).toBe(expectedMarkup);
     expect(generatedView.getByRole('link', { name: 'Reserve now' })).toHaveAttribute('data-ut-intent', 'booking.create');
   });
 

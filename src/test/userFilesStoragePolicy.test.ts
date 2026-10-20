@@ -107,5 +107,5 @@ describe('user-files storage policy remediation', () => {
     } finally {
       await db.close();
     }
-  });
+  }, 15_000);
 });

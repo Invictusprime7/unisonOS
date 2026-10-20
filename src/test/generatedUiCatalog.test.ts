@@ -31,7 +31,7 @@ const MARKER = 'UNISON GENERATED UI FOUNDATION';
  * page is allowed to import, or the wizard can never reach it.
  */
 function installedComponentIds(): string[] {
-  const raw = readFileSync(resolve(process.cwd(), '.21st/design.json'), 'utf8');
+  const raw = readFileSync(resolve(process.cwd(), 'DESIGNS/design.json'), 'utf8');
   const parsed = JSON.parse(raw) as { components?: { installed?: unknown } };
   const installed = parsed.components?.installed;
   const ids = Array.isArray(installed) ? installed : [];
@@ -58,7 +58,7 @@ function routeFor(id: string): string | null {
 describe('generated UI component catalog', () => {
   const installed = installedComponentIds();
 
-  it('reads a non-trivial installed component list from .21st/design.json', () => {
+  it('reads a non-trivial installed component list from DESIGNS/design.json', () => {
     expect(installed.length).toBeGreaterThanOrEqual(40);
   });
 

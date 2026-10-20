@@ -34,7 +34,7 @@ describe('unified records page', () => {
     await screen.findByRole('button', { name: 'When do you ship?' });
     fireEvent.click(screen.getByRole('button', { name: 'FAQs (1)' }));
     fireEvent.click(screen.getByRole('button', { name: 'New record' }));
-    await waitFor(() => expect(mocks.create).toHaveBeenCalledWith({ op: 'create', resourceKey: 'content:faq', values: { title: 'New question', question: 'New question', answer: '' } }, { businessId: 'business-a', projectId: 'project-a', mode: 'builder' }));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledWith({ op: 'create', resourceKey: 'content:faq', values: { title: 'New question' } }, { businessId: 'business-a', projectId: 'project-a', mode: 'builder' }));
   });
   it('does not query or create records for a project absent from the accessible project list', async () => {
     render(<MemoryRouter initialEntries={['/business/records?projectId=other-project']}><BusinessRecords /></MemoryRouter>);

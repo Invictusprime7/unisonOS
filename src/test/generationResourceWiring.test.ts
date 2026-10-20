@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { INDUSTRY_SEED_DATA_TARGETS, buildIndustryIconContext, buildRegisteredResourceContext } from '@/services/app-builder/appBuilderGenerationContext';
 import { EDITABLE_CATALOG_SURFACES } from '@/services/agent-runtime/catalogOps';
+import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
 import { resolveProductCatalogSurface } from '@/services/resources/seedLaunchAssets';
 import { registerContentTypes } from '@/services/resources/resourceRegistry';
 
@@ -28,7 +29,9 @@ describe('generation resource wiring', () => {
     expect(INDUSTRY_SEED_DATA_TARGETS[key]?.resourceKey).toBeUndefined();
   });
   it('exposes all editable registered catalogs to agent operations', () => {
-    expect(EDITABLE_CATALOG_SURFACES).toEqual(['services', 'products', 'menu', 'pricing', 'offers', 'testimonials', 'portfolio']);
+    expect(EDITABLE_CATALOG_SURFACES).toEqual(
+      listCatalogSurfaces().filter((surface) => surface.editableFields.length > 0).map((surface) => surface.surfaceId),
+    );
     expect(EDITABLE_CATALOG_SURFACES).not.toContain('availability');
   });
   it('uses registered price and intent support for cart eligibility', () => {

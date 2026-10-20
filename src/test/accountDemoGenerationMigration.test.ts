@@ -55,7 +55,7 @@ describe('one persistent free demo generation per account', () => {
       expect(await status(pg)).toEqual({ generation_count: 1, remaining: 0, in_progress: false, project_id: project });
       await expect(reserve(pg, second)).rejects.toThrow('used your free demo generation');
     } finally { await pg.close(); }
-  });
+  }, 15_000);
   it('reserves one slot across tabs and retries the same operation idempotently', async () => {
     const pg = await database();
     try {

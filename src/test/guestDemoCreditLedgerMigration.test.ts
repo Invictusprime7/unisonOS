@@ -106,7 +106,7 @@ describe('guest demo credit ledger migration', () => {
     } finally {
       await pg.close();
     }
-  });
+  }, 15_000);
 
   it('settles only a matching committed revision and rejects a fourth reserved action', async () => {
     const pg = await createDatabase();

@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 /**
  * R6 — the standalone AI page generator was a parallel visual pipeline:
  * its own PageRenderer, its own noir/warm/vibrant/minimal/luxury theme
- * presets, and no SiteBundleSnapshot. Canonical preview requires a snapshot,
- * so the surface is deleted rather than maintained.
+ * presets, and no SiteBundleSnapshot. The endpoint remains only as a thin
+ * compatibility adapter to the canonical AI assistant handler.
  */
 describe('R6 — legacy AI page generator surface stays deleted', () => {
   const deleted = [
@@ -36,6 +36,13 @@ describe('R6 — legacy AI page generator surface stays deleted', () => {
     expect(source).not.toContain('AIPageGenerator');
   });
 
+  it('keeps the legacy Edge Function as a canonical-handler adapter only', () => {
+    const source = readFileSync('supabase/functions/generate-page/index.ts', 'utf8');
+    expect(source).toContain("from '../ai-code-assistant/handler.ts'");
+    expect(source).toContain('handleAssistant(req, true)');
+    expect(source).not.toMatch(/(?:commitMutation|site_revisions|buildCanonicalLaunchArtifacts)/);
+  });
+
   it('no surface links to the deleted generator', () => {
     const creatives = readFileSync('src/pages/Creatives.tsx', 'utf8');
     expect(creatives).not.toContain('/ai-generator');
@@ -43,7 +50,7 @@ describe('R6 — legacy AI page generator surface stays deleted', () => {
 
   it('keeps the Wizard launch surface delegated to the canonical launch orchestrator', () => {
     const launcher = readFileSync('src/components/onboarding/wizard/LauncherWizard.tsx', 'utf8');
-    expect(launcher).toContain('runLaunchPipeline(input,');
+    expect(launcher).toContain('runLaunchPipeline({ ...input, demoGeneration }, callbacks)');
     expect(launcher).toContain('navigate("/web-builder"');
 
     const onboardingRoot = resolve(process.cwd(), 'src/components/onboarding');

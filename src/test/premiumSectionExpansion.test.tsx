@@ -5,6 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as icons from 'lucide-react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import { normalizeReactIds } from './helpers/normalizeReactIds';
 import { getVariantById, getVariantsForSection } from '@/sections/variants';
 import { getCompositionById } from '@/sections/templates';
 import { compositionToReactFileSet } from '@/sections/compositionToFileSet';
@@ -43,7 +44,17 @@ describe('premium section registry to executable VFS', () => {
       './theme': themeModule, ['./recipes/' + component]: loadModule(recipe),
     }).default as React.ComponentType<{ props: unknown; variantId: string }>;
     const Registered = variant.component;
-    expect(renderToStaticMarkup(<Emitted props={section.props} variantId={variant.id} />)).toBe(renderToStaticMarkup(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />));
+    const emittedMarkup = document.createElement('div');
+    emittedMarkup.innerHTML = renderToStaticMarkup(<Emitted props={section.props} variantId={variant.id} />);
+    const identity = emittedMarkup.querySelector('[data-ut-section-id]');
+    expect(identity).toHaveAttribute('data-ut-section-type', variant.sectionType);
+    expect(identity).toHaveAttribute('data-ut-variant', variant.id);
+    const emittedVariant = identity?.firstElementChild;
+    const registeredMarkup = document.createElement('div');
+    registeredMarkup.innerHTML = renderToStaticMarkup(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />);
+    expect(normalizeReactIds(emittedVariant?.outerHTML ?? '')).toBe(
+      normalizeReactIds(registeredMarkup.firstElementChild?.outerHTML ?? ''),
+    );
     expect(files['/src/pages/Home.tsx']).toContain(variant.id);
     expect(recipe).not.toMatch(/from ["'](?:next|motion|https?:)/);
     expect(variant.source?.sourceUrl).toContain('21st.dev/');

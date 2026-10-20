@@ -36,6 +36,8 @@
     "local-only visual text edit; durable revisions remain commitMutation-owned.": "editor-buffer",
     "dependency manifest write, not site content": "runtime-manifest",
     "write-back of canonical Unison runtime files, not user content": "runtime-manifest",
+    "local-only text projection; durable revisions remain commitMutation-owned.": "editor-buffer",
+    "local-only visual text edit; durable revisions remain commitMutation-owned.": "editor-buffer",
     "optimistic HMR projection; the same mutation is chained through commitMutation below": "optimistic-hmr"
   },
   "baseline": {

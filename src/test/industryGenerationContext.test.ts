@@ -114,11 +114,11 @@ describe('industry-aware generation context', () => {
 
     expect(catalogMocks.createCatalogItem).toHaveBeenCalledWith(
       'business-saas', 'pricing', expect.objectContaining({
-        name: 'Professional', price: 49, billing_interval: 'month', highlighted: true,
+        name: 'Professional', price: 49, billing_interval: 'monthly', highlighted: true,
       }), 'project-saas',
     );
     expect(catalogMocks.createCatalogItem).toHaveBeenCalledWith(
-      'business-saas', 'products', expect.objectContaining({ name: 'Professional', price: 49 }), 'project-saas',
+      'business-saas', 'products', expect.objectContaining({ name: 'Professional', price: 49, featured: true }), 'project-saas',
     );
   });
 

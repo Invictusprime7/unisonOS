@@ -58,10 +58,13 @@ function contract(): AppBuildContract {
   };
 }
 
+const createTestBuilder = (dependencies: Parameters<typeof createUnisonAppBuilder>[0] = {}) =>
+  createUnisonAppBuilder({ loadContentTypes: async () => [], ...dependencies });
+
 describe('UnisonAppBuilder facade', () => {
   it('stops before inference when the edited source exceeds its budget', async () => {
     const runComposer = vi.fn();
-    const result = await createUnisonAppBuilder({ runComposer }).edit({
+    const result = await createTestBuilder({ runComposer }).edit({
       operationId: 'missing-source', baseRevisionId: 'r1', currentFiles: {
         ...baseFiles,
         '/src/pages/Home.tsx': 'x'.repeat(150001),
@@ -76,7 +79,7 @@ describe('UnisonAppBuilder facade', () => {
   });
   it('checks page generation connector identity before invoking the page author', async () => {
     const authorSite = vi.fn();
-    await expect(createUnisonAppBuilder({ authorSite: authorSite as never }).generatePages({
+    await expect(createTestBuilder({ authorSite: authorSite as never }).generatePages({
       operationId: 'wrong-project', baseRevisionId: 'r2', currentFiles: baseFiles,
       pages: [{ pageId: 'new', title: 'New', route: '/new', filePath: '/src/pages/New.tsx', role: 'custom', pageType: 'custom' }],
       businessName: 'Northstar', connectorContext: { projectId: 'p1', selection: { projectId: 'p2' } },
@@ -85,7 +88,7 @@ describe('UnisonAppBuilder facade', () => {
   });
   it('rejects stale connector ownership before source authoring', async () => {
     const runComposer = vi.fn();
-    const builder = createUnisonAppBuilder({ runComposer: runComposer as never });
+    const builder = createTestBuilder({ runComposer: runComposer as never });
     await expect(builder.edit({
       operationId: 'stale-connector', baseRevisionId: 'revision-2',
       currentFiles: baseFiles, instruction: 'Change this heading',
@@ -173,7 +176,7 @@ describe('UnisonAppBuilder facade', () => {
         errors: [],
       },
     }));
-    const result = await createUnisonAppBuilder({ authorSite, runComposer }).generate({
+    const result = await createTestBuilder({ authorSite, runComposer }).generate({
       operationId: 'operation-closure', contract: contract(), initialFiles: baseFiles,
       entryPoint: '/src/main.tsx', baseRevisionId: null,
     });
@@ -207,7 +210,7 @@ describe('UnisonAppBuilder facade', () => {
       revisionId: input.revisionId,
       outcomes: input.pages.map((page) => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
     }));
-    const result = await createUnisonAppBuilder({ authorSite }).generate({
+    const result = await createTestBuilder({ authorSite }).generate({
       operationId: 'operation-multi-page', contract: multiPage, initialFiles: baseFiles,
       entryPoint: '/src/main.tsx', baseRevisionId: null,
     });
@@ -230,7 +233,7 @@ describe('UnisonAppBuilder facade', () => {
       revisionId: input.revisionId,
       outcomes: input.pages.map((target) => ({ page: target, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
     }));
-    const result = await createUnisonAppBuilder({ authorSite }).generatePages({
+    const result = await createTestBuilder({ authorSite }).generatePages({
       operationId: 'operation-page-generation',
       baseRevisionId: 'revision-1',
       currentFiles: baseFiles,
@@ -255,7 +258,7 @@ describe('UnisonAppBuilder facade', () => {
 
   it('rejects an existing route before invoking the page author', async () => {
     const authorSite = vi.fn();
-    const result = await createUnisonAppBuilder({ authorSite: authorSite as never }).generatePages({
+    const result = await createTestBuilder({ authorSite: authorSite as never }).generatePages({
       operationId: 'operation-page-collision',
       currentFiles: baseFiles,
       pages: [{
@@ -273,7 +276,7 @@ describe('UnisonAppBuilder facade', () => {
 
   it('rejects files outside the generated page directory before authoring', async () => {
     const authorSite = vi.fn();
-    const result = await createUnisonAppBuilder({ authorSite: authorSite as never }).generatePages({
+    const result = await createTestBuilder({ authorSite: authorSite as never }).generatePages({
       operationId: 'operation-page-scope',
       currentFiles: baseFiles,
       pages: [{
@@ -307,7 +310,7 @@ describe('UnisonAppBuilder facade', () => {
       },
     };
     const runComposer = vi.fn(async () => composer);
-    const builder = createUnisonAppBuilder({ runComposer });
+    const builder = createTestBuilder({ runComposer });
     const result = await builder.edit({
       operationId: 'operation-edit', baseRevisionId: 'revision-1', currentFiles: baseFiles,
       instruction: 'Change the headline',
@@ -329,7 +332,7 @@ describe('UnisonAppBuilder facade', () => {
     const runComposer = vi.fn(async (): Promise<ComposerLoopResult> => ({
       ok: false, reason: 'gates_exhausted', attempts: 3, errors: ['import-graph failed'],
     }));
-    const result = await createUnisonAppBuilder({ runComposer }).edit({
+    const result = await createTestBuilder({ runComposer }).edit({
       operationId: 'operation-rejected', baseRevisionId: 'revision-1', currentFiles: baseFiles,
       instruction: 'Break imports',
       page: { title: 'Home', route: '/', role: 'home', filePath: '/src/pages/Home.tsx' },
