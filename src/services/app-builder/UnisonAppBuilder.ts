@@ -43,6 +43,8 @@ export interface UnisonAppBuilder {
 export interface UnisonAppBuilderDependencies {
   authorSite?: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
   runComposer?: (input: ComposerLoopInput) => Promise<ComposerLoopResult>;
+  /** Job-scoped CMS schema read; defaults to the shared content service. */
+  loadContentTypes?: (scope: { businessId: string; projectId: string | null }) => Promise<Array<Record<string, unknown>>>;
 }
 
 function stopReason(reason: ComposerLoopResult['reason']): AppBuildCandidateStopReason {

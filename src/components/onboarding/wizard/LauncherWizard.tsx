@@ -94,6 +94,8 @@ export interface LauncherWizardProps {
   onOpenChange: (open: boolean) => void;
   initialVisionPrompt?: string | null;
   presentation?: "dialog" | "chat";
+  /** True when this run is the account's one free Live Demo generation. */
+  demoGeneration?: boolean;
   guidedStep?: ChatWizardStep;
   guidancePending?: boolean;
   onSelectionConfirmed?: (answer: string) => void;
