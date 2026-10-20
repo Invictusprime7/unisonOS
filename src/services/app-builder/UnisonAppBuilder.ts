@@ -65,10 +65,24 @@ export function createUnisonAppBuilder(
 ): UnisonAppBuilder {
   const authorSite = dependencies.authorSite ?? authorSitePages;
   const runComposer = dependencies.runComposer ?? runComposerRepairLoop;
+  const loadContentTypes = dependencies.loadContentTypes
+    ?? ((scope: { businessId: string; projectId: string | null }) => listContentTypes(scope));
 
   const service: UnisonAppBuilder = {
     async generate(input) {
-      return orchestrateAppBuild(input, { authorSite, runComposer });
+      // Load only this contract's CMS schemas before any page authoring; a
+      // failed read must stop the build rather than author against a stale
+      // or another project's schema.
+      const contentTypes = await loadContentTypes({
+        businessId: input.contract.identity.businessId,
+        projectId: input.contract.identity.projectId,
+      });
+      registerContentTypes(contentTypes);
+      const resourceContext = buildRegisteredResourceContext(contentTypes);
+      const scopedInput = resourceContext
+        ? { ...input, runtimeContext: [input.runtimeContext, resourceContext].filter(Boolean).join('\n') }
+        : input;
+      return orchestrateAppBuild(scopedInput, { authorSite, runComposer });
     },
 
     async generatePages(input) {

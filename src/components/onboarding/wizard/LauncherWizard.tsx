@@ -132,6 +132,7 @@ export const LauncherWizard = ({
   initialVisionPrompt,
   prefill,
   presentation = "dialog",
+  demoGeneration = false,
   guidedStep,
   guidancePending = false,
   onSelectionConfirmed,
