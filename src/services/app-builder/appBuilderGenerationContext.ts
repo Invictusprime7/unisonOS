@@ -24,11 +24,6 @@ export interface IndustrySeedDataTarget {
   resourceKey?: string;
   /** CreatorData path the seed data is read from. */
   creatorDataPath?: string;
-export interface IndustrySeedDataTarget {
-  target: string;
-  catalogSurface?: string;
-  resourceKey?: string;
-  creatorDataPath?: string;
 }
 
 export const INDUSTRY_SEED_DATA_TARGETS: Record<string, IndustrySeedDataTarget> = {
