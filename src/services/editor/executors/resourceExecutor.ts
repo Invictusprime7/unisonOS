@@ -107,6 +107,11 @@ export async function executeResourceCommand(command: EditorCommand, ctx: Resour
   if (!recordId) {
     // WYSIWYG edits must never be gated on a manual save: materialize the
     // record from the element's identity and apply the edit in one write.
+    // Only generated seed slugs on collections may auto-create; anything else
+    // is an unresolved mark and must be rejected instead of invented.
+    if (!mayMaterializeSeed(parsed)) {
+      return { ok: false, command: command.type, lane: 'resource', savedTo: null, changedFields: [], error: `This ${label} isn't linked to a saved record yet — reload the site and try again.` };
+    }
     const created = await executeResourceCommandCompatible<ResourceRecord>(ctx, {
       kind: 'resource.mutate', resourceKey: parsed.resourceKey, action: 'create', values: seedValuesFor(parsed, values),
     }, () => applyResourceOp({ op: 'create', resourceKey: parsed.resourceKey, values: seedValuesFor(parsed, values) }, ctx)).catch(() => null);
