@@ -83,16 +83,23 @@ export function buildIndustryIconContext(
   industry: string,
   enabledCapabilities: readonly string[],
   intents: readonly string[],
+  selectedSurfaces: readonly string[] = [],
 ): string {
   const registeredSurfaces = new Set(listCatalogSurfaces().map((surface) => surface.surfaceId));
   const industrySurfaces = new Set(getIndustrySeedDataTargets(industry)
     .map(({ target }) => target.catalogSurface)
     .filter((surface): surface is string => !!surface && registeredSurfaces.has(surface)));
+  for (const surface of selectedSurfaces) {
+    if (registeredSurfaces.has(surface)) industrySurfaces.add(surface);
+  }
   const seedDataKeys = new Set(getIndustryProfile(industry)?.seedDataKeys ?? []);
   const searchableSurfaces = ['menu', 'pricing', 'products', 'services']
     .filter((surface) => industrySurfaces.has(surface));
-  const cartableSurfaces = ['menu', 'products', 'services']
-    .filter((surface) => industrySurfaces.has(surface));
+  // Safe cart eligibility: products are always cartable once commerce and an
+  // explicit cart intent exist; menu joins when it is a declared surface.
+  // Services, offers and pricing never take cart actions.
+  const cartableSurfaces = ['products', 'menu']
+    .filter((surface) => surface === 'products' || industrySurfaces.has(surface));
   const purchaseRequested = intents.some((intent) => intent === 'cart.add' || intent === 'cart.checkout');
   const cartEnabled = enabledCapabilities.includes('commerce') && purchaseRequested && cartableSurfaces.length > 0;
   const affordances = [
