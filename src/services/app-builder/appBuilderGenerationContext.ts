@@ -123,6 +123,28 @@ export function buildIndustryIconContext(
   ].join('\n');
 }
 
+/**
+ * Registered content resources a generation turn may reference. When rows are
+ * provided (even empty), only those job-scoped CMS types are projected — the
+ * global registry never leaks another project's types into a scoped turn.
+ * Without rows, only the static launch seed types are described.
+ */
+export function buildRegisteredResourceContext(rows?: ContentTypeRow[]): string {
+  const defs = (rows
+    ? rows.map((row) => contentTypeToResource(row))
+    : Object.entries(SEED_CONTENT_TYPES).map(([key, seed]) => contentTypeToResource({
+      api_key: key,
+      display_name: seed.displayName,
+      field_schema: { fields: seed.fields },
+    }))
+  ).filter((def): def is NonNullable<typeof def> => !!def);
+  if (!defs.length) return '';
+  return [
+    'REGISTERED CONTENT RESOURCES: reference only these declared collections; never invent tables or CMS types.',
+    ...defs.map((def) => `- ${def.key} → CMS ${def.storage.contentType ?? def.label} (${def.schema.map((field) => `${field.key}:${field.type}`).join(', ')})`),
+  ].join('\n');
+}
+
 export function buildAppBuilderGenerationContext(contract: AppBuildContract): AppBuilderGenerationContext {
   const { business, runtime } = contract;
   const designSources = resolveDesignSourceBundle(contract);
