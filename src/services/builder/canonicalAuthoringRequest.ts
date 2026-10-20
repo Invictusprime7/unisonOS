@@ -33,6 +33,7 @@ export function shouldUseCanonicalComposer(input: {
   isLaunchPlanningRequest: boolean;
   isCatalogMutationRequest: boolean;
   hasVfs: boolean;
+  hasAttachments?: boolean;
   isScopedEdit?: boolean;
   hasAttachments?: boolean;
 }): boolean {
