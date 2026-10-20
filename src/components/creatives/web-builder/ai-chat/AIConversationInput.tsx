@@ -226,7 +226,7 @@ export const AIConversationInput: React.FC<Props> = ({
             }
           }}
           placeholder={droppedFiles.length > 0 ? 'Add instructions for attachments...' : 'What would you like to build?'}
-          aria-label="Message AI Builder"
+          aria-label="Message Affinity"
           className="border-0 bg-transparent text-sm resize-none shadow-none focus-visible:ring-0 placeholder:text-muted-foreground"
           disabled={isLoading}
         />
