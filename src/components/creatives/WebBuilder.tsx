@@ -7996,6 +7996,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 className="h-8 w-8 shrink-0 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
                 title={label}
                 aria-label={`${label} preview`}
+                aria-pressed={device === id}
               >
                 <Icon className="h-4 w-4" />
               </Button>
@@ -8029,6 +8030,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 className="h-8 w-8 shrink-0 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
                 title={`${label} view`}
                 aria-label={`${label} view`}
+                aria-pressed={viewMode === id}
               >
                 <Icon className="h-4 w-4" />
               </Button>
@@ -8072,6 +8074,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   )}
                   title={`${label} View`}
                   aria-label={`${label} view`}
+                  aria-pressed={viewMode === id}
                 >
                   <Icon className="h-3.5 w-3.5" />
                 </button>
@@ -8136,9 +8139,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             variant="ghost"
             size="icon"
             onClick={() => setAiPanelOpen(!aiPanelOpen)}
-            className={cn("h-8 w-8 rounded-md", aiPanelOpen ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/[0.06] hover:text-white")}
+            className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
             title={aiPanelOpen ? "Close Affinity panel" : "Open Affinity panel"}
             aria-label={aiPanelOpen ? "Close Affinity panel" : "Open Affinity panel"}
+            aria-pressed={aiPanelOpen}
           >
             <Sparkles className="h-4 w-4" />
           </Button>

@@ -194,16 +194,22 @@ export function DeployButton({
 
   const fileCount = getFiles ? 1 : Object.keys(files || {}).length;
   const hasIndexHtml = getFiles ? true : !!(files && (files['index.html'] || files['/index.html']));
+  const iconOnly = size === 'icon';
 
   return (
     <>
       {showProviderSelect ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant={variant} size={size} disabled={disabled || fileCount === 0}>
-              <Rocket className="h-4 w-4 mr-2" />
-              Deploy
-              <ChevronDown className="h-4 w-4 ml-2" />
+            <Button
+              variant={variant}
+              size={size}
+              disabled={disabled || fileCount === 0}
+              aria-label={iconOnly ? 'Deploy' : undefined}
+              title={iconOnly ? 'Deploy' : undefined}
+            >
+              <Rocket className={iconOnly ? 'h-4 w-4' : 'h-4 w-4 mr-2'} />
+              {iconOnly ? <span className="sr-only">Deploy</span> : <>Deploy<ChevronDown className="h-4 w-4 ml-2" /></>}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -227,9 +233,11 @@ export function DeployButton({
           size={size}
           disabled={disabled || fileCount === 0}
           onClick={() => handleOpenDialog('vercel')}
+          aria-label={iconOnly ? 'Deploy' : undefined}
+          title={iconOnly ? 'Deploy' : undefined}
         >
-          <Rocket className="h-4 w-4 mr-2" />
-          Deploy
+          <Rocket className={iconOnly ? 'h-4 w-4' : 'h-4 w-4 mr-2'} />
+          {iconOnly ? <span className="sr-only">Deploy</span> : 'Deploy'}
         </Button>
       )}
 
