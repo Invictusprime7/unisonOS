@@ -10,12 +10,10 @@ describe('canonicalBooking CRM linkage', () => {
 
   it('links a committed booking to a business-scoped CRM contact and activity', () => {
     expect(source).toContain('linkBookingToCrm');
-    expect(source).toContain('FROM public.crm_contacts WHERE business_id = $1::uuid');
-    expect(source).toContain('INSERT INTO public.crm_contacts');
-    expect(source).toContain('INSERT INTO public.crm_activities');
-    // Only columns confirmed present on crm_contacts (first_name/last_name, not a
-    // single "name" column) are used -- do not repeat intent-exec's unverified pattern.
-    expect(source).not.toMatch(/INSERT INTO public\.crm_contacts[\s\S]{0,300}?\bname\b(?!space)/);
+    expect(source).toContain('createCrmContact');
+    expect(source).toContain('createCrmActivity');
+    expect(source).not.toContain('INSERT INTO public.crm_contacts');
+    expect(source).not.toContain('INSERT INTO public.crm_activities');
   });
 
   it('never links a duplicate (idempotent-retry) booking to the CRM', () => {

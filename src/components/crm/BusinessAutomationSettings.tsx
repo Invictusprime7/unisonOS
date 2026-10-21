@@ -24,6 +24,9 @@ import {
   MessageSquare
 } from "lucide-react";
 import { toast } from "sonner";
+import { applyCapabilityMigration } from "@/services/capabilityMigrationRunner";
+import { CAPABILITY_PACKS, resolveCapabilityPacks, type BusinessCapability } from "@/platform/core/capabilityPacks";
+import { loadInstalledSiteCapabilities, resolveSystemInstallCapabilityPacks, resolveSystemTypeCapabilityPacks } from "@/services/crmWorkspaceCapabilities";
 
 interface AutomationSettings {
   id?: string;
@@ -83,6 +86,24 @@ const DAYS_OF_WEEK = [
   { value: 6, label: "Sat" },
 ];
 
+const INDUSTRY_SYSTEM_TYPES: Record<string, string> = {
+  salon: "booking",
+  restaurant: "booking",
+  contractor: "booking",
+  agency: "agency",
+  startup: "saas",
+  ecommerce: "store",
+  blog: "content",
+  landing: "content",
+  portfolio: "portfolio",
+  general: "agency",
+};
+
+const SITE_CAPABILITY_PACKS = [
+  ...CAPABILITY_PACKS.filter((pack) => pack.id === "crm.leads"),
+  ...CAPABILITY_PACKS.filter((pack) => pack.id !== "business_profile" && pack.id !== "crm.leads"),
+];
+
 const DEFAULT_SETTINGS: AutomationSettings = {
   business_id: "",
   business_hours_enabled: false,
@@ -107,9 +128,20 @@ const DEFAULT_SETTINGS: AutomationSettings = {
 interface BusinessAutomationSettingsProps {
   businessId: string;
   businessIndustry?: string;
+  projectId: string;
+  siteId: string | null;
+  siteProjects: Array<{ id: string; name: string }>;
+  onSelectProject: (projectId: string) => void;
 }
 
-export function BusinessAutomationSettings({ businessId, businessIndustry }: BusinessAutomationSettingsProps) {
+export function BusinessAutomationSettings({
+  businessId,
+  businessIndustry,
+  projectId,
+  siteId,
+  siteProjects,
+  onSelectProject,
+}: BusinessAutomationSettingsProps) {
   const [settings, setSettings] = useState<AutomationSettings>({ ...DEFAULT_SETTINGS, business_id: businessId });
   const [recipePacks, setRecipePacks] = useState<RecipePack[]>([]);
   const [recipeToggles, setRecipeToggles] = useState<Record<string, boolean>>({});
@@ -118,11 +150,101 @@ export function BusinessAutomationSettings({ businessId, businessIndustry }: Bus
   const [saving, setSaving] = useState(false);
   const [installingPackId, setInstallingPackId] = useState<string | null>(null);
   const [installResult, setInstallResult] = useState<{ packId: string; data: any } | null>(null);
+  const [installedSiteCapabilities, setInstalledSiteCapabilities] = useState<BusinessCapability[]>([]);
+  const [installingCapabilityId, setInstallingCapabilityId] = useState<BusinessCapability | null>(null);
+
+  function getSystemType(industry: string): string {
+    return INDUSTRY_SYSTEM_TYPES[industry] || "agency";
+  }
+
+  async function syncSiteCapabilities(pack: RecipePack) {
+    if (!projectId || !siteId) {
+      toast.error("Select a project with a linked site before installing a pack.");
+      return;
+    }
+
+    try {
+      setInstallingPackId(pack.pack_id);
+      const capabilityPacks = resolveSystemTypeCapabilityPacks(getSystemType(pack.industry));
+      const result = await applyCapabilityMigration({
+        packs: capabilityPacks,
+        businessId,
+        projectId,
+        siteId,
+        summary: `Sync ${pack.name} capabilities to this project site.`,
+      });
+      if (!result.success) {
+        toast.error(`Site capability sync failed: ${result.error || "Unknown error"}`);
+        return;
+      }
+      toast.success(`${pack.name} site capabilities are up to date.`);
+    } catch (err) {
+      console.error("[syncSiteCapabilities] Error:", err);
+      toast.error(`Site capability sync failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setInstallingPackId(null);
+    }
+  }
 
   useEffect(() => {
     loadSettings();
     loadRecipePacks();
   }, [businessId]);
+
+  useEffect(() => {
+    void refreshSiteCapabilities();
+  }, [businessId, projectId, siteId]);
+
+  async function refreshSiteCapabilities() {
+    if (!businessId || !projectId) {
+      setInstalledSiteCapabilities([]);
+      return;
+    }
+    try {
+      const installed = await loadInstalledSiteCapabilities({
+        businessId,
+        projectId,
+        siteId: siteId ?? undefined,
+      });
+      setInstalledSiteCapabilities(installed);
+    } catch (err) {
+      console.error("[BusinessAutomationSettings] Failed to load site capabilities:", err);
+      setInstalledSiteCapabilities([]);
+    }
+  }
+
+  async function installSiteCapability(packId: BusinessCapability) {
+    if (!businessId || !projectId || !siteId) {
+      toast.error("Select a project with a linked site before installing capabilities.");
+      return;
+    }
+
+    const pack = SITE_CAPABILITY_PACKS.find((candidate) => candidate.id === packId);
+    if (!pack) return;
+
+    try {
+      setInstallingCapabilityId(packId);
+      const resolved = resolveCapabilityPacks([packId]);
+      const result = await applyCapabilityMigration({
+        packs: resolved.order,
+        businessId,
+        projectId,
+        siteId,
+        summary: `Install the ${pack.name} capability for this project site.`,
+      });
+      if (!result.success) {
+        toast.error(`Capability install failed: ${result.error || "Unknown error"}`);
+        return;
+      }
+      await refreshSiteCapabilities();
+      toast.success(`${pack.name} is enabled for this site.`);
+    } catch (err) {
+      console.error("[installSiteCapability] Error:", err);
+      toast.error(`Capability install failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setInstallingCapabilityId(null);
+    }
+  }
 
   async function loadSettings() {
     try {
@@ -212,7 +334,10 @@ export function BusinessAutomationSettings({ businessId, businessIndustry }: Bus
       toast.success("Automation settings saved");
     } catch (err) {
       console.error("Error saving settings:", err);
-      toast.error("Failed to save settings");
+      const errorMessage = err && typeof err === "object" && "message" in err
+        ? String(err.message)
+        : "Unknown error";
+      toast.error(`Failed to save settings: ${errorMessage}`);
     } finally {
       setSaving(false);
     }
@@ -245,6 +370,10 @@ export function BusinessAutomationSettings({ businessId, businessIndustry }: Bus
       toast.error("Pack not found");
       return;
     }
+    if (!projectId || !siteId) {
+      toast.error("Select a project with a linked site before installing a pack.");
+      return;
+    }
 
     try {
       setSaving(true);
@@ -252,20 +381,7 @@ export function BusinessAutomationSettings({ businessId, businessIndustry }: Bus
       setInstallResult(null);
       
       // Map industry to system type for install-system
-      const industryToSystemType: Record<string, string> = {
-        salon: 'booking',
-        restaurant: 'booking',
-        contractor: 'booking',
-        agency: 'agency',
-        startup: 'saas',
-        ecommerce: 'store',
-        blog: 'content',
-        landing: 'content',
-        portfolio: 'portfolio',
-        general: 'agency',
-      };
-      
-      const systemType = industryToSystemType[pack.industry] || 'agency';
+      const systemType = getSystemType(pack.industry);
       
       console.log("[installPack] Starting installation for pack:", packId, "system:", systemType);
       
@@ -301,6 +417,29 @@ export function BusinessAutomationSettings({ businessId, businessIndustry }: Bus
       }
       
       console.log("[installPack] System installed successfully:", installData);
+
+      const resultData = installData?.data || installData;
+      const backendPacks = Array.isArray(resultData?.packs)
+        ? resultData.packs.filter((value: unknown): value is string => typeof value === "string")
+        : [];
+      const capabilityPacks = resolveSystemInstallCapabilityPacks(backendPacks);
+      if (capabilityPacks.length === 0) {
+        toast.error("Backend setup completed, but it returned no supported site capability packs.");
+        return;
+      }
+
+      const capabilityInstall = await applyCapabilityMigration({
+        packs: capabilityPacks,
+        businessId,
+        projectId,
+        siteId,
+        summary: `Install ${pack.name} capabilities for this project site.`,
+      });
+      if (!capabilityInstall.success) {
+        console.error("[installPack] Site capability install failed:", capabilityInstall.error);
+        toast.error(`Backend setup completed, but site capabilities failed: ${capabilityInstall.error || "Unknown error"}`);
+        return;
+      }
       
       // Store the result for display
       setInstallResult({ packId, data: installData });
@@ -342,7 +481,6 @@ export function BusinessAutomationSettings({ businessId, businessIndustry }: Bus
       setInstalledPacks((prev) => [...prev, packId]);
       
       // Show success with details
-      const resultData = installData?.data || installData;
       const warnings: string[] = Array.isArray(resultData?.warnings) ? resultData.warnings : [];
       toast.success(
         `${pack.name} installed! ${resultData?.packs?.length || 0} backend packs, ${resultData?.intentsRegistered || 0} intents registered.`
@@ -439,6 +577,66 @@ export function BusinessAutomationSettings({ businessId, businessIndustry }: Bus
 
         {/* Recipe Packs Tab */}
         <TabsContent value="recipes" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Site capability packs</CardTitle>
+              <CardDescription>
+                Install canonical capabilities for the selected project site. Recipe availability and industry do not control this list.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="divide-y">
+              {!siteId && (
+                <div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+                  <p className="text-sm text-amber-200">
+                    The selected project has no linked site. Choose a site-linked project to enable installation.
+                  </p>
+                  {siteProjects.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {siteProjects.map((siteProject) => (
+                        <Button
+                          key={siteProject.id}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onSelectProject(siteProject.id)}
+                        >
+                          {siteProject.name}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      No site-linked projects are available for this business.
+                    </p>
+                  )}
+                </div>
+              )}
+              {SITE_CAPABILITY_PACKS.map((pack) => {
+                const isInstalled = installedSiteCapabilities.includes(pack.id);
+                const isInstalling = installingCapabilityId === pack.id;
+                return (
+                  <div key={pack.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm">{pack.name}</div>
+                      <div className="text-xs text-muted-foreground">{pack.description}</div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={isInstalled ? "outline" : "default"}
+                      onClick={() => installSiteCapability(pack.id)}
+                      disabled={isInstalled || installingCapabilityId !== null || !projectId || !siteId}
+                      title={!siteId ? "Select a project with a linked site" : undefined}
+                    >
+                      {isInstalling ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+                      {isInstalling ? "Installing..." : isInstalled ? "Installed" : "Install"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+
           {/* Installation Result Banner */}
           {installResult && (
             <Card className="border-green-500/50 bg-green-500/5">
@@ -492,20 +690,37 @@ export function BusinessAutomationSettings({ businessId, businessIndustry }: Bus
                       </div>
                     </div>
                     {installedPacks.includes(pack.pack_id) ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => uninstallPack(pack.pack_id)}
-                        className="text-muted-foreground"
-                      >
-                        <X className="w-4 h-4 mr-1" />
-                        Disable
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => syncSiteCapabilities(pack)}
+                          disabled={installingPackId !== null || !projectId || !siteId}
+                          title={!siteId ? "Select a project with a linked site to sync capabilities" : undefined}
+                        >
+                          {installingPackId === pack.pack_id ? (
+                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                          ) : (
+                            <Check className="w-4 h-4 mr-1" />
+                          )}
+                          Sync site capabilities
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => uninstallPack(pack.pack_id)}
+                          className="text-muted-foreground"
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Disable
+                        </Button>
+                      </div>
                     ) : (
                       <Button 
                         size="sm" 
                         onClick={() => installPack(pack.pack_id)}
-                        disabled={installingPackId !== null}
+                        disabled={installingPackId !== null || !projectId || !siteId}
+                        title={!siteId ? "Select a project with a linked site to install this pack" : undefined}
                       >
                         {installingPackId === pack.pack_id ? (
                           <>

@@ -45,6 +45,8 @@ interface CmsRequest {
   recordId?: string;
   values?: Record<string, unknown>;
   expected?: Record<string, unknown>;
+  expectedUpdatedAt?: string;
+  idempotencyKey?: string;
   contentTypeId?: string;
   status?: string;
   changeSummary?: string;
@@ -231,18 +233,27 @@ function projectReadFilter(projectId: string | undefined): string {
   return `project_id.eq.${projectId},project_id.is.null`;
 }
 
-function audit(admin: SupabaseClient, args: { userId: string; businessId: string; projectId?: string; resource: string; action: CmsAction; recordId?: string }) {
-  void admin.from("ai_events").insert({
-    kind: "cms_record_mutation",
-    user_id: args.userId,
+async function audit(admin: SupabaseClient, args: { userId: string; businessId: string; projectId?: string; siteId?: string; resource: string; action: CmsAction; recordId?: string }) {
+  const { error } = await admin.from("resource_mutation_audit").insert({
     business_id: args.businessId,
-    payload: {
+    project_id: args.projectId ?? null,
+    site_id: args.siteId ?? null,
+    actor_id: args.userId,
+    resource_key: args.resource,
+    action: args.action,
+    record_id: args.recordId ?? null,
+    metadata: {},
+  });
+  if (error) {
+    console.error('[cms-records] Mutation succeeded but audit insert failed', {
+      businessId: args.businessId,
       projectId: args.projectId ?? null,
       resource: args.resource,
       action: args.action,
       recordId: args.recordId ?? null,
-    },
-  });
+      error,
+    });
+  }
 }
 
 function contentPermission(action: ContentCmsAction, status?: string): string {
@@ -287,6 +298,10 @@ serve(async (req) => {
   if (!isValidUUID(body.businessId)) return jsonError("Invalid businessId", 400, corsHeaders);
   if (body.projectId && !isValidUUID(body.projectId)) return jsonError("Invalid projectId", 400, corsHeaders);
   if (body.siteId && !isValidUUID(body.siteId)) return jsonError("Invalid siteId", 400, corsHeaders);
+  if (body.expectedUpdatedAt !== undefined && !Number.isFinite(Date.parse(body.expectedUpdatedAt))) {
+    return jsonError("Invalid expectedUpdatedAt", 400, corsHeaders);
+  }
+  if (body.idempotencyKey !== undefined && !isValidUUID(body.idempotencyKey)) return jsonError("Invalid idempotencyKey", 400, corsHeaders);
   if (body.contentTypeId && !isValidUUID(body.contentTypeId)) return jsonError("Invalid contentTypeId", 400, corsHeaders);
   if (["get", "update", "delete", "content-entry-get", "content-entry-update", "content-entry-transition", "content-entry-revisions"].includes(body.action) && !isValidUUID(body.recordId)) {
     return jsonError("Invalid recordId", 400, corsHeaders);
@@ -334,7 +349,7 @@ serve(async (req) => {
         : admin.from("content_types").update(writeValues).eq("id", body.contentTypeId!).eq("business_id", body.businessId).or(projectReadFilter(projectId));
       const { data, error } = await query.select("id,api_key,display_name,description,field_schema,workflow,created_at,updated_at").maybeSingle();
       if (error || !data) return jsonError(action === "content-type-create" ? "Could not create content type" : "Content type not found or could not be updated", action === "content-type-create" ? 500 : 404, corsHeaders);
-      audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, resource: "content-type", action, recordId: String(data.id) });
+      await audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, siteId: body.siteId, resource: "content-type", action, recordId: String(data.id) });
       return secureJsonResponse({ success: true, resource: "content-type", record: data }, action === "content-type-create" ? 201 : 200, corsHeaders);
     }
 
@@ -393,9 +408,13 @@ serve(async (req) => {
 
     if (action === "content-entry-transition") {
       if (!contentStatuses.includes(body.status ?? "")) return jsonError("Content status is invalid", 400, corsHeaders);
-      const { data, error } = await admin.rpc("cms_apply_content_entry_command", {
+      const command = body.idempotencyKey
+        ? "cms_apply_content_entry_command_idempotent"
+        : "cms_apply_content_entry_command_audited";
+      const args = {
         p_action: "transition",
         p_business_id: body.businessId,
+        p_project_id: scope.projectId,
         p_actor_id: userResult.user.id,
         p_entry_id: body.recordId,
         p_content_type_id: contentTypeId,
@@ -406,17 +425,25 @@ serve(async (req) => {
         p_data: entry!.data,
         p_target_status: body.status,
         p_change_summary: body.changeSummary ?? null,
-      }).maybeSingle();
+        p_expected_updated_at: body.expectedUpdatedAt ?? null,
+        ...(body.idempotencyKey ? { p_idempotency_key: body.idempotencyKey } : {}),
+      };
+      const { data, error } = await admin.rpc(command, args).maybeSingle();
+      if (error?.message.includes('CONTENT_ENTRY_CONFLICT')) return jsonError("Conflict: this content changed elsewhere. Reload the item and try again.", 409, corsHeaders);
+      if (error?.message.includes('IDEMPOTENCY_KEY_REUSED')) return jsonError("This idempotency key was already used for a different content command.", 409, corsHeaders);
       if (error || !data) return jsonError("Could not transition content entry", 500, corsHeaders);
-      audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, resource: "content-entry", action, recordId: body.recordId });
       return secureJsonResponse({ success: true, resource: "content-entry", record: data }, 200, corsHeaders);
     }
 
     const entryValidation = validateContentEntryValues(body.values, parsedSchema.fields);
     if ("error" in entryValidation) return jsonError(entryValidation.error, 400, corsHeaders);
-    const { data, error } = await admin.rpc("cms_apply_content_entry_command", {
+    const command = body.idempotencyKey
+      ? "cms_apply_content_entry_command_idempotent"
+      : "cms_apply_content_entry_command_audited";
+    const commandArgs = {
       p_action: action === "content-entry-create" ? "create" : "update",
       p_business_id: body.businessId,
+      p_project_id: scope.projectId,
       p_actor_id: userResult.user.id,
       p_entry_id: body.recordId ?? null,
       p_content_type_id: contentTypeId,
@@ -426,13 +453,17 @@ serve(async (req) => {
       p_title: entryValidation.title,
       p_data: entryValidation.data,
       p_change_summary: body.changeSummary ?? null,
-    }).maybeSingle();
+      p_expected_updated_at: body.expectedUpdatedAt ?? null,
+      ...(body.idempotencyKey ? { p_idempotency_key: body.idempotencyKey } : {}),
+    };
+    const { data, error } = await admin.rpc(command, commandArgs).maybeSingle();
+    if (error?.message.includes('CONTENT_ENTRY_CONFLICT')) return jsonError("Conflict: this content changed elsewhere. Reload the item and try again.", 409, corsHeaders);
+    if (error?.message.includes('IDEMPOTENCY_KEY_REUSED')) return jsonError("This idempotency key was already used for a different content command.", 409, corsHeaders);
     if (error || !data) return jsonError(action === "content-entry-create" ? "Could not create content entry" : "Could not update content entry", 500, corsHeaders);
     const contentEntry = data as Record<string, unknown>;
     // Stamp ownership (adopts legacy NULL rows into the editing site).
     if (projectId) await admin.from("content_entries").update({ project_id: projectId }).eq("id", String(contentEntry.id)).is("project_id", null);
     contentEntry.project_id = contentEntry.project_id ?? projectId;
-    audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, resource: "content-entry", action, recordId: String(contentEntry.id) });
     return secureJsonResponse({ success: true, resource: "content-entry", record: data }, action === "content-entry-create" ? 201 : 200, corsHeaders);
   }
 
@@ -484,7 +515,7 @@ serve(async (req) => {
       .select("*")
       .single();
     if (error || !data) return jsonError("Could not create CMS record", 500, corsHeaders);
-    audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, resource: resource.resource, action: body.action, recordId: String(data.id) });
+    await audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, siteId: body.siteId, resource: resource.resource, action: body.action, recordId: String(data.id) });
     return secureJsonResponse({ success: true, resource: resource.resource, record: data }, 201, corsHeaders);
   }
 
@@ -502,7 +533,7 @@ serve(async (req) => {
     const { data, error } = await update.select("*").maybeSingle();
     if (!error && !data && body.expected) return jsonError("Conflict: this item changed elsewhere. Reload the item and try again.", 409, corsHeaders);
     if (error || !data) return jsonError("CMS record not found or could not be updated", 404, corsHeaders);
-    audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, resource: resource.resource, action: body.action, recordId: body.recordId });
+    await audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, siteId: body.siteId, resource: resource.resource, action: body.action, recordId: body.recordId });
     return secureJsonResponse({ success: true, resource: resource.resource, record: data }, 200, corsHeaders);
   }
 
@@ -516,6 +547,6 @@ serve(async (req) => {
     .select("id")
     .maybeSingle();
   if (error || !data) return jsonError("CMS record not found or could not be deleted", 404, corsHeaders);
-  audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, resource: resource.resource, action: body.action, recordId: body.recordId });
+  await audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, siteId: body.siteId, resource: resource.resource, action: body.action, recordId: body.recordId });
   return secureJsonResponse({ success: true, resource: resource.resource, record: data }, 200, corsHeaders);
 });

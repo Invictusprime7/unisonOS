@@ -84,6 +84,9 @@ describe('launch orchestrator canonical handoff', () => {
     expect(source).toContain('const businessProfile: BusinessProfileDTO = loadedBusinessProfile || {');
     expect(source).toContain('if (input.existingBusinessId && !loadedBusinessProfile)');
     expect(source).toContain('businessRuntime,');
+    expect(source).toContain('projectId: plan.confirmed.projectId');
+    expect(source).toContain('siteId: plan.confirmed.siteId');
+    expect(source).toContain('requestedCapabilities: resolveLaunchBusinessCapabilities({');
     expect(stage4bResult).toBeLessThan(profileLoad);
     expect(profileLoad).toBeLessThan(dataBindings);
     expect(dataBindings).toBeLessThan(businessRuntime);

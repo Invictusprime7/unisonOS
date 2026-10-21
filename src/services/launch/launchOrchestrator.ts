@@ -123,7 +123,7 @@ import {
   projectCanonicalLaunchCandidateSnapshot,
 } from '@/services/launch/canonicalLaunchPlan';
 import { createWizardCompileArtifact } from '@/platform/core/snapshotSeal';
-import { resolveLaunchCapabilities } from '@/services/launch/launchCapabilities';
+import { resolveLaunchBusinessCapabilities, resolveLaunchCapabilities } from '@/services/launch/launchCapabilities';
 
 export interface LaunchOrchestratorInput {
   demoGeneration?: boolean;
@@ -592,6 +592,13 @@ async function runReservedLaunchPipeline(
   const plannedDataBindings = planSectionDataBindings(siteBundleSnapshot);
   const businessRuntime = buildBusinessRuntimeContract({
     businessId: plan.confirmed.businessId,
+    projectId: plan.confirmed.projectId,
+    siteId: plan.confirmed.siteId,
+    locationId: null,
+    requestedCapabilities: resolveLaunchBusinessCapabilities({
+      primaryGoal: input.primaryGoal,
+      customerNeeds: input.customerNeeds,
+    }),
     profile: businessProfile,
     snapshotId: siteBundleSnapshot.snapshotId,
     expectedBindingCount: plannedDataBindings.length,

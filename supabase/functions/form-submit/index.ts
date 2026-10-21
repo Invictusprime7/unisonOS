@@ -4,6 +4,7 @@ import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.t
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { safeParseBody } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
+import { createCrmActivity, createCrmLead } from "../_shared/canonicalCrm.ts";
 
 const RATE_LIMIT_CONFIG = { maxRequests: 20, windowSeconds: 300 };
 
@@ -236,8 +237,9 @@ Deno.serve(async (req) => {
 
     console.log("Form submission stored:", submission.id);
 
-    // Auto-create or update contact if email is present
+    // Persist the contact and lead through the shared CRM command path.
     let contactId = null;
+    let leadId = null;
     const email = (data as any).email || (data as any).Email || (data as any).EMAIL;
     
     const getStr = (key: string): string | undefined => {
@@ -250,64 +252,28 @@ Deno.serve(async (req) => {
     };
 
     if (typeof email === "string" && email.length > 0) {
-      // Check if contact exists
-      const { data: existingContact } = await supabase
-        .from("crm_contacts")
-        .select("id")
-        .eq("email", email.toLowerCase())
-        .eq("business_id", businessId)
-        .maybeSingle();
-
-      if (existingContact) {
-        contactId = existingContact.id;
-        
-        // Public submissions never overwrite an existing contact's details.
-      } else {
-        // Create new contact
-        const { data: newContact, error: contactError } = await supabase
-          .from("crm_contacts")
-          .insert({
-            business_id: businessId,
-            project_id: projectId,
-            email: email.toLowerCase(),
-            first_name: (getStr("firstName") || getStr("first_name") || nameFromFull(getStr("name")).first || "").slice(0, 120) || null,
-            last_name: (getStr("lastName") || getStr("last_name") || nameFromFull(getStr("name")).last || "").slice(0, 120) || null,
-            phone: (getStr("phone") || getStr("Phone") || "").slice(0, 40) || null,
-            company: (getStr("company") || getStr("Company") || "").slice(0, 120) || null,
-            source: `form:${formId}`,
-             custom_fields: { form_submission_id: submission.id, original_data: data },
-          })
-          .select()
-          .single();
-
-        if (!contactError && newContact) {
-          contactId = newContact.id;
-          console.log("New contact created:", contactId);
-        }
-      }
-    }
-
-    let leadId = null;
-    if (contactId) {
-      const leadTitle = getStr("name")?.trim() || String(email || formName || formId);
-      const { data: createdLead, error: leadError } = await supabase
-        .from("crm_leads")
-        .insert({
-          business_id: businessId,
-          project_id: projectId,
-          contact_id: contactId,
-          title: leadTitle.slice(0, 240),
-          status: "new",
+      const fallbackName = nameFromFull(getStr("name"));
+      const result = await createCrmLead(supabase, { businessId, projectId }, {
+        title: (getStr("name")?.trim() || String(formName || formId)).slice(0, 240),
+        email: String(email),
+        name: getStr("name") || null,
+        phone: getStr("phone") || getStr("Phone") || null,
+        source: `form:${formId}`,
+        intent,
+        notes: getStr("message")?.slice(0, 2_000) || null,
+        metadata: { form_submission_id: submission.id, original_data: data },
+        contact: {
+          email: String(email),
+          firstName: (getStr("firstName") || getStr("first_name") || fallbackName.first || "").slice(0, 120) || null,
+          lastName: (getStr("lastName") || getStr("last_name") || fallbackName.last || "").slice(0, 120) || null,
+          phone: (getStr("phone") || getStr("Phone") || "").slice(0, 40) || null,
+          company: (getStr("company") || getStr("Company") || "").slice(0, 120) || null,
           source: `form:${formId}`,
-          notes: getStr("message")?.slice(0, 2_000) || null,
-        })
-        .select("id")
-        .single();
-      if (leadError) {
-        console.error("Failed to create CRM lead:", leadError);
-      } else {
-        leadId = createdLead?.id ?? null;
-      }
+          customFields: { form_submission_id: submission.id, original_data: data },
+        },
+      });
+      contactId = result.contactId;
+      leadId = result.leadId;
     }
 
     await supabase
@@ -417,13 +383,12 @@ Deno.serve(async (req) => {
       // Process automation actions (simplified)
       for (const action of automation.actions || []) {
         if (action.type === "create_activity" && contactId) {
-          await supabase.from("crm_activities").insert({
-            activity_type: "note",
+          await createCrmActivity(supabase, { businessId, projectId }, {
+            type: "note",
             title: `Form submission: ${formName || formId}`,
             description: `Contact submitted form with data keys: ${Object.keys(data).join(",")}`,
-            business_id: businessId,
-            contact_id: contactId,
-            lead_id: leadId,
+            contactId,
+            leadId,
           });
         }
       }

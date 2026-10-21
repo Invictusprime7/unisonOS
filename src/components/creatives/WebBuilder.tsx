@@ -1960,14 +1960,28 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                       approvedAt: new Date().toISOString(),
                     });
 
+                      const installProjectId = resolvedProjectId || currentDraftId;
+                      const { data: installProject, error: projectLookupError } = await getProjectByIdCompat(installProjectId);
+                      if (projectLookupError) {
+                        return { success: false, error: 'Unable to verify the selected project scope.' };
+                      }
+                      const installSiteId = installProject
+                        ? installProject.site_id
+                        : effectiveRouteState?.siteId;
+                      if (!installSiteId) {
+                        return { success: false, error: 'The selected project has no linked site. Select a site-linked project to install capabilities.' };
+                      }
+                      const installBusinessId = installProject?.business_id || businessId;
+
                     // Backend first: grants, RLS and policies are applied (in a
                     // single transaction, server-side) before any frontend
                     // patch lands, so the committed UI can never read or write
                     // tables the database has not been prepared for.
                     const migration = await applyCapabilityMigration({
                       packs: plan.packs,
-                      businessId,
-                      projectId: resolvedProjectId || currentDraftId,
+                      businessId: installBusinessId,
+                      projectId: installProjectId,
+                      siteId: installSiteId,
                       summary: plan.proposal?.summary,
                     });
                     if (!migration.success) {
@@ -5566,7 +5580,12 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       case 'consultation_intake':
       case 'reservation':
       case 'patient_intake':
-        return { type: 'booking', payload };
+        return payload?.prototype === 'salon-booking'
+          ? { type: 'booking-demo', payload }
+          : { type: 'booking', payload };
+      case 'booking-demo':
+      case 'salon-booking-demo':
+        return { type: 'booking-demo', payload };
       case 'contact':
       case 'lead':
       case 'lead-capture':
@@ -7996,6 +8015,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 className="h-8 w-8 shrink-0 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
                 title={label}
                 aria-label={`${label} preview`}
+                aria-pressed={device === id}
               >
                 <Icon className="h-4 w-4" />
               </Button>
@@ -8029,6 +8049,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 className="h-8 w-8 shrink-0 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
                 title={`${label} view`}
                 aria-label={`${label} view`}
+                aria-pressed={viewMode === id}
               >
                 <Icon className="h-4 w-4" />
               </Button>
@@ -8072,6 +8093,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   )}
                   title={`${label} View`}
                   aria-label={`${label} view`}
+                  aria-pressed={viewMode === id}
                 >
                   <Icon className="h-3.5 w-3.5" />
                 </button>
@@ -8136,9 +8158,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             variant="ghost"
             size="icon"
             onClick={() => setAiPanelOpen(!aiPanelOpen)}
-            className={cn("h-8 w-8 rounded-md", aiPanelOpen ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/[0.06] hover:text-white")}
+            className="h-8 w-8 rounded-md text-white/55 hover:bg-transparent hover:text-white/55"
             title={aiPanelOpen ? "Close Affinity panel" : "Open Affinity panel"}
             aria-label={aiPanelOpen ? "Close Affinity panel" : "Open Affinity panel"}
+            aria-pressed={aiPanelOpen}
           >
             <Sparkles className="h-4 w-4" />
           </Button>

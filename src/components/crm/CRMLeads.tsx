@@ -29,10 +29,11 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Search, Plus, DollarSign, Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
-import { useCRMActions } from "@/hooks/useCRMActions";
 import { sendInngestEvent } from "@/services/inngestService";
+import { applyResourceOp, queryResource } from "@/services/resources/resourceRuntime";
 
 interface Lead {
   id: string;
@@ -75,6 +76,7 @@ export function CRMLeads({ businessId, projectId }: CRMLeadsProps = {}) {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     status: "new",
@@ -85,7 +87,6 @@ export function CRMLeads({ businessId, projectId }: CRMLeadsProps = {}) {
 
   // Hook for automation event emission
   const activeBizId = businessId || (selectedBusinessId !== "all" ? selectedBusinessId : undefined);
-  const crm = useCRMActions({ businessId: activeBizId, projectId });
 
   useEffect(() => {
     if (!businessId && !projectId) {
@@ -117,23 +118,17 @@ export function CRMLeads({ businessId, projectId }: CRMLeadsProps = {}) {
 
   async function fetchLeads() {
     try {
-      let q = supabase
-        .from('crm_leads')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (projectId) {
-        q = q.eq('project_id', projectId);
-      } else if (businessId) {
-        q = q.eq('business_id', businessId);
-      } else if (selectedBusinessId !== 'all') {
-        q = q.eq('business_id', selectedBusinessId);
+      if (!projectId && !activeBizId) {
+        setLeads([]);
+        return;
       }
 
-      const { data, error } = await q;
-
-      if (error) throw error;
-      setLeads(data || []);
+      const records = await queryResource("crm:leads", {
+        businessId: activeBizId || "",
+        projectId,
+        mode: "cloud",
+      });
+      setLeads(records as unknown as Lead[]);
     } catch (error) {
       console.error("Error fetching leads:", error);
       toast.error("Failed to load leads");
@@ -152,31 +147,27 @@ export function CRMLeads({ businessId, projectId }: CRMLeadsProps = {}) {
         value: formData.value ? parseFloat(formData.value) : null,
         source: formData.source || null,
         notes: formData.notes || null,
-        project_id: projectId || null,
       };
 
       if (editingLead) {
-        const { error } = await supabase
-          .from("crm_leads")
-          .update(leadData)
-          .eq("id", editingLead.id);
-
-        if (error) throw error;
+        await applyResourceOp({
+          op: "update",
+          ref: { resourceKey: "crm:leads", kind: "crm", recordId: editingLead.id },
+          values: leadData,
+        }, { businessId: activeBizId || "", projectId, mode: "cloud" });
         toast.success("Lead updated");
       } else {
-        const { data, error } = await supabase
-          .from("crm_leads")
-          .insert(leadData)
-          .select("id")
-          .single();
-
-        if (error) throw error;
+        const created = await applyResourceOp({ op: "create", resourceKey: "crm:leads", values: leadData }, {
+          businessId: activeBizId || "",
+          projectId,
+          mode: "cloud",
+        });
         toast.success("Lead created");
 
         // Fire automation: crm/lead.created
-        if (activeBizId && data?.id) {
+        if (activeBizId && created?.id) {
           sendInngestEvent('crm/lead.created', {
-            leadId: data.id,
+            leadId: created.id,
             businessId: activeBizId,
             projectId,
             source: formData.source || 'crm',
@@ -198,8 +189,10 @@ export function CRMLeads({ businessId, projectId }: CRMLeadsProps = {}) {
     if (!confirm("Delete this lead?")) return;
 
     try {
-      const { error } = await supabase.from("crm_leads").delete().eq("id", id);
-      if (error) throw error;
+      await applyResourceOp({
+        op: "delete",
+        ref: { resourceKey: "crm:leads", kind: "crm", recordId: id },
+      }, { businessId: activeBizId || "", projectId, mode: "cloud" });
       toast.success("Lead deleted");
       fetchLeads();
     } catch (error) {
@@ -214,12 +207,11 @@ export function CRMLeads({ businessId, projectId }: CRMLeadsProps = {}) {
       const lead = leads.find(l => l.id === id);
       const oldStatus = lead?.status || 'unknown';
 
-      const { error } = await supabase
-        .from("crm_leads")
-        .update({ status: newStatus })
-        .eq("id", id);
-
-      if (error) throw error;
+      await applyResourceOp({
+        op: "update",
+        ref: { resourceKey: "crm:leads", kind: "crm", recordId: id },
+        values: { status: newStatus },
+      }, { businessId: activeBizId || "", projectId, mode: "cloud" });
       toast.success("Status updated");
 
       // Fire automation: crm/lead.status.changed
@@ -439,7 +431,16 @@ export function CRMLeads({ businessId, projectId }: CRMLeadsProps = {}) {
               ) : (
                 filteredLeads.map((lead) => (
                   <TableRow key={lead.id}>
-                    <TableCell className="font-medium">{lead.title}</TableCell>
+                    <TableCell className="font-medium">
+                      <button
+                        type="button"
+                        className="text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => setSelectedLead(lead)}
+                        aria-label={`View ${lead.title}`}
+                      >
+                        {lead.title}
+                      </button>
+                    </TableCell>
                     <TableCell>
                       <Select
                         value={lead.status}
@@ -499,6 +500,54 @@ export function CRMLeads({ businessId, projectId }: CRMLeadsProps = {}) {
           </Table>
         </CardContent>
       </Card>
+
+      <Sheet open={Boolean(selectedLead)} onOpenChange={(open) => { if (!open) setSelectedLead(null); }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+          {selectedLead && (
+            <div className="space-y-6">
+              <SheetHeader>
+                <SheetTitle>{selectedLead.title}</SheetTitle>
+                <SheetDescription>Lead record</SheetDescription>
+              </SheetHeader>
+
+              <dl className="grid gap-4">
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Status</dt>
+                  <dd><Badge className={statusColors[selectedLead.status] || "bg-gray-100"}>{selectedLead.status}</Badge></dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Value</dt>
+                  <dd className="text-sm">{selectedLead.value == null ? '—' : `$${selectedLead.value.toLocaleString()}`}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Source</dt>
+                  <dd className="text-sm">{selectedLead.source || '—'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Contact</dt>
+                  <dd className="text-sm">{selectedLead.contact_id || '—'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Notes</dt>
+                  <dd className="whitespace-pre-wrap text-sm">{selectedLead.notes || '—'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Created</dt>
+                  <dd className="text-sm">{selectedLead.created_at ? new Date(selectedLead.created_at).toLocaleString() : '—'}</dd>
+                </div>
+              </dl>
+
+              <Button onClick={() => {
+                const lead = selectedLead;
+                setSelectedLead(null);
+                openEditDialog(lead);
+              }}>
+                <Edit className="mr-2 h-4 w-4" />Edit lead
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

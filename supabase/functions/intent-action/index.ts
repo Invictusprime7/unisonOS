@@ -13,6 +13,7 @@ import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.t
 import { errorResponse } from "../_shared/response.ts";
 import { safeParseBody, sanitizeString, isValidUUID , escapeHtml } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
+import { createCrmLead } from "../_shared/canonicalCrm.ts";
 
 // deno-lint-ignore no-explicit-any
 type AnySupabase = any;
@@ -74,30 +75,21 @@ async function sendEmail(to: string, subject: string, html: string, replyTo?: st
   } catch { return false; }
 }
 
-async function createLead(supabase: AnySupabase, businessId: string, data: Record<string, unknown>) {
-  const { data: lead, error } = await supabase.from("leads").insert({
-    business_id: businessId,
-    email: data.email || "",
-    name: data.name || data.fullName || null,
-    phone: data.phone || null,
-    message: data.message || null,
-    source: data.source || "website",
+async function createLead(supabase: AnySupabase, businessId: string, projectId: string | undefined, data: Record<string, unknown>) {
+  const email = typeof data.email === "string" ? data.email : null;
+  const name = typeof data.name === "string" ? data.name : typeof data.fullName === "string" ? data.fullName : null;
+  const result = await createCrmLead(supabase, { businessId, projectId }, {
+    title: name || email || "New lead",
+    email,
+    name,
+    phone: typeof data.phone === "string" ? data.phone : null,
+    source: typeof data.source === "string" ? data.source : "website",
+    notes: typeof data.message === "string" ? data.message : null,
+    intent: typeof data.intent === "string" ? data.intent : null,
     metadata: data,
-  }).select().single();
-  
-  if (!error) return lead;
-  
-  // Fallback to crm_leads
-  const { data: crmLead } = await supabase.from("crm_leads").insert({
-    business_id: businessId,
-    email: data.email || null,
-    name: data.name || null,
-    status: "new",
-    source: data.source || "website",
-    metadata: data,
-  }).select().single();
-  
-  return crmLead;
+    contact: { email, firstName: name, phone: typeof data.phone === "string" ? data.phone : null, source: 'website' },
+  });
+  return { id: result.leadId, contact_id: result.contactId };
 }
 
 serve(async (req) => {
@@ -163,7 +155,7 @@ serve(async (req) => {
 
     // Handle contact.submit
     if (intent === "contact.submit" || intent === "lead.capture") {
-      const lead = await createLead(supabase, businessId, { ...data, projectId });
+      const lead = await createLead(supabase, businessId, projectId, data);
       
       if (bizSettings?.notification_email) {
         await sendEmail(
@@ -207,7 +199,7 @@ serve(async (req) => {
         
         if (subError) {
           // Fallback - create as lead
-          await createLead(supabase, businessId, { ...data, source: "newsletter" });
+          await createLead(supabase, businessId, projectId, { ...data, source: "newsletter" });
         }
       }
       
@@ -219,7 +211,7 @@ serve(async (req) => {
 
     // Handle quote.request
     if (intent === "quote.request") {
-      const lead = await createLead(supabase, businessId, { ...data, source: "quote_request", projectId });
+      const lead = await createLead(supabase, businessId, projectId, { ...data, source: "quote_request" });
       
       if (bizSettings?.notification_email) {
         await sendEmail(

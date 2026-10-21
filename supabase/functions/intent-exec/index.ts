@@ -29,6 +29,7 @@ import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.t
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
+import { createCrmActivity, createCrmContact, createCrmLead } from "../_shared/canonicalCrm.ts";
 
 // ============================================================================
 // Types
@@ -609,57 +610,44 @@ async function handleLeadCapture(
     return { ok: false, result: { error: "This business is not accepting enquiries from this site." }, clientActions: [] };
   }
 
-  // Create lead/contact record
-  const { data, error } = await supabase
-    .from("crm_contacts")
-    .insert({
-      business_id: context.businessId,
-      email: params.email as string,
-      name: (params.name || params.fullName) as string,
-      phone: params.phone as string,
-      source: "website_form",
-      tags: ["lead"],
-      custom_fields: params,
-    })
-    .select("id")
-    .single();
-  
-  if (error) {
-    console.error("[intent-exec] Lead capture error:", error);
-    
-    // Check for duplicate
-    if (error.code === "23505") {
-      return {
-        ok: true,
-        result: { duplicate: true },
-        clientActions: [{
-          type: "TOAST",
-          message: "Thanks! We already have your information.",
-          level: "info",
-        }],
-      };
-    }
-    
+  const name = String(params.name || params.fullName || '');
+  const email = typeof params.email === 'string' ? params.email : null;
+  const phone = typeof params.phone === 'string' ? params.phone : null;
+  try {
+    const result = params.intent === 'contact.submit'
+      ? await createCrmContact(supabase, { businessId: context.businessId }, {
+        email,
+        firstName: name,
+        phone,
+        source: 'website_form',
+        tags: ['lead'],
+        customFields: params,
+      })
+      : await createCrmLead(supabase, { businessId: context.businessId }, {
+        title: name || email || 'New lead',
+        email,
+        name: name || null,
+        phone,
+        stage: 'new',
+        source: 'website_form',
+        intent: 'lead.capture',
+        notes: typeof params.message === 'string' ? params.message : null,
+        metadata: params,
+        contact: { email, firstName: name, phone, source: 'website_form', tags: ['lead'], customFields: params },
+      });
+    return {
+      ok: true,
+      result,
+      clientActions: [{ type: 'TOAST', message: "Thanks for reaching out! We'll be in touch soon.", level: 'success' }],
+    };
+  } catch (error) {
+    console.error('[intent-exec] Canonical CRM command failed:', error);
     return {
       ok: false,
-      result: { error: error.message },
-      clientActions: [{
-        type: "TOAST",
-        message: "Failed to submit. Please try again.",
-        level: "error",
-      }],
+      result: { error: error instanceof Error ? error.message : 'Failed to submit.' },
+      clientActions: [{ type: 'TOAST', message: 'Failed to submit. Please try again.', level: 'error' }],
     };
   }
-  
-  return {
-    ok: true,
-    result: { contactId: data?.id },
-    clientActions: [{
-      type: "TOAST",
-      message: "Thanks for reaching out! We'll be in touch soon.",
-      level: "success",
-    }],
-  };
 }
 
 async function handleQuoteRequest(
@@ -667,50 +655,42 @@ async function handleQuoteRequest(
   params: Record<string, unknown>,
   context: { businessId: string }
 ): Promise<{ ok: boolean; result: unknown; clientActions: ClientAction[] }> {
-  // Create quote request as a deal
-  const { data, error } = await supabase
-    .from("crm_deals")
-    .insert({
-      business_id: context.businessId,
-      title: `Quote Request - ${params.service || "General"}`,
-      stage: "lead",
-      value: 0,
-      probability: 20,
-      custom_fields: {
-        ...params,
-        source: "website_quote_form",
-      },
-    })
-    .select("id")
-    .single();
-  
-  // Also create contact if not exists
-  if (params.email) {
-    await supabase
-      .from("crm_contacts")
-      .upsert({
-        business_id: context.businessId,
-        email: params.email as string,
-        name: (params.name || params.fullName) as string,
-        phone: params.phone as string,
-        source: "quote_request",
-        tags: ["quote_request"],
-      }, { onConflict: "business_id,email", ignoreDuplicates: true });
+  const email = typeof params.email === 'string' ? params.email : null;
+  const name = String(params.name || params.fullName || '');
+  try {
+    const lead = await createCrmLead(supabase, { businessId: context.businessId }, {
+      title: `Quote Request - ${params.service || 'General'}`,
+      email,
+      name: name || null,
+      phone: typeof params.phone === 'string' ? params.phone : null,
+      stage: 'new',
+      intent: 'quote_request',
+      source: 'website_quote_form',
+      notes: typeof params.message === 'string' ? params.message : null,
+      metadata: params,
+      contact: { email, firstName: name || null, phone: typeof params.phone === 'string' ? params.phone : null, source: 'quote_request', tags: ['quote_request'] },
+    });
+    await createCrmActivity(supabase, { businessId: context.businessId }, {
+      type: 'quote_requested',
+      title: `Quote Request - ${params.service || 'General'}`,
+      description: typeof params.message === 'string' ? params.message : null,
+      contactId: lead.contactId,
+      leadId: lead.leadId,
+      metadata: params,
+    });
+    return {
+      ok: true,
+      result: { leadId: lead.leadId, contactId: lead.contactId },
+      clientActions: [{ type: 'TOAST', message: "Quote request received! We'll prepare your estimate shortly.", level: 'success' }],
+    };
+  } catch (error) {
+    console.error('[intent-exec] Canonical quote command failed:', error);
+    return {
+      ok: false,
+      result: { error: error instanceof Error ? error.message : 'Could not save quote request.' },
+      clientActions: [{ type: 'TOAST', message: 'Could not save your quote request.', level: 'error' }],
+    };
   }
-  
-  if (error) {
-    console.error("[intent-exec] Quote request error:", error);
-  }
-  
-  return {
-    ok: true,
-    result: { dealId: data?.id },
-    clientActions: [{
-      type: "TOAST",
-      message: "Quote request received! We'll prepare your estimate shortly.",
-      level: "success",
-    }],
-  };
 }
 
 async function handleNewsletterSubscribe(
@@ -777,23 +757,20 @@ async function handleNewsletterSubscribe(
   if (subscriberError) {
     console.error("[intent-exec] Newsletter subscribe error:", subscriberError);
 
-    const { error: contactError } = await supabase
-      .from("crm_contacts")
-      .upsert({
-        business_id: context.businessId,
+    try {
+      await createCrmContact(supabase, { businessId: context.businessId }, {
         email,
-        name: name || null,
+        firstName: name || null,
         phone: phone || null,
         source: source || "newsletter_signup",
         tags: ["newsletter"],
-        custom_fields: params,
-      }, { onConflict: "business_id,email", ignoreDuplicates: true });
-
-    if (contactError) {
+        customFields: params,
+      });
+    } catch (contactError) {
       console.error("[intent-exec] Newsletter fallback contact error:", contactError);
       return {
         ok: false,
-        result: { error: contactError.message },
+        result: { error: contactError instanceof Error ? contactError.message : String(contactError) },
         clientActions: [{
           type: "TOAST",
           message: "Failed to subscribe. Please try again.",

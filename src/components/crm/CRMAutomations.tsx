@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase as _sb } from "@/integrations/supabase/client";
-const supabase: any = _sb;
+import { applyResourceOp, queryResource } from "@/services/resources/resourceRuntime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -84,15 +83,12 @@ export function CRMAutomations({ businessId, projectId }: CRMAutomationsProps) {
 
   async function fetchAutomations() {
     try {
-      const { data, error } = await supabase
-        .from("crm_automations")
-        .select("*")
-        .eq("business_id", businessId)
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setAutomations((data as Automation[]) || []);
+      const records = await queryResource("crm:automations", {
+        businessId,
+        projectId,
+        mode: "cloud",
+      });
+      setAutomations(records as unknown as Automation[]);
     } catch (error) {
       console.error("Error fetching automations:", error);
       toast.error("Failed to load automations");
@@ -115,26 +111,18 @@ export function CRMAutomations({ businessId, projectId }: CRMAutomationsProps) {
       };
 
       if (editingAutomation) {
-        const { error } = await supabase
-          .from("crm_automations")
-          .update(automationData)
-          .eq("id", editingAutomation.id)
-          .eq("business_id", businessId)
-          .eq("project_id", projectId);
-
-        if (error) throw error;
+        await applyResourceOp({
+          op: "update",
+          ref: { resourceKey: "crm:automations", kind: "crm", recordId: editingAutomation.id },
+          values: automationData,
+        }, { businessId, projectId, mode: "cloud" });
         toast.success("Automation updated");
       } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Authentication required");
-        const { error } = await supabase.from("crm_automations").insert({
-          ...automationData,
-          user_id: user.id,
-          business_id: businessId,
-          project_id: projectId,
+        await applyResourceOp({ op: "create", resourceKey: "crm:automations", values: automationData }, {
+          businessId,
+          projectId,
+          mode: "cloud",
         });
-
-        if (error) throw error;
         toast.success("Automation created");
       }
 
@@ -150,14 +138,11 @@ export function CRMAutomations({ businessId, projectId }: CRMAutomationsProps) {
 
   async function toggleAutomation(id: string, isActive: boolean) {
     try {
-      const { error } = await supabase
-        .from("crm_automations")
-        .update({ is_active: isActive })
-        .eq("id", id)
-        .eq("business_id", businessId)
-        .eq("project_id", projectId);
-
-      if (error) throw error;
+      await applyResourceOp({
+        op: "update",
+        ref: { resourceKey: "crm:automations", kind: "crm", recordId: id },
+        values: { is_active: isActive },
+      }, { businessId, projectId, mode: "cloud" });
       toast.success(isActive ? "Automation activated" : "Automation deactivated");
       fetchAutomations();
     } catch (error) {
@@ -170,13 +155,10 @@ export function CRMAutomations({ businessId, projectId }: CRMAutomationsProps) {
     if (!confirm("Delete this automation?")) return;
 
     try {
-      const { error } = await supabase
-        .from("crm_automations")
-        .delete()
-        .eq("id", id)
-        .eq("business_id", businessId)
-        .eq("project_id", projectId);
-      if (error) throw error;
+      await applyResourceOp({
+        op: "delete",
+        ref: { resourceKey: "crm:automations", kind: "crm", recordId: id },
+      }, { businessId, projectId, mode: "cloud" });
       toast.success("Automation deleted");
       fetchAutomations();
     } catch (error) {

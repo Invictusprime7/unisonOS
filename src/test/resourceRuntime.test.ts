@@ -19,6 +19,7 @@ vi.mock('@/services/businessProfileService', () => ({
 }));
 
 import { getResource, listResources, registerContentTypes } from '@/services/resources/resourceRegistry';
+import { flattenContentEntry } from '@/services/resources/resourceAdapters';
 import { applyResourceOp, buildDuplicateResourceValues, onResourceInvalidated, parseResourceProvenance, queryResource, validateResourceOp } from '@/services/resources/resourceRuntime';
 
 const ctx = { businessId: 'b1', mode: 'builder' as const };
@@ -87,6 +88,20 @@ describe('Resource Runtime', () => {
     expect(rows[0].question).toBe('Live?');
     const builder = await queryResource('content:faq', ctx);
     expect(builder).toHaveLength(2);
+  });
+
+  it('preserves the observed content version for atomic compare-and-set updates', () => {
+    expect(flattenContentEntry({
+      id: 'entry-1',
+      title: 'FAQ',
+      status: 'draft',
+      updated_at: '2026-10-21T02:00:00.000Z',
+      data: { question: 'When?' },
+    })).toMatchObject({
+      id: 'entry-1',
+      question: 'When?',
+      updated_at: '2026-10-21T02:00:00.000Z',
+    });
   });
 
   it('rejects unknown fields, profile create/delete, and content delete', () => {

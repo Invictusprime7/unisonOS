@@ -50,6 +50,7 @@ export interface ProvisionStepResult {
 
 export interface ProvisionCapabilitiesInput {
   identity: BuilderIdentity;
+  siteId?: string | null;
   packs: CapabilityPack[];
   /** Explicit user approval is mandatory — the caller passes the record. */
   approval: { approvedBy: string; approvedAt: string };
@@ -134,6 +135,7 @@ export async function provisionCapabilities(
       packs: input.packs,
       businessId,
       projectId,
+      siteId: input.siteId,
       dryRun: true,
       summary: input.summary,
     });
@@ -151,6 +153,7 @@ export async function provisionCapabilities(
       packs: input.packs,
       businessId,
       projectId,
+      siteId: input.siteId,
       dryRun: false,
       summary: input.summary,
     });

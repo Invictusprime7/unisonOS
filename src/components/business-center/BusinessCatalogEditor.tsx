@@ -40,12 +40,7 @@ import {
   type CatalogSurface,
 } from '@/platform/core/catalogSurfaceRegistry';
 import { loadBusinessMemberships } from '@/services/businessMembership';
-import {
-  createCmsRecord,
-  listCmsRecords,
-  removeCmsRecord,
-  updateCmsRecord,
-} from '@/services/cmsRecordService';
+import { applyResourceOp, queryResource } from '@/services/resources/resourceRuntime';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Editor schema (derived from the canonical catalogSurfaceRegistry — the
@@ -137,9 +132,12 @@ interface BusinessRow {
 
 interface Props {
   sectionType: string; // key into SECTION_DATA_CONTRACTS
+  businessId?: string;
+  projectId?: string | null;
+  siteId?: string | null;
 }
 
-export function BusinessCatalogEditor({ sectionType }: Props) {
+export function BusinessCatalogEditor({ sectionType, businessId: scopeBusinessId, projectId: scopeProjectId, siteId: scopeSiteId }: Props) {
   const contract: SectionDataContract | undefined = SECTION_DATA_CONTRACTS[sectionType];
   const surface = useMemo(
     () => getCatalogSurface(sectionType),
@@ -154,6 +152,7 @@ export function BusinessCatalogEditor({ sectionType }: Props) {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
+  const [editingBaseline, setEditingBaseline] = useState<Record<string, unknown> | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -175,10 +174,18 @@ export function BusinessCatalogEditor({ sectionType }: Props) {
         return;
       }
       setBusinesses(list);
+      if (scopeBusinessId && !list.some((business) => business.id === scopeBusinessId)) {
+        setBusinessId(null);
+        toast.error('Selected business is not available to this user');
+        setLoading(false);
+        return;
+      }
       // A single accessible tenant is unambiguous. Multiple tenants require
       // an explicit choice until ActiveUnisonContext is wired into this page.
       setBusinessId((previous) => (
-        previous && list.some((business) => business.id === previous)
+        scopeBusinessId && list.some((business) => business.id === scopeBusinessId)
+          ? scopeBusinessId
+          : previous && list.some((business) => business.id === previous)
           ? previous
           : list.length === 1 ? list[0].id : null
       ));
@@ -186,7 +193,7 @@ export function BusinessCatalogEditor({ sectionType }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scopeBusinessId]);
 
   // ── Load rows for the active business+resource ────────────────────────────
   const loadRows = useCallback(async () => {
@@ -197,7 +204,12 @@ export function BusinessCatalogEditor({ sectionType }: Props) {
     }
     setLoading(true);
     try {
-      const data = await listCmsRecords({ businessId, resource: schema.resource });
+      const data = await queryResource(schema.resource, {
+        businessId,
+        projectId: scopeProjectId,
+        siteId: scopeSiteId,
+        mode: 'builder',
+      });
       setRows(data);
     } catch (error) {
       console.warn('[BusinessCatalogEditor] load rows failed', error);
@@ -206,7 +218,7 @@ export function BusinessCatalogEditor({ sectionType }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [schema, businessId]);
+  }, [schema, businessId, scopeProjectId, scopeSiteId]);
 
   useEffect(() => {
     void loadRows();
@@ -214,34 +226,33 @@ export function BusinessCatalogEditor({ sectionType }: Props) {
 
   const bumpPreview = useCallback(() => {
     try {
-      window.postMessage(
-        { type: 'CATALOG_BINDINGS_CHANGED', projectId: null, businessId },
-        '*',
-      );
       window.dispatchEvent(
         new CustomEvent('unison:catalog-seeded', {
-          detail: { businessId, resource: schema?.resource },
+          detail: { businessId, projectId: scopeProjectId ?? null, siteId: scopeSiteId ?? null, resource: schema?.resource },
         }),
       );
     } catch {
       /* noop */
     }
-  }, [businessId, schema]);
+  }, [businessId, schema, scopeProjectId, scopeSiteId]);
 
   const startNew = () => {
     if (!schema) return;
     setEditingId('new');
     setDraft({ ...schema.defaults });
+    setEditingBaseline(null);
   };
 
   const startEdit = (row: Record<string, unknown>) => {
     setEditingId(String(row.id));
     setDraft({ ...row });
+    setEditingBaseline({ ...row });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setDraft({});
+    setEditingBaseline(null);
   };
 
   const save = async () => {
@@ -257,26 +268,31 @@ export function BusinessCatalogEditor({ sectionType }: Props) {
       }
     }
     setSaving(true);
-    const payload: Record<string, unknown> = { ...draft, business_id: businessId };
+    const payload: Record<string, unknown> = { ...draft };
     // Never allow client to override server-managed columns.
     delete payload.id;
     delete payload.created_at;
     delete payload.updated_at;
+    delete payload.business_id;
 
     try {
+      const context = { businessId, projectId: scopeProjectId, siteId: scopeSiteId, mode: 'builder' as const };
       if (editingId === 'new') {
-        await createCmsRecord({ businessId, resource: schema.resource, values: payload });
+        await applyResourceOp({ op: 'create', resourceKey: schema.resource, values: payload }, context);
       } else if (editingId) {
-        await updateCmsRecord({
-          businessId,
-          resource: schema.resource,
-          recordId: editingId,
+        const expected = editingBaseline
+          ? Object.fromEntries(schema.fields.map((field) => [field.key, editingBaseline[field.key]]))
+          : undefined;
+        await applyResourceOp({
+          op: 'update',
+          ref: { resourceKey: schema.resource, kind: 'catalog', catalogKind: surface?.catalogKind, recordId: editingId },
           values: payload,
-        });
+          ...(expected ? { expected } : {}),
+        }, context);
       }
     } catch (error) {
       console.warn('[BusinessCatalogEditor] save failed', error);
-      toast.error('Save failed — check required fields');
+      toast.error(error instanceof Error ? error.message : 'Save failed — check required fields');
       return;
     } finally {
       setSaving(false);
@@ -284,6 +300,7 @@ export function BusinessCatalogEditor({ sectionType }: Props) {
     toast.success(editingId === 'new' ? 'Added' : 'Saved');
     setEditingId(null);
     setDraft({});
+    setEditingBaseline(null);
     bumpPreview();
     await loadRows();
   };
@@ -294,7 +311,10 @@ export function BusinessCatalogEditor({ sectionType }: Props) {
     setDeletingId(id);
     try {
       if (!businessId) return;
-      await removeCmsRecord({ businessId, resource: schema.resource, recordId: id });
+      await applyResourceOp({
+        op: 'delete',
+        ref: { resourceKey: schema.resource, kind: 'catalog', catalogKind: surface?.catalogKind, recordId: id },
+      }, { businessId, projectId: scopeProjectId, siteId: scopeSiteId, mode: 'builder' });
     } catch (error) {
       console.warn('[BusinessCatalogEditor] delete failed', error);
       toast.error('Delete failed');

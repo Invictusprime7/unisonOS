@@ -273,7 +273,7 @@ async function bookingCapabilityIsEnabled(
     .from("site_capabilities")
     .select("capability_id")
     .eq("site_id", siteId)
-    .eq("capability_id", "booking")
+    .in("capability_id", ["booking", "booking.appointments"])
     .eq("status", "enabled")
     .maybeSingle();
   return !error && Boolean(data);

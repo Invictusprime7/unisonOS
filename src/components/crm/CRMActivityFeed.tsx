@@ -21,7 +21,7 @@ interface Props {
 
 interface ActivityRow {
   id: string;
-  activity_type: string;
+  type: string;
   title: string | null;
   description: string | null;
   created_at: string;
@@ -39,7 +39,7 @@ interface TaskRow {
 const ACTIVITY_LABEL: Record<string, string> = {
   lead_captured: 'New lead',
   quote_requested: 'Quote requested',
-  booking_created: 'Booking',
+  booking: 'Booking',
   contact_submitted: 'Contact form',
 };
 
@@ -59,7 +59,7 @@ export function CRMActivityFeed({ businessId, className }: Props) {
     const [{ data: acts }, { data: tks }] = await Promise.all([
       supabase
         .from('crm_activities')
-        .select('id,activity_type,title,description,created_at')
+        .select('id,type,title,description,created_at')
         .eq('business_id', businessId)
         .order('created_at', { ascending: false })
         .limit(15),
@@ -113,7 +113,7 @@ export function CRMActivityFeed({ businessId, className }: Props) {
                   <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">
-                      {ACTIVITY_LABEL[a.activity_type] ?? a.activity_type}
+                      {ACTIVITY_LABEL[a.type] ?? a.type}
                       {a.title ? ` · ${a.title}` : ''}
                     </p>
                     {a.description && (

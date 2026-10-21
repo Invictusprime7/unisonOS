@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
+import { Slot } from "@radix-ui/react-slot";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -47,10 +48,11 @@ function Dialog({ open: controlledOpen, defaultOpen = false, onOpenChange, child
 const DialogTrigger = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }
->(({ onClick, children, ...props }, ref) => {
+>(({ onClick, children, asChild = false, ...props }, ref) => {
   const { onOpenChange } = React.useContext(DialogContext);
+  const Comp = asChild ? Slot : "button";
   return (
-    <button
+    <Comp
       ref={ref}
       type="button"
       onClick={(e) => {
@@ -60,7 +62,7 @@ const DialogTrigger = React.forwardRef<
       {...props}
     >
       {children}
-    </button>
+    </Comp>
   );
 });
 DialogTrigger.displayName = "DialogTrigger";

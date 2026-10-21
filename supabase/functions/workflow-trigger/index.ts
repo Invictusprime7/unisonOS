@@ -59,7 +59,7 @@ export default async (req: Request) => {
     // Fetch the workflow
     const { data: workflow, error: workflowError } = await supabase
       .from("crm_workflows")
-      .select("id, name, trigger_type, trigger_config, steps, user_id, business_id")
+      .select("id, name, trigger_type, trigger_config, steps, user_id, business_id, project_id")
       .eq("id", workflowId)
       .eq("is_active", true)
       .maybeSingle();
@@ -103,6 +103,8 @@ export default async (req: Request) => {
         status: "running",
         trigger_data: {
           ...triggerData,
+          business_id: workflow.business_id,
+          project_id: workflow.project_id,
           event_type: eventType,
           workflow_name: workflow.name,
           triggered_by: userId,

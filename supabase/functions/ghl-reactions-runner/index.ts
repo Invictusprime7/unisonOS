@@ -12,6 +12,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { verifyAuth, verifyBusinessAccess } from '../_shared/auth.ts';
+import { updateCrmLead } from '../_shared/canonicalCrm.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -136,10 +137,29 @@ Deno.serve(async (req) => {
         }
         case 'update_lead': {
           if (event.contact_id) {
-            await supabase.from('crm_leads')
-              .update({ stage: String(cfg.stage || 'qualified') })
+            const { data: contact, error: contactError } = await supabase
+              .from('crm_contacts')
+              .select('id')
               .eq('business_id', event.business_id)
-              .eq('external_contact_id', event.contact_id);
+              .eq('external_id', event.contact_id)
+              .maybeSingle();
+            if (contactError) throw contactError;
+            if (contact?.id) {
+              const { data: lead, error: leadError } = await supabase
+                .from('crm_leads')
+                .select('id')
+                .eq('business_id', event.business_id)
+                .eq('contact_id', contact.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (leadError) throw leadError;
+              if (lead?.id) {
+                await updateCrmLead(supabase, { businessId: event.business_id }, lead.id, {
+                  stage: String(cfg.stage || 'qualified'),
+                });
+              }
+            }
           }
           break;
         }

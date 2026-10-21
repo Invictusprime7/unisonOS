@@ -32,6 +32,40 @@ export interface PackDatabaseContract {
   tables: PackTableContract[];
 }
 
+export interface SiteCapabilityInstallRecord {
+  siteId: string;
+  capabilityId: string;
+  status: 'enabled';
+  enabledBy: string;
+  configuration: {
+    manifestVersion: '1.0';
+    source: 'capability-migration-apply';
+    packId: string;
+    provides: string[];
+    requiredTables: string[];
+  };
+}
+
+export function buildSiteCapabilityInstallRecord(
+  siteId: string,
+  enabledBy: string,
+  pack: PackDatabaseContract,
+): SiteCapabilityInstallRecord {
+  return {
+    siteId,
+    capabilityId: pack.id,
+    status: 'enabled',
+    enabledBy,
+    configuration: {
+      manifestVersion: '1.0',
+      source: 'capability-migration-apply',
+      packId: pack.id,
+      provides: [...pack.provides],
+      requiredTables: [...new Set(pack.tables.map((table) => table.table))],
+    },
+  };
+}
+
 const OWNER_MANAGED_GRANTS: PackGrant[] = [
   { role: 'authenticated', privileges: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] },
   { role: 'service_role', privileges: ['ALL'] },
@@ -87,13 +121,6 @@ export const PACK_DATABASE_CONTRACTS: PackDatabaseContract[] = [
     dependsOn: ['business_profile'],
     provides: ['crm.leads', 'crm.contacts', 'forms.contact', 'forms.quote', 'notifications.email'],
     tables: [
-      {
-        table: 'leads',
-        ownershipColumn: 'business_id',
-        publicRead: false,
-        publicInsert: true,
-        grants: PUBLIC_SUBMIT_GRANTS,
-      },
       {
         table: 'crm_leads',
         ownershipColumn: 'business_id',

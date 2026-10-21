@@ -12,6 +12,8 @@ import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.t
 import { safeParseBody, isValidUUID , escapeHtml } from "../_shared/validate.ts";
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
+import { createCrmActivity, createCrmLead } from "../_shared/canonicalCrm.ts";
+import { publicBusinessWriteAllowed } from "../_shared/publicBusinessGate.ts";
 
 const corsHeaders = publicCorsHeaders;
 const RATE_LIMIT_CONFIG = { maxRequests: 10, windowSeconds: 300 };
@@ -57,13 +59,13 @@ serve(async (req) => {
   if (preflight) return preflight;
 
   const ip = getClientIp(req);
-  const rate = await checkRateLimit(`quote:${ip}`, RATE_LIMIT_CONFIG);
+  const rate = checkRateLimit("request-quote", ip, RATE_LIMIT_CONFIG);
   if (!rate.allowed) {
-    return errorResponse("Too many requests", 429, { ...corsHeaders, ...rateLimitHeaders(rate) });
+    return errorResponse("Too many requests", 429, { ...corsHeaders, ...rateLimitHeaders(rate, RATE_LIMIT_CONFIG) });
   }
 
   const parsed = await safeParseBody<QuotePayload>(req);
-  if (!parsed.ok || !parsed.data) return errorResponse("Invalid body", 400, corsHeaders);
+  if (parsed.error || !parsed.data) return errorResponse("Invalid body", 400, corsHeaders);
   const body = parsed.data;
 
   if (!body.businessId || !isValidUUID(body.businessId)) {
@@ -77,6 +79,10 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  if (!(await publicBusinessWriteAllowed(supabase, req, body.businessId))) {
+    return errorResponse("This business is not accepting submissions", 403, corsHeaders);
+  }
+
   const { data: biz } = await supabase
     .from("businesses")
     .select("id,name,notification_email")
@@ -85,92 +91,48 @@ serve(async (req) => {
 
   const leadTitle = `Quote: ${body.name?.trim() || normalizedEmail}${body.serviceInterest ? ` — ${body.serviceInterest}` : ""}`;
 
-  // Contact
-  let contactId: string | null = null;
+  const [firstName, ...lastNameParts] = (body.name || "").trim().split(/\s+/).filter(Boolean);
+  let leadId: string;
+  let contactId: string | null;
   try {
-    const { data: existing } = await supabase
-      .from("crm_contacts")
-      .select("id")
-      .eq("email", normalizedEmail)
-      .maybeSingle();
-    if (existing?.id) {
-      contactId = existing.id;
-    } else {
-      const [first, ...rest] = (body.name || "").trim().split(/\s+/);
-      const { data: created } = await supabase
-        .from("crm_contacts")
-        .insert({
-          email: normalizedEmail,
-          first_name: first || null,
-          last_name: rest.join(" ") || null,
-          phone: body.phone || null,
-          source: "quote_request",
-        })
-        .select("id")
-        .single();
-      contactId = created?.id ?? null;
-    }
-  } catch (e) {
-    console.warn("[request-quote] contact upsert failed", e);
-  }
-
-  // Lead
-  let leadId: string | null = null;
-  try {
-    const { data: lead } = await supabase
-      .from("crm_leads")
-      .insert({
-        business_id: body.businessId,
-        email: normalizedEmail,
-        name: body.name?.trim() || null,
-        intent: "quote_request",
-        contact_id: contactId,
-        title: leadTitle,
-        status: "new",
-        source: "quote_form",
-        notes: body.message || null,
-        metadata: {
-          serviceInterest: body.serviceInterest || null,
-          budget: body.budget || null,
-          timeline: body.timeline || null,
-          ...(body.metadata || {}),
-        },
-      })
-      .select("id")
-      .single();
-    leadId = lead?.id ?? null;
-  } catch (e) {
-    console.warn("[request-quote] lead insert failed", e);
-  }
-
-  // Deal in "quote" stage
-  try {
-    await supabase.from("crm_deals").insert({
-      business_id: body.businessId,
-      contact_id: contactId,
-      lead_id: leadId,
+    const result = await createCrmLead(supabase, { businessId: body.businessId }, {
       title: leadTitle,
-      stage: "quote",
-      value: null,
+      email: normalizedEmail,
+      name: body.name?.trim() || null,
+      phone: body.phone || null,
+      stage: "new",
+      intent: "quote_request",
+      source: "quote_form",
+      notes: body.message || null,
       metadata: {
         serviceInterest: body.serviceInterest || null,
         budget: body.budget || null,
         timeline: body.timeline || null,
+        ...(body.metadata || {}),
+      },
+      contact: {
+        email: normalizedEmail,
+        firstName: firstName || null,
+        lastName: lastNameParts.join(" ") || null,
+        phone: body.phone || null,
+        source: "quote_request",
       },
     });
+    leadId = result.leadId;
+    contactId = result.contactId;
   } catch (e) {
-    console.warn("[request-quote] deal insert failed", e);
+    console.error("[request-quote] canonical CRM write failed", e);
+    return errorResponse("Could not save quote request", 500, corsHeaders);
   }
 
   // Activity + follow-up task
   try {
-    await supabase.from("crm_activities").insert({
-      business_id: body.businessId,
-      contact_id: contactId,
-      lead_id: leadId,
-      activity_type: "quote_requested",
+    await createCrmActivity(supabase, { businessId: body.businessId }, {
+      type: "quote_requested",
       title: leadTitle,
       description: body.message || null,
+      contactId,
+      leadId,
       metadata: { serviceInterest: body.serviceInterest || null },
     });
     await supabase.from("tasks").insert({

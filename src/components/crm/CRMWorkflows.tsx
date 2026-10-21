@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import { supabase as _sb } from "@/integrations/supabase/client";
-const supabase: any = _sb;
 import { generateUUID } from "@/utils/uuid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,6 +27,7 @@ import { toast } from "sonner";
 import { WorkflowStepBuilder, WorkflowStep } from "./WorkflowStepBuilder";
 import { AUTOMATION_INTENTS, ACTION_INTENTS } from "@/platform/core/coreIntents";
 import { useCRMActions } from "@/hooks/useCRMActions";
+import { applyResourceOp, queryResource } from "@/services/resources/resourceRuntime";
 
 interface WorkflowType {
   id: string;
@@ -76,18 +75,20 @@ export function CRMWorkflows({ businessId, projectId }: CRMWorkflowsProps = {}) 
 
   useEffect(() => {
     fetchWorkflows();
-  }, [projectId]);
+  }, [businessId, projectId]);
 
   async function fetchWorkflows() {
     try {
-      const { data, error } = await supabase
-        .from("crm_workflows")
-        .select("*")
-        .eq("project_id", projectId || null)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setWorkflows((data || []) as WorkflowType[]);
+      if (!businessId && !projectId) {
+        setWorkflows([]);
+        return;
+      }
+      const records = await queryResource("crm:workflows", {
+        businessId: businessId || "",
+        projectId,
+        mode: "cloud",
+      });
+      setWorkflows(records as unknown as WorkflowType[]);
     } catch (error) {
       console.error("Error fetching workflows:", error);
       toast.error("Failed to load workflows");
@@ -122,23 +123,21 @@ export function CRMWorkflows({ businessId, projectId }: CRMWorkflowsProps = {}) 
           action_config: s.action_config,
           order: s.order,
         })),
-        project_id: projectId || null,
       };
 
       if (editingWorkflow) {
-        const { error } = await supabase
-          .from("crm_workflows")
-          .update(workflowData)
-          .eq("id", editingWorkflow.id);
-
-        if (error) throw error;
+        await applyResourceOp({
+          op: "update",
+          ref: { resourceKey: "crm:workflows", kind: "crm", recordId: editingWorkflow.id },
+          values: workflowData,
+        }, { businessId: businessId || "", projectId, mode: "cloud" });
         toast.success("Workflow updated");
       } else {
-        const { error } = await supabase
-          .from("crm_workflows")
-          .insert(workflowData);
-
-        if (error) throw error;
+        await applyResourceOp({ op: "create", resourceKey: "crm:workflows", values: workflowData }, {
+          businessId: businessId || "",
+          projectId,
+          mode: "cloud",
+        });
         toast.success("Workflow created");
       }
 
@@ -155,12 +154,11 @@ export function CRMWorkflows({ businessId, projectId }: CRMWorkflowsProps = {}) 
 
   async function toggleWorkflow(id: string, isActive: boolean) {
     try {
-      const { error } = await supabase
-        .from("crm_workflows")
-        .update({ is_active: isActive })
-        .eq("id", id);
-
-      if (error) throw error;
+      await applyResourceOp({
+        op: "update",
+        ref: { resourceKey: "crm:workflows", kind: "crm", recordId: id },
+        values: { is_active: isActive },
+      }, { businessId: businessId || "", projectId, mode: "cloud" });
       toast.success(isActive ? "Workflow activated" : "Workflow deactivated");
       fetchWorkflows();
     } catch (error) {
@@ -173,8 +171,10 @@ export function CRMWorkflows({ businessId, projectId }: CRMWorkflowsProps = {}) 
     if (!confirm("Delete this workflow?")) return;
 
     try {
-      const { error } = await supabase.from("crm_workflows").delete().eq("id", id);
-      if (error) throw error;
+      await applyResourceOp({
+        op: "delete",
+        ref: { resourceKey: "crm:workflows", kind: "crm", recordId: id },
+      }, { businessId: businessId || "", projectId, mode: "cloud" });
       toast.success("Workflow deleted");
       fetchWorkflows();
     } catch (error) {

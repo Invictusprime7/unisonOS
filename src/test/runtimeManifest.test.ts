@@ -25,6 +25,34 @@ describe("normalizeUnisonRuntimeContext", () => {
     });
   });
 
+  it("preserves an optional location identity without requiring it for older sites", () => {
+    expect(normalizeUnisonRuntimeContext({
+      workspaceId: "workspace_123",
+      businessId: "business_123",
+      projectId: "project_123",
+      websiteId: "website_123",
+      locationId: "location_123",
+      snapshotId: "snapshot_123",
+      environment: "preview",
+    })).toMatchObject({
+      businessId: "business_123",
+      projectId: "project_123",
+      websiteId: "website_123",
+      locationId: "location_123",
+    });
+
+    const legacyContext = normalizeUnisonRuntimeContext({
+      workspaceId: "workspace_123",
+      businessId: "business_123",
+      projectId: "project_123",
+      websiteId: "website_123",
+      snapshotId: "snapshot_123",
+      environment: "preview",
+    });
+    expect(legacyContext).toBeDefined();
+    expect(legacyContext).not.toHaveProperty('locationId');
+  });
+
   it("rejects an incomplete tenant identity", () => {
     expect(normalizeUnisonRuntimeContext({
       businessId: "business_123",

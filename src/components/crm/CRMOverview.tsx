@@ -39,28 +39,82 @@ export function CRMOverview({ onNavigate, businessId, projectId }: CRMOverviewPr
   useEffect(() => {
     async function fetchStats() {
       try {
+        if (!businessId && !projectId) {
+          setStats({
+            contacts: 0,
+            leads: 0,
+            deals: 0,
+            workflows: 0,
+            submissions: 0,
+            recentLeads: [],
+            recentSubmissions: [],
+          });
+          return;
+        }
+
         let contactsQuery = supabase.from("crm_contacts").select("id", { count: "exact", head: true });
         let leadsQuery = supabase.from("crm_leads").select("*").order("created_at", { ascending: false }).limit(5);
-        let dealsQuery = supabase.from("crm_deals").select("id", { count: "exact", head: true });
-        let workflowsQuery = supabase.from("crm_workflows").select("id", { count: "exact", head: true });
         let submissionsQuery = supabase.from("crm_form_submissions").select("*").order("created_at", { ascending: false }).limit(5);
+        let scopeColumn = "project_id";
+        let scopeId = projectId;
+        let contactRowsQuery = supabase.from("crm_contacts").select("id");
 
         if (projectId) {
-          contactsQuery = contactsQuery.eq("project_id", projectId);
+          if (businessId) {
+            const sharedContactFilter = `project_id.eq.${projectId},project_id.is.null`;
+            contactsQuery = contactsQuery.eq("business_id", businessId).or(sharedContactFilter);
+            contactRowsQuery = contactRowsQuery.eq("business_id", businessId).or(sharedContactFilter);
+          } else {
+            contactsQuery = contactsQuery.eq("project_id", projectId);
+            contactRowsQuery = contactRowsQuery.eq("project_id", projectId);
+          }
           leadsQuery = leadsQuery.eq("project_id", projectId);
-          dealsQuery = dealsQuery.eq("project_id", projectId);
-          workflowsQuery = workflowsQuery.eq("project_id", projectId);
           submissionsQuery = submissionsQuery.eq("project_id", projectId);
         } else if (businessId) {
+          scopeColumn = "business_id";
+          scopeId = businessId;
           contactsQuery = contactsQuery.eq("business_id", businessId);
+          contactRowsQuery = contactRowsQuery.eq("business_id", businessId);
+          leadsQuery = leadsQuery.eq("business_id", businessId);
           submissionsQuery = submissionsQuery.eq("business_id", businessId);
         }
+
+        const [contactRows, leadRows] = await Promise.all([
+          contactRowsQuery,
+          supabase.from("crm_leads").select("id").eq(scopeColumn, scopeId),
+        ]);
+        if (contactRows.error) throw contactRows.error;
+        if (leadRows.error) throw leadRows.error;
+
+        let workflowProjectIds = projectId ? [projectId] : [];
+        if (!projectId && businessId) {
+          const { data: projects, error } = await supabase
+            .from("projects")
+            .select("id")
+            .eq("business_id", businessId);
+          if (error) throw error;
+          workflowProjectIds = (projects || []).map((project: { id: string }) => project.id);
+        }
+
+        const contactIds = (contactRows.data || []).map((contact: { id: string }) => contact.id);
+        const leadIds = (leadRows.data || []).map((lead: { id: string }) => lead.id);
+        const dealScopeFilters = [
+          ...(contactIds.length ? [`contact_id.in.(${contactIds.join(",")})`] : []),
+          ...(leadIds.length ? [`lead_id.in.(${leadIds.join(",")})`] : []),
+        ];
+        const dealsQuery = supabase.from("crm_deals").select("id", { count: "exact", head: true });
+        const dealsPromise = dealScopeFilters.length
+          ? dealsQuery.or(dealScopeFilters.join(","))
+          : Promise.resolve({ count: 0 });
+        const workflowsPromise = workflowProjectIds.length
+          ? supabase.from("crm_workflows").select("id", { count: "exact", head: true }).in("project_id", workflowProjectIds)
+          : Promise.resolve({ count: 0 });
 
         const [contactsRes, leadsRes, dealsRes, workflowsRes, submissionsRes] = await Promise.all([
           contactsQuery,
           leadsQuery,
-          dealsQuery,
-          workflowsQuery,
+          dealsPromise,
+          workflowsPromise,
           submissionsQuery,
         ]);
 

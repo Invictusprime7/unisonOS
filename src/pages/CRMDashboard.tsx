@@ -5,12 +5,16 @@ import {
   Workflow, 
   FileText, 
   BarChart3, 
+  Activity as ActivityIcon,
+  BriefcaseBusiness,
   Menu,
   X,
   Kanban,
   Zap,
   Sparkles,
   Calendar,
+  Package,
+  Utensils,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -23,25 +27,38 @@ import { CRMPipeline } from "@/components/crm/CRMPipeline";
 import { CRMAutomations } from "@/components/crm/CRMAutomations";
 import { PrebuiltWorkflows } from "@/components/crm/PrebuiltWorkflows";
 import { CRMBookings } from "@/components/crm/CRMBookings";
+import { CRMActivityFeed } from "@/components/crm/CRMActivityFeed";
+import { BusinessCatalogEditor } from '@/components/business-center/BusinessCatalogEditor';
+import {
+  getCRMNavigationItems,
+  loadInstalledSiteCapabilities,
+  resolveVisibleCRMView,
+  type CRMView,
+} from '@/services/crmWorkspaceCapabilities';
 
-export type CRMView = "overview" | "contacts" | "leads" | "bookings" | "pipeline" | "workflows" | "recipes" | "automations" | "forms";
+export type { CRMView } from '@/services/crmWorkspaceCapabilities';
 
-const navItems = [
-  { id: "overview" as CRMView, label: "Overview", icon: BarChart3 },
-  { id: "contacts" as CRMView, label: "Contacts", icon: Users },
-  { id: "leads" as CRMView, label: "Leads", icon: Target },
-  { id: "bookings" as CRMView, label: "Bookings", icon: Calendar },
-  { id: "pipeline" as CRMView, label: "Pipeline", icon: Kanban },
-  { id: "workflows" as CRMView, label: "Workflows", icon: Workflow },
-  { id: "recipes" as CRMView, label: "Prebuilt", icon: Sparkles },
-  { id: "automations" as CRMView, label: "Automations", icon: Zap },
-  { id: "forms" as CRMView, label: "Form Submissions", icon: FileText },
-];
+const CRM_VIEW_ICONS = {
+  overview: BarChart3,
+  contacts: Users,
+  activity: ActivityIcon,
+  automations: Zap,
+  leads: Target,
+  bookings: Calendar,
+  services: BriefcaseBusiness,
+  products: Package,
+  menu: Utensils,
+  pipeline: Kanban,
+  workflows: Workflow,
+  recipes: Sparkles,
+  forms: FileText,
+} satisfies Record<CRMView, typeof BarChart3>;
 
 interface CRMDashboardProps {
   initialView?: CRMView;
   businessId: string;
   projectId: string;
+  siteId?: string;
   embedded?: boolean;
 }
 
@@ -49,27 +66,60 @@ export default function CRMDashboard({
   initialView = "overview",
   businessId,
   projectId,
+  siteId,
   embedded = false,
 }: CRMDashboardProps) {
   const [activeView, setActiveView] = useState<CRMView>(initialView);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [installedCapabilities, setInstalledCapabilities] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!siteId) {
+      setInstalledCapabilities([]);
+      return;
+    }
+    void loadInstalledSiteCapabilities({ businessId, projectId, siteId })
+      .then((capabilities) => { if (!cancelled) setInstalledCapabilities(capabilities); })
+      .catch((error) => {
+        console.warn('[CRMDashboard] Site capability load failed; showing core CRM only.', error);
+        if (!cancelled) setInstalledCapabilities([]);
+      });
+    return () => { cancelled = true; };
+  }, [businessId, projectId, siteId]);
 
   useEffect(() => {
     setActiveView(initialView);
   }, [initialView]);
+
+  useEffect(() => {
+    if (installedCapabilities === null) return;
+    if (!resolveVisibleCRMView(activeView, installedCapabilities)) setActiveView('overview');
+  }, [activeView, installedCapabilities]);
+
+  const navItems = getCRMNavigationItems(installedCapabilities ?? []);
+  const visibleView = resolveVisibleCRMView(activeView, installedCapabilities ?? []);
 
   const selectView = (view: CRMView) => {
     setActiveView(view);
   };
 
   const renderContent = () => {
-    switch (activeView) {
+    switch (visibleView) {
       case "contacts":
         return <CRMContacts businessId={businessId} projectId={projectId} />;
+      case "activity":
+        return <CRMActivityFeed businessId={businessId} />;
       case "leads":
         return <CRMLeads businessId={businessId} projectId={projectId} />;
       case "bookings":
         return <CRMBookings businessId={businessId} projectId={projectId} />;
+      case "services":
+        return <BusinessCatalogEditor sectionType="ServiceGrid" businessId={businessId} projectId={projectId} siteId={siteId} />;
+      case "products":
+        return <BusinessCatalogEditor sectionType="ProductGrid" businessId={businessId} projectId={projectId} siteId={siteId} />;
+      case "menu":
+        return <BusinessCatalogEditor sectionType="MenuSection" businessId={businessId} projectId={projectId} siteId={siteId} />;
       case "pipeline":
         return <CRMPipeline businessId={businessId} projectId={projectId} />;
       case "workflows":
@@ -124,14 +174,17 @@ export default function CRMDashboard({
           {navItems.map((item) => (
             <Button
               key={item.id}
-              variant={activeView === item.id ? "secondary" : "ghost"}
+              variant={visibleView === item.id ? "secondary" : "ghost"}
               className={cn(
                 "w-full justify-start",
                 !sidebarOpen && "justify-center px-2"
               )}
               onClick={() => selectView(item.id)}
             >
-              <item.icon className={cn("h-4 w-4", sidebarOpen && "mr-2")} />
+              {(() => {
+                const Icon = CRM_VIEW_ICONS[item.id];
+                return <Icon className={cn("h-4 w-4", sidebarOpen && "mr-2")} />;
+              })()}
               {sidebarOpen && <span>{item.label}</span>}
             </Button>
           ))}
@@ -145,7 +198,7 @@ export default function CRMDashboard({
         <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6">
           <div>
             <h2 className="text-xl font-semibold text-foreground capitalize">
-              {activeView === "forms" ? "Form Submissions" : activeView === "recipes" ? "Prebuilt Workflows" : activeView}
+              {navItems.find((item) => item.id === visibleView)?.label ?? visibleView}
             </h2>
           </div>
           <div className="text-xs text-muted-foreground">

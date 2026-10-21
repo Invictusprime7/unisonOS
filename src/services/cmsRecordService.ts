@@ -141,13 +141,18 @@ export interface ContentCmsRequest {
   contentTypeId?: string;
   status?: 'draft' | 'review' | 'published' | 'archived';
   changeSummary?: string;
+  expectedUpdatedAt?: string;
+  idempotencyKey?: string;
   values?: Record<string, unknown>;
 }
 
 export async function mutateContentRecord(request: ContentCmsRequest): Promise<CmsRecordResponse> {
+  const idempotentAction = ['content-entry-create', 'content-entry-update', 'content-entry-transition'].includes(request.action);
+  const idempotencyKey = request.idempotencyKey ?? (idempotentAction ? crypto.randomUUID() : undefined);
   const { data, error } = await supabase.functions.invoke('cms-records', {
     body: {
       ...request,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
       projectId: request.projectId ?? undefined,
       siteId: request.siteId ?? undefined,
     },

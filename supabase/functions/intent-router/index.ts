@@ -16,6 +16,7 @@ import { createClient } from "@supabase/supabase-js";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { safeParseBody, isValidUUID, sanitizeString , escapeHtml } from "../_shared/validate.ts";
+import { createCrmLead } from "../_shared/canonicalCrm.ts";
 
 // Navigation intents - client-side only, no backend persistence
 const NAV_INTENTS = [
@@ -243,68 +244,23 @@ async function createLead(
   projectId: string | undefined,
   data: Record<string, any>
 ) {
-  // First try the 'leads' table (simpler schema)
-  const leadsData = {
-    business_id: businessId,
-    email: data.email || "",
-    name: data.name || data.fullName || null,
-    phone: data.phone || data.phoneNumber || null,
-    message: data.message || data.notes || null,
-    source: data.source || "website",
-    metadata: {
-      projectId: projectId || null,
-      firstName: data.firstName || data.first_name || null,
-      lastName: data.lastName || data.last_name || null,
-      company: data.company || data.organization || null,
-      sourceUrl: data.sourceUrl || null,
-      rawData: data,
-    },
-  };
-  
-  const { data: lead, error } = await supabase
-    .from("leads")
-    .insert(leadsData)
-    .select()
-    .single();
-  
-  if (!error) {
-    return lead;
-  }
-  
-  console.log("[intent-router] leads insert failed, trying crm_leads:", error.message);
-  
-  // Fallback to crm_leads table (different schema)
-  const crmLeadsData = {
-    business_id: businessId,
-    email: data.email || null,
-    name: data.name || data.fullName || null,
-    status: "new",
-    source: data.source || "website",
-    notes: data.message || data.notes || null,
-    intent: data.intent || null,
-    metadata: {
-      projectId: projectId || null,
-      phone: data.phone || data.phoneNumber || null,
-      firstName: data.firstName || data.first_name || null,
-      lastName: data.lastName || data.last_name || null,
-      company: data.company || data.organization || null,
-      sourceUrl: data.sourceUrl || null,
-      rawData: data,
-    },
-  };
-  
-  const { data: crmLead, error: crmError } = await supabase
-    .from("crm_leads")
-    .insert(crmLeadsData)
-    .select()
-    .single();
-  
-  if (crmError) {
-    console.error("[intent-router] Failed to create lead:", crmError);
-    throw new Error(`Failed to save lead: ${crmError.message || crmError.code || 'Unknown database error'}`);
-  }
-  
-  return crmLead;
+  const email = typeof data.email === 'string' ? data.email : null;
+  const name = typeof data.name === 'string' ? data.name : typeof data.fullName === 'string' ? data.fullName : null;
+  const firstName = typeof data.firstName === 'string' ? data.firstName : typeof data.first_name === 'string' ? data.first_name : name;
+  const lastName = typeof data.lastName === 'string' ? data.lastName : typeof data.last_name === 'string' ? data.last_name : null;
+  const phone = typeof data.phone === 'string' ? data.phone : typeof data.phoneNumber === 'string' ? data.phoneNumber : null;
+  const result = await createCrmLead(supabase, { businessId, projectId }, {
+    title: name || email || 'New lead',
+    email,
+    name,
+    phone,
+    source: typeof data.source === 'string' ? data.source : 'website',
+    notes: typeof data.message === 'string' ? data.message : typeof data.notes === 'string' ? data.notes : null,
+    intent: typeof data.intent === 'string' ? data.intent : null,
+    metadata: { ...data, projectId: projectId || null, sourceUrl: data.sourceUrl || null },
+    contact: { email, firstName, lastName, phone, company: typeof data.company === 'string' ? data.company : null, source: 'website' },
+  });
+  return { id: result.leadId, contact_id: result.contactId };
 }
 
 // Record intent execution for audit/analytics

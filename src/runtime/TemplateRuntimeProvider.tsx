@@ -815,30 +815,17 @@ function createCRMManagerWired(config: RuntimeIntentManagerConfig): IntentManage
 
       if (canonical?.ok) {
         const result = (canonical.result ?? {}) as { leadId?: string; contactId?: string; pipelineId?: string };
-        return {
-          leadId: result.leadId || result.contactId || `lead_${Date.now()}`,
-          pipelineId: result.pipelineId || 'default',
-        };
+        const leadId = result.leadId || result.contactId;
+        if (!leadId) throw new Error('Canonical CRM command returned no lead or contact ID.');
+        return { leadId, pipelineId: result.pipelineId || '' };
       }
 
-      if (canonical && !canonical.ok) {
-        console.error('[CRM] Canonical lead submission failed:', canonical.error);
-      }
-
-      // Fallback to direct insert
-      const { data: lead } = await supabase
-        .from('crm_leads')
-        .insert({
-          workspace_id: config.businessId,
-          email: data.email,
-          phone: data.phone,
-          name: data.name,
-          source: data.source || 'website',
-        } as any)
-        .select()
-        .single();
-
-      return { leadId: lead?.id || 'unknown', pipelineId: 'default' };
+      const canonicalError = canonical?.error;
+      throw new Error(
+        typeof canonicalError === 'string'
+          ? canonicalError
+          : canonicalError?.message || 'Canonical CRM command is unavailable.',
+      );
     },
 
     getPipeline: async (id) => {

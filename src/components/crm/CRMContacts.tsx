@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase as _sb } from "@/integrations/supabase/client";
-const supabase: any = _sb;
+import { applyResourceOp, queryResource } from "@/services/resources/resourceRuntime";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,6 +20,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Search, Plus, Mail, Phone, Building, Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,6 +46,7 @@ export function CRMContacts({ businessId, projectId }: CRMContactsProps = {}) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [formData, setFormData] = useState({
     email: "",
@@ -62,21 +63,17 @@ export function CRMContacts({ businessId, projectId }: CRMContactsProps = {}) {
 
   async function fetchContacts() {
     try {
-      let query = supabase
-        .from("crm_contacts")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (projectId) {
-        query = query.eq("project_id", projectId);
-      } else if (businessId) {
-        query = query.eq("business_id", businessId);
+      if (!projectId && !businessId) {
+        setContacts([]);
+        return;
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setContacts(data || []);
+      const records = await queryResource("crm:contacts", {
+        businessId: businessId || "",
+        projectId,
+        mode: "cloud",
+      });
+      setContacts(records as unknown as Contact[]);
     } catch (error) {
       console.error("Error fetching contacts:", error);
       toast.error("Failed to load contacts");
@@ -96,24 +93,21 @@ export function CRMContacts({ businessId, projectId }: CRMContactsProps = {}) {
         phone: formData.phone || null,
         company: formData.company || null,
         tags: formData.tags ? formData.tags.split(",").map((t) => t.trim()) : [],
-        business_id: businessId || null,
-        project_id: projectId || null,
       };
 
       if (editingContact) {
-        const { error } = await supabase
-          .from("crm_contacts")
-          .update(contactData)
-          .eq("id", editingContact.id);
-
-        if (error) throw error;
+        await applyResourceOp({
+          op: "update",
+          ref: { resourceKey: "crm:contacts", kind: "crm", recordId: editingContact.id },
+          values: contactData,
+        }, { businessId: businessId || "", projectId, mode: "cloud" });
         toast.success("Contact updated");
       } else {
-        const { error } = await supabase
-          .from("crm_contacts")
-          .insert(contactData);
-
-        if (error) throw error;
+        await applyResourceOp({ op: "create", resourceKey: "crm:contacts", values: contactData }, {
+          businessId: businessId || "",
+          projectId,
+          mode: "cloud",
+        });
         toast.success("Contact created");
       }
 
@@ -131,8 +125,10 @@ export function CRMContacts({ businessId, projectId }: CRMContactsProps = {}) {
     if (!confirm("Delete this contact?")) return;
 
     try {
-      const { error } = await supabase.from("crm_contacts").delete().eq("id", id);
-      if (error) throw error;
+      await applyResourceOp({
+        op: "delete",
+        ref: { resourceKey: "crm:contacts", kind: "crm", recordId: id },
+      }, { businessId: businessId || "", projectId, mode: "cloud" });
       toast.success("Contact deleted");
       fetchContacts();
     } catch (error) {
@@ -277,9 +273,16 @@ export function CRMContacts({ businessId, projectId }: CRMContactsProps = {}) {
                 filteredContacts.map((contact) => (
                   <TableRow key={contact.id}>
                     <TableCell className="font-medium">
-                      {contact.first_name || contact.last_name
-                        ? `${contact.first_name || ""} ${contact.last_name || ""}`.trim()
-                        : "—"}
+                      <button
+                        type="button"
+                        className="text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => setSelectedContact(contact)}
+                        aria-label={`View ${contact.first_name || contact.last_name || contact.email || 'contact'}`}
+                      >
+                        {contact.first_name || contact.last_name
+                          ? `${contact.first_name || ""} ${contact.last_name || ""}`.trim()
+                          : "—"}
+                      </button>
                     </TableCell>
                     <TableCell>
                       {contact.email ? (
@@ -342,6 +345,60 @@ export function CRMContacts({ businessId, projectId }: CRMContactsProps = {}) {
           </Table>
         </CardContent>
       </Card>
+
+      <Sheet open={Boolean(selectedContact)} onOpenChange={(open) => { if (!open) setSelectedContact(null); }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+          {selectedContact && (
+            <div className="space-y-6">
+              <SheetHeader>
+                <SheetTitle>
+                  {[selectedContact.first_name, selectedContact.last_name].filter(Boolean).join(' ') || 'Contact'}
+                </SheetTitle>
+                <SheetDescription>Contact record</SheetDescription>
+              </SheetHeader>
+
+              <dl className="grid gap-4">
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Email</dt>
+                  <dd className="break-all text-sm">{selectedContact.email || '—'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Phone</dt>
+                  <dd className="text-sm">{selectedContact.phone || '—'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Company</dt>
+                  <dd className="text-sm">{selectedContact.company || '—'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Source</dt>
+                  <dd className="text-sm">{selectedContact.source || '—'}</dd>
+                </div>
+                <div className="space-y-2">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Tags</dt>
+                  <dd className="flex flex-wrap gap-1">
+                    {selectedContact.tags?.length
+                      ? selectedContact.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)
+                      : <span className="text-sm">—</span>}
+                  </dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Created</dt>
+                  <dd className="text-sm">{selectedContact.created_at ? new Date(selectedContact.created_at).toLocaleString() : '—'}</dd>
+                </div>
+              </dl>
+
+              <Button onClick={() => {
+                const contact = selectedContact;
+                setSelectedContact(null);
+                openEditDialog(contact);
+              }}>
+                <Edit className="mr-2 h-4 w-4" />Edit contact
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import { supabase as _sb } from "@/integrations/supabase/client";
-const supabase: any = _sb;
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,11 +10,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Search, Plus, DollarSign, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useCRMActions } from "@/hooks/useCRMActions";
+import { queryResource } from '@/services/resources/resourceRuntime';
 
 interface Deal {
   id: string;
@@ -56,6 +57,7 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [draggedDeal, setDraggedDeal] = useState<Deal | null>(null);
   const [formData, setFormData] = useState({
     title: "",
@@ -74,21 +76,12 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
 
   async function fetchDeals() {
     try {
-      let query = supabase
-        .from("crm_deals")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (projectId) {
-        query = query.eq("project_id", projectId);
-      } else if (businessId) {
-        query = query.eq("business_id", businessId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setDeals(data || []);
+      const records = await queryResource('crm:deals', {
+        businessId: businessId || activeBizId || '',
+        projectId,
+        mode: 'cloud',
+      });
+      setDeals(records as unknown as Deal[]);
     } catch (error) {
       console.error("Error fetching deals:", error);
       toast.error("Failed to load deals");
@@ -99,21 +92,12 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
 
   async function fetchContacts() {
     try {
-      let query = supabase
-        .from("crm_contacts")
-        .select("id, first_name, last_name, email")
-        .limit(100);
-
-      if (projectId) {
-        query = query.eq("project_id", projectId);
-      } else if (businessId) {
-        query = query.eq("business_id", businessId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setContacts(data || []);
+      const records = await queryResource('crm:contacts', {
+        businessId: businessId || activeBizId || '',
+        projectId,
+        mode: 'cloud',
+      });
+      setContacts(records as unknown as Contact[]);
     } catch (error) {
       console.error("Error fetching contacts:", error);
     }
@@ -121,21 +105,12 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
 
   async function fetchLeads() {
     try {
-      let query = supabase
-        .from("crm_leads")
-        .select("id, title")
-        .limit(100);
-
-      if (projectId) {
-        query = query.eq("project_id", projectId);
-      } else if (businessId) {
-        query = query.eq("business_id", businessId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setLeads(data || []);
+      const records = await queryResource('crm:leads', {
+        businessId: businessId || activeBizId || '',
+        projectId,
+        mode: 'cloud',
+      });
+      setLeads(records as unknown as Lead[]);
     } catch (error) {
       console.error("Error fetching leads:", error);
     }
@@ -175,7 +150,7 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
     }
   }
 
-  async function updateDealStage(dealId: string, newStage: string, oldStage: string) {
+  async function updateDealStage(dealId: string, newStage: string, oldStage: string): Promise<boolean> {
     try {
       // Use hook: updates stage AND fires crm/deal.stage.changed + orchestrator dispatch
       const result = await crm.moveDealStage(dealId, oldStage, newStage);
@@ -183,9 +158,11 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
 
       toast.success(`Deal moved to ${stages.find(s => s.id === newStage)?.label}`);
       fetchDeals();
+      return true;
     } catch (error) {
       console.error("Error updating deal stage:", error);
       toast.error("Failed to update deal stage");
+      return false;
     }
   }
 
@@ -214,6 +191,13 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
 
   const getTotalValue = (stageId: string) =>
     getDealsByStage(stageId).reduce((sum, deal) => sum + (deal.value || 0), 0);
+
+  const selectedContact = selectedDeal
+    ? contacts.find((contact) => contact.id === selectedDeal.contact_id)
+    : undefined;
+  const selectedLead = selectedDeal
+    ? leads.find((lead) => lead.id === selectedDeal.lead_id)
+    : undefined;
 
   if (loading) {
     return (
@@ -324,7 +308,13 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
                     >
                       <CardHeader className="p-3 pb-2">
                         <CardTitle className="text-sm font-medium line-clamp-2">
-                          {deal.title}
+                          <button
+                            type="button"
+                            className="text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            onClick={() => setSelectedDeal(deal)}
+                          >
+                            {deal.title}
+                          </button>
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-3 pt-0 space-y-1">
@@ -351,6 +341,52 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
           );
         })}
       </div>
+
+      <Sheet open={Boolean(selectedDeal)} onOpenChange={(open) => { if (!open) setSelectedDeal(null); }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+          {selectedDeal && (
+            <div className="space-y-6">
+              <SheetHeader>
+                <SheetTitle>{selectedDeal.title}</SheetTitle>
+                <SheetDescription>Sales opportunity</SheetDescription>
+              </SheetHeader>
+
+              <dl className="grid gap-4">
+                <div className="space-y-2">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Stage</dt>
+                  <dd>
+                    <Select value={selectedDeal.stage} onValueChange={(nextStage) => {
+                      const deal = selectedDeal;
+                      void updateDealStage(deal.id, nextStage, deal.stage).then((updated) => {
+                        if (updated) setSelectedDeal((current) => current?.id === deal.id ? { ...current, stage: nextStage } : current);
+                      });
+                    }}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>{stages.map((stage) => <SelectItem key={stage.id} value={stage.id}>{stage.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Value</dt>
+                  <dd className="text-sm">{selectedDeal.value == null ? '—' : `$${selectedDeal.value.toLocaleString()}`}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Expected close</dt>
+                  <dd className="text-sm">{selectedDeal.expected_close_date ? new Date(selectedDeal.expected_close_date).toLocaleDateString() : '—'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Contact</dt>
+                  <dd className="text-sm">{selectedContact?.email || [selectedContact?.first_name, selectedContact?.last_name].filter(Boolean).join(' ') || '—'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase text-muted-foreground">Lead</dt>
+                  <dd className="text-sm">{selectedLead?.title || '—'}</dd>
+                </div>
+              </dl>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* Pipeline Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">

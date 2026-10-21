@@ -6,6 +6,7 @@ import { safeParseBody, isValidUUID, sanitizeString } from '../_shared/validate.
 import { createChatCompletion } from '../_shared/ai/providerClient.ts'
 import { DEFAULT_GEMINI_GATEWAY_MODEL } from '../_shared/geminiModel.ts'
 import { createCanonicalBooking } from '../_shared/canonicalBooking.ts'
+import { createCrmLead, updateCrmLead } from '../_shared/canonicalCrm.ts'
 
 // =============================================================================
 // Types
@@ -42,23 +43,22 @@ interface AgentRunnerRequest {
 // --- CRM Tools ---
 
 const crmLeadCreate: ToolHandler = async (payload, context) => {
-  const { data, error } = await context.supabase
-    .from('crm_leads')
-    .insert({
-      business_id: context.businessId,
-      name: payload.name as string,
-      email: payload.email as string,
-      title: `Lead: ${payload.name || payload.email}`,
-      metadata: { score: payload.score, source: 'ai_agent' },
-      status: 'new',
-      intent: (payload.intent as string) || 'contact.submit',
-    })
-    .select('id')
-    .single()
-
-  if (error) throw new Error(`Failed to create lead: ${error.message}`)
-  console.log('[agent-runner] crm.lead.create:', data.id)
-  return { leadId: data.id, success: true }
+  const result = await createCrmLead(context.supabase, { businessId: context.businessId }, {
+    title: `Lead: ${payload.name || payload.email}`,
+    name: typeof payload.name === 'string' ? payload.name : null,
+    email: typeof payload.email === 'string' ? payload.email : null,
+    stage: 'new',
+    metadata: { score: payload.score, source: 'ai_agent' },
+    intent: (payload.intent as string) || 'contact.submit',
+    source: 'ai_agent',
+    contact: {
+      email: typeof payload.email === 'string' ? payload.email : null,
+      firstName: typeof payload.name === 'string' ? payload.name : null,
+      source: 'ai_agent',
+    },
+  })
+  console.log('[agent-runner] crm.lead.create:', result.leadId)
+  return { leadId: result.leadId, success: true }
 }
 
 const pipelineStageSet: ToolHandler = async (payload, context) => {
@@ -66,13 +66,7 @@ const pipelineStageSet: ToolHandler = async (payload, context) => {
     throw new Error('leadId is required for pipeline.stage.set')
   }
 
-  const { error } = await context.supabase
-    .from('crm_leads')
-    .update({ status: payload.stage as string })
-    .eq('id', payload.leadId)
-    .eq('business_id', context.businessId)
-
-  if (error) throw new Error(`Failed to update pipeline stage: ${error.message}`)
+  await updateCrmLead(context.supabase, { businessId: context.businessId }, String(payload.leadId), { stage: String(payload.stage) })
   console.log('[agent-runner] pipeline.stage.set:', payload.leadId, '->', payload.stage)
   return { updated: true, stage: payload.stage }
 }

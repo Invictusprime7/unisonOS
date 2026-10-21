@@ -21,6 +21,7 @@ import { Client as PgClient } from 'https://deno.land/x/postgres@v0.19.3/mod.ts'
 import { getCorsHeaders } from '../_shared/cors.ts';
 import {
   assertExecutable,
+  buildSiteCapabilityInstallRecord,
   buildContractMigration,
   resolveDatabaseContracts,
   type MigrationStatement,
@@ -36,6 +37,7 @@ const BodySchema = z.object({
   capabilities: z.array(z.string().min(1).max(120)).min(1).max(24),
   businessId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
+  siteId: z.string().uuid().optional(),
   /** Generate + authorize + validate, but roll back instead of committing. */
   dryRun: z.boolean().optional(),
   summary: z.string().max(2000).optional(),
@@ -76,7 +78,7 @@ Deno.serve(async (req) => {
         { status: 400, headers: jsonHeaders },
       );
     }
-    const { capabilities, businessId, projectId, dryRun, summary } = parsed.data;
+    const { capabilities, businessId, projectId, siteId, dryRun, summary } = parsed.data;
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -84,7 +86,34 @@ Deno.serve(async (req) => {
 
     // ---- Gate 2: the caller must administer the target -------------------
     let authorized = false;
-    if (businessId) {
+    let targetBusinessId = businessId ?? null;
+    let installSiteId: string | null = null;
+    if (siteId) {
+      const { data: site } = await admin
+        .from('sites').select('id, business_id').eq('id', siteId).maybeSingle();
+      if (!site || (businessId && site.business_id !== businessId)) {
+        return new Response(JSON.stringify({ error: 'The site does not match the requested business.' }), { status: 403, headers: jsonHeaders });
+      }
+
+      if (projectId) {
+        const { data: project } = await admin
+          .from('projects').select('business_id, site_id').eq('id', projectId).maybeSingle();
+        const { data: draft } = project ? { data: null } : await admin
+          .from('builder_drafts').select('business_id, site_id').eq('id', projectId).maybeSingle();
+        const scope = project ?? draft;
+        if (!scope || scope.site_id !== siteId || scope.business_id !== site.business_id) {
+          return new Response(JSON.stringify({ error: 'The project does not belong to the requested site and business.' }), { status: 403, headers: jsonHeaders });
+        }
+      }
+
+      const { data: isAdmin } = await admin.rpc('is_business_admin', {
+        _user_id: userId,
+        _business_id: site.business_id,
+      });
+      authorized = Boolean(isAdmin);
+      targetBusinessId = site.business_id;
+      installSiteId = site.id;
+    } else if (businessId) {
       const { data: isAdmin } = await admin.rpc('is_business_admin', {
         _user_id: userId,
         _business_id: businessId,
@@ -97,6 +126,7 @@ Deno.serve(async (req) => {
       const { data: project } = await admin
         .from('projects').select('owner_id, business_id').eq('id', projectId).maybeSingle();
       if (project?.business_id) {
+        targetBusinessId = project.business_id;
         const { data: isAdmin } = await admin.rpc('is_business_admin', {
           _user_id: userId, _business_id: project.business_id,
         });
@@ -150,11 +180,33 @@ Deno.serve(async (req) => {
       for (const statement of migration.statements as MigrationStatement[]) {
         try {
           await pg.queryArray(statement.sql);
-          results.push({ id: statement.id, kind: statement.kind, table: statement.table, status: 'applied' });
+          results.push({ id: statement.id, kind: statement.kind, table: statement.table, status: dryRun ? 'skipped' : 'applied' });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           results.push({ id: statement.id, kind: statement.kind, table: statement.table, status: 'failed', error: message });
           throw new Error(`${statement.id}: ${message}`);
+        }
+      }
+      if (installSiteId) {
+        for (const pack of order) {
+          const install = buildSiteCapabilityInstallRecord(installSiteId, userId, pack);
+          await pg.queryArray(
+            `INSERT INTO public.site_capabilities
+              (site_id, capability_id, status, configuration, enabled_by)
+             VALUES ($1, $2, $3, $4::jsonb, $5)
+             ON CONFLICT (site_id, capability_id) DO UPDATE SET
+               status = EXCLUDED.status,
+               configuration = EXCLUDED.configuration,
+               enabled_by = EXCLUDED.enabled_by,
+               updated_at = now()`,
+            [install.siteId, install.capabilityId, install.status, JSON.stringify(install.configuration), install.enabledBy],
+          );
+          results.push({
+            id: `site-capability-${install.capabilityId}`,
+            kind: 'site-capability',
+            table: 'site_capabilities',
+            status: dryRun ? 'skipped' : 'applied',
+          });
         }
       }
       if (dryRun) {
@@ -178,7 +230,7 @@ Deno.serve(async (req) => {
       .insert({
         kind: 'sql_migration',
         status,
-        business_id: businessId ?? null,
+        business_id: targetBusinessId,
         project_id: projectId ?? null,
         proposed_by: userId,
         reviewed_by: userId,
@@ -189,6 +241,7 @@ Deno.serve(async (req) => {
         payload: {
           capabilities,
           packs: order.map((pack) => pack.id),
+          siteId: installSiteId,
           tables: migration.tables,
           sql: migration.sql,
           dryRun: Boolean(dryRun),
@@ -203,6 +256,8 @@ Deno.serve(async (req) => {
         status,
         dryRun: Boolean(dryRun),
         packs: order.map((pack) => pack.id),
+        siteId: installSiteId,
+        installedCapabilities: installSiteId && !dryRun ? order.map((pack) => pack.id) : [],
         tables: migration.tables,
         unsupported,
         statements: migration.statements.map((statement) => ({

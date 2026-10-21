@@ -5,8 +5,18 @@
  * Converts between visual builder format and database format.
  */
 
-import { supabase } from '@/integrations/supabase/client';
+import { applyResourceOp, getResourceRecord, queryResource } from '@/services/resources/resourceRuntime';
 import type { Workflow, WorkflowNode, WorkflowEdge } from '@/components/creatives/web-builder/workflow-builder/types';
+import type { ResourceContext } from '@/services/resources/resourceTypes';
+
+export interface WorkflowScope {
+  businessId: string;
+  projectId?: string;
+}
+
+function resourceContext(scope: WorkflowScope): ResourceContext {
+  return { ...scope, mode: 'cloud' };
+}
 
 // ============ TYPES ============
 
@@ -190,43 +200,23 @@ export function dbFormatToWorkflow(dbWorkflow: DbWorkflow): Workflow {
 /**
  * Save workflow to database
  */
-export async function saveWorkflow(workflow: Workflow): Promise<{ success: boolean; id?: string; error?: string }> {
+export async function saveWorkflow(workflow: Workflow, scope: WorkflowScope): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     const dbFormat = workflowToDbFormat(workflow);
-    
+
     if (workflow.id && !workflow.id.startsWith('wf_')) {
-      // Update existing
-      const { error } = await supabase
-        .from('crm_workflows')
-        .update({
-          name: dbFormat.name,
-          description: dbFormat.description,
-          trigger_type: dbFormat.trigger_type,
-          trigger_config: JSON.parse(JSON.stringify(dbFormat.trigger_config)),
-          steps: JSON.parse(JSON.stringify(dbFormat.steps)),
-          is_active: dbFormat.is_active,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', workflow.id);
-      
-      if (error) throw error;
+      await applyResourceOp({
+        op: 'update',
+        ref: { resourceKey: 'crm:workflows', kind: 'crm', recordId: workflow.id },
+        values: dbFormat,
+      }, resourceContext(scope));
       return { success: true, id: workflow.id };
     } else {
-      // Insert new
-      const { data, error } = await supabase
-        .from('crm_workflows')
-        .insert({
-          name: dbFormat.name,
-          description: dbFormat.description,
-          trigger_type: dbFormat.trigger_type,
-          trigger_config: JSON.parse(JSON.stringify(dbFormat.trigger_config)),
-          steps: JSON.parse(JSON.stringify(dbFormat.steps)),
-          is_active: dbFormat.is_active,
-        })
-        .select('id')
-        .single();
-      
-      if (error) throw error;
+      const data = await applyResourceOp({
+        op: 'create',
+        resourceKey: 'crm:workflows',
+        values: dbFormat,
+      }, resourceContext(scope));
       return { success: true, id: data?.id };
     }
   } catch (error) {
@@ -238,15 +228,9 @@ export async function saveWorkflow(workflow: Workflow): Promise<{ success: boole
 /**
  * Load workflow from database
  */
-export async function loadWorkflow(workflowId: string): Promise<{ workflow?: Workflow; error?: string }> {
+export async function loadWorkflow(workflowId: string, scope: WorkflowScope): Promise<{ workflow?: Workflow; error?: string }> {
   try {
-    const { data, error } = await supabase
-      .from('crm_workflows')
-      .select('*')
-      .eq('id', workflowId)
-      .single();
-    
-    if (error) throw error;
+    const data = await getResourceRecord('crm:workflows', resourceContext(scope), workflowId);
     if (!data) return { error: 'Workflow not found' };
     
     const workflow = dbFormatToWorkflow(data as unknown as DbWorkflow);
@@ -260,23 +244,10 @@ export async function loadWorkflow(workflowId: string): Promise<{ workflow?: Wor
 /**
  * List workflows for a project
  */
-export async function listWorkflows(projectId?: string): Promise<{ workflows: Workflow[]; error?: string }> {
+export async function listWorkflows(scope: WorkflowScope): Promise<{ workflows: Workflow[]; error?: string }> {
   try {
-    const query = supabase
-      .from('crm_workflows')
-      .select('*')
-      .order('updated_at', { ascending: false });
-    
-    if (projectId) {
-      // Note: project_id column may not exist yet
-      // query = query.eq('project_id', projectId);
-    }
-    
-    const { data, error } = await query;
-    
-    if (error) throw error;
-    
-    const workflows = (data || []).map(row => dbFormatToWorkflow(row as unknown as DbWorkflow));
+    const rows = await queryResource('crm:workflows', resourceContext(scope));
+    const workflows = rows.map(row => dbFormatToWorkflow(row as unknown as DbWorkflow));
     return { workflows };
   } catch (error) {
     console.error('Error listing workflows:', error);
@@ -287,14 +258,12 @@ export async function listWorkflows(projectId?: string): Promise<{ workflows: Wo
 /**
  * Delete workflow
  */
-export async function deleteWorkflow(workflowId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteWorkflow(workflowId: string, scope: WorkflowScope): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase
-      .from('crm_workflows')
-      .delete()
-      .eq('id', workflowId);
-    
-    if (error) throw error;
+    await applyResourceOp({
+      op: 'delete',
+      ref: { resourceKey: 'crm:workflows', kind: 'crm', recordId: workflowId },
+    }, resourceContext(scope));
     return { success: true };
   } catch (error) {
     console.error('Error deleting workflow:', error);
@@ -305,9 +274,9 @@ export async function deleteWorkflow(workflowId: string): Promise<{ success: boo
 /**
  * Duplicate workflow
  */
-export async function duplicateWorkflow(workflowId: string): Promise<{ workflow?: Workflow; error?: string }> {
+export async function duplicateWorkflow(workflowId: string, scope: WorkflowScope): Promise<{ workflow?: Workflow; error?: string }> {
   try {
-    const { workflow, error: loadError } = await loadWorkflow(workflowId);
+    const { workflow, error: loadError } = await loadWorkflow(workflowId, scope);
     
     if (loadError || !workflow) {
       return { error: loadError || 'Workflow not found' };
@@ -323,7 +292,7 @@ export async function duplicateWorkflow(workflowId: string): Promise<{ workflow?
       updatedAt: new Date().toISOString(),
     };
     
-    const { id, error: saveError } = await saveWorkflow(copy);
+    const { id, error: saveError } = await saveWorkflow(copy, scope);
     
     if (saveError) {
       return { error: saveError };
@@ -339,14 +308,13 @@ export async function duplicateWorkflow(workflowId: string): Promise<{ workflow?
 /**
  * Toggle workflow active status
  */
-export async function toggleWorkflowActive(workflowId: string, isActive: boolean): Promise<{ success: boolean; error?: string }> {
+export async function toggleWorkflowActive(workflowId: string, isActive: boolean, scope: WorkflowScope): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase
-      .from('crm_workflows')
-      .update({ is_active: isActive, updated_at: new Date().toISOString() })
-      .eq('id', workflowId);
-    
-    if (error) throw error;
+    await applyResourceOp({
+      op: 'update',
+      ref: { resourceKey: 'crm:workflows', kind: 'crm', recordId: workflowId },
+      values: { is_active: isActive },
+    }, resourceContext(scope));
     return { success: true };
   } catch (error) {
     console.error('Error toggling workflow:', error);

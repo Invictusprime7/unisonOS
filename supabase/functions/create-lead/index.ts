@@ -6,6 +6,7 @@ import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.t
 import { safeParseBody, sanitizeString, isValidUUID , escapeHtml } from "../_shared/validate.ts";
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
+import { createCrmActivity, createCrmLead } from "../_shared/canonicalCrm.ts";
 
 const corsHeaders = publicCorsHeaders;
 const RATE_LIMIT_CONFIG = { maxRequests: 20, windowSeconds: 300 };
@@ -150,107 +151,59 @@ serve(async (req) => {
       return errorResponse("Invalid email format", 400, corsHeaders);
     }
 
-    // Insert lead into database
-    const { data: lead, error: insertError } = await supabase
-      .from("leads")
-      .insert({
-        business_id: businessId,
-        name: name || null,
-        email,
-        phone: phone || null,
-        source: source || 'web_form',
-        message: message || null,
-        metadata: metadata || {},
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error("Failed to create lead:", insertError);
-      return errorResponse("Failed to submit form", 500, corsHeaders);
-    }
-
-    // Also create/update CRM entities (best-effort)
+    const normalizedEmail = email.toLowerCase();
+    const { first, last } = splitName(name);
+    const leadTitle = name?.trim() ? `${name.trim()} (${normalizedEmail})` : normalizedEmail;
+    let crmLead: { leadId: string; contactId: string | null };
     try {
-      const normalizedEmail = email.toLowerCase();
-      const { first, last } = splitName(name);
-
-      // Upsert contact by email (no unique constraint guaranteed; we take first match)
-      const { data: existingContact } = await supabase
-        .from("crm_contacts")
-        .select("id")
-        .eq("email", normalizedEmail)
-        .eq("business_id", businessId)
-        .limit(1)
-        .maybeSingle();
-
-      let contactId: string | null = existingContact?.id ?? null;
-      if (contactId) {
-        // Public submissions never overwrite an existing contact's details.
-      } else {
-        const { data: createdContact } = await supabase
-          .from("crm_contacts")
-          .insert({
-            business_id: businessId,
-            email: normalizedEmail,
-            first_name: first,
-            last_name: last,
-            phone: phone || null,
-            source: source || "web_form",
-          })
-          .select("id")
-          .single();
-        contactId = createdContact?.id ?? null;
-      }
-
-      const leadTitle = name?.trim()
-        ? `${name.trim()} (${email})`
-        : email;
-
-      // NEW: Write to crm_leads with business_id, email, name, intent
-      await supabase.from("crm_leads").insert({
-        business_id: businessId,
+      crmLead = await createCrmLead(supabase, { businessId }, {
+        title: leadTitle,
         email: normalizedEmail,
         name: name?.trim() || null,
-        intent: source || "lead_capture",
-        contact_id: contactId,
-        title: leadTitle,
-        status: "new",
+        phone: phone || null,
         source: source || "web_form",
+        intent: source || "lead_capture",
         notes: message || null,
-        value: null,
         metadata: metadata || {},
+        contact: {
+          email: normalizedEmail,
+          firstName: first,
+          lastName: last,
+          phone: phone || null,
+          source: source || "web_form",
+        },
       });
+    } catch (error) {
+      console.error("[create-lead] canonical CRM write failed", error);
+      return errorResponse("Failed to submit form", 500, corsHeaders);
+    }
+    const { leadId, contactId } = crmLead;
 
-      // CRM activity + owner follow-up task (Milestone 5)
-      try {
-        await supabase.from("crm_activities").insert({
-          business_id: businessId,
-          contact_id: contactId,
-          activity_type: "lead_captured",
-          title: `New lead: ${leadTitle}`,
-          description: message || null,
-          metadata: { source: source || "web_form", ...(metadata || {}) },
-        });
-      } catch (activityErr) {
-        console.warn("[create-lead] activity insert failed", activityErr);
-      }
+    try {
+      await createCrmActivity(supabase, { businessId }, {
+        type: "lead_captured",
+        title: `New lead: ${leadTitle}`,
+        description: message || null,
+        contactId,
+        leadId,
+        metadata: { source: source || "web_form", ...(metadata || {}) },
+      });
+    } catch (activityErr) {
+      console.warn("[create-lead] activity insert failed", activityErr);
+    }
 
-      try {
-        await supabase.from("tasks").insert({
-          business_id: businessId,
-          title: `Follow up with ${name?.trim() || email}`,
-          description: message ? `Lead message: ${message}` : `New lead from ${source || "web_form"}`,
-          status: "todo",
-          priority: "high",
-          due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          metadata: { type: "follow_up", lead_email: normalizedEmail, contact_id: contactId },
-        });
-      } catch (taskErr) {
-        console.warn("[create-lead] follow-up task insert failed", taskErr);
-      }
-    } catch (e) {
-      console.warn("[create-lead] CRM create/update failed", e);
+    try {
+      await supabase.from("tasks").insert({
+        business_id: businessId,
+        title: `Follow up with ${name?.trim() || email}`,
+        description: message ? `Lead message: ${message}` : `New lead from ${source || "web_form"}`,
+        status: "todo",
+        priority: "high",
+        due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        metadata: { type: "follow_up", lead_email: normalizedEmail, contact_id: contactId },
+      });
+    } catch (taskErr) {
+      console.warn("[create-lead] follow-up task insert failed", taskErr);
     }
 
 
@@ -320,7 +273,8 @@ serve(async (req) => {
               status: "pending",
               trigger_data: {
                 type: "lead_created",
-                lead_id: lead.id,
+                lead_id: leadId,
+                business_id: businessId,
                 email,
                 source,
               },
@@ -335,7 +289,7 @@ serve(async (req) => {
     return secureJsonResponse({ 
         success: true, 
         data: { 
-          id: lead.id,
+          id: leadId,
           message: "Thank you! We'll be in touch soon." 
         }
       }, 200, corsHeaders);

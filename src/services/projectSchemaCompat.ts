@@ -16,6 +16,7 @@ const OPTIONAL_PROJECT_COLUMNS = [
   'status',
   'publish_status',
   'business_id',
+  'site_id',
   'published_at',
   'custom_domain',
   'settings',
@@ -35,6 +36,7 @@ export interface ProjectRecord {
   status?: string | null;
   publish_status?: string | null;
   business_id?: string | null;
+  site_id?: string | null;
   published_at?: string | null;
   custom_domain?: string | null;
   settings?: Record<string, unknown> | null;
@@ -114,6 +116,7 @@ function normalizeProjectRecord(row: Record<string, unknown>): ProjectRecord {
     status: (row.status as string | null | undefined) ?? null,
     publish_status: (row.publish_status as string | null | undefined) ?? null,
     business_id: (row.business_id as string | null | undefined) ?? null,
+    site_id: (row.site_id as string | null | undefined) ?? null,
     published_at: (row.published_at as string | null | undefined) ?? null,
     custom_domain: (row.custom_domain as string | null | undefined) ?? null,
     settings: (row.settings as Record<string, unknown> | null | undefined) ?? null,

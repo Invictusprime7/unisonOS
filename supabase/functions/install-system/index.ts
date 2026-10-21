@@ -182,22 +182,9 @@ serve(async (req) => {
       }
     }
 
-    // 3) Record install. This should not block provisioning if the table is not
-    // present yet in an older environment.
+    // 3) Resolve backend packs for seeding and the response. Site capability
+    // installation is recorded by capability-migration-apply, not here.
     const packs = packsForSystem(systemType);
-    const { error: installError } = await admin
-      .from("business_installs")
-      .insert({
-        business_id: businessId,
-        system_type: systemType,
-        packs,
-        status: "installed",
-        installed_by: userId,
-      });
-    if (installError) {
-      console.error("[install-system] record install failed", installError);
-      warnings.push("business_installs_unavailable");
-    }
 
     // 3b) Persist launcher design preferences (optional)
     if (body.templateCategory || body.designPreset) {

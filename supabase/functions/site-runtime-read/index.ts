@@ -31,7 +31,7 @@ type Surface = {
 const SURFACES: Record<string, Surface> = {
   services: {
     sourceKind: "service", sourceTable: "services",
-    requiredCapability: "booking",
+    requiredCapability: "catalog.services",
     bindingPrefix: "ServiceGrid", aliases: ["servicegrid", "servicesgrid", "service_grid", "featured_services", "services"],
     columns: ["id", "name", "description", "image_url", "price_cents", "currency", "category", "featured", "is_active", "duration_minutes"],
     title: "name", description: "description", image: "image_url", priceCents: "price_cents", category: "category", featured: "featured", active: "is_active",
@@ -45,7 +45,7 @@ const SURFACES: Record<string, Surface> = {
   },
   menu_items: {
     sourceKind: "menu_item", sourceTable: "menu_items",
-    requiredCapability: "booking",
+    requiredCapability: "catalog.menu",
     bindingPrefix: "MenuSection", aliases: ["menusection", "menu", "menu_section", "menu_items"],
     columns: ["id", "name", "description", "image_url", "price_cents", "currency", "category", "featured", "available"],
     title: "name", description: "description", image: "image_url", priceCents: "price_cents", category: "category", featured: "featured", active: "available",
@@ -174,11 +174,17 @@ async function isSurfaceEnabled(
   siteId: string,
   surface: Surface,
 ): Promise<boolean> {
+  const legacyCapabilityId = surface.requiredCapability === 'catalog.services'
+    || surface.requiredCapability === 'catalog.menu'
+    ? 'booking'
+    : null;
   const { data, error } = await supabase
     .from("site_capabilities")
     .select("capability_id")
     .eq("site_id", siteId)
-    .eq("capability_id", surface.requiredCapability)
+    .in("capability_id", legacyCapabilityId
+      ? [surface.requiredCapability, legacyCapabilityId]
+      : [surface.requiredCapability])
     .eq("status", "enabled")
     .maybeSingle();
   return !error && Boolean(data);

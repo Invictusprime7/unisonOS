@@ -102,8 +102,9 @@ describe('resolveCapabilityPacks', () => {
   it('aggregates tables, slots, functions and settings across the pack set', () => {
     const { order } = resolveCapabilityPacks(['booking.appointments']);
     expect(packTables(order)).toEqual(expect.arrayContaining([
-      'businesses', 'services', 'leads', 'crm_leads', 'crm_contacts', 'availability_slots', 'bookings',
+      'businesses', 'services', 'crm_leads', 'crm_contacts', 'availability_slots', 'bookings',
     ]));
+    expect(packTables(order)).not.toContain('leads');
     expect(packSlots(order)).toContain('service-card.primary-action');
     expect(packFunctions(order)).toEqual(expect.arrayContaining(['create-lead', 'site-runtime']));
     expect(packSettings(order).accountFields).toEqual(expect.arrayContaining([

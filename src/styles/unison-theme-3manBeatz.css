@@ -1,0 +1,61 @@
+/* Bridge app-only semantic roles to the attached library, without redefining it. */
+:root {
+  --ut-font-body: var(--ut-font-sans);
+  --font-sans: var(--ut-font-sans);
+  --font-serif: var(--ut-font-display);
+  --font-mono: var(--ut-font-mono);
+  --radius: var(--ut-radius-base);
+  --input: var(--border);
+  --ring: var(--primary);
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
+  --sidebar-background: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--muted);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary);
+  --ut-hover-illumination-mix: 82%;
+}
+
+.affinity-home-chat-glow {
+  border-radius: var(--ut-radius-base);
+  box-shadow: 0 0 var(--ut-border-weight) hsl(var(--secondary)),
+    0 0 var(--ut-density-gap) hsl(var(--secondary)),
+    0 0 var(--ut-density-padding) hsl(var(--primary));
+}
+
+.affinity-wizard-title {
+  margin: 0;
+  padding: var(--ut-density-padding);
+  font-family: var(--ut-font-body);
+  color: hsl(var(--foreground));
+}
+
+/* Existing Tailwind hover utilities must not turn UI controls into glowing cards. */
+@media (hover: hover) {
+  [class*="hover:"]:hover,
+  [class*="cursor-pointer"]:hover,
+  button:not(:disabled):hover,
+  a[href]:hover,
+  [role="button"]:hover,
+  [role="tab"]:hover,
+  [role="menuitem"]:hover {
+    color: color-mix(in srgb, currentColor var(--ut-hover-illumination-mix), white) !important;
+    border-color: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .group:hover [class*="group-hover:"],
+  .peer:hover [class*="peer-hover:"] {
+    color: color-mix(in srgb, currentColor var(--ut-hover-illumination-mix), white) !important;
+    border-color: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+}

@@ -114,6 +114,7 @@ interface Project {
   updated_at?: string;
   published_at?: string;
   business_id?: string;
+  site_id?: string | null;
   owner_id?: string;
   user_id?: string;
   preview_ready?: boolean;
@@ -1869,6 +1870,7 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                       embedded
                       businessId={selectedBusiness.id}
                       projectId={selectedScopeProject.id}
+                      siteId={selectedScopeProject.site_id ?? undefined}
                       initialView={crmView}
                     />
                   ) : (
@@ -1905,6 +1907,12 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                       <BusinessAutomationSettings
                         businessId={selectedBusiness.id}
                         businessIndustry={selectedBusiness.industry}
+                        projectId={selectedScopeProject?.id ?? ""}
+                        siteId={selectedScopeProject?.site_id ?? null}
+                        siteProjects={projects
+                          .filter((project) => Boolean(project.site_id))
+                          .map((project) => ({ id: project.id, name: project.name }))}
+                        onSelectProject={setSelectedProjectScopeId}
                       />
                     </div>
 

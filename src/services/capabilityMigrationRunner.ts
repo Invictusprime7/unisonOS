@@ -24,6 +24,8 @@ export interface CapabilityMigrationResult {
   status: 'applied' | 'approved' | 'failed' | 'skipped';
   tables: string[];
   packs: string[];
+  siteId?: string | null;
+  installedCapabilities?: string[];
   applied: number;
   failed: number;
   error?: string;
@@ -36,10 +38,31 @@ export function previewCapabilityMigration(packs: CapabilityPack[]): CapabilityM
   return { ...migration, lint: lintMigrationSql(migration.sql) };
 }
 
+async function describeInvocationError(error: unknown): Promise<string> {
+  const fallback = error instanceof Error ? error.message : 'The backend migration could not be reached.';
+  const context = (error as { context?: Response } | null)?.context;
+  if (!context) return fallback;
+
+  try {
+    const payload = await context.clone().json() as { error?: unknown; message?: unknown };
+    const detail = typeof payload.error === 'string'
+      ? payload.error
+      : payload.error !== undefined
+        ? JSON.stringify(payload.error)
+        : typeof payload.message === 'string'
+          ? payload.message
+          : null;
+    return detail ? `${detail} (status ${context.status})` : `${fallback} (status ${context.status})`;
+  } catch {
+    return `${fallback} (status ${context.status})`;
+  }
+}
+
 export interface ApplyCapabilityMigrationInput {
   packs: CapabilityPack[];
   businessId: string | null;
   projectId?: string | null;
+  siteId?: string | null;
   /** Validate + roll back instead of committing. */
   dryRun?: boolean;
   summary?: string;
@@ -85,6 +108,7 @@ export async function applyCapabilityMigration(
       capabilities: packs.map((pack) => pack.id),
       businessId: input.businessId ?? undefined,
       projectId: input.projectId ?? undefined,
+      siteId: input.siteId ?? undefined,
       dryRun: input.dryRun ?? false,
       summary: input.summary,
     },
@@ -98,7 +122,7 @@ export async function applyCapabilityMigration(
       packs: packs.map((pack) => pack.id),
       applied: 0,
       failed: preview.statements.length,
-      error: error.message || 'The backend migration could not be reached.',
+      error: await describeInvocationError(error),
     };
   }
 
@@ -108,6 +132,8 @@ export async function applyCapabilityMigration(
     packs?: string[];
     error?: string | null;
     proposalId?: string | null;
+    siteId?: string | null;
+    installedCapabilities?: string[];
     results?: Array<{ status: string }>;
   };
   const results = payload.results ?? [];
@@ -120,6 +146,8 @@ export async function applyCapabilityMigration(
     status,
     tables: payload.tables ?? preview.tables,
     packs: payload.packs ?? packs.map((pack) => pack.id),
+    siteId: payload.siteId,
+    installedCapabilities: payload.installedCapabilities ?? [],
     applied,
     failed,
     error: payload.error ?? undefined,

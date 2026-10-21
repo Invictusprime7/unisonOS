@@ -18,6 +18,21 @@ function withId(r: Record<string, unknown>): ResourceRecord {
   return { ...r, id: String(r.id ?? '') };
 }
 
+function fromCrmStorage(def: ResourceDefinition, row: Record<string, unknown>): ResourceRecord {
+  const record = withId(row);
+  if (def.key === 'crm:leads') record.status = row.stage ?? row.status ?? 'new';
+  return record;
+}
+
+function toCrmStorage(def: ResourceDefinition, values: Record<string, unknown>): Record<string, unknown> {
+  const safeValues = filterWritableValues(def, values);
+  if (def.key === 'crm:leads' && Object.prototype.hasOwnProperty.call(safeValues, 'status')) {
+    safeValues.stage = safeValues.status;
+    delete safeValues.status;
+  }
+  return safeValues;
+}
+
 /** Only fields declared editable in the resource schema may be written. */
 export function filterWritableValues(def: ResourceDefinition, values: Record<string, unknown>): Record<string, unknown> {
   const allowed = new Set(def.schema.filter((f) => f.editable).map((f) => f.key));
@@ -49,7 +64,7 @@ export const catalogResourceAdapter: ResourceAdapter = {
 /** Flatten a content entry: its field values live in `data`, lifecycle stays visible. */
 export function flattenContentEntry(r: Record<string, unknown>): ResourceRecord {
   const data = r.data && typeof r.data === 'object' ? (r.data as Record<string, unknown>) : {};
-  return { ...data, id: String(r.id ?? ''), status: r.status, slug: r.slug ?? data.slug, title: r.title ?? data.title };
+  return { ...data, id: String(r.id ?? ''), status: r.status, slug: r.slug ?? data.slug, title: r.title ?? data.title, updated_at: r.updated_at };
 }
 
 export const contentResourceAdapter: ResourceAdapter = {
@@ -88,6 +103,7 @@ export const contentResourceAdapter: ResourceAdapter = {
     const data = { ...((current.data as Record<string, unknown>) ?? {}), ...dataValues };
     return flattenContentEntry(await updateContentRecord({
       businessId: ctx.businessId, projectId: ctx.projectId, recordId: id,
+      expectedUpdatedAt: String(current.updated_at ?? ''),
       // The content command requires the title on every update.
       values: { title: String(values.title ?? values.name ?? current.title ?? ''), slug: current.slug, locale: current.locale, data }, changeSummary: `Edited ${Object.keys(values).join(', ')}`,
     }));
@@ -123,56 +139,98 @@ export const businessProfileResourceAdapter: ResourceAdapter = {
   },
 };
 
-function requireProjectScope(ctx: ResourceContext, def: ResourceDefinition): asserts ctx is ResourceContext & { projectId: string } {
-  if (!ctx.projectId) throw new Error('CRM records require a selected project.');
+function requireCrmScope(ctx: ResourceContext, def: ResourceDefinition): void {
+  if (!ctx.projectId && !ctx.businessId) throw new Error('CRM records require a selected business or project.');
   if (!def.storage.table) throw new Error(`${def.label} has no CRM table binding.`);
+}
+
+function applyCrmScope(query: any, ctx: ResourceContext, def: ResourceDefinition): any {
+  if (ctx.businessId) query = query.eq('business_id', ctx.businessId);
+  if (ctx.projectId && def.key === 'crm:contacts' && ctx.businessId) {
+    return query.or(`project_id.eq.${ctx.projectId},project_id.is.null`);
+  }
+  if (ctx.projectId) query = query.eq('project_id', ctx.projectId);
+  return query;
+}
+
+async function invokeCrmCommand(input: {
+  resource: string;
+  action: 'create' | 'update' | 'delete';
+  recordId?: string;
+  businessId: string;
+  projectId?: string | null;
+  values?: Record<string, unknown>;
+  expected?: Record<string, unknown>;
+}): Promise<{ record?: Record<string, unknown>; deleted?: true }> {
+  const { data, error } = await supabase.functions.invoke('crm-command', { body: input });
+  if (error) throw error;
+  const response = data as { success?: boolean; error?: string; record?: Record<string, unknown>; deleted?: true } | null;
+  if (!response?.success) throw new Error(response?.error || 'CRM command failed.');
+  return response;
 }
 
 export const crmResourceAdapter: ResourceAdapter = {
   async query(def, ctx) {
-    requireProjectScope(ctx, def);
-    const { data, error } = await supabase
+    requireCrmScope(ctx, def);
+    const query = applyCrmScope(supabase
       .from(def.storage.table)
       .select('*')
-      .eq('project_id', ctx.projectId)
-      .eq('business_id', ctx.businessId)
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(100), ctx, def);
+    const { data, error } = await query;
     if (error) throw error;
-    return (data ?? []).map(withId) as ResourceRecord[];
+    return (data ?? []).map((row: Record<string, unknown>) => fromCrmStorage(def, row));
   },
   async get(def, ctx, id) {
-    requireProjectScope(ctx, def);
-    const { data, error } = await supabase
+    requireCrmScope(ctx, def);
+    const query = applyCrmScope(supabase
       .from(def.storage.table)
       .select('*')
       .eq('id', id)
-      .eq('project_id', ctx.projectId)
-      .eq('business_id', ctx.businessId)
-      .maybeSingle();
+      .maybeSingle(), ctx, def);
+    const { data, error } = await query;
     if (error) throw error;
-    return data ? withId(data) : null;
+    return data ? fromCrmStorage(def, data) : null;
   },
-  async create() {
-    throw new Error('CRM records are created by project intake and CRM workflows.');
+  async create(def, ctx, values) {
+    requireCrmScope(ctx, def);
+    const safeValues = toCrmStorage(def, values);
+    if (!Object.keys(safeValues).length) throw new Error(`No editable ${def.label.toLowerCase()} fields were provided.`);
+    const response = await invokeCrmCommand({
+      resource: def.key.replace(/^crm:/, ''),
+      action: 'create',
+      businessId: ctx.businessId,
+      projectId: ctx.projectId,
+      values: safeValues,
+    });
+    if (!response.record) throw new Error('CRM command did not return the created record.');
+    return fromCrmStorage(def, response.record);
   },
   async update(def, ctx, id, values, expected) {
-    requireProjectScope(ctx, def);
-    const safeValues = filterWritableValues(def, values);
+    requireCrmScope(ctx, def);
+    const safeValues = toCrmStorage(def, values);
     if (!Object.keys(safeValues).length) throw new Error(`No editable ${def.label.toLowerCase()} fields were provided.`);
-    let query = supabase
-      .from(def.storage.table)
-      .update({ ...safeValues, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .eq('project_id', ctx.projectId)
-      .eq('business_id', ctx.businessId);
-    if (expected && Object.prototype.hasOwnProperty.call(expected, 'updated_at')) {
-      query = query.eq('updated_at', expected.updated_at);
-    }
-    const { data, error } = await query.select('*').maybeSingle();
-    if (error) throw error;
-    if (!data) throw new Error(`This ${def.label.slice(0, -1).toLowerCase()} changed elsewhere or is no longer in this project. Refresh and try again.`);
-    return withId(data);
+    const response = await invokeCrmCommand({
+      resource: def.key.replace(/^crm:/, ''),
+      action: 'update',
+      recordId: id,
+      businessId: ctx.businessId,
+      projectId: ctx.projectId,
+      values: safeValues,
+      expected,
+    });
+    if (!response.record) throw new Error(`This ${def.label.slice(0, -1).toLowerCase()} changed elsewhere or is no longer in this project. Refresh and try again.`);
+    return fromCrmStorage(def, response.record);
+  },
+  async delete(def, ctx, id) {
+    requireCrmScope(ctx, def);
+    await invokeCrmCommand({
+      resource: def.key.replace(/^crm:/, ''),
+      action: 'delete',
+      recordId: id,
+      businessId: ctx.businessId,
+      projectId: ctx.projectId,
+    });
   },
 };
 

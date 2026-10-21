@@ -6,6 +6,7 @@ import {
 import { CAPABILITY_PACKS, resolveCapabilityPacks } from '@/platform/core/capabilityPacks';
 import {
   buildContractMigration,
+  buildSiteCapabilityInstallRecord,
   resolveDatabaseContracts,
   assertExecutable,
 } from '../../supabase/functions/_shared/capabilityPackContracts';
@@ -52,11 +53,12 @@ describe('capability migration SQL', () => {
       expect(grant.sql).not.toContain('GRANT ALL');
     }
 
-    // Public submit tables must not become publicly readable.
+    // Canonical public submit tables must not become publicly readable.
     const leadReads = migration.statements.filter(
-      (s) => s.table === 'leads' && s.kind === 'policy' && s.sql.includes('FOR SELECT'),
+      (s) => s.table === 'crm_leads' && s.kind === 'policy' && s.sql.includes('FOR SELECT'),
     );
     expect(leadReads.every((s) => !s.sql.includes('anon'))).toBe(true);
+    expect(migration.tables).not.toContain('leads');
   });
 
   it('guards every policy so re-applying a pack is a no-op', () => {
@@ -120,5 +122,25 @@ describe('server mirror stays in sync with the client contracts', () => {
     const { order, unsupported } = resolveDatabaseContracts(['not.a.capability']);
     expect(order).toEqual([]);
     expect(unsupported).toEqual(['not.a.capability']);
+  });
+
+  it('builds site installation records from canonical packs, not client configuration', () => {
+    const { order } = resolveDatabaseContracts(['booking.appointments']);
+    const pack = order.find((candidate) => candidate.id === 'booking.appointments');
+    expect(pack).toBeDefined();
+    if (!pack) throw new Error('Booking pack was not resolved');
+
+    expect(buildSiteCapabilityInstallRecord('site-1', 'owner-1', pack)).toMatchObject({
+      siteId: 'site-1',
+      capabilityId: 'booking.appointments',
+      status: 'enabled',
+      enabledBy: 'owner-1',
+      configuration: {
+        manifestVersion: '1.0',
+        source: 'capability-migration-apply',
+        packId: 'booking.appointments',
+        requiredTables: expect.arrayContaining(['bookings']),
+      },
+    });
   });
 });

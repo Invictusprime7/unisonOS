@@ -35,6 +35,7 @@ export interface UnisonRuntimeContext {
   businessId: string;
   projectId: string;
   websiteId: string;
+  locationId?: string | null;
   snapshotId: string;
   environment: UnisonRuntimeEnvironment;
   revisionId?: string;

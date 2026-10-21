@@ -8,6 +8,7 @@ import { agentOperations } from '@/services/agent-runtime/operations';
  */
 
 import { supabase as supabaseClient } from '@/integrations/supabase/client';
+import { applyResourceOp } from '@/services/resources/resourceRuntime';
 import type { 
   IntentManagers, 
   LeadData, 
@@ -47,47 +48,19 @@ function createCRMManager(businessId: string): IntentManagers['crm'] {
   return {
     submitLead: async (data: LeadData) => {
       console.log('[CRM] Submitting lead:', data);
-      
-      if (supabase) {
-        // Get or create default pipeline
-        let pipelineId: string | undefined;
-        const { data: pipelines } = await supabase
-          .from('crm_pipelines')
-          .select('id')
-          .eq('business_id', businessId)
-          .limit(1);
-        
-        if (pipelines && pipelines.length > 0) {
-          pipelineId = pipelines[0].id;
-        }
-
-        // Create lead
-        const { data: lead, error } = await supabase
-          .from('crm_leads')
-          .insert({
-            business_id: businessId,
-            email: data.email,
-            phone: data.phone,
-            name: data.name,
-            source: data.source || 'website',
-            pipeline_id: pipelineId,
-            metadata: data.metadata,
-          })
-          .select()
-          .single();
-
-        if (error) {
-          console.error('[CRM] Failed to create lead:', error);
-          throw error;
-        }
-
-        return { leadId: lead.id, pipelineId: pipelineId || '' };
-      }
-
-      // Fallback for development
-      const leadId = `lead_${Date.now()}`;
-      console.log('[CRM] Created lead (dev mode):', leadId);
-      return { leadId, pipelineId: 'default' };
+      if (!supabase) throw new Error('CRM lead storage is unavailable.');
+      const lead = await applyResourceOp({
+        op: 'create',
+        resourceKey: 'crm:leads',
+        values: {
+          title: data.name || data.email || 'New lead',
+          email: data.email,
+          phone: data.phone,
+          source: data.source || 'website',
+          notes: data.message,
+        },
+      }, { businessId, mode: 'cloud' });
+      return { leadId: lead?.id ?? '', pipelineId: '' };
     },
 
     getPipeline: async (id?: string) => {
@@ -134,34 +107,6 @@ function createCRMManager(businessId: string): IntentManagers['crm'] {
           { id: 'closed_lost', name: 'Closed Lost' },
         ],
       };
-
-      if (supabase) {
-        const { data: pipeline, error } = await supabase
-          .from('crm_pipelines')
-          .insert({
-            business_id: businessId,
-            name: defaultPipeline.name,
-            is_default: true,
-          })
-          .select()
-          .single();
-
-        if (error) {
-          console.error('[CRM] Failed to create pipeline:', error);
-          return defaultPipeline;
-        }
-
-        // Create stages
-        const stages = defaultPipeline.stages.map((s, i) => ({
-          pipeline_id: pipeline.id,
-          name: s.name,
-          position: i,
-        }));
-
-        await supabase.from('crm_stages').insert(stages);
-
-        return { ...defaultPipeline, id: pipeline.id };
-      }
 
       return defaultPipeline;
     },

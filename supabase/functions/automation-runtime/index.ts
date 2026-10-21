@@ -19,6 +19,7 @@ import {
   sanitizeWebhookHeaders,
   validateOutboundWebhookUrl,
 } from "../_shared/outbound.ts";
+import { createCrmLead, updateCrmContact, updateCrmLead } from "../_shared/canonicalCrm.ts";
 
 interface BusinessSettings {
   business_hours_enabled?: boolean;
@@ -669,17 +670,20 @@ async function createTask(supabase: SupabaseClient, config: Record<string, unkno
 }
 
 async function createLead(supabase: SupabaseClient, _config: Record<string, unknown>, context: RunContext): Promise<Record<string, unknown>> {
-  const { data, error } = await supabase.from("leads").insert({
-    business_id: context.business.id,
-    email: context.payload?.email || context.contact?.email || null,
-    name: context.payload?.name || context.contact?.name || null,
-    phone: context.payload?.phone || null,
-    source: "automation",
+  const email = typeof context.payload?.email === 'string' ? context.payload.email : context.contact?.email || null;
+  const name = typeof context.payload?.name === 'string' ? context.payload.name : context.contact?.name || null;
+  const projectId = typeof context.payload?.projectId === 'string' ? context.payload.projectId : null;
+  const lead = await createCrmLead(supabase, { businessId: context.business.id, projectId }, {
+    title: name || email || 'Automation lead',
+    email,
+    name,
+    phone: typeof context.payload?.phone === 'string' ? context.payload.phone : context.contact?.phone || null,
+    source: 'automation',
+    intent: context.intent,
     metadata: { automationContext: context },
-  }).select().single();
-  
-  if (error) throw error;
-  return { leadId: data.id };
+    contactId: context.contact?.id,
+  });
+  return { leadId: lead.leadId, contactId: lead.contactId };
 }
 
 async function updateContact(supabase: SupabaseClient, config: Record<string, unknown>, context: RunContext): Promise<Record<string, unknown>> {
@@ -689,18 +693,12 @@ async function updateContact(supabase: SupabaseClient, config: Record<string, un
   }
   
   const updates: Record<string, unknown> = {};
-  if (config.firstName) updates.first_name = interpolate(config.firstName as string, context);
-  if (config.lastName) updates.last_name = interpolate(config.lastName as string, context);
+  if (config.firstName) updates.firstName = interpolate(config.firstName as string, context);
+  if (config.lastName) updates.lastName = interpolate(config.lastName as string, context);
   if (config.phone) updates.phone = interpolate(config.phone as string, context);
   if (config.tags) updates.tags = config.tags;
-  updates.updated_at = new Date().toISOString();
-  
-  const { error } = await supabase
-    .from("crm_contacts")
-    .update(updates)
-    .eq("id", contactId);
-  
-  if (error) throw error;
+  const projectId = typeof context.payload?.projectId === 'string' ? context.payload.projectId : null;
+  await updateCrmContact(supabase, { businessId: context.business.id, projectId }, contactId, updates);
   return { updated: true, contactId };
 }
 
@@ -712,12 +710,8 @@ async function movePipelineStage(supabase: SupabaseClient, config: Record<string
     return { moved: false, reason: "Missing leadId or stage" };
   }
   
-  const { error } = await supabase
-    .from("crm_leads")
-    .update({ status: stage, updated_at: new Date().toISOString() })
-    .eq("id", leadId);
-  
-  if (error) throw error;
+  const projectId = typeof context.payload?.projectId === 'string' ? context.payload.projectId : null;
+  await updateCrmLead(supabase, { businessId: context.business.id, projectId }, leadId, { stage });
   return { moved: true, leadId, stage };
 }
 
@@ -738,10 +732,8 @@ async function addTag(supabase: SupabaseClient, config: Record<string, unknown>,
   const currentTags = contact?.tags || [];
   if (!currentTags.includes(tag)) {
     currentTags.push(tag);
-    await supabase
-      .from("crm_contacts")
-      .update({ tags: currentTags, updated_at: new Date().toISOString() })
-      .eq("id", contactId);
+    const projectId = typeof context.payload?.projectId === 'string' ? context.payload.projectId : null;
+    await updateCrmContact(supabase, { businessId: context.business.id, projectId }, contactId, { tags: currentTags });
   }
   
   return { added: true, contactId, tag };
@@ -762,10 +754,8 @@ async function removeTag(supabase: SupabaseClient, config: Record<string, unknow
     .single();
   
   const currentTags = (contact?.tags || []).filter((t: string) => t !== tag);
-  await supabase
-    .from("crm_contacts")
-    .update({ tags: currentTags, updated_at: new Date().toISOString() })
-    .eq("id", contactId);
+  const projectId = typeof context.payload?.projectId === 'string' ? context.payload.projectId : null;
+  await updateCrmContact(supabase, { businessId: context.business.id, projectId }, contactId, { tags: currentTags });
   
   return { removed: true, contactId, tag };
 }
@@ -934,12 +924,10 @@ async function ghlCreateContact(
     // Sync GHL contact ID back to local CRM
     const ghlContactId = (data.contact as Record<string, unknown> | undefined)?.id;
     if (ghlContactId && context.contact?.id) {
-      await supabase
-        .from('crm_contacts')
-        .update({ external_id: String(ghlContactId) })
-        .eq('id', context.contact.id)
-        .eq('project_id', projectIdFromRunContext(context))
-        .eq('business_id', context.business.id);
+      await updateCrmContact(supabase, {
+        businessId: context.business.id,
+        projectId: projectIdFromRunContext(context),
+      }, context.contact.id, { externalId: String(ghlContactId) });
     }
 
     console.log('[automation-runtime] GHL contact created:', ghlContactId);

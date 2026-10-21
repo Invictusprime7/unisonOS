@@ -21,6 +21,7 @@ import { dispatchAutomation } from '@/services/automationOrchestrator';
 import { sendInngestEvent } from '@/services/inngestService';
 import { isAutomatable } from '@/runtime/intentClassifier';
 import type { IntentContext, IntentResult } from '@/runtime/intentExecutor';
+import { applyResourceOp } from '@/services/resources/resourceRuntime';
 
 // ============================================================================
 // Types
@@ -75,25 +76,23 @@ export function useCRMActions(scope?: string | CRMScopeOptions) {
     typeof scope === 'string' ? { businessId: scope } : scope || {};
   const businessId = normalizedScope.businessId;
   const projectId = normalizedScope.projectId;
+  const resourceContext = { businessId: businessId || '', projectId, mode: 'cloud' as const };
   // ---- DEALS ----
 
   const createDeal = useCallback(async (input: CRMDealInput): Promise<CRMActionResult<{ id: string }>> => {
     try {
-      const { data, error } = await supabase
-        .from('crm_deals')
-        .insert({
+      const data = await applyResourceOp({
+        op: 'create',
+        resourceKey: 'crm:deals',
+        values: {
           title: input.title,
           stage: input.stage,
           value: input.value ?? null,
           expected_close_date: input.expected_close_date ?? null,
           contact_id: input.contact_id ?? null,
           lead_id: input.lead_id ?? null,
-          ...(projectId ? { project_id: projectId } : {}),
-        })
-        .select('id')
-        .single();
-
-      if (error) return { success: false, error: error.message };
+        },
+      }, resourceContext);
 
       // Deterministic: CRM deal events are always automatable
       if (businessId && data?.id && isAutomatable('deal.won')) {
@@ -111,7 +110,7 @@ export function useCRMActions(scope?: string | CRMScopeOptions) {
     } catch (e) {
       return { success: false, error: (e as Error).message };
     }
-  }, [businessId, projectId]);
+  }, [businessId, projectId, resourceContext]);
 
   const moveDealStage = useCallback(async (
     dealId: string,
@@ -120,12 +119,11 @@ export function useCRMActions(scope?: string | CRMScopeOptions) {
     contactEmail?: string
   ): Promise<CRMActionResult> => {
     try {
-      const { error } = await supabase
-        .from('crm_deals')
-        .update({ stage: newStage })
-        .eq('id', dealId);
-
-      if (error) return { success: false, error: error.message };
+      await applyResourceOp({
+        op: 'update',
+        ref: { resourceKey: 'crm:deals', kind: 'crm', recordId: dealId },
+        values: { stage: newStage },
+      }, resourceContext);
 
       // Fire automation: stage changed → crm/deal.stage.changed
       if (businessId) {
@@ -153,37 +151,37 @@ export function useCRMActions(scope?: string | CRMScopeOptions) {
     } catch (e) {
       return { success: false, error: (e as Error).message };
     }
-  }, [businessId, projectId]);
+  }, [businessId, projectId, resourceContext]);
 
   const deleteDeal = useCallback(async (dealId: string): Promise<CRMActionResult> => {
     try {
-      const { error } = await supabase.from('crm_deals').delete().eq('id', dealId);
-      if (error) return { success: false, error: error.message };
+      await applyResourceOp({
+        op: 'delete',
+        ref: { resourceKey: 'crm:deals', kind: 'crm', recordId: dealId },
+      }, resourceContext);
       return { success: true };
     } catch (e) {
       return { success: false, error: (e as Error).message };
     }
-  }, []);
+  }, [resourceContext]);
 
   // ---- LEADS ----
 
   const createLead = useCallback(async (input: CRMLeadInput): Promise<CRMActionResult<{ id: string }>> => {
     try {
-      const { data, error } = await supabase
-        .from('crm_leads')
-        .insert({
+      const data = await applyResourceOp({
+        op: 'create',
+        resourceKey: 'crm:leads',
+        values: {
           title: input.title,
           status: input.status || 'new',
           value: input.value ?? null,
           source: input.source ?? null,
           notes: input.notes ?? null,
-          business_id: input.business_id ?? null,
-          ...(projectId ? { project_id: projectId } : {}),
-        })
-        .select('id')
-        .single();
-
-      if (error) return { success: false, error: error.message };
+          email: input.email,
+          phone: input.phone,
+        },
+      }, resourceContext);
 
       // Fire automation: lead created → crm/lead.created
       if (businessId && data?.id) {
@@ -201,30 +199,23 @@ export function useCRMActions(scope?: string | CRMScopeOptions) {
     } catch (e) {
       return { success: false, error: (e as Error).message };
     }
-  }, [businessId, projectId]);
+  }, [businessId, projectId, resourceContext]);
 
   const updateLead = useCallback(async (
     leadId: string,
     updates: Partial<CRMLeadInput>
   ): Promise<CRMActionResult> => {
     try {
-      const { error } = await supabase
-        .from('crm_leads')
-        .update({
-          ...(updates.title !== undefined ? { title: updates.title } : {}),
-          ...(updates.status !== undefined ? { status: updates.status } : {}),
-          ...(updates.value !== undefined ? { value: updates.value } : {}),
-          ...(updates.source !== undefined ? { source: updates.source } : {}),
-          ...(updates.notes !== undefined ? { notes: updates.notes } : {}),
-        })
-        .eq('id', leadId);
-
-      if (error) return { success: false, error: error.message };
+      await applyResourceOp({
+        op: 'update',
+        ref: { resourceKey: 'crm:leads', kind: 'crm', recordId: leadId },
+        values: Object.fromEntries(Object.entries(updates).filter(([, value]) => value !== undefined)),
+      }, resourceContext);
       return { success: true };
     } catch (e) {
       return { success: false, error: (e as Error).message };
     }
-  }, []);
+  }, [resourceContext]);
 
   const updateLeadStatus = useCallback(async (
     leadId: string,
@@ -233,12 +224,11 @@ export function useCRMActions(scope?: string | CRMScopeOptions) {
     email?: string
   ): Promise<CRMActionResult> => {
     try {
-      const { error } = await supabase
-        .from('crm_leads')
-        .update({ status: newStatus })
-        .eq('id', leadId);
-
-      if (error) return { success: false, error: error.message };
+      await applyResourceOp({
+        op: 'update',
+        ref: { resourceKey: 'crm:leads', kind: 'crm', recordId: leadId },
+        values: { status: newStatus },
+      }, resourceContext);
 
       // Fire automation: status changed → crm/lead.status.changed
       if (businessId) {
@@ -262,38 +252,36 @@ export function useCRMActions(scope?: string | CRMScopeOptions) {
     } catch (e) {
       return { success: false, error: (e as Error).message };
     }
-  }, [businessId, projectId]);
+  }, [businessId, projectId, resourceContext]);
 
   const deleteLead = useCallback(async (leadId: string): Promise<CRMActionResult> => {
     try {
-      const { error } = await supabase.from('crm_leads').delete().eq('id', leadId);
-      if (error) return { success: false, error: error.message };
+      await applyResourceOp({
+        op: 'delete',
+        ref: { resourceKey: 'crm:leads', kind: 'crm', recordId: leadId },
+      }, resourceContext);
       return { success: true };
     } catch (e) {
       return { success: false, error: (e as Error).message };
     }
-  }, []);
+  }, [resourceContext]);
 
   // ---- CONTACTS ----
 
   const createContact = useCallback(async (input: CRMContactInput): Promise<CRMActionResult<{ id: string }>> => {
     try {
-      const { data, error } = await supabase
-        .from('crm_contacts')
-        .insert({
+      const data = await applyResourceOp({
+        op: 'create',
+        resourceKey: 'crm:contacts',
+        values: {
           first_name: input.first_name,
           last_name: input.last_name ?? null,
           email: input.email ?? null,
           phone: input.phone ?? null,
           company: input.company ?? null,
           tags: input.tags ?? [],
-          ...(businessId ? { business_id: businessId } : {}),
-          ...(projectId ? { project_id: projectId } : {}),
-        })
-        .select('id')
-        .single();
-
-      if (error) return { success: false, error: error.message };
+        },
+      }, resourceContext);
 
       // Fire automation: contact created → crm/contact.created
       if (businessId && data?.id) {
@@ -312,17 +300,19 @@ export function useCRMActions(scope?: string | CRMScopeOptions) {
     } catch (e) {
       return { success: false, error: (e as Error).message };
     }
-  }, [businessId, projectId]);
+  }, [businessId, projectId, resourceContext]);
 
   const deleteContact = useCallback(async (contactId: string): Promise<CRMActionResult> => {
     try {
-      const { error } = await supabase.from('crm_contacts').delete().eq('id', contactId);
-      if (error) return { success: false, error: error.message };
+      await applyResourceOp({
+        op: 'delete',
+        ref: { resourceKey: 'crm:contacts', kind: 'crm', recordId: contactId },
+      }, resourceContext);
       return { success: true };
     } catch (e) {
       return { success: false, error: (e as Error).message };
     }
-  }, []);
+  }, [resourceContext]);
 
   // ---- WORKFLOWS ----
 

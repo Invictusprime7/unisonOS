@@ -73,7 +73,7 @@ export function WorkflowListPanel({
     setIsLoading(true);
     setError(null);
     
-    const { workflows: data, error: fetchError } = await listWorkflows(projectId);
+    const { workflows: data, error: fetchError } = await listWorkflows({ businessId: businessId || '', projectId });
     
     if (fetchError) {
       setError(fetchError);
@@ -82,7 +82,7 @@ export function WorkflowListPanel({
     }
     
     setIsLoading(false);
-  }, [projectId]);
+  }, [businessId, projectId]);
 
   useEffect(() => {
     fetchWorkflows();
@@ -96,18 +96,18 @@ export function WorkflowListPanel({
 
   // Edit workflow
   const handleEdit = useCallback(async (workflowId: string) => {
-    const { workflow, error: loadError } = await loadWorkflow(workflowId);
+    const { workflow, error: loadError } = await loadWorkflow(workflowId, { businessId: businessId || '', projectId });
     if (loadError || !workflow) {
       toast.error('Failed to load workflow');
       return;
     }
     setEditingWorkflow(workflow);
     setIsBuilderOpen(true);
-  }, []);
+  }, [businessId, projectId]);
 
   // Save workflow from builder
   const handleSave = useCallback(async (workflow: Workflow) => {
-    const { success, id, error: saveError } = await saveWorkflow(workflow);
+    const { success, id, error: saveError } = await saveWorkflow(workflow, { businessId: businessId || '', projectId });
     
     if (!success || saveError) {
       throw new Error(saveError || 'Save failed');
@@ -122,11 +122,11 @@ export function WorkflowListPanel({
     
     setIsBuilderOpen(false);
     setEditingWorkflow(null);
-  }, [editingWorkflow]);
+  }, [businessId, projectId, editingWorkflow]);
 
   // Toggle active
   const handleToggleActive = useCallback(async (workflowId: string, currentActive: boolean) => {
-    const { success, error: toggleError } = await toggleWorkflowActive(workflowId, !currentActive);
+    const { success, error: toggleError } = await toggleWorkflowActive(workflowId, !currentActive, { businessId: businessId || '', projectId });
     
     if (success) {
       setWorkflows(prev => prev.map(w => 
@@ -136,11 +136,11 @@ export function WorkflowListPanel({
     } else {
       toast.error(toggleError || 'Failed to toggle workflow');
     }
-  }, []);
+  }, [businessId, projectId]);
 
   // Duplicate
   const handleDuplicate = useCallback(async (workflowId: string) => {
-    const { workflow, error: dupError } = await duplicateWorkflow(workflowId);
+    const { workflow, error: dupError } = await duplicateWorkflow(workflowId, { businessId: businessId || '', projectId });
     
     if (workflow) {
       setWorkflows(prev => [workflow, ...prev]);
@@ -148,13 +148,13 @@ export function WorkflowListPanel({
     } else {
       toast.error(dupError || 'Failed to duplicate workflow');
     }
-  }, []);
+  }, [businessId, projectId]);
 
   // Delete
   const handleDelete = useCallback(async () => {
     if (!deleteConfirmId) return;
     
-    const { success, error: deleteError } = await deleteWorkflow(deleteConfirmId);
+    const { success, error: deleteError } = await deleteWorkflow(deleteConfirmId, { businessId: businessId || '', projectId });
     
     if (success) {
       setWorkflows(prev => prev.filter(w => w.id !== deleteConfirmId));

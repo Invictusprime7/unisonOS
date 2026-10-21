@@ -29,6 +29,15 @@ import { onResourceInvalidated, queryResource } from '@/services/resources/resou
 const ctx = { businessId: 'business', projectId: 'a', siteId: 'site-a', mode: 'builder' as const };
 const id = '11111111-2222-3333-4444-555555555555';
 const target = (key: string) => ({ resourceMark: `${key}#${id}`, projectId: 'a' });
+const M2_FIXTURES = [
+  { fixture: 'salon', resource: 'services', titleField: 'name', imageField: 'image_url', row: { id, name: 'Haircut', image_url: 'haircut.jpg' } },
+  { fixture: 'ecommerce', resource: 'products', titleField: 'name', imageField: 'image_url', row: { id, name: 'Tee', image_url: 'tee.jpg' } },
+  { fixture: 'restaurant', resource: 'menu', titleField: 'name', imageField: 'image_url', row: { id, name: 'Soup', image_url: 'soup.jpg' } },
+  { fixture: 'offers', resource: 'offers', titleField: 'title', imageField: 'image_url', row: { id, title: 'Lunch special', image_url: 'offer.jpg', cta_href: '/old-offer' } },
+  { fixture: 'testimonials', resource: 'testimonials', titleField: 'author_name', imageField: 'author_avatar_url', row: { id, author_name: 'Alex', author_avatar_url: 'avatar.jpg' } },
+  { fixture: 'portfolio', resource: 'portfolio', titleField: 'title', imageField: 'cover_image_url', row: { id, title: 'Studio', cover_image_url: 'studio.jpg' } },
+] as const;
+
 describe('cross-industry resource edit acceptance at service level', () => {
   beforeEach(() => {
     state.rows.clear(); state.failWrite = false; state.race = false;
@@ -41,6 +50,22 @@ describe('cross-industry resource edit acceptance at service level', () => {
       state.rows.set(`${project}:menu`, [{ id, name: 'Soup', price_cents: 1250, category: 'Starter' }]);
       state.rows.set(`${project}:services`, [{ id, name: 'Haircut', duration_minutes: 30 }]);
       state.rows.set(`${project}:portfolio`, [{ id, title: 'Studio', image_url: 'studio.jpg' }]);
+    }
+    for (const fixture of M2_FIXTURES) {
+      const key = `a:${fixture.resource}`;
+      const rows = state.rows.get(key);
+      if (!rows) {
+        state.rows.set(key, [structuredClone(fixture.row)]);
+      } else {
+        const row = rows.find((candidate) => candidate.id === id);
+        if (row) {
+          for (const [field, value] of Object.entries(fixture.row)) {
+            if (row[field] === undefined) row[field] = value;
+          }
+        } else {
+          rows.push(structuredClone(fixture.row));
+        }
+      }
     }
   });
   it('replaces only the second product image and reads it back after reopening the resource', async () => {
@@ -93,5 +118,40 @@ describe('cross-industry resource edit acceptance at service level', () => {
     expect(result.ok).toBe(false);
     expect(events).toEqual([]);
     expect((await queryResource('products', ctx))[1].name).toBe('Second');
+  });
+
+  it('reopens six Preview data fixtures with inline text and image edits persisted', async () => {
+    for (const fixture of M2_FIXTURES) {
+      const textResult = await executeEditorCommand({
+        type: 'set-text',
+        target: { resourceMark: `${fixture.resource}#${id}.${fixture.titleField}`, projectId: 'a' },
+        text: `${fixture.fixture} revised`,
+      }, { source: 'inline', resource: ctx });
+      expect(textResult.ok, `${fixture.fixture} text edit`).toBe(true);
+
+      const imageResult = await executeEditorCommand({
+        type: 'replace-asset',
+        target: { resourceMark: `${fixture.resource}#${id}.${fixture.imageField}`, projectId: 'a' },
+        url: `https://assets.test/${fixture.fixture}.jpg`,
+      }, { source: 'toolbar', resource: ctx });
+      expect(imageResult.ok, `${fixture.fixture} image edit`).toBe(true);
+
+      const reopened = await queryResource(fixture.resource, ctx);
+      const reopenedRecord = reopened.find((record) => record.id === id);
+      expect(reopenedRecord?.[fixture.titleField], `${fixture.fixture} title after reopen`).toBe(`${fixture.fixture} revised`);
+      expect(reopenedRecord?.[fixture.imageField], `${fixture.fixture} image after reopen`).toBe(`https://assets.test/${fixture.fixture}.jpg`);
+    }
+  });
+
+  it('persists an editable CTA URL in the selected offer record after reopening', async () => {
+    const result = await executeEditorCommand({
+      type: 'update-resource-field',
+      target: { resourceMark: `offers#${id}.cta_href`, projectId: 'a' },
+      values: { cta_href: '/offers/featured' },
+      expected: { cta_href: '/old-offer' },
+    }, { source: 'inspector', resource: ctx });
+
+    expect(result).toMatchObject({ ok: true, lane: 'resource', changedFields: ['cta_href'] });
+    expect((await queryResource('offers', ctx)).find((record) => record.id === id)?.cta_href).toBe('/offers/featured');
   });
 });

@@ -1,0 +1,80 @@
+{
+  "_doc": "P0.5 \u2014 audited registry of every canonical VFS write exemption. Each exemption reason must map to an approved category, and every file's per-reason count is frozen here. Adding an exemption requires an explicit, reviewed entry.",
+  "categories": {
+    "hydration": "Loads already-persisted bytes (revision, draft, sealed snapshot, wizard handoff) into an empty or stale working set. Creates no new site state.",
+    "adoption": "Projects the authoritative result of an accepted commitMutation / declared adoption record into the working set. The commit already happened.",
+    "rollback": "Restores a previously captured working set after a refused or failed transaction.",
+    "local-history": "Editor or AI-history undo / redo / revert / reapply of a working-set snapshot the user already had.",
+    "router-projection": "Deterministic re-projection of /src/App.tsx (or a registry-owned page deletion) from the canonical PageRegistry. The registry, not the writer, is the authority.",
+    "workspace-import": "Developer-workspace import of external code, a saved project or a scraped page into the editor buffer before any commit.",
+    "editor-buffer": "Editor working-buffer projection; persistence happens on the next commit.",
+    "runtime-manifest": "Non-content runtime plumbing (dependency manifest, canonical Unison runtime files).",
+    "optimistic-hmr": "Optimistic preview projection that MUST be chained to a commitMutation / saveDraft in the same code path. Highest-risk category \u2014 guarded by a proximity check."
+  },
+  "reasons": {
+    "hydration of a persisted revision into the working set": "hydration",
+    "hydration of canonical snapshot files into an empty working set": "hydration",
+    "hydration of the committed wizard handoff": "hydration",
+    "hydration of a saved draft into the working set": "hydration",
+    "adoption of an accepted commitMutation result": "adoption",
+    "template import adoption, declared through the adoption record": "adoption",
+    "projection of an already-accepted AI apply transaction": "adoption",
+    "rollback restore of the pre-mutation working set": "rollback",
+    "local editor undo of a working-set snapshot": "local-history",
+    "local editor redo of a working-set snapshot": "local-history",
+    "local working-set undo": "local-history",
+    "local working-set redo": "local-history",
+    "AI edit-history revert of a recorded working-set snapshot": "local-history",
+    "AI edit-history reapply of a recorded working-set snapshot": "local-history",
+    "deterministic router projection from the page registry": "router-projection",
+    "registry-owned page removal; the registry is the deletion authority": "router-projection",
+    "import of a saved project into the workspace": "workspace-import",
+    "webpage import into the workspace": "workspace-import",
+    "code import into the workspace": "workspace-import",
+    "editor working-buffer projection; persistence happens on commit": "editor-buffer",
+    "local-only text projection; durable revisions remain commitMutation-owned.": "editor-buffer",
+    "local-only visual text edit; durable revisions remain commitMutation-owned.": "editor-buffer",
+    "dependency manifest write, not site content": "runtime-manifest",
+    "write-back of canonical Unison runtime files, not user content": "runtime-manifest",
+    "local-only text projection; durable revisions remain commitMutation-owned.": "editor-buffer",
+    "local-only visual text edit; durable revisions remain commitMutation-owned.": "editor-buffer",
+    "optimistic HMR projection; the same mutation is chained through commitMutation below": "optimistic-hmr"
+  },
+  "baseline": {
+    "src/components/creatives/WebBuilder.tsx": {
+      "optimistic HMR projection; the same mutation is chained through commitMutation below": 2,
+      "hydration of a persisted revision into the working set": 1,
+      "adoption of an accepted commitMutation result": 8,
+      "hydration of canonical snapshot files into an empty working set": 1,
+      "deterministic router projection from the page registry": 4,
+      "registry-owned page removal; the registry is the deletion authority": 1,
+      "hydration of the committed wizard handoff": 1,
+      "rollback restore of the pre-mutation working set": 2,
+      "editor working-buffer projection; persistence happens on commit": 1,
+      "local-only text projection; durable revisions remain commitMutation-owned.": 1,
+      "local-only visual text edit; durable revisions remain commitMutation-owned.": 1,
+      "hydration of a saved draft into the working set": 2,
+      "template import adoption, declared through the adoption record": 2,
+      "local editor undo of a working-set snapshot": 1,
+      "local editor redo of a working-set snapshot": 1,
+      "AI edit-history revert of a recorded working-set snapshot": 1,
+      "AI edit-history reapply of a recorded working-set snapshot": 1
+    },
+    "src/components/creatives/code-editor/VFSCodeView.tsx": {
+      "dependency manifest write, not site content": 1
+    },
+    "src/contexts/VFSContext.tsx": {
+      "local working-set undo": 1,
+      "local working-set redo": 1,
+      "import of a saved project into the workspace": 1,
+      "webpage import into the workspace": 1,
+      "code import into the workspace": 1
+    },
+    "src/services/aiVFSOrchestrator.ts": {
+      "projection of an already-accepted AI apply transaction": 1
+    },
+    "src/services/unisonCanonicalRegistry.ts": {
+      "write-back of canonical Unison runtime files, not user content": 1
+    }
+  }
+}

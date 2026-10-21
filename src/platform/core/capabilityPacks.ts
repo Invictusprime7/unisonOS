@@ -263,16 +263,6 @@ const CRM_LEADS_PACK: CapabilityPack = {
   database: {
     tables: [
       {
-        table: 'leads',
-        purpose: 'Raw public submissions; the write target for anonymous visitors.',
-        requiredColumns: ['id', 'business_id', 'name', 'email', 'phone', 'source', 'message', 'metadata'],
-        ownershipColumn: 'business_id',
-        publicRead: false,
-        publicInsert: true,
-        policies: ['leads_insert_public_valid', 'leads_select_member', 'leads_update_member', 'leads_delete_member'],
-        grants: PUBLIC_SUBMIT_GRANTS,
-      },
-      {
         table: 'crm_leads',
         purpose: 'Qualified pipeline records with stage, value and intent.',
         requiredColumns: ['id', 'business_id', 'contact_id', 'title', 'name', 'email', 'status', 'value', 'source', 'intent', 'notes', 'metadata'],
@@ -334,9 +324,9 @@ const CRM_LEADS_PACK: CapabilityPack = {
   },
   readiness: {
     assertions: [
-      { id: 'leads-table-exists', kind: 'table-exists', target: 'leads', description: 'Public submissions have somewhere to land.', blocking: true },
-      { id: 'leads-public-insert', kind: 'policy-exists', target: 'leads_insert_public_valid', description: 'Visitors can submit a form without signing in.', blocking: true },
-      { id: 'leads-owner-read-only', kind: 'rls-enabled', target: 'leads', description: 'Only the business can read its own submissions.', blocking: true },
+      { id: 'crm-leads-table-exists', kind: 'table-exists', target: 'crm_leads', description: 'Public submissions have somewhere to land.', blocking: true },
+      { id: 'crm-leads-public-insert', kind: 'policy-exists', target: 'crm_leads_insert_public_valid', description: 'Visitors can submit a form without signing in.', blocking: true },
+      { id: 'crm-leads-owner-read-only', kind: 'rls-enabled', target: 'crm_leads', description: 'Only the business can read its own submissions.', blocking: true },
       { id: 'lead-handler-installed', kind: 'handler-installed', target: 'create-lead', description: 'The submit handler is wired to the backend.', blocking: true },
       { id: 'crm-notification-target', kind: 'setting-present', target: 'business.notificationEmail', description: 'New leads notify a real inbox.', blocking: true },
     ],

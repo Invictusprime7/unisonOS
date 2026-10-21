@@ -240,6 +240,41 @@ export async function verifyBusinessAccess(
   }
 }
 
+/** Verify project ownership or explicit project membership for authenticated commands. */
+export async function verifyProjectAccess(
+  userId: string,
+  projectId: string,
+): Promise<{ allowed: boolean; businessId?: string | null; error?: string }> {
+  if (!projectId) return { allowed: false, error: "projectId is required" };
+
+  try {
+    const admin = getAdminClient();
+    const { data: project, error: projectError } = await admin
+      .from("projects")
+      .select("id,owner_id,business_id")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (projectError) return { allowed: false, error: "Project authorization check failed" };
+    if (!project) return { allowed: false, error: "Project not found" };
+    const businessId = typeof project.business_id === "string" ? project.business_id : null;
+    if (project.owner_id === userId) return { allowed: true, businessId };
+
+    const { data: member, error: memberError } = await admin
+      .from("project_members")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (memberError) return { allowed: false, error: "Project membership check failed" };
+    return member
+      ? { allowed: true, businessId }
+      : { allowed: false, error: "Access denied to this project" };
+  } catch (error) {
+    console.error("[auth] Project access check failed:", error);
+    return { allowed: false, error: "Project authorization check failed" };
+  }
+}
+
 /**
  * Create an error response with consistent format.
  */

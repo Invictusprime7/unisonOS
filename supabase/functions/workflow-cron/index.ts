@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
+import { updateCrmWorkflow } from "../_shared/canonicalCrm.ts";
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -73,7 +74,12 @@ Deno.serve(async (req) => {
           .insert({
             workflow_id: workflow.id,
             status: "running",
-            trigger_data: { triggered_by: "cron", scheduled_time: now.toISOString() },
+            trigger_data: {
+              triggered_by: "cron",
+              scheduled_time: now.toISOString(),
+              business_id: workflow.business_id,
+              project_id: workflow.project_id,
+            },
           })
           .select()
           .single();
@@ -98,13 +104,10 @@ Deno.serve(async (req) => {
         }
 
         // Update last run time
-        await supabase
-          .from("crm_workflows")
-          .update({
-            trigger_config: { ...config, lastRun: now.toISOString() },
-            updated_at: now.toISOString(),
-          })
-          .eq("id", workflow.id);
+        await updateCrmWorkflow(supabase, {
+          businessId: workflow.business_id,
+          projectId: workflow.project_id,
+        }, workflow.id, { triggerConfig: { ...config, lastRun: now.toISOString() } });
 
         // Trigger job processor
         await supabase.functions.invoke("workflow-job-processor", {

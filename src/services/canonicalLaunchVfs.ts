@@ -368,6 +368,14 @@ function buildRuntimeAppContext(
   const snapshotId = siteBundleSnapshot?.snapshotId;
   const organizationId = input.organizationId || undefined;
   const siteId = input.siteId || projectId;
+  const runtimeIdentity = input.businessRuntime?.identity;
+  if (runtimeIdentity && (
+    runtimeIdentity.businessId !== businessId
+    || runtimeIdentity.projectId !== projectId
+    || runtimeIdentity.siteId !== siteId
+  )) {
+    throw new Error('Business runtime identity must match the canonical launch scope.');
+  }
   return {
     runtimeContext: organizationId && businessId && projectId && siteId && snapshotId
       ? {
@@ -377,6 +385,7 @@ function buildRuntimeAppContext(
           projectId,
           websiteId: siteId,
           siteId,
+          locationId: runtimeIdentity?.locationId,
           snapshotId,
           environment: input.environment ?? 'builder',
           brandProfileVersion: input.businessRuntime?.profile.version,

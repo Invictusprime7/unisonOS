@@ -7,6 +7,7 @@ import {
   mergeGeneratedVfsWithCanonicalSnapshot,
 } from "@/services/canonicalLaunchVfs";
 import type { SiteBundleSnapshot } from "@/platform/core/canonicalPipeline";
+import type { BusinessRuntimeContract } from "@/platform/core/businessRuntimeContract";
 import {
   WIZARD_LANE_A_PROTECTED_FILES,
   WIZARD_LAUNCH_AUTHORITY_PATH,
@@ -15,6 +16,45 @@ import { createEmptyCreatorData } from "@/types/creatorData";
 import { createBuilderPage, createEmptyPageRegistry } from "@/types/pageRegistry";
 import { launchStateToSandpackFiles } from "@/utils/launchToSandpack";
 import { createLaunchState } from "@/types/launchState";
+
+const businessRuntime = {
+  version: '1.1',
+  businessId: 'biz_123',
+  identity: {
+    businessId: 'biz_123',
+    projectId: 'project_123',
+    siteId: 'site_123',
+    locationId: 'location_123',
+  },
+  capabilityManifest: {
+    version: '1.0',
+    source: 'capability_pack_registry',
+    requestedCapabilities: ['business_profile', 'crm.leads'],
+    packs: [{
+      id: 'crm.leads',
+      status: 'declared',
+      provides: ['crm.leads', 'crm.contacts', 'forms.contact', 'forms.quote', 'notifications.email'],
+      requiredPermissions: ['business.crm.manage', 'visitor.lead.create'],
+      requiredTables: ['leads', 'crm_leads', 'crm_contacts', 'crm_activities'],
+      readinessAssertions: ['leads-public-insert-enabled'],
+    }],
+    unsupportedCapabilities: [],
+  },
+  profile: {
+    source: 'businesses',
+    version: '2026-10-20T00:00:00.000Z',
+    completenessPercent: 100,
+    publishReady: true,
+    missingRequiredFields: [],
+  },
+  dataBindings: {
+    source: 'site_data_bindings',
+    snapshotId: 'snap_123',
+    expectedCount: 0,
+    status: 'ready',
+  },
+  generatedAt: '2026-10-20T00:00:00.000Z',
+} satisfies BusinessRuntimeContract;
 
 function createSnapshot(): SiteBundleSnapshot {
   const pageRegistry = createEmptyPageRegistry();
@@ -300,7 +340,7 @@ export default function App(){ return <HashRouter><Routes><Route path="/" elemen
 
   it("wires launcher output into canonical VFS metadata and package dependencies", () => {
     const snapshot = createSnapshot();
-    const artifacts = buildCanonicalLaunchArtifacts({
+    const input = {
       generatedFiles: {
         "/src/App.tsx": "import { motion } from 'framer-motion';\nexport default function App(){ return <motion.div>Hello</motion.div>; }",
       },
@@ -311,6 +351,7 @@ export default function App(){ return <HashRouter><Routes><Route path="/" elemen
       projectId: "project_123",
       organizationId: "biz_123",
       siteId: "site_123",
+      businessRuntime,
       systemType: "agency",
       systemName: "Acme Co",
       templateName: "Acme Launch",
@@ -319,7 +360,8 @@ export default function App(){ return <HashRouter><Routes><Route path="/" elemen
       industry: "agency",
       aesthetic: "modern",
       backendRequired: false,
-    });
+    };
+    const artifacts = buildCanonicalLaunchArtifacts(input);
 
     expect(artifacts.files["/src/App.tsx"]).toContain("Routes");
     expect(artifacts.files["/src/pages/Home.tsx"]).toContain("motion.div");
@@ -330,8 +372,10 @@ export default function App(){ return <HashRouter><Routes><Route path="/" elemen
       businessId: 'biz_123',
       projectId: 'project_123',
       websiteId: 'site_123',
+      locationId: 'location_123',
       snapshotId: 'snap_123',
     });
+    expect(artifacts.runtimeManifest.appContext?.businessRuntime?.capabilityManifest).toEqual(businessRuntime.capabilityManifest);
     expect(artifacts.runtimeManifest.appContext?.previewRuntime?.foundation).toBe('token-glass');
     expect(artifacts.appContext).not.toHaveProperty('experienceContract');
     expect(artifacts.runtimeManifest.metadataFiles).toContain(CANONICAL_METADATA_FILE_PATHS.appContext);
@@ -340,6 +384,13 @@ export default function App(){ return <HashRouter><Routes><Route path="/" elemen
     expect(artifacts.files[CANONICAL_METADATA_FILE_PATHS.wizardRuntime]).toContain('token-glass');
     expect(artifacts.files[CANONICAL_METADATA_FILE_PATHS.siteBundleSnapshot]).toContain("\"vfsFilePaths\"");
     expect(artifacts.files['/src/components/businessProfile.ts']).toContain('useBusinessProfile');
+    expect(() => buildCanonicalLaunchArtifacts({
+      ...input,
+      businessRuntime: {
+        ...businessRuntime,
+        identity: { ...businessRuntime.identity, siteId: 'another-site' },
+      },
+    })).toThrow('Business runtime identity must match the canonical launch scope.');
   });
 
   it('yields between finalization stages without changing canonical artifacts', async () => {

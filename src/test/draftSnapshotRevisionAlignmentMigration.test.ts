@@ -7,6 +7,7 @@ const stamp = read('20260930045635_persist_authorship_authority_handoff.sql');
 const align = read('20261004123245_align_canonical_snapshots_with_revision.sql');
 const base = read('20260815032033_ececf37c-f596-4970-b2d1-7d6574725950.sql');
 const buildRecovery = read('20261013144937_canonical_build_row_recovery.sql');
+const pointerIntegrity = read('20261021111258_enforce_builder_draft_revision_pointer_integrity.sql');
 
 describe('draft snapshot alignment with stamped revisions', () => {
   it('reproduces the divergence: revision snapshot is mutated on insert while the draft strict-compares it', () => {
@@ -47,5 +48,14 @@ describe('draft snapshot alignment with stamped revisions', () => {
     expect(buildRecovery.indexOf('INSERT INTO public.site_builds')).toBeLessThan(
       buildRecovery.indexOf('RETURN public.commit_canonical_site_revision_v2_full'),
     );
+  });
+
+  it('keeps draft pointers attached to an immutable committed revision', () => {
+    expect(pointerIntegrity).toContain('FOREIGN KEY (last_revision_id)');
+    expect(pointerIntegrity).toContain('ON DELETE RESTRICT');
+    expect(pointerIntegrity).toContain('BEFORE UPDATE OF id, project_id, business_id, draft_id, status');
+    expect(pointerIntegrity).toContain("IF OLD.status = 'committed'");
+    expect(pointerIntegrity).toContain('NEW.status IS DISTINCT FROM OLD.status');
+    expect(pointerIntegrity).toContain('invalid pointers exist');
   });
 });

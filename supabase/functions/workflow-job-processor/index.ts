@@ -7,6 +7,7 @@ import {
   sanitizeWebhookHeaders,
   validateOutboundWebhookUrl,
 } from "../_shared/outbound.ts";
+import { createCrmActivity, createCrmContact, createCrmLead, updateCrmContact, updateCrmLead, type CrmScope } from "../_shared/canonicalCrm.ts";
 
 interface WorkflowJobProcessorRequest {
   workflowRunId?: string;
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
 
     const { data: workflowRun, error: workflowRunError } = await supabase
       .from("crm_workflow_runs")
-      .select("id, status")
+      .select("id, status, trigger_data")
       .eq("id", workflowRunId)
       .maybeSingle();
 
@@ -94,6 +95,11 @@ Deno.serve(async (req) => {
     console.log(`Found ${jobs?.length || 0} pending jobs`);
 
     const results: any[] = [];
+    const triggerData = workflowRun.trigger_data || {};
+    const crmScope: CrmScope = {
+      businessId: triggerData.business_id || triggerData.businessId || null,
+      projectId: triggerData.project_id || triggerData.projectId || null,
+    };
 
     for (const job of jobs || []) {
       console.log(`Processing job ${job.id}: ${job.action_type}`);
@@ -105,7 +111,7 @@ Deno.serve(async (req) => {
         .eq("id", job.id);
 
       try {
-        const result = await processJob(supabase, job);
+        const result = await processJob(supabase, job, crmScope);
         
         // Update job as completed
         await supabase
@@ -189,24 +195,24 @@ Deno.serve(async (req) => {
   }
 });
 
-async function processJob(supabase: any, job: any): Promise<any> {
+async function processJob(supabase: any, job: any, crmScope: CrmScope): Promise<any> {
   const { action_type, action_config } = job;
 
   switch (action_type) {
     case "create_contact":
-      return await createContact(supabase, action_config);
+      return await createContact(supabase, action_config, crmScope);
     
     case "update_contact":
-      return await updateContact(supabase, action_config);
+      return await updateContact(supabase, action_config, crmScope);
     
     case "create_lead":
-      return await createLead(supabase, action_config);
+      return await createLead(supabase, action_config, crmScope);
     
     case "update_lead_status":
-      return await updateLeadStatus(supabase, action_config);
+      return await updateLeadStatus(supabase, action_config, crmScope);
     
     case "create_activity":
-      return await createActivity(supabase, action_config);
+      return await createActivity(supabase, action_config, crmScope);
     
     case "send_email":
       return await sendEmail(action_config);
@@ -226,92 +232,64 @@ async function processJob(supabase: any, job: any): Promise<any> {
   }
 }
 
-async function createContact(supabase: any, config: any) {
-  const { data, error } = await supabase
-    .from("crm_contacts")
-    .insert({
-      email: config.email,
-      first_name: config.firstName,
-      last_name: config.lastName,
-      phone: config.phone,
-      company: config.company,
-      source: config.source || "workflow",
-      tags: config.tags || [],
-      custom_fields: config.customFields || {},
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return { contactId: data.id, action: "created" };
+async function createContact(supabase: any, config: any, scope: CrmScope) {
+  const { contactId } = await createCrmContact(supabase, scope, {
+    email: config.email,
+    firstName: config.firstName,
+    lastName: config.lastName,
+    phone: config.phone,
+    company: config.company,
+    source: config.source || "workflow",
+    tags: config.tags || [],
+    customFields: config.customFields || {},
+  });
+  return { contactId, action: "created" };
 }
 
-async function updateContact(supabase: any, config: any) {
-  const updates: any = {};
-  if (config.firstName) updates.first_name = config.firstName;
-  if (config.lastName) updates.last_name = config.lastName;
-  if (config.phone) updates.phone = config.phone;
-  if (config.company) updates.company = config.company;
-  if (config.tags) updates.tags = config.tags;
-  if (config.customFields) updates.custom_fields = config.customFields;
-  updates.updated_at = new Date().toISOString();
-
-  const { error } = await supabase
-    .from("crm_contacts")
-    .update(updates)
-    .eq("id", config.contactId);
-
-  if (error) throw error;
+async function updateContact(supabase: any, config: any, scope: CrmScope) {
+  await updateCrmContact(supabase, scope, config.contactId, {
+    firstName: config.firstName,
+    lastName: config.lastName,
+    phone: config.phone,
+    company: config.company,
+    tags: config.tags,
+    customFields: config.customFields,
+  });
   return { contactId: config.contactId, action: "updated" };
 }
 
-async function createLead(supabase: any, config: any) {
-  const { data, error } = await supabase
-    .from("crm_leads")
-    .insert({
-      contact_id: config.contactId,
-      title: config.title,
-      status: config.status || "new",
-      value: config.value,
-      source: config.source,
-      notes: config.notes,
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return { leadId: data.id, action: "created" };
+async function createLead(supabase: any, config: any, scope: CrmScope) {
+  const result = await createCrmLead(supabase, scope, {
+    title: config.title,
+    stage: config.status || config.stage || "new",
+    email: config.email,
+    name: config.name,
+    phone: config.phone,
+    source: config.source,
+    notes: config.notes,
+    value: config.value,
+    contactId: config.contactId,
+    metadata: config.metadata,
+  });
+  return { leadId: result.leadId, action: "created" };
 }
 
-async function updateLeadStatus(supabase: any, config: any) {
-  const { error } = await supabase
-    .from("crm_leads")
-    .update({
-      status: config.status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", config.leadId);
-
-  if (error) throw error;
-  return { leadId: config.leadId, status: config.status, action: "status_updated" };
+async function updateLeadStatus(supabase: any, config: any, scope: CrmScope) {
+  const stage = config.status || config.stage;
+  await updateCrmLead(supabase, scope, config.leadId, { stage });
+  return { leadId: config.leadId, status: stage, action: "status_updated" };
 }
 
-async function createActivity(supabase: any, config: any) {
-  const { data, error } = await supabase
-    .from("crm_activities")
-    .insert({
-      activity_type: config.activityType,
-      title: config.title,
-      description: config.description,
-      contact_id: config.contactId,
-      lead_id: config.leadId,
-      deal_id: config.dealId,
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return { activityId: data.id, action: "created" };
+async function createActivity(supabase: any, config: any, scope: CrmScope) {
+  const result = await createCrmActivity(supabase, scope, {
+    type: config.activityType || config.type || 'note',
+    title: config.title,
+    description: config.description,
+    contactId: config.contactId,
+    leadId: config.leadId,
+    metadata: config.metadata,
+  });
+  return { activityId: result.activityId, action: "created" };
 }
 
 async function sendEmail(config: any) {
