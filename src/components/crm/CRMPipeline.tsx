@@ -77,7 +77,7 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
   async function fetchDeals() {
     try {
       const records = await queryResource('crm:deals', {
-        businessId: businessId || activeBizId || '',
+        businessId: businessId || '',
         projectId,
         mode: 'cloud',
       });
@@ -93,7 +93,7 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
   async function fetchContacts() {
     try {
       const records = await queryResource('crm:contacts', {
-        businessId: businessId || activeBizId || '',
+        businessId: businessId || '',
         projectId,
         mode: 'cloud',
       });
@@ -106,7 +106,7 @@ export function CRMPipeline({ businessId, projectId }: { businessId?: string; pr
   async function fetchLeads() {
     try {
       const records = await queryResource('crm:leads', {
-        businessId: businessId || activeBizId || '',
+        businessId: businessId || '',
         projectId,
         mode: 'cloud',
       });

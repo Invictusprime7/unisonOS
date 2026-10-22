@@ -65,15 +65,35 @@ async function hasPluginInstance(businessId: string): Promise<boolean> {
   return !!data;
 }
 
+type InstallSystemType = 'booking' | 'portfolio' | 'store' | 'agency' | 'content' | 'saas';
+
+const INDUSTRY_TO_SYSTEM: Record<string, InstallSystemType> = {
+  booking: 'booking', salon: 'booking', spa: 'booking', restaurant: 'booking',
+  contractor: 'booking', coaching: 'booking', fitness: 'booking', local_service: 'booking',
+  portfolio: 'portfolio', photography: 'portfolio', creative: 'portfolio',
+  store: 'store', ecommerce: 'store', retail: 'store',
+  agency: 'agency', realestate: 'agency', real_estate: 'agency', consulting: 'agency',
+  content: 'content', blog: 'content', nonprofit: 'content', media: 'content',
+  saas: 'saas', software: 'saas',
+};
+
+/** install-system accepts only canonical system types; industries map onto them. */
+export function resolveInstallSystemType(industry: string | null): InstallSystemType {
+  const key = (industry ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return INDUSTRY_TO_SYSTEM[key] ?? 'agency';
+}
+
 async function provisionBusiness(business: BootstrapBusiness): Promise<void> {
   console.log('[SupabaseBootstrap] Provisioning business:', business.id, business.name);
-  await supabase.functions.invoke('install-system', {
+  const { error } = await supabase.functions.invoke('install-system', {
     body: {
       businessId: business.id,
-      systemType: business.industry ?? 'general',
+      systemType: resolveInstallSystemType(business.industry),
+      industry: business.industry ?? undefined,
       source: 'bootstrap',
     },
   });
+  if (error) console.warn('[SupabaseBootstrap] install-system declined:', error.message);
 }
 
 function isWebBuilderRoute(): boolean {

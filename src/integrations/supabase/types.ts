@@ -4577,29 +4577,23 @@ export type Database = {
         Row: {
           capability_id: string
           created_at: string
-          configuration: Json
           enabled_by: string | null
           site_id: string
           status: string
-          updated_at: string
         }
         Insert: {
           capability_id: string
           created_at?: string
-          configuration?: Json
           enabled_by?: string | null
           site_id: string
           status?: string
-          updated_at?: string
         }
         Update: {
           capability_id?: string
           created_at?: string
-          configuration?: Json
           enabled_by?: string | null
           site_id?: string
           status?: string
-          updated_at?: string
         }
         Relationships: [
           {

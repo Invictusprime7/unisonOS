@@ -5581,11 +5581,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       case 'reservation':
       case 'patient_intake':
         return payload?.prototype === 'salon-booking'
-          ? { type: 'booking-demo', payload }
+          ? { type: 'booking', payload }
           : { type: 'booking', payload };
       case 'booking-demo':
       case 'salon-booking-demo':
-        return { type: 'booking-demo', payload };
+        return { type: 'booking', payload };
       case 'contact':
       case 'lead':
       case 'lead-capture':
