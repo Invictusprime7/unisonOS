@@ -36,8 +36,10 @@ const clip = (v: string | undefined | null, n: number) => (v ? String(v).slice(0
  * on this state rather than on a guessed delay.
  */
 export class SiteImageBusyError extends Error {
-  constructor() {
-    super('A picture is already being made. Wait for it to finish, then try again.');
+  constructor(public retryAfterSeconds?: number) {
+    super(retryAfterSeconds
+      ? `The picture maker is cooling down. Try again in ${retryAfterSeconds} second${retryAfterSeconds === 1 ? '' : 's'}.`
+      : 'A picture is already being made. Wait for it to finish, then try again.');
     this.name = 'SiteImageBusyError';
   }
 }
@@ -55,16 +57,33 @@ export class SiteImageRequestError extends Error {
 }
 
 let inFlight = false;
+let cooldownUntil = 0;
+let cooldownTimer: ReturnType<typeof setTimeout> | null = null;
 const busyListeners = new Set<() => void>();
+
+function notifyBusyListeners() {
+  for (const listener of [...busyListeners]) listener();
+}
 
 function setInFlight(next: boolean) {
   if (inFlight === next) return;
   inFlight = next;
-  for (const listener of [...busyListeners]) listener();
+  notifyBusyListeners();
+}
+
+function startImageCooldown(seconds: number) {
+  cooldownUntil = Date.now() + seconds * 1000;
+  if (cooldownTimer) clearTimeout(cooldownTimer);
+  cooldownTimer = setTimeout(() => {
+    cooldownUntil = 0;
+    cooldownTimer = null;
+    notifyBusyListeners();
+  }, seconds * 1000);
+  notifyBusyListeners();
 }
 
 export function isImageBusy(): boolean {
-  return inFlight;
+  return inFlight || cooldownUntil > Date.now();
 }
 
 /** Subscribe to "a picture is being made" so a control can stay locked honestly. */
@@ -83,6 +102,9 @@ export async function generateSiteImage(
   // Check and claim happen before the first await, so two clicks in the same
   // tick can never both pass the gate.
   if (inFlight) return Promise.reject(new SiteImageBusyError());
+  if (cooldownUntil > Date.now()) {
+    return Promise.reject(new SiteImageBusyError(Math.ceil((cooldownUntil - Date.now()) / 1000)));
+  }
   setInFlight(true);
   try {
     const { data, error } = await supabase.functions.invoke('ai-code-assistant', {
@@ -114,6 +136,10 @@ export async function generateSiteImage(
         const raw = (j as { retryAfterSeconds?: unknown } | null)?.retryAfterSeconds;
         if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) retryAfterSeconds = Math.ceil(raw);
       } catch { /* no body */ }
+      if (status === 429) {
+        retryAfterSeconds ??= 60;
+        startImageCooldown(retryAfterSeconds);
+      }
       throw new SiteImageRequestError(
         detail || error.message || 'The image generator did not answer',
         status,

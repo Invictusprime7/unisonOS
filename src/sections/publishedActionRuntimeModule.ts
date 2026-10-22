@@ -196,7 +196,27 @@ async function submitBooking(form: HTMLFormElement) {
   }
   form.dataset.utIdempotencyKey = '';
   const serviceName = result.state?.booking?.serviceName || result.booking?.serviceName;
-  showActionStatus(form, serviceName ? serviceName + ' is booked.' : 'Your booking is confirmed.');
+  const notifications = result.state?.notifications || {};
+  const customerStatus = notifications.customer;
+  const ownerStatus = notifications.owner;
+  const message = [
+    serviceName ? serviceName + ' is booked.' : 'Your booking is confirmed.',
+    customerStatus === 'sent'
+      ? 'A confirmation email was sent to you.'
+      : customerStatus === 'unconfigured' || customerStatus === 'failed'
+        ? 'Your booking is saved, but the confirmation email could not be sent.'
+        : '',
+    ownerStatus === 'sent'
+      ? 'The site owner was notified.'
+      : ownerStatus === 'not_configured'
+        ? 'The site owner has not configured booking notifications yet.'
+        : ownerStatus === 'disabled'
+          ? 'The site owner has disabled booking email notifications.'
+          : ownerStatus === 'failed'
+            ? 'The booking was saved, but the site owner email could not be delivered.'
+            : '',
+  ].filter(Boolean).join(' ');
+  showActionStatus(form, message);
   window.dispatchEvent(new CustomEvent('unison:booking.updated', { detail: result.state || result }));
 }
 

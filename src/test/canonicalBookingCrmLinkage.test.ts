@@ -31,4 +31,16 @@ describe('canonicalBooking CRM linkage', () => {
     const catchBlock = fn.slice(fn.indexOf('} catch (error) {'), fn.indexOf('} catch (error) {') + 200);
     expect(catchBlock).not.toContain('throw');
   });
+
+  it('creates a CRM lead inside the same atomic booking transaction', () => {
+    const migration = readFileSync(
+      resolve(process.cwd(), 'supabase/migrations/20261022155702_booking_crm_lead.sql'),
+      'utf8',
+    );
+    expect(migration).toContain('CREATE TRIGGER bookings_create_crm_lead');
+    expect(migration).toContain('AFTER INSERT ON public.bookings');
+    expect(migration).toContain('INSERT INTO public.crm_leads');
+    expect(migration).toContain("'booking.create'");
+    expect(migration).toContain("'booking_id', NEW.id");
+  });
 });

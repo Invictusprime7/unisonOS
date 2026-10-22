@@ -438,11 +438,32 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
               variant="ghost"
               size="icon"
               onClick={handleClearHistory}
+              aria-label="Clear conversation"
+              title="Clear conversation"
               className="text-white/80 hover:text-white hover:bg-white/20 h-8 w-8"
             >
               <Trash2 className="w-4 h-4" />
             </Button>
           )}
+        </div>
+      )}
+
+      {hideHeader && allowClearHistory && (
+        <div className="flex justify-end px-2 pt-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearHistory}
+            disabled={messages.length === 0}
+            title="Clear conversation"
+            className={cn(
+              "h-7 px-2",
+              appearance === "unison" && "text-white/70 hover:bg-white/10 hover:text-white",
+            )}
+          >
+            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+            Clear
+          </Button>
         </div>
       )}
 

@@ -1013,6 +1013,7 @@ async function commitMutationInner(
       files,
       snapshot as SiteBundleSnapshot,
       bindingOperationResult.boundBindingIds,
+      readWizardEnabledCapabilities(workingFiles),
     );
     if (application.missingBindings.length) {
       throw new Error(
@@ -1832,24 +1833,24 @@ function finalizeBusinessSystemState(
   };
 }
 
-function readWizardEnabledCapabilities(files: Record<string, string>): CapabilityId[] {
+function readWizardEnabledCapabilities(files: Record<string, string>): CapabilityId[] | undefined {
   try {
     const seed = JSON.parse(files['/.unison/wizard-seed.json'] || '{}') as {
       canonical?: { capabilities?: unknown };
     };
-    if (!Array.isArray(seed.canonical?.capabilities)) return [];
+    if (!Array.isArray(seed.canonical?.capabilities)) return undefined;
     return Array.from(new Set(seed.canonical.capabilities.filter(
       (capability): capability is CapabilityId =>
         typeof capability === 'string' && capability in CAPABILITY_REGISTRY,
     ))).sort();
   } catch {
-    return [];
+    return undefined;
   }
 }
 
 function buildWizardBusinessSystemState(files: Record<string, string>): BusinessSystemState | undefined {
   const capabilities = readWizardEnabledCapabilities(files);
-  if (capabilities.length === 0) return undefined;
+  if (!capabilities?.length) return undefined;
   const approvedAt = new Date().toISOString();
   return {
     version: '1.0',

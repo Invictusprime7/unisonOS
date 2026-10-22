@@ -829,7 +829,9 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   // Resolve a target window for posting bridge messages (Sandpack iframe or docker iframe)
   const getPreviewWindow = useCallback((): Window | null => {
     if (sandpackIframeRef.current?.isConnected && sandpackIframeRef.current.contentWindow) return sandpackIframeRef.current.contentWindow;
-    const sp = previewContainerRef.current?.querySelector('iframe.sp-preview-iframe, .sp-preview iframe') as HTMLIFrameElement | null;
+    const sp = previewContainerRef.current?.querySelector(
+      'iframe.sp-preview-iframe, .sp-preview iframe, iframe[title*="Sandpack"], iframe[src*="csb.app"], iframe[src*="codesandbox"]',
+    ) as HTMLIFrameElement | null;
     if (sp?.contentWindow) {
       sandpackIframeRef.current = sp;
       return sp.contentWindow;
@@ -993,6 +995,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       }
     };
 
+    attach();
     attach();
     iframe.addEventListener('load', attach);
 

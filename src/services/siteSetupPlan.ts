@@ -1,4 +1,5 @@
 export type SiteSetupStepId =
+  | "owner_information"
   | "booking_calendar"
   | "notifications"
   | "payments"
@@ -25,6 +26,14 @@ export interface SiteSetupPlanStep {
 }
 
 const DEFAULT_SITE_SETUP_PLAN: readonly SiteSetupPlanStep[] = [
+  {
+    id: "owner_information",
+    title: "Owner Information",
+    description: "Review the business contact, location, and brand details shown to visitors",
+    category: "core",
+    timeEstimate: "~3 min",
+    required: false,
+  },
   {
     id: "booking_calendar",
     title: "Booking Calendar",

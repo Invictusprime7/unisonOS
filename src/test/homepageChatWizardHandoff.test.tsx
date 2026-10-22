@@ -1,3 +1,17 @@
+
+it('lets users manually clear the headerless homepage conversation', () => {
+  render(<AIAssistantCore
+    appearance="unison"
+    hideHeader
+    allowClearHistory
+    showFileUpload={false}
+    initialMessages={[{ role: 'user', content: 'Keep this message?', timestamp: new Date(0) }]}
+  />);
+
+  expect(screen.getByText('Keep this message?')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+  expect(screen.queryByText('Keep this message?')).not.toBeInTheDocument();
+});
 import { useState } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -11,6 +25,21 @@ vi.mock('@/integrations/supabase/ai-client', () => ({ invokeAIFunction: vi.fn() 
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+});
+
+it('lets users manually clear the headerless homepage conversation', () => {
+  render(<AIAssistantCore
+    appearance="unison"
+    hideHeader
+    allowClearHistory
+    showFileUpload={false}
+    initialMessages={[{ role: 'user', content: 'Keep this message?', timestamp: new Date(0) }]}
+  />);
+
+  expect(screen.getByText('Keep this message?')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+  expect(screen.queryByText('Keep this message?')).not.toBeInTheDocument();
+  expect(screen.getByText('Tell Affinity what you have in mind.')).toBeInTheDocument();
 });
 
 it('reveals controls with each discovery question and sends selections back into the same chat', async () => {

@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { BusinessLogoInput } from "@/components/business/BusinessLogoInput";
 import { cn } from "@/lib/utils";
 import {
   THEME_PRESETS,
@@ -93,6 +95,7 @@ export interface LauncherWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialVisionPrompt?: string | null;
+  onLaunchComplete?: () => void;
   presentation?: "dialog" | "chat";
   /** True when this run is the account's one free Live Demo generation. */
   demoGeneration?: boolean;
@@ -104,6 +107,18 @@ export interface LauncherWizardProps {
     businessName: string | null;
     industry: string | null;
     notificationEmail: string | null;
+    email?: string | null;
+    phone?: string | null;
+    notificationPhone?: string | null;
+    socialLinks?: Record<string, string> | null;
+    tagline?: string | null;
+    description?: string | null;
+    website?: string | null;
+    logoUrl?: string | null;
+    brandColor?: string | null;
+    timezone?: string | null;
+    address?: NonNullable<LaunchOrchestratorInput['businessParameters']>['address'] | null;
+    hours?: NonNullable<LaunchOrchestratorInput['businessParameters']>['hours'] | null;
   } | null;
 }
 
@@ -129,6 +144,7 @@ const CHAT_GUIDANCE: Record<SelectionStep, string> = {
 export const LauncherWizard = ({
   open,
   onOpenChange,
+  onLaunchComplete,
   initialVisionPrompt,
   prefill,
   presentation = "dialog",
@@ -160,6 +176,21 @@ export const LauncherWizard = ({
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const [systemId, setSystemId] = useState<BusinessSystemType | null>(null);
   const [businessName, setBusinessName] = useState("");
+  const [businessParameters, setBusinessParameters] = useState<NonNullable<LaunchOrchestratorInput['businessParameters']>>({
+    ownerEmail: prefill?.notificationEmail || '',
+    notificationEmail: prefill?.notificationEmail || '',
+    publicEmail: prefill?.email || '',
+    phone: prefill?.phone || '',
+    notificationPhone: prefill?.notificationPhone || '',
+    tagline: prefill?.tagline || '',
+    description: prefill?.description || '',
+    website: prefill?.website || '',
+    logoUrl: prefill?.logoUrl || '',
+    brandColor: prefill?.brandColor || '',
+    timezone: prefill?.timezone || '',
+    address: prefill?.address || {},
+    hours: prefill?.hours || [],
+  });
   const [primaryGoal, setPrimaryGoal] = useState<PrimaryGoal | null>(null);
   const [customerNeeds, setCustomerNeeds] = useState<CustomerNeed[]>([]);
   const [selectedPages, setSelectedPages] = useState<PageChoice[]>([]);
@@ -170,7 +201,7 @@ export const LauncherWizard = ({
   const [experience, setExperience] = useState<WizardExperiencePreference>("standard");
   const [sectionPins, setSectionPins] = useState<Record<string, VariantId>>({});
 
-  const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
+  const [socialLinks, setSocialLinks] = useState<Record<string, string>>(prefill?.socialLinks ?? {});
   const [visionPrompt, setVisionPrompt] = useState("");
   const chatPlanRef = useRef<ChatLaunchPlan | null>(null);
   const seededFromChatRef = useRef(false);
@@ -210,6 +241,7 @@ export const LauncherWizard = ({
     setSelectedIndustry(null);
     setSystemId(null);
     setBusinessName("");
+    setBusinessParameters({});
     setPrimaryGoal(null);
     setCustomerNeeds([]);
     setSelectedPages([]);
@@ -231,6 +263,23 @@ export const LauncherWizard = ({
   useEffect(() => {
     if (!open) return;
     if (prefill?.businessName) setBusinessName(prefill.businessName);
+    setBusinessParameters((current) => ({
+      ...current,
+      ownerEmail: current.ownerEmail || prefill?.notificationEmail || '',
+      notificationEmail: current.notificationEmail || prefill?.notificationEmail || '',
+      publicEmail: current.publicEmail || prefill?.email || '',
+      phone: current.phone || prefill?.phone || '',
+      notificationPhone: current.notificationPhone || prefill?.notificationPhone || '',
+      tagline: current.tagline || prefill?.tagline || '',
+      description: current.description || prefill?.description || '',
+      website: current.website || prefill?.website || '',
+      logoUrl: current.logoUrl || prefill?.logoUrl || '',
+      brandColor: current.brandColor || prefill?.brandColor || '',
+      timezone: current.timezone || prefill?.timezone || '',
+      address: Object.keys(current.address || {}).length ? current.address : prefill?.address || {},
+      hours: current.hours?.length ? current.hours : prefill?.hours || [],
+    }));
+    if (prefill?.socialLinks) setSocialLinks((current) => ({ ...prefill.socialLinks, ...current }));
     if (!initialVisionPrompt) { chatPlanRef.current = null; return; }
 
     setVisionPrompt(initialVisionPrompt);
@@ -260,7 +309,7 @@ export const LauncherWizard = ({
     if (plan.primaryGoal) setPrimaryGoal(plan.primaryGoal);
     setCustomerNeeds(plan.customerNeeds);
     if (!guidedStep) setStep("goals");
-  }, [open, initialVisionPrompt, prefill?.businessName, guidedStep]);
+  }, [open, initialVisionPrompt, prefill?.businessName, prefill?.notificationEmail, prefill?.email, prefill?.phone, prefill?.notificationPhone, prefill?.socialLinks, prefill?.tagline, prefill?.description, prefill?.website, prefill?.logoUrl, prefill?.brandColor, prefill?.timezone, prefill?.address, prefill?.hours, guidedStep]);
 
   // After the user answers, the chat must move forward at least one step —
   // even when the AI re-asks the same question (e.g. after Back + correction).
@@ -353,7 +402,14 @@ export const LauncherWizard = ({
       case "questions": return CUSTOMER_NEEDS.filter(need => customerNeeds.includes(need.id)).map(need => need.label).join(", ") || "No additional visitor actions";
       case "pages": return ["Home", ...pageChoices.filter(page => selectedPages.includes(page.id)).map(page => page.label)].join(", ");
       case "aesthetic": return [theme?.label, visualDirections.find(direction => direction.id === artDirectionPackId)?.name ?? "Auto-matched art direction", experience].join(" · ");
-      case "brand": return businessName.trim();
+      case "brand": return [
+        businessName.trim(),
+        businessParameters.ownerEmail && `Owner email ${businessParameters.ownerEmail}`,
+        businessParameters.publicEmail && `Public email ${businessParameters.publicEmail}`,
+        businessParameters.phone && `Phone ${businessParameters.phone}`,
+        businessParameters.website && `Website ${businessParameters.website}`,
+        Object.values(businessParameters.address || {}).filter(Boolean).join(', '),
+      ].filter(Boolean).join(' · ');
       default: return "";
     }
   };
@@ -429,6 +485,28 @@ export const LauncherWizard = ({
         sectionPins,
       }),
       businessName,
+      businessParameters: {
+        ...businessParameters,
+        ownerEmail: businessParameters.ownerEmail?.trim() || businessParameters.notificationEmail?.trim() || undefined,
+        notificationEmail: businessParameters.notificationEmail?.trim() || businessParameters.ownerEmail?.trim() || undefined,
+        publicEmail: businessParameters.publicEmail?.trim() || undefined,
+        phone: businessParameters.phone?.trim() || undefined,
+        notificationPhone: businessParameters.notificationPhone?.trim() || undefined,
+        tagline: businessParameters.tagline?.trim() || undefined,
+        description: businessParameters.description?.trim() || undefined,
+        website: businessParameters.website?.trim() || undefined,
+        logoUrl: businessParameters.logoUrl?.trim() || undefined,
+        brandColor: businessParameters.brandColor?.trim() || undefined,
+        timezone: businessParameters.timezone?.trim() || undefined,
+        address: Object.fromEntries(Object.entries(businessParameters.address || {}).filter(([, value]) => value?.trim())) as typeof businessParameters.address,
+        hours: businessParameters.hours?.filter((entry) => entry.closed || entry.open || entry.close),
+        ctaDestinations: {
+          ...businessParameters.ctaDestinations,
+          call: businessParameters.phone?.trim() ? `tel:${businessParameters.phone.trim().replace(/[^\d+]/g, '')}` : undefined,
+          email: businessParameters.publicEmail?.trim() ? `mailto:${businessParameters.publicEmail.trim()}` : undefined,
+        },
+        socialLinks,
+      },
       primaryGoal,
       customerNeeds,
       selectedPages,
@@ -453,6 +531,7 @@ export const LauncherWizard = ({
       };
       const result = await runLaunchPipeline({ ...input, demoGeneration }, callbacks);
       if (generation !== generationRef.current) return;
+      onLaunchComplete?.();
       setLaunch(result.launchState);
       navigate("/web-builder", {
         replace: true,
@@ -635,7 +714,7 @@ export const LauncherWizard = ({
                           </div>
                         </div>
                         <aside className="space-y-5">
-{!isChat && <div><FieldLabel>Business name</FieldLabel><Input aria-label="Business name" value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="Northside Studio" className="mt-2" /></div>}
+                          {!isChat && <div><FieldLabel>Business name</FieldLabel><Input aria-label="Business name" value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="Northside Studio" className="mt-2" /><OwnerBrandFields industry={selectedIndustry} primaryGoal={primaryGoal} parameters={businessParameters} update={(patch) => setBusinessParameters((current) => ({ ...current, ...patch }))} /></div>}
                           <div className="space-y-2"><FieldLabel>Selected style</FieldLabel><div><p className="text-base font-semibold">{theme?.label}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{theme?.description}</p></div></div>
                           <div><FieldLabel>Experience</FieldLabel><div className="mt-2 grid gap-2">{([['standard','Standard'],['motion-rich','Motion rich'],['immersive','Immersive 3D']] as const).map(([value,label]) => <Chip key={value} active={experience === value} onClick={() => setExperience(value)}>{label}</Chip>)}</div></div>
                         </aside>
@@ -656,6 +735,7 @@ export const LauncherWizard = ({
                   </section>}
                   {step === "brand" && <section className="space-y-5">
                     <label className="block text-sm">Brand name<Input aria-label="Business name" value={businessName} onChange={event => setBusinessName(event.target.value)} placeholder="Northside Studio" className="mt-2" /></label>
+                    <OwnerBrandFields industry={selectedIndustry} primaryGoal={primaryGoal} parameters={businessParameters} update={(patch) => setBusinessParameters((current) => ({ ...current, ...patch }))} />
                     <details><summary className="cursor-pointer text-sm">Add social profiles (optional)</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{(['instagram','facebook','linkedin','youtube'] as const).map(platform => <Input key={platform} value={socialLinks[platform] || ''} onChange={event => setSocialLinks(current => ({...current,[platform]:event.target.value}))} placeholder={`${platform} URL`} aria-label={`${platform} profile URL`} />)}</div></details>
                   </section>}
                   {step === "confirm" && <section aria-label="Your site plan" className="rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-4">
@@ -690,6 +770,87 @@ export const LauncherWizard = ({
     </Dialog>
   );
 };
+
+function OwnerBrandFields({
+  industry,
+  primaryGoal,
+  parameters,
+  update,
+}: {
+  industry: string | null;
+  primaryGoal: PrimaryGoal | null;
+  parameters: NonNullable<LaunchOrchestratorInput['businessParameters']>;
+  update: (patch: Partial<NonNullable<LaunchOrchestratorInput['businessParameters']>>) => void;
+}) {
+  const industryKey = (industry || '').toLowerCase().replace(/[_\s]+/g, '-');
+  const localBusiness = ['salon', 'barber', 'medspa', 'wellness', 'dental', 'fitness', 'local-service', 'contractor', 'hvac', 'cleaning', 'landscaping', 'auto-detailing', 'moving', 'restaurant', 'cafe', 'bakery', 'real-estate'].includes(industryKey);
+  const showHours = localBusiness || primaryGoal === 'book_appointments';
+  const address = parameters.address || {};
+  const hours = parameters.hours || [];
+  const days = [
+    ['mon', 'Monday'], ['tue', 'Tuesday'], ['wed', 'Wednesday'], ['thu', 'Thursday'],
+    ['fri', 'Friday'], ['sat', 'Saturday'], ['sun', 'Sunday'],
+  ] as const;
+  const updateAddress = (key: keyof NonNullable<typeof parameters.address>, value: string) => {
+    update({ address: { ...address, [key]: value } });
+  };
+  const updateDay = (day: string, patch: Partial<NonNullable<typeof parameters.hours>[number]>) => {
+    const existing = hours.find((entry) => entry.day === day);
+    const nextEntry = { day, ...existing, ...patch };
+    const nextHours = hours.filter((entry) => entry.day !== day);
+    if (nextEntry.closed || nextEntry.open || nextEntry.close) nextHours.push(nextEntry);
+    update({ hours: nextHours });
+  };
+
+  return (
+    <div className="mt-4 space-y-3 border-t border-border/60 pt-4">
+      <p className="text-xs font-semibold text-foreground">Owner and visitor contact</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm">Owner email<Input aria-label="Owner email" type="email" value={parameters.ownerEmail || ''} onChange={(event) => update({ ownerEmail: event.target.value, notificationEmail: event.target.value })} placeholder="owner@business.com" className="mt-1.5" /></label>
+        <label className="block text-sm">Public email<Input aria-label="Public email" type="email" value={parameters.publicEmail || ''} onChange={(event) => update({ publicEmail: event.target.value })} placeholder="hello@business.com" className="mt-1.5" /></label>
+        <label className="block text-sm">Business phone<Input aria-label="Business phone" type="tel" value={parameters.phone || ''} onChange={(event) => update({ phone: event.target.value })} placeholder="+1 555 0100" className="mt-1.5" /></label>
+        <label className="block text-sm">Website<Input aria-label="Business website" type="url" value={parameters.website || ''} onChange={(event) => update({ website: event.target.value })} placeholder="https://business.com" className="mt-1.5" /></label>
+      </div>
+      <details className="group border-t border-border/60 pt-3">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground group-open:text-foreground">More brand details</summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">Tagline<Input aria-label="Business tagline" value={parameters.tagline || ''} onChange={(event) => update({ tagline: event.target.value })} placeholder="A short line about your business" className="mt-1.5" /></label>
+          <label className="block text-sm">Brand color<Input aria-label="Business brand color" type="color" value={parameters.brandColor || '#111827'} onChange={(event) => update({ brandColor: event.target.value })} className="mt-1.5 h-9 p-1" /></label>
+          <div className="sm:col-span-2"><p className="mb-1.5 text-sm">Logo</p><BusinessLogoInput value={parameters.logoUrl} onChange={(logoUrl) => update({ logoUrl: logoUrl || undefined })} compact /></div>
+          <label className="block text-sm sm:col-span-2">About the business<Textarea aria-label="Business description" value={parameters.description || ''} onChange={(event) => update({ description: event.target.value })} rows={2} placeholder="What should visitors know?" className="mt-1.5" /></label>
+          <label className="block text-sm">Notification phone<Input aria-label="Notification phone" type="tel" value={parameters.notificationPhone || ''} onChange={(event) => update({ notificationPhone: event.target.value })} placeholder="Optional SMS number" className="mt-1.5" /></label>
+        </div>
+      </details>
+      {(localBusiness || showHours) && <details className="group border-t border-border/60 pt-3">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground group-open:text-foreground">{localBusiness ? 'Location and business hours' : 'Business hours'}</summary>
+        <div className="mt-3 space-y-4">
+          {localBusiness && <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm sm:col-span-2">Street address<Input aria-label="Street address" value={address.line1 || ''} onChange={(event) => updateAddress('line1', event.target.value)} className="mt-1.5" /></label>
+            <label className="block text-sm">City<Input aria-label="Business city" value={address.city || ''} onChange={(event) => updateAddress('city', event.target.value)} className="mt-1.5" /></label>
+            <label className="block text-sm">State or region<Input aria-label="Business region" value={address.region || ''} onChange={(event) => updateAddress('region', event.target.value)} className="mt-1.5" /></label>
+            <label className="block text-sm">Postal code<Input aria-label="Business postal code" value={address.postalCode || ''} onChange={(event) => updateAddress('postalCode', event.target.value)} className="mt-1.5" /></label>
+            <label className="block text-sm">Country<Input aria-label="Business country" value={address.country || ''} onChange={(event) => updateAddress('country', event.target.value)} className="mt-1.5" /></label>
+          </div>}
+          {showHours && <>
+            <p className="text-[11px] text-muted-foreground">Visitor-facing hours are separate from bookable appointment slots.</p>
+            <div className="space-y-2">
+              {days.map(([day, label]) => {
+                const entry = hours.find((item) => item.day === day);
+                return <div key={day} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2">
+                  <span className="text-xs">{label}</span>
+                  <Input aria-label={`${label} opening time`} type="time" value={entry?.open || ''} disabled={entry?.closed} onChange={(event) => updateDay(day, { open: event.target.value, closed: false })} className="h-8 w-28" />
+                  <Input aria-label={`${label} closing time`} type="time" value={entry?.close || ''} disabled={entry?.closed} onChange={(event) => updateDay(day, { close: event.target.value, closed: false })} className="h-8 w-28" />
+                  <label className="flex items-center gap-1 text-[11px] text-muted-foreground"><input aria-label={`${label} closed`} type="checkbox" checked={entry?.closed || false} onChange={(event) => updateDay(day, { closed: event.target.checked, open: event.target.checked ? '' : entry?.open, close: event.target.checked ? '' : entry?.close })} />Closed</label>
+                </div>;
+              })}
+            </div>
+            <label className="block max-w-xs text-sm">Time zone<Input aria-label="Business time zone" value={parameters.timezone || ''} onChange={(event) => update({ timezone: event.target.value })} placeholder="America/New_York" className="mt-1.5" /></label>
+          </>}
+        </div>
+      </details>}
+    </div>
+  );
+}
 
 const StepHeading = ({ title, subtitle }: { title: string; subtitle: string }) => (
   <div className="max-w-2xl">

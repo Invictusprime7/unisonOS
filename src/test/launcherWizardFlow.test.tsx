@@ -57,6 +57,13 @@ describe("Launcher Wizard guided flow", () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Business name'), { target: { value: 'Studio Glow' } });
+    fireEvent.change(screen.getByLabelText('Owner email'), { target: { value: 'owner@studioglow.test' } });
+    fireEvent.change(screen.getByLabelText('Public email'), { target: { value: 'hello@studioglow.test' } });
+    fireEvent.change(screen.getByLabelText('Business phone'), { target: { value: '+1 555 0100' } });
+    fireEvent.click(screen.getByText('Location and business hours'));
+    fireEvent.change(screen.getByLabelText('Street address'), { target: { value: '10 Main Street' } });
+    fireEvent.change(screen.getByLabelText('Business city'), { target: { value: 'Brooklyn' } });
+    fireEvent.change(screen.getByLabelText('Monday opening time'), { target: { value: '09:00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('region', { name: 'Your site plan' })).toHaveTextContent('Studio Glow');
     expect(runLaunchPipeline).not.toHaveBeenCalled();
@@ -65,13 +72,44 @@ describe("Launcher Wizard guided flow", () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.click(screen.getByRole('button', { name: 'Create site' }));
     expect(runLaunchPipeline).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(runLaunchPipeline).mock.calls[0][0]).toMatchObject({ businessName: 'Studio Glow', primaryGoal: 'book_appointments' });
+    expect(vi.mocked(runLaunchPipeline).mock.calls[0][0]).toMatchObject({
+      businessName: 'Studio Glow',
+      primaryGoal: 'book_appointments',
+      businessParameters: {
+        ownerEmail: 'owner@studioglow.test',
+        notificationEmail: 'owner@studioglow.test',
+        publicEmail: 'hello@studioglow.test',
+        phone: '+1 555 0100',
+        address: { line1: '10 Main Street', city: 'Brooklyn' },
+        hours: expect.arrayContaining([expect.objectContaining({ day: 'mon', open: '09:00' })]),
+        ctaDestinations: {
+          call: 'tel:+15550100',
+          email: 'mailto:hello@studioglow.test',
+        },
+      },
+    });
     await screen.findByRole('heading', { name: 'Preparing your site preview' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open in builder' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: /Preview loaded chat candidate/ }));
     expect(screen.getByRole('button', { name: 'Open in builder' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Edit details' }));
+  }, 20000);
+
+  it("signals completion only after a successful site launch", async () => {
+    const onLaunchComplete = vi.fn();
+    vi.mocked(runLaunchPipeline).mockResolvedValue({ launchState: {}, navigationState: {} } as never);
+    render(<MemoryRouter><LauncherWizard open onOpenChange={vi.fn()} onLaunchComplete={onLaunchComplete} /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole("button", { name: /Salon & Spa/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /Book Appointments/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.change(screen.getByLabelText("Business name"), { target: { value: "Studio Glow" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create site" }));
+
+    await waitFor(() => expect(onLaunchComplete).toHaveBeenCalledOnce());
   }, 20000);
 
   it("keeps the opening screen focused on industry selection and progressively reveals setup", () => {

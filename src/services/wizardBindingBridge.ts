@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
-import type { PlaygroundBinding, PlaygroundBindingSpecV2, PlaygroundPageRole } from '@/types/playground';
+import { resolvePlaygroundBindingDomIntent, type PlaygroundBinding, type PlaygroundBindingSpecV2, type PlaygroundPageRole } from '@/types/playground';
 import type { BuilderPage } from '@/types/pageRegistry';
 import {
   buildUIIntentContract,
@@ -8,6 +8,7 @@ import {
   hasUIIntentProfile,
   resolveUIIntentPlacements,
 } from '@/platform/core/uiIntentProfile';
+import { getIntentDef } from '@/platform/core/intentSurfaceRegistry';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 
 /** Authored component paths a page may render as part of its own surface. */
@@ -120,6 +121,10 @@ function getSlotMarkers(binding: PlaygroundBinding): string[] {
   if (slot === 'social-link') return ['cta.social-link'];
 
   return [];
+}
+
+export function getWizardBindingMarkers(binding: PlaygroundBinding): string[] {
+  return getSlotMarkers(binding);
 }
 
 function normalizeText(value: string): string {
@@ -271,23 +276,17 @@ function collectJsxCandidates(
 }
 
 function getDomIntent(binding: PlaygroundBinding): string {
-  switch (binding.intent) {
-    case 'nav.goto_page':
-      return 'nav.goto';
-    case 'external.open':
-      return 'nav.external';
-    case 'checkout.start':
-      if (binding.coreIntent === 'cart.add') return 'cart.add';
-      if (binding.coreIntent === 'cart.checkout') return 'cart.checkout';
-      if (binding.coreIntent === 'pay.checkout') return 'pay.checkout';
-      return binding.coreIntent || 'pay.checkout';
-    case 'calendar.open':
-    case 'form.open':
-    case 'popup.open':
-      return binding.coreIntent || 'button.click';
-    default:
-      return binding.coreIntent || binding.intent;
-  }
+  return resolvePlaygroundBindingDomIntent(binding);
+}
+
+function bindingIsActive(binding: PlaygroundBinding, enabledCapabilities?: readonly string[]): boolean {
+  if (!enabledCapabilities) return true;
+  const required = new Set([
+    ...(binding.requiredCapabilities ?? []),
+    ...(getIntentDef(binding.coreIntent || '')?.requiredCapabilities ?? []),
+    ...(getIntentDef(getDomIntent(binding))?.requiredCapabilities ?? []),
+  ]);
+  return [...required].every((capability) => enabledCapabilities.includes(capability));
 }
 
 function getBindingAttrs(binding: PlaygroundBinding, snapshot: SiteBundleSnapshot): Record<string, string> {
@@ -532,10 +531,11 @@ function describeBindingTarget(binding: PlaygroundBinding, snapshot: WizardBindi
 
 export function buildWizardBindingGuide(
   snapshot: WizardBindingGuideSource,
-  options: { industry?: string | null } = {},
+  options: { industry?: string | null; enabledCapabilities?: readonly string[] } = {},
 ): string {
   const bindings = Object.values(snapshot.bindings)
     .filter((binding) => binding.sourceSection && binding.sourceSlot)
+    .filter((binding) => bindingIsActive(binding, options.enabledCapabilities))
     .sort((a, b) => `${a.sourcePageId}:${a.elementKey || a.bindingId}`.localeCompare(`${b.sourcePageId}:${b.elementKey || b.bindingId}`));
 
   const lines: string[] = [];
@@ -571,7 +571,7 @@ export function buildWizardBindingGuide(
     const profile = getUIIntentProfile(industry);
     // Build binding spec snapshot from existing bindings so resolver can mark "covered" placements.
     const specs: PlaygroundBindingSpecV2[] = Object.values(snapshot.bindings)
-      .filter((b) => b.sourceSection && b.sourceSlot && b.coreIntent)
+      .filter((b) => b.sourceSection && b.sourceSlot && b.coreIntent && bindingIsActive(b, options.enabledCapabilities))
       .map((b) => {
         const page = snapshot.pageRegistry.pages[b.sourcePageId];
         return {
@@ -606,6 +606,7 @@ export function applyWizardBindingsToVfs(
   files: Record<string, string>,
   snapshot: SiteBundleSnapshot,
   bindingIds?: readonly string[],
+  enabledCapabilities?: readonly string[],
 ): WizardBindingApplicationResult {
   const nextFiles = { ...files };
   let appliedBindings = 0;
@@ -613,6 +614,7 @@ export function applyWizardBindingsToVfs(
 
   const selectedBindingIds = bindingIds ? new Set(bindingIds) : null;
   for (const binding of Object.values(snapshot.bindings)) {
+    if (!bindingIsActive(binding, enabledCapabilities)) continue;
     if (selectedBindingIds && !selectedBindingIds.has(binding.bindingId)) continue;
     const page = snapshot.pageRegistry.pages[binding.sourcePageId];
     const filePath = resolveBindingFilePath(nextFiles, page);

@@ -472,9 +472,26 @@ export function CreatorPlaygroundModal({
                       notificationEmail={setupSnapshot?.notificationEmail || null}
                       customDomain={setupSnapshot?.customDomain || null}
                       publishBlockers={controlPlane.overview.blockedLaunchTasks}
-                      onOpenTask={(task) => task.target?.playgroundSection && setActiveSection(task.target.playgroundSection as Section)}
+                      onOpenTask={(task) => {
+                        const setupStepId = task.target?.setupStepId;
+                        const isSetupStep = !!setupStepId && SETUP_STEP_IDS.has(setupStepId as SetupStepId);
+                        if (isSetupStep) {
+                          setupWizard.setActiveStep(setupStepId as SetupStepId);
+                          setActiveSection('launch');
+                          return;
+                        }
+                        if (task.target?.operationKey === 'leads') {
+                          setupWizard.setActiveStep('notifications');
+                          setActiveSection('launch');
+                          return;
+                        }
+                        setupWizard.setActiveStep(null);
+                        if (task.target?.playgroundSection) {
+                          setActiveSection(task.target.playgroundSection as Section);
+                        }
+                      }}
                     />
-                    <SetupWizardPanel wizard={setupWizard} businessId={businessId} siteId={siteId} />
+                    <SetupWizardPanel wizard={setupWizard} businessId={businessId} siteId={siteId} projectId={projectId} industry={industry ?? wizardSelections?.industryOverlay ?? null} systemType={systemType} />
                   </>
                 )}
                 {activeSection === "overview" && (

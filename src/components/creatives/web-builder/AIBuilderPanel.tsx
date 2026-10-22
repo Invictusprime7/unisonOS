@@ -797,7 +797,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             // is a status note rather than a red error the user has to decode.
             if (err instanceof SiteImageBusyError) {
               emitAgentEvent({ kind: 'error', runId, status: 'failed', message: msg });
-              toast.info('One picture at a time', { id, description: msg });
+              toast.info(err.retryAfterSeconds ? 'The picture maker is cooling down' : 'One picture at a time', { id, description: msg });
               return;
             }
             emitAgentEvent({ kind: 'error', runId, status: 'failed', message: msg });

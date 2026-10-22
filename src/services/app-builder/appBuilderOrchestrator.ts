@@ -39,9 +39,19 @@ export async function orchestrateAppBuild(
   const startedAt = Date.now();
   const totalBudgetMs = input.budgetMs ?? 280_000;
   const authoringBudgetMs = Math.max(60_000, totalBudgetMs - CLOSURE_REPAIR_RESERVE_MS);
-  const contentTypes = dependencies.loadContentTypes
-    ? await dependencies.loadContentTypes({ businessId: input.contract.identity.businessId, projectId: input.contract.identity.projectId })
-    : [];
+  let contentTypes: ContentTypeRow[] = [];
+  if (dependencies.loadContentTypes) {
+    try {
+      contentTypes = await dependencies.loadContentTypes({
+        businessId: input.contract.identity.businessId,
+        projectId: input.contract.identity.projectId,
+      });
+    } catch (error) {
+      // CMS schemas enrich authoring only; fresh-launch project IDs may not be
+      // persisted until owner approval, and CMS writes remain post-commit.
+      console.warn('[AppBuilder] Content-type context unavailable; continuing without CMS schema hints.', error);
+    }
+  }
   const generation = buildAppBuilderGenerationContext(input.contract, contentTypes);
   const baseFiles = applyDesignSources(input.initialFiles, generation.materialization);
   const manifestSource = baseFiles['/.unison/design-source-manifest.json'];

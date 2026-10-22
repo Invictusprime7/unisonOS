@@ -45,7 +45,7 @@ import {
   buildCanonicalLaunchArtifactsAsync,
   type PublishedRuntimeConfig,
 } from "@/services/canonicalLaunchVfs";
-import { loadBusinessProfile } from "@/services/businessProfileService";
+import { loadBusinessProfile, saveSiteProfile } from "@/services/businessProfileService";
 import { planSectionDataBindings } from "@/services/autoEmitSectionBindings";
 import { buildBusinessRuntimeContract } from "@/platform/core/businessRuntimeContract";
 import {
@@ -115,7 +115,7 @@ import {
 import { buildWizardBindingGuide } from '@/services/wizardBindingBridge';
 import type { CommitMutationResult } from "@/services/vfsCommitService";
 import { compileResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
-import { buildAppBuildContract } from '@/services/app-builder/appBuilderContracts';
+import { buildAppBuildContract, type AppBuildBusinessParameters } from '@/services/app-builder/appBuilderContracts';
 import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { WIZARD_LANE_B_PROTECTED_PATHS } from '@/services/wizardLaneBEnrichment';
 import {
@@ -139,6 +139,7 @@ export interface LaunchOrchestratorInput {
   customerNeeds: CustomerNeed[];
   selectedPages: PageChoice[];
   socialLinks?: Record<string, string>;
+  businessParameters?: AppBuildBusinessParameters;
   existingBusinessId?: string | null;
 }
 
@@ -262,7 +263,10 @@ async function runReservedLaunchPipeline(
       throw new LaunchFatalError("Your session expired. Sign in again to generate your site.");
     }
     const user = sessionData.session.user;
-    const ownerEmail = user.email || "";
+    const ownerEmail = input.businessParameters?.ownerEmail?.trim()
+      || input.businessParameters?.notificationEmail?.trim()
+      || user.email
+      || "";
 
     const generationCategory = resolveGenerationCategory(system, input.template);
     const industryProfile = getIndustryForCategory(generationCategory);
@@ -337,6 +341,12 @@ async function runReservedLaunchPipeline(
       visionPrompt: input.visionPrompt?.trim(),
       designSelection: input.designSelection,
       businessName: brand,
+      businessParameters: {
+        ...input.businessParameters,
+        ownerEmail,
+        notificationEmail: input.businessParameters?.notificationEmail?.trim() || ownerEmail || undefined,
+        socialLinks: input.socialLinks,
+      },
       businessModel: SYSTEM_TO_BUSINESS_MODEL[input.systemId] || "general",
       industryOverlay,
       systemType: input.systemId,
@@ -414,6 +424,7 @@ async function runReservedLaunchPipeline(
     business: {
       name: brand,
       industry: plan.industryOverlay,
+      parameters: plan.selections.businessParameters,
       primaryGoal: plan.selections.primaryGoal,
       systemType: input.systemId,
     },
@@ -461,6 +472,7 @@ async function runReservedLaunchPipeline(
 
   const bindingGuide = buildWizardBindingGuide(canonicalPlan.playground, {
     industry: plan.industryOverlay,
+    enabledCapabilities: plan.launchCapabilities,
   });
   const designContext = compileResolvedSiteDesignContext({
     industry: plan.industryOverlay,
@@ -482,6 +494,21 @@ async function runReservedLaunchPipeline(
     pageRegistry: canonicalPlan.playground.pageRegistry,
     industry: plan.industryOverlay,
     businessName: brand,
+    businessProfile: canonicalPlan.playground.creatorData.businessInfo,
+    businessParameters: {
+      ...plan.selections.businessParameters,
+      ownerEmail: plan.ownerEmail || undefined,
+      notificationEmail: canonicalPlan.playground.creatorData.businessInfo.notificationEmail,
+      notificationPhone: canonicalPlan.playground.creatorData.businessInfo.notificationPhone,
+      publicEmail: canonicalPlan.playground.creatorData.businessInfo.email,
+      phone: canonicalPlan.playground.creatorData.businessInfo.phone,
+      crmDestination: canonicalPlan.playground.creatorData.businessInfo.crmDestination,
+      bookingOwner: canonicalPlan.playground.creatorData.businessInfo.bookingOwner,
+      paymentProvider: canonicalPlan.playground.creatorData.businessInfo.paymentProvider,
+      followUpChannel: canonicalPlan.playground.creatorData.businessInfo.followUpChannel,
+    },
+    canonicalBindings: Object.values(canonicalPlan.playground.bindings),
+    registeredComponentInstances: Object.values(canonicalPlan.playground.creatorData.componentInstances),
     visionBrief: plan.selections.visionPrompt,
     goals: [plan.selections.primaryGoal, ...plan.selections.secondaryGoals],
     intents: plan.canonicalIntents,
@@ -533,7 +560,7 @@ async function runReservedLaunchPipeline(
   if (input.existingBusinessId && !loadedBusinessProfile) {
     throw new Error("Unable to load the selected Business Profile for this launch.");
   }
-  const businessProfile: BusinessProfileDTO = loadedBusinessProfile || {
+  const baseBusinessProfile: BusinessProfileDTO = loadedBusinessProfile || {
     businessId: plan.confirmed.businessId,
     ownerId: plan.user.id,
     name: brand,
@@ -545,6 +572,25 @@ async function runReservedLaunchPipeline(
     hours: [],
     socialLinks: {},
     settings: {},
+  };
+  const ownerParameters = plan.selections.businessParameters ?? {};
+  const businessProfile: BusinessProfileDTO = {
+    ...baseBusinessProfile,
+    name: brand,
+    industry: plan.industryOverlay,
+    notificationEmail: ownerParameters.notificationEmail?.trim() || ownerParameters.ownerEmail?.trim() || baseBusinessProfile.notificationEmail || plan.ownerEmail || null,
+    notificationPhone: ownerParameters.notificationPhone?.trim() || baseBusinessProfile.notificationPhone || null,
+    email: ownerParameters.publicEmail?.trim() || baseBusinessProfile.email || null,
+    phone: ownerParameters.phone?.trim() || baseBusinessProfile.phone || null,
+    tagline: ownerParameters.tagline?.trim() || baseBusinessProfile.tagline || null,
+    description: ownerParameters.description?.trim() || baseBusinessProfile.description || null,
+    website: ownerParameters.website?.trim() || baseBusinessProfile.website || null,
+    logoUrl: ownerParameters.logoUrl?.trim() || baseBusinessProfile.logoUrl || null,
+    brandColor: ownerParameters.brandColor?.trim() || baseBusinessProfile.brandColor || null,
+    timezone: ownerParameters.timezone?.trim() || baseBusinessProfile.timezone,
+    address: { ...baseBusinessProfile.address, ...(ownerParameters.address ?? {}) },
+    hours: ownerParameters.hours?.length ? ownerParameters.hours as BusinessProfileDTO['hours'] : baseBusinessProfile.hours,
+    socialLinks: { ...baseBusinessProfile.socialLinks, ...(ownerParameters.socialLinks ?? {}) },
   };
   const canonicalPages = Object.values(siteBundleSnapshot.pageRegistry.pages)
     .filter((page): page is typeof page & { filePath: string } => Boolean(page.filePath))
@@ -761,6 +807,24 @@ async function runReservedLaunchPipeline(
     // Register the reviewed identity before writing its first revision.
     const confirmed: ConfirmedLaunchIds = callbacks.onReview ? await plan.provision() : plan.confirmed;
     if (Object.keys(plan.confirmed).some(key => confirmed[key as keyof ConfirmedLaunchIds] !== plan.confirmed[key as keyof ConfirmedLaunchIds])) throw new Error('Launch identity changed after review. Generate a fresh preview.');
+    const persistedProfile = await saveSiteProfile(confirmed.businessId, confirmed.projectId, {
+      name: businessProfile.name,
+      industry: businessProfile.industry,
+      notificationEmail: businessProfile.notificationEmail,
+      notificationPhone: businessProfile.notificationPhone,
+      email: businessProfile.email,
+      phone: businessProfile.phone,
+      tagline: businessProfile.tagline,
+      description: businessProfile.description,
+      website: businessProfile.website,
+      logoUrl: businessProfile.logoUrl,
+      brandColor: businessProfile.brandColor,
+      timezone: businessProfile.timezone,
+      address: businessProfile.address,
+      hours: businessProfile.hours,
+      socialLinks: businessProfile.socialLinks,
+    });
+    if (!persistedProfile) throw new Error('Owner information could not be saved for this site. Review the details and retry launch.');
     try { localStorage.setItem('unison:lastBusinessId', confirmed.businessId); } catch { /* Best effort. */ }
     const identity: BuilderIdentity = {
       userId: plan.user.id,

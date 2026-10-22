@@ -10,6 +10,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const TEMPLATES: Record<string, { subject: string; body: string }> = {
   booking_confirm_email: { subject: "Your booking with {{business}} is confirmed", body: "Hi {{name}},<br/><br/>Your booking{{serviceLine}}{{whenLine}} is confirmed. We look forward to seeing you." },
+  booking_owner_notification: { subject: "New booking for {{business}}: {{service}}", body: "A new booking was confirmed.<br/><br/><strong>Service:</strong> {{service}}<br/><strong>When:</strong> {{whenLine}}<br/><strong>Customer:</strong> {{name}}<br/><strong>Email:</strong> {{customerEmail}}<br/><strong>Phone:</strong> {{customerPhone}}<br/><strong>Notes:</strong> {{notes}}<br/><strong>Booking ID:</strong> {{bookingId}}" },
   quote_received: { subject: "We received your quote request", body: "Hi {{name}},<br/><br/>Thanks for reaching out to {{business}}. We received your request and will reply with a quote shortly." },
   job_complete_invoice: { subject: "Your job with {{business}} is complete", body: "Hi {{name}},<br/><br/>Your job is complete. Thank you for choosing {{business}} — your invoice will follow separately." },
   noshow_followup: { subject: "We missed you at {{business}}", body: "Hi {{name}},<br/><br/>We missed you today. Reply to this email if you'd like to rebook." },
@@ -76,6 +77,11 @@ Deno.serve(async (req) => {
     name: esc(ctx.contactName || "there"),
     serviceLine: ctx.service ? ` for ${esc(ctx.service)}` : "",
     whenLine: ctx.scheduledAt ? ` on ${esc(new Date(String(ctx.scheduledAt)).toUTCString())}` : "",
+    service: esc(ctx.service),
+    customerEmail: esc(ctx.customerEmail),
+    customerPhone: esc(ctx.customerPhone),
+    notes: esc(ctx.notes),
+    bookingId: esc(ctx.bookingId),
     orderLine: ctx.orderId ? ` (#${esc(ctx.orderId)})` : "",
   };
   const fill = (s: string) => s.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");

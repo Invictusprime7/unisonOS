@@ -39,6 +39,8 @@ export interface LaunchTask {
 }
 
 export interface LaunchReadinessInput {
+  /** Durable confirmed site + project identity has been hydrated. */
+  siteConnected?: boolean;
   capabilities?: string[];
   systemType?: string | null;
   /** Resource types the generated site actually renders, with saved counts. */
@@ -68,6 +70,18 @@ export function deriveLaunchTasks(input: LaunchReadinessInput): LaunchTask[] {
   const profile = input.businessProfile ?? {};
 
   const missing = (['name', 'email', 'phone'] as const).filter((k) => blank(profile[k]));
+  if (input.siteConnected === false) {
+    tasks.push({
+      id: 'site-connection',
+      title: 'Connect confirmed site',
+      description: 'Confirm a launch so this Playground can read and configure the saved site.',
+      domain: 'publish',
+      priority: 'required',
+      status: 'blocked',
+      verifiable: true,
+      target: { playgroundSection: 'readiness' },
+    });
+  }
   tasks.push({
     id: 'business-profile',
     title: 'Complete business profile',
@@ -135,13 +149,16 @@ export function deriveLaunchTasks(input: LaunchReadinessInput): LaunchTask[] {
   }
 
   const blockers = input.publishBlockers;
+  const siteDisconnected = input.siteConnected === false;
   tasks.push({
     id: 'publish',
     title: 'Ready to publish',
-    description: blockers === undefined ? 'Not checked yet' : blockers ? `${blockers} button or form connection${blockers === 1 ? '' : 's'} still need fixing` : 'Every required connection works',
+    description: siteDisconnected
+      ? 'Connect a confirmed site before validating publication requirements'
+      : blockers === undefined ? 'Not checked yet' : blockers ? `${blockers} button or form connection${blockers === 1 ? '' : 's'} still need fixing` : 'Every required connection works',
     domain: 'publish',
     priority: 'required',
-    status: blockers === undefined ? 'pending_verification' : blockers ? 'blocked' : 'ready',
+    status: siteDisconnected ? 'blocked' : blockers === undefined ? 'pending_verification' : blockers ? 'blocked' : 'ready',
     verifiable: true,
     target: { playgroundSection: 'readiness' },
     dependencyIds: tasks.filter((t) => t.priority === 'required').map((t) => t.id),

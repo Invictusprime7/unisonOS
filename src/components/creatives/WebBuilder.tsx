@@ -1717,17 +1717,17 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     () =>
       createBrowserCartManager({
         businessId: businessId || undefined,
-        siteId: projectId || undefined,
+        siteId: effectiveRouteState?.siteId ?? launch?.siteId ?? undefined,
       }),
-    [businessId, projectId],
+    [businessId, effectiveRouteState?.siteId, launch?.siteId, projectId],
   );
   const previewCart = useMemo(
     () =>
       readBrowserCart({
         businessId: businessId || undefined,
-        siteId: projectId || undefined,
+        siteId: effectiveRouteState?.siteId ?? launch?.siteId ?? undefined,
       }),
-    [businessId, projectId, previewCartVersion],
+    [businessId, effectiveRouteState?.siteId, launch?.siteId, projectId, previewCartVersion],
   );
 
   useEffect(() => {
@@ -3397,7 +3397,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       if (commit.status !== 'committed') {
         throw new CommitRejectedError('presentation mutation was rejected', commit);
       }
-      if (commit.persistedRevisionId) setCurrentRevisionId(commit.persistedRevisionId);
+      if (commit.persistedRevisionId) {
+        // A subsequent builder edit may arrive before React rerenders.
+        currentRevisionIdRef.current = commit.persistedRevisionId;
+        setCurrentRevisionId(commit.persistedRevisionId);
+      }
       // canonical-vfs-exempt: adoption of an accepted commitMutation result
       const imported = importBuilderFiles(commit.vfsFiles, {
         replace: true,
@@ -3543,6 +3547,12 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       });
       if (commit.status !== 'committed') {
         throw new CommitRejectedError('builder edit was rejected by the canonical pipeline', commit);
+      }
+      if (commit.persistedRevisionId) {
+        // The next queued toolbar edit must use this accepted revision before
+        // React commits the state update.
+        currentRevisionIdRef.current = commit.persistedRevisionId;
+        setCurrentRevisionId(commit.persistedRevisionId);
       }
       // canonical-vfs-exempt: adoption of an accepted commitMutation result
       const imported = importBuilderFiles(commit.vfsFiles, {
@@ -6005,7 +6015,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           const overlayPayload = {
             ...(payload as Record<string, unknown>),
             businessId,
-            siteId: projectId,
+            siteId: effectiveRouteState?.siteId ?? launch?.siteId ?? undefined,
             projectId,
             source: (payload as Record<string, unknown> | undefined)?.source
               || (intent === 'lead.capture' ? 'lead_capture' : intent),
@@ -7912,7 +7922,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           </Button>
 
           {/* Inline project rename — invisible until a project is loaded. */}
-          <span className="shrink-0 text-foreground" aria-label="Affinity Builder">Affinity</span>
+          <img
+            src="/unison-logo-lockup.png"
+            alt="Unison"
+            className="h-7 w-auto shrink-0 object-contain"
+          />
           {projectId && (
             <input
               value={projectDisplayName}
@@ -8241,6 +8255,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         }}
         playground={creatorPlayground}
         businessId={businessId || null}
+        siteId={effectiveRouteState?.siteId ?? launch?.siteId ?? null}
+        projectId={projectId ?? null}
+        industry={builderIndustry ?? null}
+        systemType={systemType ?? null}
         initialSection={playgroundInitialSection}
         initialBindingId={playgroundInitialBindingId}
         bindings={playgroundBindings}
@@ -9527,7 +9545,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         activeOverlay={activeRuntimeOverlay}
         onClose={() => setActiveRuntimeOverlay(null)}
         businessId={businessId || undefined}
-        siteId={projectId || undefined}
+        siteId={effectiveRouteState?.siteId ?? launch?.siteId ?? undefined}
       />
 
       <PreviewCartDrawer

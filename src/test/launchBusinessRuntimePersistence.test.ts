@@ -25,6 +25,7 @@ import { createCanonicalComponentInstance } from '@/services/canonicalComponentR
 import { resolveComponentRuntimeContract } from '@/services/componentRuntimeContract';
 import { compileGeneratedSiteRuntimeManifest } from '@/services/generatedSiteRuntimeManifest';
 import { getIntentDef } from '@/platform/core/intentSurfaceRegistry';
+import { buildSiteSetupPlan } from '@/services/siteSetupPlan';
 
 function createSnapshot(): SiteBundleSnapshot {
   const pageRegistry = createEmptyPageRegistry();
@@ -71,6 +72,17 @@ function createSnapshot(): SiteBundleSnapshot {
 }
 
 describe('launch business runtime persistence', () => {
+  it('always includes Owner Information as the first core launch setup step', () => {
+    for (const input of [{}, { systemType: 'booking' }, { systemType: 'store', capabilities: ['commerce'] }]) {
+      const plan = buildSiteSetupPlan(input);
+      expect(plan[0]).toMatchObject({
+        id: 'owner_information',
+        title: 'Owner Information',
+        category: 'core',
+      });
+    }
+  });
+
   it('emits a public standalone runtime contract without credentials', () => {
     const runtime = buildPublishedRuntimeConfig({
       siteId: 'site-1',
@@ -187,6 +199,12 @@ describe('launch business runtime persistence', () => {
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('runtime.controllerEndpoints[controller.functionName]');
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("controller.transport !== 'supabase-function'");
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('fetch(endpoint');
+  });
+
+  it('reports actual booking notification delivery rather than claiming an email was sent', () => {
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("customerStatus === 'sent'");
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("ownerStatus === 'not_configured'");
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('the confirmation email could not be sent');
   });
 
   it('derives booking component reads, writes, and slot requirements from the canonical registry', () => {
@@ -325,6 +343,19 @@ describe('launch business runtime persistence', () => {
     });
   });
 
+  it('routes booking notifications through site setup or the private business email', () => {
+    const runtime = readFileSync(resolve(process.cwd(), 'supabase/functions/site-runtime/index.ts'), 'utf8');
+    const resolver = runtime.slice(
+      runtime.indexOf('async function configuredBookingOwnerEmail'),
+      runtime.indexOf('function emailStatus'),
+    );
+
+    expect(resolver).toContain(".from('site_setup_steps')");
+    expect(resolver).toContain(".from('businesses')");
+    expect(resolver).toContain(".select('notification_email')");
+    expect(resolver).toContain('config?.emailNewBooking === false');
+  });
+
   it('does not generate new booking bindings to legacy executors', () => {
     const legacyBinding = /booking\.create[^\n]*(?:intent-exec|intent-router|intent-booking)|(?:intent-exec|intent-router|intent-booking)[^\n]*booking\.create/;
     const builderActions = readFileSync(
@@ -382,6 +413,11 @@ describe('launch business runtime persistence', () => {
       'utf8',
     );
 
+    expect(functionalBlocks).not.toContain('IntentBookingForm');
+    expect(existsSync(resolve(
+      process.cwd(),
+      'src/components/creatives/web-builder/functional-blocks/IntentBookingForm.tsx',
+    ))).toBe(false);
     expect(config).not.toContain('[functions.create-booking]');
     expect(existsSync(resolve(process.cwd(), 'supabase/functions/create-booking/index.ts'))).toBe(false);
     expect(templateAutomation).not.toContain("case 'createBooking'");

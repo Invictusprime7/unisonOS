@@ -14,11 +14,24 @@ import { planSiteComposition, type SiteCompositionPlan } from '@/services/compos
 import type { ResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import type { WizardAggregatedRegistryContext } from '@/services/launch/wizardRegistryAggregation';
 import type { BuilderPageType, PageRegistry } from '@/types/pageRegistry';
+import { resolvePlaygroundBindingDomIntent, type PlaygroundBinding } from '@/platform/core/playground';
+import type { CreatorBusinessInfo, CreatorComponentInstance } from '@/types/creatorData';
 import type { AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
+import type { WizardBusinessParameters } from '@/platform/core/playground';
+import { getIntentDef } from '@/platform/core/intentSurfaceRegistry';
+import {
+  assertCanonicalComponentDefinition,
+  getCanonicalComponentDefinition,
+  type CanonicalComponentDefinition,
+} from '@/services/canonicalComponentRegistry';
+import { resolveComponentRuntimeContract, type ComponentRuntimeContract } from '@/services/componentRuntimeContract';
+import { getWizardBindingMarkers } from '@/services/wizardBindingBridge';
 import { getArtifact } from '@/platform/core/artifactRegistry';
 
-export const APP_BUILDER_PROTOCOL_VERSION = 'unison-app-builder/2' as const;
+export const APP_BUILDER_PROTOCOL_VERSION = 'unison-app-builder/3' as const;
+
+export type AppBuildBusinessParameters = WizardBusinessParameters;
 
 export interface AppBuilderLogoContract {
   version: '1.0';
@@ -121,6 +134,110 @@ export function deriveDesignSourceSelection(registry: WizardAggregatedRegistryCo
   };
 }
 
+export interface AppBuildIntentBinding {
+  bindingId: string;
+  pageId: string;
+  route: string;
+  elementKey?: string;
+  sourceSection: string;
+  sourceSlot: string;
+  coreIntent: string;
+  domIntent: string;
+  ctaMarkers: string[];
+  intentHandler: string;
+  targetType: string;
+  targetId: string;
+  requiredCapabilities: string[];
+  missingCapabilities: string[];
+  componentInstanceId?: string;
+  componentSlug?: string;
+  componentWriteIntent?: string;
+}
+
+export interface AppBuildRegisteredComponent {
+  runtime: ComponentRuntimeContract;
+  label: string;
+  targetType: CanonicalComponentDefinition['targetType'];
+  instanceStatus: CreatorComponentInstance['status'];
+  bindings: Record<string, string>;
+  requiredBindingKeys: string[];
+  requiredBusinessFields: string[];
+  requiredSetupSteps: string[];
+}
+
+function deriveRegisteredComponents(
+  instances: readonly CreatorComponentInstance[],
+  capabilities: readonly string[],
+): AppBuildRegisteredComponent[] {
+  return instances.flatMap((instance) => {
+    if (!instance.componentSlug) return [];
+    const definition = getCanonicalComponentDefinition(instance.componentSlug);
+    if (!definition) {
+      throw new Error(`AppBuildContract component ${instance.componentSlug} is not registered.`);
+    }
+    assertCanonicalComponentDefinition(definition);
+    const runtime = resolveComponentRuntimeContract(instance, capabilities);
+    if (!runtime) throw new Error(`AppBuildContract component ${instance.componentSlug} has no runtime contract.`);
+    return [{
+      runtime,
+      label: instance.label,
+      targetType: definition.targetType,
+      instanceStatus: instance.status,
+      bindings: { ...instance.bindings },
+      requiredBindingKeys: [...definition.requiredBindingKeys],
+      requiredBusinessFields: [...(definition.requiredBusinessFields ?? [])],
+      requiredSetupSteps: [...(definition.requiredSetupSteps ?? [])],
+    }];
+  }).sort((left, right) => left.runtime.instanceId.localeCompare(right.runtime.instanceId));
+}
+
+function deriveIntentBindings(
+  bindings: readonly PlaygroundBinding[],
+  pageRegistry: PageRegistry,
+  components: readonly AppBuildRegisteredComponent[],
+  enabledCapabilities: readonly string[],
+): AppBuildIntentBinding[] {
+  return bindings
+    .filter((binding) => binding.sourceSection && binding.sourceSlot && binding.coreIntent)
+    .map((binding) => {
+      const page = pageRegistry.pages[binding.sourcePageId];
+      const intent = getIntentDef(binding.coreIntent!);
+      if (!page) throw new Error(`AppBuildContract binding ${binding.bindingId} has no registered source page.`);
+      if (!intent) throw new Error(`AppBuildContract binding ${binding.bindingId} uses unregistered intent ${binding.coreIntent}.`);
+      const targetKey = binding.targetType === 'form' ? 'formId'
+        : binding.targetType === 'calendar' ? 'calendarId'
+          : binding.targetType === 'product' ? 'productId'
+            : null;
+      const component = targetKey
+        ? components.find((candidate) => candidate.bindings[targetKey] === binding.targetId)
+        : undefined;
+      const requiredCapabilities = [...new Set([
+        ...(intent.requiredCapabilities ?? []),
+        ...(binding.requiredCapabilities ?? []),
+      ])].sort();
+      return {
+        bindingId: binding.bindingId,
+        pageId: binding.sourcePageId,
+        route: page.path || '/',
+        elementKey: binding.elementKey,
+        sourceSection: binding.sourceSection!,
+        sourceSlot: binding.sourceSlot!,
+        coreIntent: intent.name,
+        domIntent: resolvePlaygroundBindingDomIntent(binding),
+        ctaMarkers: getWizardBindingMarkers(binding),
+        intentHandler: intent.handler,
+        targetType: binding.targetType,
+        targetId: binding.targetId,
+        requiredCapabilities,
+        missingCapabilities: requiredCapabilities.filter((capability) => !enabledCapabilities.includes(capability)),
+        componentInstanceId: component?.runtime.instanceId,
+        componentSlug: component?.runtime.componentSlug,
+        componentWriteIntent: component?.runtime.writeIntent ?? undefined,
+      };
+    })
+    .sort((left, right) => left.bindingId.localeCompare(right.bindingId));
+}
+
 export interface AppBuildContract {
   protocolVersion: typeof APP_BUILDER_PROTOCOL_VERSION;
   identity: AppBuildIdentity;
@@ -135,6 +252,13 @@ export interface AppBuildContract {
     branding: AppBuilderLogoContract;
     /** Owner's planning-chat brief carried from WizardSelections.visionPrompt. */
     visionBrief?: string;
+    /** Business-provided routing/contact parameters used by registered actions. */
+    parameters: AppBuildBusinessParameters;
+    businessProfile: CreatorBusinessInfo;
+    /** Registered functional components available to own form/CRM/runtime actions. */
+    registeredComponents: AppBuildRegisteredComponent[];
+    /** Canonical slot bindings joined to registered intent and component contracts. */
+    intentBindings: AppBuildIntentBinding[];
     goals: readonly string[];
     intents: readonly string[];
     capabilities: readonly string[];
@@ -169,6 +293,10 @@ export interface BuildAppBuildContractInput {
   industry: string;
   businessName: string;
   visionBrief?: string;
+  businessParameters?: AppBuildBusinessParameters;
+  businessProfile?: CreatorBusinessInfo;
+  canonicalBindings?: readonly PlaygroundBinding[];
+  registeredComponentInstances?: readonly CreatorComponentInstance[];
   goals: readonly string[];
   intents: readonly string[];
   capabilities: readonly string[];
@@ -383,6 +511,9 @@ function assertAppBuildContract(value: unknown): asserts value is AppBuildContra
   if (!contract.identity || !contract.topology || !contract.business || !contract.design || !contract.runtime) {
     throw new Error('AppBuildContract is incomplete.');
   }
+  if (!Array.isArray(contract.business.registeredComponents) || !Array.isArray(contract.business.intentBindings)) {
+    throw new Error('AppBuildContract requires structured component and intent bindings.');
+  }
   if (contract.business.branding?.version !== '1.0'
     || contract.business.branding.brandMark?.source?.field !== 'logoUrl'
     || !Array.isArray(contract.business.branding.brandMark.placements)
@@ -406,6 +537,16 @@ function assertAppBuildContract(value: unknown): asserts value is AppBuildContra
 }
 
 export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBuildContract {
+  const registeredComponents = deriveRegisteredComponents(
+    input.registeredComponentInstances ?? [],
+    input.capabilities,
+  );
+  const intentBindings = deriveIntentBindings(
+    input.canonicalBindings ?? [],
+    input.pageRegistry,
+    registeredComponents,
+    input.capabilities,
+  );
   const compositionPlan = planSiteComposition(
     input.industry,
     input.sitePlan.pages.map((page) => ({ pageId: page.id, role: page.role })),
@@ -428,6 +569,14 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
       businessName: input.businessName,
       branding: deriveAppBuilderLogoContract(input.businessName),
       visionBrief: input.visionBrief?.trim() || undefined,
+      parameters: Object.fromEntries(
+        Object.entries(input.businessParameters ?? {})
+          .filter(([, value]) => value !== undefined && value !== '')
+          .sort(([left], [right]) => left.localeCompare(right)),
+      ) as AppBuildBusinessParameters,
+      businessProfile: input.businessProfile ?? { businessName: input.businessName },
+      registeredComponents,
+      intentBindings,
       goals: [...input.goals],
       intents: [...input.intents],
       capabilities: [...input.capabilities],

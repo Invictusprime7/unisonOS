@@ -31,6 +31,13 @@ function stableSourceHash(files: Readonly<Record<string, string>>): string {
   return `fnv1a:${hash.toString(16).padStart(8, '0')}`;
 }
 
+function hasConfiguredValue(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === 'object') return Object.keys(value).length > 0;
+  return value != null && value !== false;
+}
+
 /** Attribute names (or '...' for a spread) on every JSX usage of a component. */
 function jsxUsages(source: string, name: string): Array<{ names: string[]; raw: string }> {
   const usages: Array<{ names: string[]; raw: string }> = [];
@@ -347,7 +354,17 @@ export async function validateAppBuildCandidate(input: {
     }
   }
 
-  for (const requirement of bindingGuideRequirements(input.contract.business.bindingGuide)) {
+  const allGuideRequirements = bindingGuideRequirements(input.contract.business.bindingGuide);
+  const canonicalBindings = input.contract.business.intentBindings;
+  const guideRequirements = canonicalBindings.length === 0
+    ? allGuideRequirements
+    : allGuideRequirements.filter((requirement) => canonicalBindings.some((binding) =>
+      binding.missingCapabilities.length === 0
+      && binding.route === requirement.route
+      && binding.domIntent === requirement.intent,
+    ));
+
+  for (const requirement of guideRequirements) {
     const page = pages.find((candidate) => candidate.route === requirement.route);
     // A page's surface includes the authored components it renders (shared
     // nav, footer, newsletter band); the binder stamps markers there too.
@@ -361,6 +378,157 @@ export async function validateAppBuildCandidate(input: {
         code: 'wizard-binding-marker-missing',
         path: page?.filePath,
         message: `Wizard-selected intent ${requirement.intent} needs one of ${requirement.markers.map((marker) => `data-ut-cta="${marker}"`).join(', ')} on ${requirement.route}. The canonical binder will stamp its data-ut-intent after this candidate closes.`,
+      });
+    }
+  }
+
+  for (const binding of canonicalBindings) {
+    if (binding.missingCapabilities.length > 0) continue;
+    if (!guideRequirements.some((requirement) => requirement.route === binding.route && requirement.intent === binding.domIntent)) {
+      issues.push({
+        severity: 'blocker',
+        code: 'intent-binding-guide-missing',
+        path: pages.find((page) => page.id === binding.pageId)?.filePath,
+        message: `Canonical intent binding ${binding.bindingId} (${binding.coreIntent} -> ${binding.domIntent}) has no matching authored marker requirement.`,
+      });
+    }
+    if ((binding.targetType === 'form' || binding.targetType === 'calendar')
+      && (!binding.componentInstanceId || !binding.componentSlug)) {
+      issues.push({
+        severity: 'blocker',
+        code: 'intent-binding-component-unregistered',
+        path: pages.find((page) => page.id === binding.pageId)?.filePath,
+        message: `${binding.coreIntent} targets ${binding.targetType} ${binding.targetId} without a registered component instance.`,
+      });
+    }
+    if (binding.componentWriteIntent && binding.componentWriteIntent !== binding.coreIntent) {
+      issues.push({
+        severity: 'blocker',
+        code: 'intent-binding-component-intent-mismatch',
+        path: pages.find((page) => page.id === binding.pageId)?.filePath,
+        message: `Registered ${binding.componentSlug} owns ${binding.componentWriteIntent}, not ${binding.coreIntent}.`,
+      });
+    }
+  }
+
+  for (const component of input.contract.business.registeredComponents) {
+    if (component.runtime.requiredCapabilities.some((capability) => !input.contract.business.capabilities.includes(capability))) continue;
+    const writeIntent = component.runtime.writeIntent;
+    if (component.instanceStatus === 'stubbed') continue;
+    if (component.instanceStatus !== 'ready' || component.runtime.status !== 'ready') {
+      issues.push({
+        severity: 'blocker',
+        code: 'registered-component-not-ready',
+        message: `Registered ${component.runtime.componentSlug} is not ready: ${component.runtime.blockers.join(' ') || `instance status is ${component.instanceStatus ?? 'unset'}`}`,
+      });
+      continue;
+    }
+    const profile = input.contract.business.businessProfile as unknown as Record<string, unknown>;
+    const profileCustomValues = profile.customValues && typeof profile.customValues === 'object'
+      ? profile.customValues as Record<string, unknown>
+      : {};
+    const parameterValues = input.contract.business.parameters as unknown as Record<string, unknown>;
+    const industryValues = input.contract.business.parameters.industry ?? {};
+    const missingBusinessFields = component.requiredBusinessFields.filter((field) => ![
+      profile[field],
+      profileCustomValues[field],
+      parameterValues[field],
+      industryValues[field],
+      field === 'notificationEmail' ? input.contract.business.parameters.ownerEmail : undefined,
+      field === 'bookingOwner' ? input.contract.business.parameters.ownerEmail : undefined,
+    ].some(hasConfiguredValue));
+    if (missingBusinessFields.length > 0) {
+      issues.push({
+        severity: 'blocker',
+        code: 'registered-component-business-fields-missing',
+        message: `${component.runtime.componentSlug} requires business fields: ${missingBusinessFields.join(', ')}.`,
+      });
+    }
+    if (!writeIntent) continue;
+
+    const assignedWriteIntents = input.contract.business.intentBindings
+      .filter((binding) => binding.componentInstanceId === component.runtime.instanceId && binding.missingCapabilities.length === 0)
+      .map((binding) => binding.coreIntent);
+    if (assignedWriteIntents.length > 0 && !assignedWriteIntents.includes(writeIntent)) {
+      issues.push({
+        severity: 'blocker',
+        code: 'registered-component-intent-mismatch',
+        message: `Registered ${component.runtime.componentSlug} declares ${writeIntent}, but its bindings assign ${assignedWriteIntents.join(', ')}.`,
+      });
+      continue;
+    }
+
+    const componentPages = [
+      ...component.runtime.usedOnPages.map((pageId) => pages.find((page) => page.id === pageId)).filter((page) => !!page),
+      ...input.contract.business.intentBindings
+        .filter((binding) => binding.componentInstanceId === component.runtime.instanceId)
+        .map((binding) => pages.find((page) => page.route === binding.route)).filter((page) => !!page),
+    ];
+    const uniquePages = [...new Map(componentPages.map((page) => [page!.id, page!])).values()];
+    const rendered = uniquePages.some((page) => {
+      const surface = collectLocalImportClosure(files, page.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path));
+      const source = surface.map((path) => files[path] ?? '').join('\n');
+      const escapedSlug = component.runtime.componentSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escapedId = component.runtime.instanceId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const registeredHost = new RegExp(
+        `(?:data-ut-component-slug\\s*=\\s*["']${escapedSlug}["']|data-ut-component-instance-id\\s*=\\s*["']${escapedId}["'])`,
+      ).test(source);
+      if (!registeredHost) return false;
+      if (component.targetType === 'form' || component.targetType === 'calendar') {
+        const form = new RegExp(`<form\\b(?=[^>]*data-intent-form\\s*=\\s*["']${writeIntent}["'])[^>]*>`, 'i').exec(source)?.[0];
+        return Boolean(form) && !/\\bonSubmit\\s*=/.test(form ?? '');
+      }
+      return new RegExp(`(?:data-intent-trigger|data-ut-intent)\\s*=\\s*["']${writeIntent}["']`).test(source);
+    });
+    if (!rendered) {
+      issues.push({
+        severity: 'blocker',
+        code: 'registered-component-not-rendered',
+        message: `Render registered ${component.runtime.componentSlug} with its native ${component.targetType === 'form' || component.targetType === 'calendar' ? `data-intent-form="${writeIntent}"` : `intent trigger "${writeIntent}"`} on its assigned page.`,
+      });
+    }
+  }
+
+  if (input.contract.business.capabilities.includes('booking')) {
+    const bookingPage = pages.find((page) => page.role === 'booking')
+      ?? pages.find((page) => page.route.replace(/\/$/, '').toLowerCase() === '/booking');
+    const bookingSurface = bookingPage?.filePath
+      ? collectLocalImportClosure(files, bookingPage.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path))
+      : [];
+    const bookingSources = bookingSurface.map((path) => files[path] ?? '').join('\n');
+    const bookingForm = /<form\b[^>]*data-intent-form\s*=\s*["']booking\.create["'][^>]*>/i.exec(bookingSources)?.[0] ?? '';
+    const missingFields = ['serviceId', 'slotId', 'customerName', 'customerEmail']
+      .filter((field) => !new RegExp(`name\\s*=\\s*["']${field}["']`).test(bookingSources));
+    const hasRegisteredHost = /data-ut-component-slug\s*=\s*["']booking-scheduler["']|data-ut-component-instance-id\s*=/.test(bookingSources);
+    const hasLocalSubmitHandler = /<form\b[^>]*data-intent-form\s*=\s*["']booking\.create["'][^>]*\bonSubmit\s*=/.test(bookingSources);
+    if (!bookingPage || !hasRegisteredHost || !bookingForm || hasLocalSubmitHandler || missingFields.length > 0) {
+      issues.push({
+        severity: 'blocker',
+        code: 'booking-runtime-contract-missing',
+        path: bookingPage?.filePath,
+        message: `Booking requires a registered booking-scheduler host and a native form[data-intent-form="booking.create"] with serviceId, slotId, customerName, and customerEmail fields${missingFields.length ? ` (missing: ${missingFields.join(', ')})` : ''}; local submit handlers cannot claim success.`,
+      });
+    }
+  }
+
+  if (input.contract.business.capabilities.includes('booking')) {
+    const bookingPage = pages.find((page) => page.role === 'booking')
+      ?? pages.find((page) => page.route.replace(/\/$/, '').toLowerCase() === '/booking');
+    const bookingSurface = bookingPage?.filePath
+      ? collectLocalImportClosure(files, bookingPage.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path))
+      : [];
+    const bookingSources = bookingSurface.map((path) => files[path] ?? '').join('\n');
+    const bookingForm = /<form\b[^>]*data-intent-form\s*=\s*["']booking\.create["'][^>]*>/i.exec(bookingSources)?.[0] ?? '';
+    const missingFields = ['serviceId', 'slotId', 'customerName', 'customerEmail']
+      .filter((field) => !new RegExp(`name\\s*=\\s*["']${field}["']`).test(bookingSources));
+    const hasRegisteredHost = /data-ut-component-slug\s*=\s*["']booking-scheduler["']|data-ut-component-instance-id\s*=/.test(bookingSources);
+    const hasLocalSubmitHandler = /\bonSubmit\s*=/.test(bookingForm);
+    if (!bookingPage || !hasRegisteredHost || !bookingForm || hasLocalSubmitHandler || missingFields.length > 0) {
+      issues.push({
+        severity: 'blocker',
+        code: 'booking-runtime-contract-missing',
+        path: bookingPage?.filePath,
+        message: `Booking requires a registered booking-scheduler host and a native form[data-intent-form="booking.create"] with serviceId, slotId, customerName, and customerEmail fields${missingFields.length ? ` (missing: ${missingFields.join(', ')})` : ''}; local submit handlers cannot claim success.`,
       });
     }
   }

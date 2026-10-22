@@ -24,6 +24,8 @@ function contract(): AppBuildContract {
     },
     business: {
       industry: 'salon', businessName: 'Northstar', goals: [], intents: [], capabilities: [], bindingGuide: '',
+      parameters: {}, registeredComponents: [], intentBindings: [],
+      businessProfile: { businessName: 'Northstar' },
       branding: {
         version: '1.0',
         brandMark: {
@@ -54,7 +56,80 @@ const initialFiles = {
   '/src/pages/Contact.tsx': 'export default function Contact(){return <main>Baseline</main>}',
 };
 
+function bookingContract(): AppBuildContract {
+  const value = contract();
+  value.business.capabilities = ['booking'];
+  value.topology.sitePlan.pages.push({
+    id: 'booking', name: 'booking', title: 'Booking', route: '/booking', role: 'booking',
+    filePath: '/src/pages/Booking.tsx', visibleInNav: true, isHome: false, generatedBy: 'wizard',
+  });
+  return value;
+}
+
+function contactCrmContract(): AppBuildContract {
+  const value = contract();
+  value.business.capabilities = ['contact'];
+  value.business.intents = ['contact.submit'];
+  value.business.parameters = {
+    ownerEmail: 'owner@example.test',
+    notificationEmail: 'owner@example.test',
+    crmDestination: 'unison_crm',
+  };
+  value.business.businessProfile = {
+    businessName: 'Northstar',
+    notificationEmail: 'owner@example.test',
+    bookingOwner: 'owner@example.test',
+    crmDestination: 'unison_crm',
+  };
+  value.business.bindingGuide = '- Page Contact (/contact), slot contact.form-submit: label "Send", marker data-ut-cta="cta.form-submit", intent contact.submit, target form-contact';
+  value.business.registeredComponents = [{
+    runtime: {
+      instanceId: 'cmp-contact', componentSlug: 'contact-form', usedOnPages: ['contact'],
+      requiredCapabilities: ['contact'], catalogSurfaces: [], writeIntent: 'contact.submit',
+      slotBindings: ['form-submit'], status: 'ready', blockers: [],
+    },
+    label: 'Contact Form', targetType: 'form', instanceStatus: 'ready', bindings: { formId: 'form-contact' },
+    requiredBindingKeys: ['formId'], requiredSetupSteps: [],
+    requiredBusinessFields: ['notificationEmail', 'crmDestination'],
+  }];
+  value.business.intentBindings = [{
+    bindingId: 'bind-contact', pageId: 'contact', route: '/contact',
+    elementKey: 'contact.contact.form-submit', sourceSection: 'contact', sourceSlot: 'form-submit',
+    coreIntent: 'contact.submit', domIntent: 'contact.submit', intentHandler: 'site-runtime', targetType: 'form', targetId: 'form-contact',
+    requiredCapabilities: ['contact'], missingCapabilities: [], componentInstanceId: 'cmp-contact',
+    componentSlug: 'contact-form', componentWriteIntent: 'contact.submit',
+  }];
+  return value;
+}
+
+const contactCrmPage = '<section data-ut-component-slug="contact-form"><form data-intent-form="contact.submit"><input name="name" /><input name="email" /><button type="submit" data-ut-cta="cta.form-submit">Send</button></form></section>';
+
 describe('App Builder candidate closure', () => {
+  it('blocks locally fabricated booking confirmations without the registered runtime form', async () => {
+    const files = {
+      ...initialFiles,
+      '/src/pages/Booking.tsx': `import { useState } from 'react'; export default function Booking(){ const [sent,setSent]=useState(false); return <main>{sent ? <p>Consultation Request Dispatched</p> : <button onClick={()=>setSent(true)}>Confirm Booking</button>}</main>}`,
+    };
+    const report = await validateAppBuildCandidate({ contract: bookingContract(), files, initialFiles });
+
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(expect.objectContaining({
+      severity: 'blocker',
+      code: 'booking-runtime-contract-missing',
+      path: '/src/pages/Booking.tsx',
+    }));
+  });
+
+  it('accepts a booking page only with the registered runtime host and required form fields', async () => {
+    const files = {
+      ...initialFiles,
+      '/src/pages/Booking.tsx': '<section data-ut-component-slug="booking-scheduler"><form data-intent-form="booking.create"><select name="serviceId" /><select name="slotId" /><input name="customerName" /><input name="customerEmail" type="email" /></form></section>',
+    };
+    const report = await validateAppBuildCandidate({ contract: bookingContract(), files, initialFiles });
+
+    expect(report.issues.some((issue) => issue.code === 'booking-runtime-contract-missing')).toBe(false);
+  });
+
   it('accepts a complete multi-page candidate with project-local companion modules', async () => {
     const files = {
       ...initialFiles,
@@ -64,7 +139,7 @@ describe('App Builder candidate closure', () => {
     };
     const report = await validateAppBuildCandidate({ contract: contract(), files, initialFiles });
 
-    expect(report.ok).toBe(true);
+    expect(report.ok, JSON.stringify(report.issues)).toBe(true);
     expect(report.issues.filter((issue) => issue.severity === 'blocker')).toEqual([]);
     expect(report.sourceHash).toMatch(/^fnv1a:/);
   });
@@ -117,6 +192,122 @@ describe('App Builder candidate closure', () => {
     const report = await validateAppBuildCandidate({ contract: withBindingGuide, files, initialFiles });
 
     expect(report.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
+  });
+
+  it('accepts a CRM form only when its registered component, intent, and business routing are connected', async () => {
+    const files = {
+      ...initialFiles,
+      '/src/pages/Contact.tsx': contactCrmPage,
+    };
+    const report = await validateAppBuildCandidate({ contract: contactCrmContract(), files, initialFiles });
+
+    expect(report.ok).toBe(true);
+    expect(report.issues.filter((issue) => issue.code.startsWith('crm-') || issue.code.startsWith('intent-binding-'))).toEqual([]);
+  });
+
+  it('blocks CRM forms that omit the assigned registered component host', async () => {
+    const files = {
+      ...initialFiles,
+      '/src/pages/Contact.tsx': contactCrmPage.replace('data-ut-component-slug="contact-form"', 'data-ut-component-slug="request-quote"'),
+    };
+    const report = await validateAppBuildCandidate({ contract: contactCrmContract(), files, initialFiles });
+
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(expect.objectContaining({ code: 'registered-component-not-rendered' }));
+  });
+
+  it('blocks a registered CRM component whose write intent differs from the assigned binding', async () => {
+    const mismatched = contactCrmContract();
+    mismatched.business.registeredComponents[0].runtime.writeIntent = 'quote.request';
+    mismatched.business.intentBindings[0].componentWriteIntent = 'quote.request';
+    const report = await validateAppBuildCandidate({
+      contract: mismatched,
+      files: { ...initialFiles, '/src/pages/Contact.tsx': contactCrmPage },
+      initialFiles,
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(expect.objectContaining({ code: 'registered-component-intent-mismatch' }));
+    expect(report.issues).toContainEqual(expect.objectContaining({ code: 'intent-binding-component-intent-mismatch' }));
+  });
+
+  it('does not require UI markers or runtime hosts for optional bindings with disabled capabilities', async () => {
+    const inactive = contract();
+    inactive.business.capabilities = [];
+    inactive.business.bindingGuide = [
+      '- Page Home (/), slot navbar.primary-cta: label "Account", marker data-ut-cta="cta.nav", intent nav.goto, target account',
+      '- Page Contact (/contact), slot contact.form-submit: label "Request quote", marker data-ut-cta="cta.form-submit", intent quote.request, target quote-form',
+    ].join('\n');
+    inactive.business.intentBindings = [
+      {
+        bindingId: 'bind-account', pageId: 'home', route: '/', sourceSection: 'navbar', sourceSlot: 'primary-cta',
+        coreIntent: 'account.open', domIntent: 'nav.goto', ctaMarkers: ['cta.nav'], intentHandler: 'client',
+        targetType: 'url', targetId: '/account', requiredCapabilities: ['auth'], missingCapabilities: ['auth'],
+      },
+      {
+        bindingId: 'bind-quote', pageId: 'contact', route: '/contact', sourceSection: 'contact', sourceSlot: 'form-submit',
+        coreIntent: 'quote.request', domIntent: 'quote.request', ctaMarkers: ['cta.form-submit'], intentHandler: 'intent-exec',
+        targetType: 'form', targetId: 'quote-form', requiredCapabilities: ['quoting'], missingCapabilities: ['quoting'],
+        componentInstanceId: 'cmp-quote', componentSlug: 'request-quote', componentWriteIntent: 'quote.request',
+      },
+    ];
+    inactive.business.registeredComponents = [{
+      ...contactCrmContract().business.registeredComponents[0],
+      targetType: 'form', instanceStatus: 'ready', requiredCapabilities: ['quoting'],
+      runtime: { ...contactCrmContract().business.registeredComponents[0].runtime, componentSlug: 'request-quote', requiredCapabilities: ['quoting'], writeIntent: 'quote.request', status: 'blocked', blockers: ['Missing required capability: quoting.'] },
+    }];
+    const report = await validateAppBuildCandidate({ contract: inactive, files: initialFiles, initialFiles });
+
+    expect(report.ok, JSON.stringify(report.issues)).toBe(true);
+    expect(report.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
+    expect(report.issues.some((issue) => issue.code.startsWith('registered-component-'))).toBe(false);
+  });
+
+  it('validates registered non-form writers through their declared native action target', async () => {
+    const checkout = contactCrmContract();
+    checkout.business.capabilities = ['commerce'];
+    checkout.business.parameters.paymentProvider = 'connected';
+    checkout.business.businessProfile.paymentProvider = 'connected';
+    checkout.business.bindingGuide = '- Page Home (/), slot shop-grid.card-cta: label "Buy", marker data-ut-cta="cta.card", intent pay.checkout, target product-1';
+    checkout.business.registeredComponents[0] = {
+      ...checkout.business.registeredComponents[0],
+      targetType: 'checkout',
+      bindings: { productId: 'product-1' },
+      requiredBindingKeys: ['productId'],
+      requiredBusinessFields: ['paymentProvider'],
+      runtime: {
+        ...checkout.business.registeredComponents[0].runtime,
+        componentSlug: 'checkout-cta',
+        requiredCapabilities: ['commerce'],
+        writeIntent: 'pay.checkout',
+      },
+    };
+    checkout.business.intentBindings[0] = {
+      ...checkout.business.intentBindings[0],
+      pageId: 'home',
+      route: '/',
+      sourceSection: 'shop-grid',
+      sourceSlot: 'card-cta',
+      coreIntent: 'pay.checkout',
+      domIntent: 'pay.checkout',
+      intentHandler: 'stripe-checkout',
+      targetType: 'product',
+      targetId: 'product-1',
+      requiredCapabilities: ['commerce'],
+      missingCapabilities: [],
+      componentSlug: 'checkout-cta',
+      componentWriteIntent: 'pay.checkout',
+    };
+    const files = {
+      ...initialFiles,
+      '/src/pages/Home.tsx': '<section data-ut-component-slug="checkout-cta"><button data-ut-cta="cta.card" data-intent-trigger="pay.checkout">Buy</button></section>',
+      '/src/pages/Contact.tsx': 'export default function Contact(){return <main>Contact</main>}',
+    };
+
+    const report = await validateAppBuildCandidate({ contract: checkout, files, initialFiles });
+
+    expect(report.ok, JSON.stringify(report.issues)).toBe(true);
+    expect(report.issues.filter((issue) => issue.code.startsWith('registered-component-'))).toEqual([]);
   });
 
   it('accepts binding markers placed in the shared nav and footer a page renders', async () => {

@@ -44,6 +44,7 @@ const HOME_QUICK_ACTIONS: QuickAction[] = [
 
 export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange, badge, headline, subtitle, chatGlow = false, demoGeneration = false }: HeroSectionProps) {
   const [discoveryActive, setDiscoveryActive] = useState(false);
+  const [chatResetKey, setChatResetKey] = useState(0);
 
   return (
     <section className="relative overflow-hidden">
@@ -162,6 +163,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
             <div className={chatGlow ? "affinity-home-chat-glow" : undefined}>
             <AIAssistantCore
               key={user ? `site-discovery:${user.id}` : "site-discovery:anonymous"}
+              key={chatResetKey}
               appearance="unison"
               className={cn("transition-[height] duration-500 motion-reduce:transition-none", launcherOpen || discoveryActive ? "h-[min(740px,85dvh)]" : "h-[250px] sm:h-[270px]")}
               placeholder="Tell Affinity about your idea..."
@@ -178,6 +180,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
                 initialVisionPrompt={turn.brief}
                 onSelectionConfirmed={answer}
                 onOpenChange={onLauncherOpenChange}
+                onLaunchComplete={() => setChatResetKey(key => key + 1)}
               />}
               selectionActive={launcherOpen}
               conversationContent={launcherOpen ? <LauncherWizard
@@ -186,6 +189,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
                 presentation="chat"
                 initialVisionPrompt={launchBrief}
                 onOpenChange={onLauncherOpenChange}
+                onLaunchComplete={() => setChatResetKey(key => key + 1)}
               /> : undefined}
               onBeforeSend={() => {
                 if (user) return true;
@@ -195,7 +199,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               systemType="website"
               businessName="Unison site planning"
               showFileUpload={false}
-              allowClearHistory={false}
+              allowClearHistory
               hideHeader
             />
             </div>

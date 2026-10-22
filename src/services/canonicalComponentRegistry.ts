@@ -1,9 +1,11 @@
 import { nanoid } from "nanoid";
 import type { CreatorComponentInstance } from "@/types/creatorData";
 import type { CapabilityId } from "@/platform/core/capabilityRegistry";
+import { getCapability } from "@/platform/core/capabilityRegistry";
 import type { CatalogSourceTable } from "@/platform/core/catalogSurfaceRegistry";
 import type { CoreIntent } from "@/platform/core/coreIntents";
 import type { SlotRole } from "@/platform/core/slotBindingPolicy";
+import { getIntentDef } from "@/platform/core/intentSurfaceRegistry";
 
 export type CanonicalComponentCategory =
   | "leads"
@@ -192,6 +194,79 @@ const registry: CanonicalComponentDefinition[] = [
 ];
 
 export const CANONICAL_COMPONENT_DEFINITIONS = registry;
+
+export interface CanonicalComponentRegistryIssue {
+  slug: string;
+  message: string;
+}
+
+export function validateCanonicalComponentDefinition(
+  definition: CanonicalComponentDefinition,
+): CanonicalComponentRegistryIssue[] {
+  const issues: CanonicalComponentRegistryIssue[] = [];
+  const add = (message: string) => issues.push({ slug: definition.slug, message });
+  const duplicateBindingKeys = definition.requiredBindingKeys.filter(
+    (key, index) => definition.requiredBindingKeys.indexOf(key) !== index,
+  );
+  if (duplicateBindingKeys.length) add(`Duplicate required binding keys: ${duplicateBindingKeys.join(', ')}.`);
+  if (!definition.requiredBindingKeys.every((key) => key.trim())) add('Required binding keys must be non-empty.');
+  if (!definition.htmlTemplate.includes(`data-ut-component-slug="${definition.slug}"`)) {
+    add('Template must declare its registered data-ut-component-slug.');
+  }
+  for (const capability of definition.requiredCapabilities) {
+    try {
+      getCapability(capability);
+    } catch {
+      add(`Unknown required capability: ${capability}.`);
+    }
+  }
+
+  if (definition.writeIntent) {
+    const intent = getIntentDef(definition.writeIntent);
+    if (!intent) {
+      add(`Unknown write intent: ${definition.writeIntent}.`);
+    } else {
+      const missingCapabilities = (intent.requiredCapabilities ?? [])
+        .filter((capability) => !definition.requiredCapabilities.includes(capability));
+      if (missingCapabilities.length) {
+        add(`Write intent ${definition.writeIntent} requires capabilities not declared by the component: ${missingCapabilities.join(', ')}.`);
+      }
+    }
+    if (definition.slotBindings.length === 0) add('A write component must declare at least one registered slot binding.');
+    if (definition.targetType === 'form' || definition.targetType === 'calendar') {
+      if (!new RegExp(`<form\\b[^>]*data-intent-form=["']${definition.writeIntent}["']`).test(definition.htmlTemplate)) {
+        add(`Native form template must bind data-intent-form to ${definition.writeIntent}.`);
+      }
+    } else if (definition.targetType === 'checkout') {
+      if (!definition.htmlTemplate.includes(`data-intent-trigger="${definition.writeIntent}"`)) {
+        add(`Checkout template must bind data-intent-trigger to ${definition.writeIntent}.`);
+      }
+    }
+  }
+
+  return issues;
+}
+
+export function validateCanonicalComponentRegistry(
+  definitions: readonly CanonicalComponentDefinition[] = registry,
+): CanonicalComponentRegistryIssue[] {
+  const issues = definitions.flatMap(validateCanonicalComponentDefinition);
+  const seen = new Set<string>();
+  for (const definition of definitions) {
+    if (seen.has(definition.slug)) {
+      issues.push({ slug: definition.slug, message: 'Component slugs must be unique.' });
+    }
+    seen.add(definition.slug);
+  }
+  return issues;
+}
+
+export function assertCanonicalComponentDefinition(definition: CanonicalComponentDefinition): void {
+  const issues = validateCanonicalComponentDefinition(definition);
+  if (issues.length) {
+    throw new Error(`[canonicalComponentRegistry] Invalid ${definition.slug}: ${issues.map((issue) => issue.message).join(' ')}`);
+  }
+}
 
 export const CANONICAL_COMPONENT_DEFINITIONS_BY_SLUG = Object.fromEntries(
   registry.map((definition) => [definition.slug, definition]),

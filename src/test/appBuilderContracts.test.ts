@@ -10,6 +10,13 @@ import {
   serializeAppBuildContract,
   type BuildAppBuildContractInput,
 } from '@/services/app-builder/appBuilderContracts';
+import {
+  CANONICAL_COMPONENT_DEFINITIONS,
+  createCanonicalComponentInstance,
+  validateCanonicalComponentRegistry,
+} from '@/services/canonicalComponentRegistry';
+import { resolveComponentRuntimeContract } from '@/services/componentRuntimeContract';
+import { buildAppBuilderGenerationContext } from '@/services/app-builder/appBuilderGenerationContext';
 
 const createdAt = '2026-09-30T12:00:00.000Z';
 const home = createBuilderPage('page-home', 'Home', '/', 'home', {
@@ -68,6 +75,14 @@ function makeInput(): BuildAppBuildContractInput {
     pageRegistry,
     industry: 'salon',
     businessName: 'Northstar Studio',
+    businessParameters: {
+      ownerEmail: 'owner@example.test',
+      notificationEmail: 'owner@example.test',
+      publicEmail: 'hello@example.test',
+      phone: '+1 555 0100',
+      ctaDestinations: { call: 'tel:+15550100', email: 'mailto:hello@example.test' },
+      industry: { bookingType: 'consultation' },
+    },
     goals: ['book_appointments', 'build_trust'],
     intents: ['booking.create', 'nav.goto'],
     capabilities: ['booking'],
@@ -110,6 +125,44 @@ function makeInput(): BuildAppBuildContractInput {
 }
 
 describe('AppBuildContract', () => {
+  it('verifies every approved canonical component against its runtime registry contract', () => {
+    const issues = validateCanonicalComponentRegistry();
+    expect(issues).toEqual([]);
+
+    const input = makeInput();
+    input.capabilities = [...new Set(CANONICAL_COMPONENT_DEFINITIONS.flatMap((definition) => definition.requiredCapabilities))];
+    input.registeredComponentInstances = [];
+    for (const definition of CANONICAL_COMPONENT_DEFINITIONS) {
+      const component = createCanonicalComponentInstance(definition.slug, {
+        usedOnPages: ['page-home'],
+        bindings: Object.fromEntries(definition.requiredBindingKeys.map((key) => [key, `${key}-registered`])),
+      });
+      expect(component, definition.slug).not.toBeNull();
+      const runtime = resolveComponentRuntimeContract(component!, definition.requiredCapabilities);
+      expect(runtime, definition.slug).toMatchObject({
+        componentSlug: definition.slug,
+        requiredCapabilities: definition.requiredCapabilities,
+        writeIntent: definition.writeIntent ?? null,
+        slotBindings: definition.slotBindings,
+        status: 'ready',
+        blockers: [],
+      });
+      input.registeredComponentInstances.push(component!);
+    }
+    expect(buildAppBuildContract(input).business.registeredComponents.map((component) => component.runtime.componentSlug).sort())
+      .toEqual(CANONICAL_COMPONENT_DEFINITIONS.map((definition) => definition.slug).sort());
+  });
+
+  it('fails closed instead of dropping an unknown registered component slug', () => {
+    const input = makeInput();
+    input.registeredComponentInstances = [{
+      instanceId: 'cmp-unregistered', componentType: 'future-widget', componentSlug: 'future-widget',
+      label: 'Future Widget', bindings: {}, props: {}, usedOnPages: [], status: 'ready',
+    }];
+
+    expect(() => buildAppBuildContract(input)).toThrow('component future-widget is not registered');
+  });
+
   it('derives topology, design, runtime and registry context without a second schema', () => {
     const input = makeInput();
     const contract = buildAppBuildContract(input);
@@ -127,6 +180,7 @@ describe('AppBuildContract', () => {
       artifactId: 'logo-cloud', source: 'owner-authored', minimumItems: 4,
       emptyBehavior: 'hide_section', generatedEntriesAllowed: false,
     }));
+    expect(contract.business.parameters).toEqual(input.businessParameters);
     expect(contract.design.resolvedSiteDesignContext).toBe(input.designContext);
     expect(contract.design.resolvedSiteDesignContext.contract).toBe(input.designContext.contract);
     expect(contract.design.registryContext).toBe(input.registryContext);
@@ -145,6 +199,71 @@ describe('AppBuildContract', () => {
     expect(first).toBe(second);
     expect(parsed).toEqual(contract);
     expect(serializeAppBuildContract(parsed)).toBe(first);
+  });
+
+  it('joins a CRM form binding to its registered component and intent handler', () => {
+    const input = makeInput();
+    input.capabilities = ['contact'];
+    input.intents = ['contact.submit'];
+    input.businessParameters = {
+      ownerEmail: 'owner@example.test',
+      notificationEmail: 'owner@example.test',
+      crmDestination: 'unison_crm',
+    };
+    input.registeredComponentInstances = [{
+      instanceId: 'cmp-contact',
+      componentType: 'contact-form',
+      componentSlug: 'contact-form',
+      label: 'Contact Form',
+      category: 'leads',
+      targetType: 'form',
+      bindings: { formId: 'form-contact' },
+      props: {},
+      usedOnPages: ['page-contact'],
+      requiredCapabilities: ['contact'],
+      outputEvents: ['lead.created'],
+      status: 'ready',
+    }];
+    input.canonicalBindings = [{
+      bindingId: 'bind-contact',
+      sourcePageId: 'page-contact',
+      sourceLabel: 'Send message',
+      intent: 'form.open',
+      targetId: 'form-contact',
+      targetType: 'form',
+      confidence: 1,
+      source: 'wizard',
+      isValid: true,
+      elementKey: 'contact.contact.form-submit',
+      sourceSection: 'contact',
+      sourceSlot: 'form-submit',
+      coreIntent: 'contact.submit',
+      uiAction: 'overlay',
+      requiredCapabilities: ['contact'],
+    }];
+
+    const contract = buildAppBuildContract(input);
+
+    expect(contract.business.registeredComponents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ runtime: expect.objectContaining({
+        instanceId: 'cmp-contact', componentSlug: 'contact-form', writeIntent: 'contact.submit', status: 'ready',
+      }) }),
+    ]));
+    expect(contract.business.intentBindings).toEqual([expect.objectContaining({
+      bindingId: 'bind-contact',
+      route: '/contact',
+      coreIntent: 'contact.submit',
+      domIntent: 'contact.submit',
+      ctaMarkers: ['cta.form-submit'],
+      intentHandler: 'intent-exec',
+      componentInstanceId: 'cmp-contact',
+      componentSlug: 'contact-form',
+      componentWriteIntent: 'contact.submit',
+      missingCapabilities: [],
+    })]);
+    const generationContext = buildAppBuilderGenerationContext(contract);
+    expect(generationContext.runtimeContext).toContain('DOM intent contact.submit');
+    expect(generationContext.runtimeContext).toContain('data-ut-cta="cta.form-submit"');
   });
 
   it('rejects unknown protocol versions and incomplete topology', () => {

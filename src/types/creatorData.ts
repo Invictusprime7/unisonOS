@@ -192,9 +192,14 @@ export interface CreatorBusinessInfo {
   businessName: string;
   tagline?: string;
   description?: string;
+  website?: string;
+  logoUrl?: string;
+  brandColor?: string;
+  timezone?: string;
   phone?: string;
   email?: string;
   notificationEmail?: string;
+  notificationPhone?: string;
   address?: string;
   bookingOwner?: string;
   paymentProvider?: string;

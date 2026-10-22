@@ -818,7 +818,7 @@ function* buildCanonicalLaunchArtifactSteps(
 
   yield;
   const bindingApplication = input.siteBundleSnapshot && !input.preservePageSources
-    ? applyWizardBindingsToVfs(repairedFiles, input.siteBundleSnapshot)
+    ? applyWizardBindingsToVfs(repairedFiles, input.siteBundleSnapshot, undefined, input.enabledCapabilities)
     : null;
 
   // The snapshot is the only canonical VFS source once it exists. A compile

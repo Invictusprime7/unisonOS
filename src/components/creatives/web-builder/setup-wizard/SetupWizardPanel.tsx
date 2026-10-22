@@ -4,7 +4,7 @@
  * Each step renders an inline form that writes to the relevant backend tables.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,20 +13,25 @@ import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
+import { BusinessLogoInput } from "@/components/business/BusinessLogoInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Calendar, Bell, CreditCard, Database, Globe, Search, BarChart3,
   CheckCircle2, Circle, ChevronRight, Rocket, ArrowRight, ArrowLeft,
   Clock, Save, SkipForward, RotateCcw, Loader2, Shield, Zap,
+  UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UseSetupWizardReturn, SetupStepId, SetupStep } from "@/hooks/useSetupWizard";
+import { loadSiteProfile, saveSiteProfile } from "@/services/businessProfileService";
+import type { BusinessProfileDTO, BusinessProfilePatch, WeekDay } from "@/types/businessProfile";
 
 // ============================================================================
 // Step Icon Map
 // ============================================================================
 
 const STEP_ICONS: Record<SetupStepId, React.ElementType> = {
+  owner_information: UserRound,
   booking_calendar: Calendar,
   notifications: Bell,
   payments: CreditCard,
@@ -37,6 +42,7 @@ const STEP_ICONS: Record<SetupStepId, React.ElementType> = {
 };
 
 const STEP_COLORS: Record<SetupStepId, string> = {
+  owner_information: "text-sky-400 bg-sky-500/15",
   booking_calendar: "text-orange-400 bg-orange-500/15",
   notifications: "text-violet-400 bg-violet-500/15",
   payments: "text-emerald-400 bg-emerald-500/15",
@@ -54,13 +60,16 @@ interface SetupWizardPanelProps {
   wizard: UseSetupWizardReturn;
   businessId: string | null;
   siteId: string | null;
+  projectId: string | null;
+  industry?: string | null;
+  systemType?: string | null;
 }
 
 // ============================================================================
 // Main Panel
 // ============================================================================
 
-export function SetupWizardPanel({ wizard, businessId, siteId }: SetupWizardPanelProps) {
+export function SetupWizardPanel({ wizard, businessId, siteId, projectId, industry, systemType }: SetupWizardPanelProps) {
   const { steps, activeStep, setActiveStep, progressPercent, completedCount, totalCount, isLoading, isSaving } = wizard;
 
   if (isLoading) {
@@ -72,7 +81,7 @@ export function SetupWizardPanel({ wizard, businessId, siteId }: SetupWizardPane
     );
   }
 
-  if (!businessId || !siteId) {
+  if (!businessId || !siteId || !projectId) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <Shield className="h-10 w-10 text-muted-foreground/40 mb-4" />
@@ -93,6 +102,9 @@ export function SetupWizardPanel({ wizard, businessId, siteId }: SetupWizardPane
           step={step}
           wizard={wizard}
           businessId={businessId}
+          projectId={projectId}
+          industry={industry}
+          systemType={systemType}
           onBack={() => setActiveStep(null)}
         />
       );
@@ -207,14 +219,18 @@ function StepRow({ step, onSelect }: { step: SetupStep; onSelect: () => void }) 
 // Step Detail View
 // ============================================================================
 
-function StepDetailView({ step, wizard, businessId, onBack }: {
+function StepDetailView({ step, wizard, businessId, projectId, industry, systemType, onBack }: {
   step: SetupStep;
   wizard: UseSetupWizardReturn;
   businessId: string;
+  projectId: string | null;
+  industry?: string | null;
+  systemType?: string | null;
   onBack: () => void;
 }) {
   const Icon = STEP_ICONS[step.id];
   const isComplete = step.status === "completed";
+  const [ownerInfoDirty, setOwnerInfoDirty] = useState(false);
 
   return (
     <div className="flex flex-col h-full">
@@ -239,7 +255,7 @@ function StepDetailView({ step, wizard, businessId, onBack }: {
 
       {/* Form Content */}
       <ScrollArea className="flex-1 py-4">
-        <StepForm step={step} wizard={wizard} businessId={businessId} />
+        <StepForm step={step} wizard={wizard} businessId={businessId} projectId={projectId} industry={industry} systemType={systemType} onOwnerInfoDirtyChange={setOwnerInfoDirty} />
       </ScrollArea>
 
       {/* Actions */}
@@ -263,7 +279,8 @@ function StepDetailView({ step, wizard, businessId, onBack }: {
           <Button 
             size="sm" 
             onClick={() => wizard.completeStep(step.id)} 
-            disabled={wizard.isSaving}
+            disabled={wizard.isSaving || (step.id === "owner_information" && ownerInfoDirty)}
+            title={step.id === "owner_information" && ownerInfoDirty ? "Save owner information before completing this step" : undefined}
             className="text-xs h-8 bg-emerald-600 hover:bg-emerald-700"
           >
             {wizard.isSaving ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
@@ -279,8 +296,17 @@ function StepDetailView({ step, wizard, businessId, onBack }: {
 // Step-Specific Forms
 // ============================================================================
 
-function StepForm({ step, wizard, businessId }: { step: SetupStep; wizard: UseSetupWizardReturn; businessId: string }) {
+function StepForm({ step, wizard, businessId, projectId, industry, systemType, onOwnerInfoDirtyChange }: {
+  step: SetupStep;
+  wizard: UseSetupWizardReturn;
+  businessId: string;
+  projectId: string | null;
+  industry?: string | null;
+  systemType?: string | null;
+  onOwnerInfoDirtyChange: (dirty: boolean) => void;
+}) {
   switch (step.id) {
+    case "owner_information": return <OwnerInformationForm businessId={businessId} projectId={projectId} industry={industry} systemType={systemType} onDirtyChange={onOwnerInfoDirtyChange} />;
     case "booking_calendar": return <BookingCalendarForm step={step} wizard={wizard} />;
     case "notifications": return <NotificationsForm step={step} wizard={wizard} />;
     case "payments": return <PaymentsForm step={step} wizard={wizard} />;
@@ -290,6 +316,174 @@ function StepForm({ step, wizard, businessId }: { step: SetupStep; wizard: UseSe
     case "analytics": return <AnalyticsForm step={step} wizard={wizard} />;
     default: return null;
   }
+}
+
+function OwnerInformationForm({
+  businessId,
+  projectId,
+  industry,
+  systemType,
+  onDirtyChange,
+}: {
+  businessId: string;
+  projectId: string | null;
+  industry?: string | null;
+  systemType?: string | null;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
+  const [profile, setProfile] = useState<BusinessProfileDTO | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void loadSiteProfile(businessId, projectId).then((loaded) => {
+      if (cancelled) return;
+      setProfile(loaded);
+      setError(loaded ? null : 'Owner information could not be loaded for this site.');
+    }).catch((loadError) => {
+      if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Owner information could not be loaded.');
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [businessId, projectId]);
+
+  const edit = (patch: Partial<BusinessProfileDTO>) => {
+    setProfile((current) => current ? { ...current, ...patch } : current);
+    setDirty(true);
+    setSaved(false);
+    onDirtyChange(true);
+    setError(null);
+  };
+
+  const save = async () => {
+    if (!profile || !projectId) {
+      setError('A confirmed site project is required to save owner information.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const patch: BusinessProfilePatch = {
+        name: profile.name.trim(),
+        notificationEmail: profile.notificationEmail?.trim() || null,
+        notificationPhone: profile.notificationPhone?.trim() || null,
+        email: profile.email?.trim() || null,
+        phone: profile.phone?.trim() || null,
+        website: profile.website?.trim() || null,
+        tagline: profile.tagline?.trim() || null,
+        description: profile.description?.trim() || null,
+        logoUrl: profile.logoUrl?.trim() || null,
+        brandColor: profile.brandColor?.trim() || null,
+        timezone: profile.timezone?.trim() || 'UTC',
+        address: profile.address,
+        hours: profile.hours,
+        socialLinks: profile.socialLinks,
+      };
+      const savedProfile = await saveSiteProfile(businessId, projectId, patch);
+      if (!savedProfile) throw new Error('Owner information could not be saved.');
+      setProfile(savedProfile);
+      setDirty(false);
+      setSaved(true);
+      onDirtyChange(false);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Owner information could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading owner profile...</div>;
+  }
+  if (!profile) return <p role="alert" className="py-6 text-sm text-destructive">{error || 'Owner information is unavailable.'}</p>;
+
+  const localIndustries = new Set(['salon', 'barber', 'medspa', 'wellness', 'dental', 'fitness', 'local-service', 'contractor', 'hvac', 'cleaning', 'landscaping', 'auto-detailing', 'moving', 'restaurant', 'cafe', 'bakery', 'real-estate']);
+  const localBusiness = !industry || localIndustries.has(industry.toLowerCase().replace(/[_\s]+/g, '-'));
+  const showHours = localBusiness || systemType === 'booking';
+  const days: Array<{ id: WeekDay; label: string }> = [
+    { id: 'mon', label: 'Monday' }, { id: 'tue', label: 'Tuesday' }, { id: 'wed', label: 'Wednesday' },
+    { id: 'thu', label: 'Thursday' }, { id: 'fri', label: 'Friday' }, { id: 'sat', label: 'Saturday' }, { id: 'sun', label: 'Sunday' },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <FormSection title="Contact details">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div><Label className="text-xs">Business name</Label><Input aria-label="Business name" value={profile.name} onChange={(event) => edit({ name: event.target.value })} className="mt-1 h-9 text-sm" /></div>
+          <div><Label className="text-xs">Owner email for notifications</Label><Input aria-label="Owner email for notifications" type="email" value={profile.notificationEmail || ''} onChange={(event) => edit({ notificationEmail: event.target.value })} className="mt-1 h-9 text-sm" /></div>
+          <div><Label className="text-xs">Public email</Label><Input aria-label="Public email" type="email" value={profile.email || ''} onChange={(event) => edit({ email: event.target.value })} className="mt-1 h-9 text-sm" /></div>
+          <div><Label className="text-xs">Public phone</Label><Input aria-label="Public phone" type="tel" value={profile.phone || ''} onChange={(event) => edit({ phone: event.target.value })} className="mt-1 h-9 text-sm" /></div>
+          <div><Label className="text-xs">Website</Label><Input aria-label="Website" type="url" value={profile.website || ''} onChange={(event) => edit({ website: event.target.value })} className="mt-1 h-9 text-sm" /></div>
+        </div>
+      </FormSection>
+
+      <details className="group rounded-md border border-border/50 px-3 py-2">
+        <summary className="cursor-pointer text-xs font-medium">Brand details</summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div><Label className="text-xs">Tagline</Label><Input aria-label="Tagline" value={profile.tagline || ''} onChange={(event) => edit({ tagline: event.target.value })} className="mt-1 h-9 text-sm" /></div>
+          <div><Label className="text-xs">Brand color</Label><Input aria-label="Brand color" type="color" value={profile.brandColor || '#111827'} onChange={(event) => edit({ brandColor: event.target.value })} className="mt-1 h-9 p-1" /></div>
+          <div className="sm:col-span-2"><Label className="text-xs">Logo</Label><div className="mt-1"><BusinessLogoInput value={profile.logoUrl} scopeId={projectId} onChange={(logoUrl) => edit({ logoUrl })} compact /></div></div>
+          <div className="sm:col-span-2"><Label className="text-xs">About</Label><Textarea aria-label="About" value={profile.description || ''} onChange={(event) => edit({ description: event.target.value })} rows={3} className="mt-1 text-sm" /></div>
+          <div><Label className="text-xs">Notification phone</Label><Input aria-label="Notification phone" type="tel" value={profile.notificationPhone || ''} onChange={(event) => edit({ notificationPhone: event.target.value })} className="mt-1 h-9 text-sm" /></div>
+        </div>
+      </details>
+
+      {localBusiness && <details className="group rounded-md border border-border/50 px-3 py-2">
+        <summary className="cursor-pointer text-xs font-medium">Location and hours</summary>
+        <div className="mt-3 space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2"><Label className="text-xs">Street address</Label><Input aria-label="Street address" value={profile.address.line1 || ''} onChange={(event) => edit({ address: { ...profile.address, line1: event.target.value } })} className="mt-1 h-9 text-sm" /></div>
+          <div><Label className="text-xs">City</Label><Input aria-label="City" value={profile.address.city || ''} onChange={(event) => edit({ address: { ...profile.address, city: event.target.value } })} className="mt-1 h-9 text-sm" /></div>
+          <div><Label className="text-xs">State or region</Label><Input aria-label="State or region" value={profile.address.region || ''} onChange={(event) => edit({ address: { ...profile.address, region: event.target.value } })} className="mt-1 h-9 text-sm" /></div>
+          <div><Label className="text-xs">Postal code</Label><Input aria-label="Postal code" value={profile.address.postalCode || ''} onChange={(event) => edit({ address: { ...profile.address, postalCode: event.target.value } })} className="mt-1 h-9 text-sm" /></div>
+          <div><Label className="text-xs">Country</Label><Input aria-label="Country" value={profile.address.country || ''} onChange={(event) => edit({ address: { ...profile.address, country: event.target.value } })} className="mt-1 h-9 text-sm" /></div>
+        </div>
+
+      {showHours && <div>
+        <p className="mb-2 text-xs font-semibold">Visitor-facing hours</p>
+        <div className="space-y-2">
+          {days.map(({ id, label }) => {
+            const current = profile.hours.find((entry) => entry.day === id);
+            const updateHours = (patch: Partial<BusinessProfileDTO['hours'][number]>) => {
+              const next = profile.hours.filter((entry) => entry.day !== id);
+              const updated = { day: id, ...current, ...patch };
+              if (updated.closed || updated.open || updated.close) next.push(updated);
+              edit({ hours: next });
+            };
+            return <div key={id} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2">
+              <span className="text-xs">{label}</span>
+              <Input aria-label={`${label} open`} type="time" value={current?.open || ''} disabled={current?.closed} onChange={(event) => updateHours({ open: event.target.value, closed: false })} className="h-8 w-28" />
+              <Input aria-label={`${label} close`} type="time" value={current?.close || ''} disabled={current?.closed} onChange={(event) => updateHours({ close: event.target.value, closed: false })} className="h-8 w-28" />
+              <label className="flex items-center gap-1 text-[11px] text-muted-foreground"><input type="checkbox" aria-label={`${label} closed`} checked={current?.closed || false} onChange={(event) => updateHours({ closed: event.target.checked, open: event.target.checked ? undefined : current?.open, close: event.target.checked ? undefined : current?.close })} />Closed</label>
+            </div>;
+          })}
+        </div>
+        <div className="mt-3 max-w-xs"><Label className="text-xs">Time zone</Label><Input aria-label="Time zone" value={profile.timezone} onChange={(event) => edit({ timezone: event.target.value })} placeholder="America/New_York" className="mt-1 h-9 text-sm" /></div>
+      </div>}
+        </div>
+      </details>}
+
+      <details className="group rounded-md border border-border/50 px-3 py-2">
+        <summary className="cursor-pointer text-xs font-medium">Social profiles</summary>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(['instagram', 'facebook', 'x', 'tiktok', 'linkedin', 'youtube', 'website'] as const).map((platform) => <div key={platform}><Label className="text-xs capitalize">{platform}</Label><Input type="url" value={profile.socialLinks[platform] || ''} onChange={(event) => edit({ socialLinks: { ...profile.socialLinks, [platform]: event.target.value } })} className="mt-1 h-9 text-sm" /></div>)}
+        </div>
+      </details>
+
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+      {saved && !dirty && <p role="status" className="text-xs text-emerald-400">Owner information saved.</p>}
+      <Button size="sm" onClick={() => void save()} disabled={!dirty || saving} className="h-8">
+        {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+        Save owner information
+      </Button>
+    </div>
+  );
 }
 
 // ---------- Booking Calendar ----------

@@ -81,7 +81,9 @@ describe('launch orchestrator canonical handoff', () => {
     const intentSurfaces = position('buildIntentSurfacesFile(materializedPlayground)');
     const canonicalBuild = position('await buildCanonicalLaunchArtifactsAsync(');
 
-    expect(source).toContain('const businessProfile: BusinessProfileDTO = loadedBusinessProfile || {');
+    expect(source).toContain('const baseBusinessProfile: BusinessProfileDTO = loadedBusinessProfile || {');
+    expect(source).toContain('const ownerParameters = plan.selections.businessParameters ?? {};');
+    expect(source).toContain('notificationEmail: ownerParameters.notificationEmail?.trim()');
     expect(source).toContain('if (input.existingBusinessId && !loadedBusinessProfile)');
     expect(source).toContain('businessRuntime,');
     expect(source).toContain('projectId: plan.confirmed.projectId');
@@ -96,6 +98,14 @@ describe('launch orchestrator canonical handoff', () => {
     expect(nativeReadiness).toBeLessThan(intentBindings);
     expect(intentBindings).toBeLessThan(intentSurfaces);
     expect(intentSurfaces).toBeLessThan(canonicalBuild);
+  });
+
+  it('persists the merged owner profile after confirmed provisioning and before the first revision', () => {
+    const profileSave = position('const persistedProfile = await saveSiteProfile(confirmed.businessId, confirmed.projectId');
+    const firstRevision = position('const result = await commitMutation({');
+
+    expect(source).toContain('if (!persistedProfile) throw new Error(\'Owner information could not be saved for this site. Review the details and retry launch.\');');
+    expect(profileSave).toBeLessThan(firstRevision);
   });
 
   it('derives the versioned App Builder contract from canonical launch objects before preflight', () => {

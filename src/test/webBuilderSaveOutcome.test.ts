@@ -52,6 +52,17 @@ function createDependencies() {
 }
 
 describe('WebBuilder save outcome', () => {
+  it('advances the toolbar base revision synchronously after an accepted commit', () => {
+    const commitCallback = source.text.slice(
+      source.text.indexOf('const commitBuilderFiles = useCallback'),
+      source.text.indexOf("const onTerminalPatch = useCallback"),
+    );
+    expect(commitCallback.indexOf('currentRevisionIdRef.current = commit.persistedRevisionId'))
+      .toBeGreaterThanOrEqual(0);
+    expect(commitCallback.indexOf('currentRevisionIdRef.current = commit.persistedRevisionId'))
+      .toBeLessThan(commitCallback.indexOf('setCurrentRevisionId(commit.persistedRevisionId)'));
+  });
+
   it('serializes autosave through the shared builder mutation coordinator', () => {
     expect(source.text).toContain("runExclusive('autosave'");
   });

@@ -23,6 +23,17 @@ describe('launch readiness', () => {
     expect(tasks.find((t) => t.id === 'integration:payments')?.status).toBe('pending_verification');
   });
 
+  it('blocks publication until the confirmed site and project are connected', () => {
+    const tasks = deriveLaunchTasks({
+      siteConnected: false,
+      businessProfile: { name: 'SPARK', email: 'a@b.co', phone: '1' },
+      publishBlockers: 0,
+    });
+    expect(tasks.find((task) => task.id === 'site-connection')?.status).toBe('blocked');
+    expect(tasks.find((task) => task.id === 'publish')?.status).toBe('blocked');
+    expect(tasks.find((task) => task.id === 'publish')?.description).toContain('Connect a confirmed site');
+  });
+
   it('setup plan follows capabilities', () => {
     const ids = buildSiteSetupPlan({ systemType: 'agency', capabilities: ['contact'] }).map((s) => s.id);
     expect(ids).not.toContain('booking_calendar');

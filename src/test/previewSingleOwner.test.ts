@@ -173,7 +173,15 @@ describe('Web Builder preview ownership', () => {
   it('treats the generated app render-ready signal as recovery from a Sandpack timeout', () => {
     const sharedPreview = readSource('src/components/VFSPreview.tsx');
     const builder = readSource('src/components/creatives/WebBuilder.tsx');
+    const previewWindowLookup = sharedPreview.slice(
+      sharedPreview.indexOf('const getPreviewWindow ='),
+      sharedPreview.indexOf('const clearSelectedElement ='),
+    );
 
+    expect(previewWindowLookup).toContain('iframe[title*="Sandpack"]');
+    expect(previewWindowLookup).toContain('iframe[src*="csb.app"]');
+    expect(previewWindowLookup).toContain('iframe[src*="codesandbox"]');
+    expect(sharedPreview).toContain('if (event.source !== getPreviewWindow()) return;');
     expect(sharedPreview).toMatch(/data\.type === 'UNISON_PREVIEW_RENDER_READY'[\s\S]*?handleSandpackRunning\(\)[\s\S]*?reportPreviewRunning\(\)/);
     expect(sharedPreview).toContain('window.clearTimeout(timeoutRecoveryTimerRef.current)');
     expect(sharedPreview).toContain('timeoutRecoveryTimerRef.current = null;');

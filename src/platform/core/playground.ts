@@ -62,12 +62,42 @@ export type IndustryOverlay =
 
 export type WizardScaffoldMode = 'selected-pages' | 'capability-full';
 
+export interface WizardBusinessParameters {
+  ownerEmail?: string;
+  notificationEmail?: string;
+  notificationPhone?: string;
+  publicEmail?: string;
+  phone?: string;
+  tagline?: string;
+  description?: string;
+  website?: string;
+  logoUrl?: string;
+  brandColor?: string;
+  timezone?: string;
+  address?: {
+    line1?: string;
+    city?: string;
+    region?: string;
+    postalCode?: string;
+    country?: string;
+  };
+  hours?: Array<{ day: string; open?: string; close?: string; closed?: boolean }>;
+  crmDestination?: string;
+  bookingOwner?: string;
+  paymentProvider?: string;
+  followUpChannel?: string;
+  ctaDestinations?: Partial<Record<'call' | 'email' | 'booking' | 'quote' | 'ordering', string>>;
+  industry?: Record<string, string>;
+  socialLinks?: Record<string, string>;
+}
+
 export interface WizardSelections {
   visionPrompt?: string;
   compositionPlan?: import('@/sections/aiPageComposition').AIPageCompositionPlan;
   /** Durable visual direction, experience posture, and optional section pins. */
   designSelection?: import('@/services/wizardDesignSelection').WizardDesignSelection;
   businessName: string;
+  businessParameters?: WizardBusinessParameters;
   businessModel: BusinessModel;
   industryOverlay: IndustryOverlay;
   primaryGoal: string;
@@ -360,6 +390,27 @@ export interface PlaygroundBinding {
   fixHints?: string[];
   /** Readiness state */
   readiness?: 'preview-ready' | 'publish-ready' | 'stubbed' | 'blocked';
+}
+
+/** Runtime DOM intent emitted by the canonical binding bridge for a Playground intent. */
+export function resolvePlaygroundBindingDomIntent(binding: PlaygroundBinding): string {
+  switch (binding.intent) {
+    case 'nav.goto_page':
+      return 'nav.goto';
+    case 'external.open':
+      return 'nav.external';
+    case 'checkout.start':
+      if (binding.coreIntent === 'cart.add') return 'cart.add';
+      if (binding.coreIntent === 'cart.checkout') return 'cart.checkout';
+      if (binding.coreIntent === 'pay.checkout') return 'pay.checkout';
+      return binding.coreIntent || 'pay.checkout';
+    case 'calendar.open':
+    case 'form.open':
+    case 'popup.open':
+      return binding.coreIntent || 'button.click';
+    default:
+      return binding.coreIntent || binding.intent;
+  }
 }
 
 // ============================================================================

@@ -4,6 +4,7 @@ import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { safeParseBody } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 import { CanonicalBookingError, createCanonicalBooking } from "../_shared/canonicalBooking.ts";
+import { dispatchBookingNotifications, type BookingEmailStatus } from "../_shared/bookingNotifications.ts";
 
 const RATE_LIMIT_CONFIG = { maxRequests: 60, windowSeconds: 60 };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -279,6 +280,46 @@ async function bookingCapabilityIsEnabled(
   return !error && Boolean(data);
 }
 
+async function configuredBookingOwnerEmail(
+  supabase: ServerSupabaseClient,
+  businessId: string,
+  siteId: string,
+): Promise<{ email: string | null; disabled: boolean }> {
+  const [{ data: setup, error: setupError }, { data: business, error: businessError }] = await Promise.all([
+    supabase.from('site_setup_steps')
+      .select('status,config')
+      .eq('business_id', businessId)
+      .eq('site_id', siteId)
+      .eq('step_id', 'notifications')
+      .maybeSingle(),
+    supabase.from('businesses')
+      .select('notification_email')
+      .eq('id', businessId)
+      .maybeSingle(),
+  ]);
+  const config = !setupError && setup && ['in_progress', 'completed'].includes(setup.status)
+    ? asRecord(setup.config)
+    : null;
+  if (config?.emailNewBooking === false) return { email: null, disabled: true };
+  const configuredAddress = typeof config?.notificationEmail === 'string' ? config.notificationEmail.trim() : '';
+  const accountAddress = !businessError && typeof business?.notification_email === 'string'
+    ? business.notification_email.trim()
+    : '';
+  const address = configuredAddress || accountAddress;
+  return {
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) && address.length <= 320 ? address : null,
+    disabled: false,
+  };
+}
+
+function emailStatus(payload: unknown, error: unknown): BookingEmailStatus {
+  if (error) return 'failed';
+  const response = asRecord(payload);
+  if (response?.delivered === true && response.status === 'sent') return 'sent';
+  if (response?.status === 'unconfigured') return 'unconfigured';
+  return 'failed';
+}
+
 async function createAtomicBooking(
   businessId: string,
   siteId: string,
@@ -345,7 +386,24 @@ Deno.serve(async (req) => {
     }
     try {
       const state = await createAtomicBooking(context.businessId, body.siteId, bookingAction);
-      return secureJsonResponse({ success: true, state }, state.duplicate ? 200 : 201, publicCorsHeaders, rateHeaders);
+      const ownerNotification = await configuredBookingOwnerEmail(supabase, context.businessId, body.siteId);
+      const notifications = await dispatchBookingNotifications({
+        businessId: context.businessId,
+        ownerEmail: ownerNotification.email,
+        ownerNotificationsDisabled: ownerNotification.disabled,
+        customerEmail: bookingAction.customerEmail,
+        customerName: bookingAction.customerName,
+        customerPhone: bookingAction.customerPhone,
+        serviceName: state.booking.serviceName,
+        startsAt: state.booking.startsAt,
+        bookingId: state.booking.id,
+        notes: bookingAction.notes,
+        duplicate: state.duplicate,
+      }, async (notification) => {
+        const { data, error } = await supabase.functions.invoke('send-automation-email', { body: notification });
+        return emailStatus(data, error);
+      });
+      return secureJsonResponse({ success: true, state: { ...state, notifications } }, state.duplicate ? 200 : 201, publicCorsHeaders, rateHeaders);
     } catch (error) {
       if (error instanceof CanonicalBookingError) {
         return errorResponse(error.message, error.status, publicCorsHeaders);

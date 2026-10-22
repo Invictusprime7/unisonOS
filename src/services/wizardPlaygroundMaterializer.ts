@@ -344,22 +344,45 @@ function applyNativePublishDefaults(
   playground: PlaygroundState,
   selections: WizardSelections,
 ): void {
-  if (!selections.nativePublishReady) return;
-
+  const parameters = selections.businessParameters;
   const ownerEmail = normalizeOwnerEmail(selections.ownerEmail);
   const businessInfo = playground.creatorData.businessInfo;
-  businessInfo.email = businessInfo.email || ownerEmail;
-  businessInfo.notificationEmail = businessInfo.notificationEmail || ownerEmail;
-  businessInfo.bookingOwner = businessInfo.bookingOwner || ownerEmail;
-  businessInfo.crmDestination = businessInfo.crmDestination || 'unison_crm';
-  businessInfo.followUpChannel = businessInfo.followUpChannel || 'email';
-  businessInfo.hours = businessInfo.hours?.length ? businessInfo.hours : DEFAULT_NATIVE_HOURS;
+  businessInfo.tagline = parameters?.tagline?.trim() || businessInfo.tagline;
+  businessInfo.description = parameters?.description?.trim() || businessInfo.description;
+  businessInfo.website = parameters?.website?.trim() || businessInfo.website;
+  businessInfo.logoUrl = parameters?.logoUrl?.trim() || businessInfo.logoUrl;
+  businessInfo.brandColor = parameters?.brandColor?.trim() || businessInfo.brandColor;
+  businessInfo.timezone = parameters?.timezone?.trim() || businessInfo.timezone;
+  businessInfo.email = parameters?.publicEmail?.trim() || businessInfo.email || ownerEmail;
+  businessInfo.phone = parameters?.phone?.trim() || businessInfo.phone;
+  businessInfo.notificationEmail = parameters?.notificationEmail?.trim() || businessInfo.notificationEmail || ownerEmail;
+  businessInfo.notificationPhone = parameters?.notificationPhone?.trim() || businessInfo.notificationPhone;
+  businessInfo.bookingOwner = parameters?.bookingOwner?.trim() || parameters?.ownerEmail?.trim() || businessInfo.bookingOwner || ownerEmail;
+  businessInfo.crmDestination = parameters?.crmDestination?.trim() || businessInfo.crmDestination || 'unison_crm';
+  businessInfo.paymentProvider = parameters?.paymentProvider?.trim() || businessInfo.paymentProvider;
+  businessInfo.followUpChannel = parameters?.followUpChannel?.trim() || businessInfo.followUpChannel || 'email';
+  businessInfo.socialLinks = { ...(parameters?.socialLinks || {}), ...(businessInfo.socialLinks || {}) };
+  const address = parameters?.address;
+  if (address) {
+    const formattedAddress = [address.line1, address.city, address.region, address.postalCode, address.country]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join(', ');
+    businessInfo.address = formattedAddress || businessInfo.address;
+  }
+  businessInfo.hours = parameters?.hours?.length ? parameters.hours : businessInfo.hours;
   businessInfo.customValues = {
     ...(businessInfo.customValues || {}),
-    publishMode: selections.publishMode || 'native-first-party',
-    nativeLeadDestination: 'unison_crm',
-    nativeBookingProvider: 'unison_booking_requests',
+    ...(parameters?.industry || {}),
+    ...(selections.nativePublishReady ? {
+      publishMode: selections.publishMode || 'native-first-party',
+      nativeLeadDestination: 'unison_crm',
+      nativeBookingProvider: 'unison_booking_requests',
+    } : {}),
   };
+  if (!selections.nativePublishReady) return;
+
+  businessInfo.hours = businessInfo.hours?.length ? businessInfo.hours : DEFAULT_NATIVE_HOURS;
 
   if (selections.industryOverlay === 'salon' || selections.businessModel === 'appointment_service') {
     seedNativeSalonServices(playground.creatorData);
@@ -431,6 +454,7 @@ function getPrimaryPageId(
 
 function inferComponentSlugForForm(formName: string) {
   const normalized = formName.toLowerCase();
+  if (normalized.includes('booking') || normalized.includes('reservation')) return null;
   if (normalized.includes('quote')) return 'request-quote';
   if (normalized.includes('newsletter')) return 'newsletter-signup';
   return 'contact-form';
@@ -710,6 +734,7 @@ export function materializePlayground(
 
   for (const form of Object.values(creatorData.forms)) {
     const slug = inferComponentSlugForForm(form.name);
+    if (!slug) continue;
     const component = createCanonicalComponentInstance(slug, {
       label: form.name,
       usedOnPages: [slug === 'newsletter-signup' ? homePageId : contactPageId].filter(Boolean),
@@ -726,7 +751,10 @@ export function materializePlayground(
     const component = createCanonicalComponentInstance('booking-scheduler', {
       label: `${calendar.name} Scheduler`,
       usedOnPages: [...new Set([...calendar.attachedPageIds, bookingPageId])].filter(Boolean),
-      bindings: { calendarId: calendar.calendarId },
+      bindings: {
+        calendarId: calendar.calendarId,
+        ...(calendar.intakeFormId ? { formId: calendar.intakeFormId } : {}),
+      },
     });
 
     if (component) {

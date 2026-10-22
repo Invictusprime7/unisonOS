@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveCapabilities } from '@/services/wizardCapabilityResolver';
 import { materializePlayground } from '@/services/wizardPlaygroundMaterializer';
-import { applyWizardBindingsToVfs } from '@/services/wizardBindingBridge';
+import { applyWizardBindingsToVfs, buildWizardBindingGuide } from '@/services/wizardBindingBridge';
 import type { WizardSelections } from '@/types/playground';
 
 const salonSelections: WizardSelections = {
@@ -79,5 +79,40 @@ describe('Wizard form binding aliases', () => {
 
     expect(result.missingBindings).toEqual([]);
     expect(result.files['/src/project-components/SiteFooter.tsx']).toMatch(/data-ut-intent=/);
+  });
+
+  it('omits disabled capability bindings from the guide and final VFS stamping', () => {
+    const capabilities = resolveCapabilities(salonSelections);
+    const { playground } = materializePlayground(salonSelections, capabilities);
+    const home = Object.values(playground.pageRegistry.pages).find((page) => (page.pageRole || page.pageType) === 'home')!;
+    const binding = {
+      ...Object.values(playground.bindings)[0],
+      bindingId: 'bind-account-disabled',
+      sourcePageId: home.pageId,
+      sourceLabel: 'Account',
+      intent: 'nav.goto_page' as const,
+      targetId: home.pageId,
+      targetType: 'page' as const,
+      sourceSection: 'navbar' as const,
+      sourceSlot: 'primary-cta' as const,
+      coreIntent: 'account.open',
+      requiredCapabilities: ['auth'],
+      readiness: 'blocked' as const,
+    };
+    const snapshot = { ...playground, bindings: { [binding.bindingId]: binding } } as any;
+    const enabledCapabilities = ['booking'];
+    const guide = buildWizardBindingGuide(snapshot, { enabledCapabilities });
+    const pageContent = 'export default function Home(){ return <button data-ut-cta="cta.nav">Account</button>; }';
+    const application = applyWizardBindingsToVfs(
+      { [home.filePath!]: pageContent },
+      snapshot,
+      undefined,
+      enabledCapabilities,
+    );
+
+    expect(guide).not.toContain('Account');
+    expect(application.appliedBindings).toBe(0);
+    expect(application.missingBindings).toEqual([]);
+    expect(application.files[home.filePath!]).toBe(pageContent);
   });
 });

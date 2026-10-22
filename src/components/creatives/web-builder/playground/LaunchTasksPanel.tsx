@@ -28,7 +28,10 @@ export function LaunchTasksPanel(props: Props) {
   const [loaded, setLoaded] = useState<LaunchReadinessInput | null>(null);
 
   useEffect(() => {
-    if (!businessId) { setLoaded({}); return; }
+    if (!businessId || !projectId || !siteId) {
+      setLoaded({ siteConnected: false });
+      return;
+    }
     let alive = true;
     loadLaunchReadinessInput({ businessId, projectId, siteId, industry, vfsFiles: props.vfsFiles })
       .then((r) => alive && setLoaded(r))

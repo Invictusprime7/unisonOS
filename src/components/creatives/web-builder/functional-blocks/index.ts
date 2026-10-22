@@ -10,7 +10,6 @@ export { WorkflowButton } from './WorkflowButton';
 // Intent-based functional blocks (LIVE - connected to backend)
 export { IntentContactForm } from './IntentContactForm';
 export { IntentNewsletterForm } from './IntentNewsletterForm';
-export { IntentBookingForm } from './IntentBookingForm';
 
 // Smart template intent components
 export { TemplateIntentButton, TemplateIntentForm } from './TemplateIntentButton';

@@ -35,6 +35,7 @@ export async function loadLaunchReadinessInput(args: LoadLaunchReadinessArgs): P
 
   const profile = profileRows[0] ?? null;
   return {
+    siteConnected: Boolean(args.businessId && args.projectId && args.siteId),
     businessProfile: profile,
     usedResources: used.map((t, i) => ({ key: t.key, label: t.label, count: counts[i] })),
     capabilities: capRows.map((r) => r.capability_id),

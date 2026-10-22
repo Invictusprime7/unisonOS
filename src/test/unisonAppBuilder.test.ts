@@ -141,10 +141,20 @@ describe('UnisonAppBuilder facade', () => {
     expect(authorSite.mock.calls[0]?.[0].runtimeContext).toContain('content:articles');
     expect(authorSite.mock.calls[0]?.[0].runtimeContext).toContain('body:textarea');
   });
-  it('does not author against a stale schema when scoped discovery fails', async () => {
-    const authorSite = vi.fn();
-    await expect(createUnisonAppBuilder({ authorSite, loadContentTypes: async () => { throw new Error('Schema read failed'); } }).generate({ operationId: 'failed-schemas', contract: contract(), initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null })).rejects.toThrow('Schema read failed');
-    expect(authorSite).not.toHaveBeenCalled();
+  it('continues authoring without optional CMS schema hints when scoped discovery fails', async () => {
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: { ...input.files, '/src/pages/Home.tsx': 'export default function Home(){return <main>Authored without CMS hints</main>}' },
+      revisionId: input.revisionId,
+      outcomes: [],
+    }));
+    const result = await createUnisonAppBuilder({
+      authorSite,
+      loadContentTypes: async () => { throw new Error('Content CMS content-type-list (403): Site, project, or business scope is invalid'); },
+    }).generate({ operationId: 'failed-schemas', contract: contract(), initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null });
+    expect(authorSite).toHaveBeenCalledOnce();
+    expect(authorSite.mock.calls[0]?.[0].runtimeContext).not.toContain('content:articles');
+    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidate.files['/src/pages/Home.tsx']).toContain('Authored without CMS hints');
   });
 
   it('repairs site-wide closure in memory before returning a candidate', async () => {

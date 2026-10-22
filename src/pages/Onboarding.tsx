@@ -26,6 +26,18 @@ const Onboarding = () => {
     businessName: string | null;
     industry: string | null;
     notificationEmail: string | null;
+    email?: string | null;
+    phone?: string | null;
+    notificationPhone?: string | null;
+    socialLinks?: Record<string, string> | null;
+    tagline?: string | null;
+    description?: string | null;
+    website?: string | null;
+    logoUrl?: string | null;
+    brandColor?: string | null;
+    timezone?: string | null;
+    address?: BusinessProfileDTO['address'] | null;
+    hours?: BusinessProfileDTO['hours'] | null;
   } | null>(null);
 
   useEffect(() => {
@@ -149,6 +161,18 @@ const Onboarding = () => {
             businessName: profile?.name ?? null,
             industry: profile?.industry ?? null,
             notificationEmail: profile?.notificationEmail ?? null,
+            email: profile?.email ?? null,
+            phone: profile?.phone ?? null,
+            notificationPhone: profile?.notificationPhone ?? null,
+            socialLinks: profile?.socialLinks ?? null,
+            tagline: profile?.tagline ?? null,
+            description: profile?.description ?? null,
+            website: profile?.website ?? null,
+            logoUrl: profile?.logoUrl ?? null,
+            brandColor: profile?.brandColor ?? null,
+            timezone: profile?.timezone ?? null,
+            address: profile?.address ?? null,
+            hours: profile?.hours ?? null,
           });
           setGateOpen(false);
           setLauncherOpen(true);
