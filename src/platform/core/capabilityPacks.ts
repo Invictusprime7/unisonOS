@@ -19,6 +19,7 @@
 
 import type { CoreIntent } from './coreIntents';
 import type { BusinessCapability, CapabilityId } from './capabilityRegistry';
+export type { BusinessCapability } from './capabilityRegistry';
 
 // ============================================================================
 // Contract types
