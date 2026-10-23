@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Search } from 'lucide-react';
 import { listPublicMarketplaceListings } from '@/marketplace/listingService';
+import { MarketplaceTemplateShowcase } from '@/marketplace/MarketplaceTemplateShowcase';
 import type { MarketplaceProductType, PublicMarketplaceListing } from '@/marketplace/contracts';
 
 const PRODUCT_TYPES: Array<{ value: MarketplaceProductType; label: string }> = [
@@ -23,7 +24,7 @@ export function MarketplaceCatalog({ embedded = false, enabled = true }: { embed
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get('q') ?? '';
   const industryKey = searchParams.get('industry') ?? '';
-  const productType = searchParams.get('type') as MarketplaceProductType | '';
+  const productType = (searchParams.get('type') ?? '') as MarketplaceProductType | '';
   const [listings, setListings] = useState<PublicMarketplaceListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,8 +66,15 @@ export function MarketplaceCatalog({ embedded = false, enabled = true }: { embed
         <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Design Marketplace</p>
         <h1 className={embedded ? 'text-2xl font-semibold tracking-tight' : 'text-3xl font-semibold tracking-tight'}>Browse templates</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Certified, editable releases for the Unison App Builder.
+          Explore real live composition previews alongside certified releases for the Unison App Builder.
         </p>
+      </div>
+
+      <MarketplaceTemplateShowcase />
+
+      <div className="border-b border-border pb-3 pt-7">
+        <h2 className="text-lg font-semibold">Certified marketplace releases</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Published releases with verified source and licensing evidence.</p>
       </div>
 
       <section aria-label="Marketplace filters" className="grid gap-3 border-b border-border py-5 md:grid-cols-[minmax(220px,1fr)_220px_190px]">
@@ -78,7 +86,7 @@ export function MarketplaceCatalog({ embedded = false, enabled = true }: { embed
             value={query}
             onChange={(event) => updateFilter('q', event.target.value)}
             placeholder="Search templates"
-            className="h-10 w-full border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-10 w-full rounded-none border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -86,7 +94,7 @@ export function MarketplaceCatalog({ embedded = false, enabled = true }: { embed
           <select
             value={productType}
             onChange={(event) => updateFilter('type', event.target.value)}
-            className="h-10 border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-10 rounded-none border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">All types</option>
             {PRODUCT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
@@ -98,7 +106,7 @@ export function MarketplaceCatalog({ embedded = false, enabled = true }: { embed
             value={industryKey}
             onChange={(event) => updateFilter('industry', event.target.value.trim().toLowerCase())}
             placeholder="All industries"
-            className="h-10 border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-10 rounded-none border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </label>
       </section>
