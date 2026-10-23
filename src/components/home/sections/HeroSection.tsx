@@ -1,12 +1,13 @@
 import { Badge } from "@/components/ui/badge";
-import { useState, type ReactNode } from 'react';
-import { Sparkles } from "lucide-react";
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { MessageCircle, Sparkles, Store } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { AIAssistantCore, type QuickAction } from "@/components/ai/AIAssistantCore";
 import { siteDiscoveryMessagesKey } from "@/components/ai/siteDiscoveryPersistence";
 import { LauncherWizard } from "@/components/onboarding/wizard/LauncherWizard";
+import { MarketplaceCatalog } from '@/marketplace/MarketplaceCatalog';
 
 
 interface HeroSectionProps {
@@ -45,6 +46,19 @@ const HOME_QUICK_ACTIONS: QuickAction[] = [
 export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange, badge, headline, subtitle, chatGlow = false, demoGeneration = false }: HeroSectionProps) {
   const [discoveryActive, setDiscoveryActive] = useState(false);
   const [chatResetKey, setChatResetKey] = useState(0);
+  const [activeHomeTab, setActiveHomeTab] = useState<'chat' | 'marketplace'>('chat');
+
+  const handleHomeTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const nextTab = event.key === 'Home'
+      ? 'chat'
+      : event.key === 'End'
+        ? 'marketplace'
+        : activeHomeTab === 'chat' ? 'marketplace' : 'chat';
+    setActiveHomeTab(nextTab);
+    document.getElementById(`home-${nextTab}-tab`)?.focus();
+  };
 
   return (
     <section className="relative overflow-hidden">
@@ -147,7 +161,48 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
             {subtitle ?? "Tell Affinity what your business needs. We’ll shape a complete site with booking, CRM, automations, and a live backend — no dev work required."}
           </motion.p>
 
-          {/* Floating AI chat replaces the primary site-building CTA */}
+          <div role="tablist" aria-label="Home workspace" className="mx-auto mb-4 inline-flex items-center gap-1 border border-white/10 bg-black/20 p-1">
+            <button
+              id="home-chat-tab"
+              type="button"
+              role="tab"
+              aria-selected={activeHomeTab === 'chat'}
+              aria-controls="home-chat-panel"
+              tabIndex={activeHomeTab === 'chat' ? 0 : -1}
+              onKeyDown={handleHomeTabKeyDown}
+              onClick={() => setActiveHomeTab('chat')}
+              className={cn(
+                'inline-flex min-h-10 items-center gap-2 px-4 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300',
+                activeHomeTab === 'chat' ? 'bg-cyan-300 text-slate-950' : 'text-white/70 hover:bg-white/10 hover:text-white',
+              )}
+            >
+              <MessageCircle aria-hidden="true" className="h-4 w-4" /> AI Chat
+            </button>
+            <button
+              id="home-marketplace-tab"
+              type="button"
+              role="tab"
+              aria-selected={activeHomeTab === 'marketplace'}
+              aria-controls="home-marketplace-panel"
+              tabIndex={activeHomeTab === 'marketplace' ? 0 : -1}
+              onKeyDown={handleHomeTabKeyDown}
+              onClick={() => setActiveHomeTab('marketplace')}
+              className={cn(
+                'inline-flex min-h-10 items-center gap-2 px-4 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300',
+                activeHomeTab === 'marketplace' ? 'bg-cyan-300 text-slate-950' : 'text-white/70 hover:bg-white/10 hover:text-white',
+              )}
+            >
+              <Store aria-hidden="true" className="h-4 w-4" /> Marketplace
+            </button>
+          </div>
+
+          <div
+            id="home-chat-panel"
+            role="tabpanel"
+            aria-labelledby="home-chat-tab"
+            hidden={activeHomeTab !== 'chat'}
+          >
+          {/* Keep the chat mounted while the visitor browses Marketplace. */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -207,6 +262,17 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               {launcherOpen || discoveryActive ? "Choose an option or reply in chat. Create your site when you're ready." : "Describe your idea or choose a starting point above"}
             </p>
           </motion.div>
+          </div>
+
+          <div
+            id="home-marketplace-panel"
+            role="tabpanel"
+            aria-labelledby="home-marketplace-tab"
+            hidden={activeHomeTab !== 'marketplace'}
+            className="mx-auto mb-10 w-full max-w-6xl text-left"
+          >
+            <MarketplaceCatalog embedded enabled={activeHomeTab === 'marketplace'} />
+          </div>
 
         </div>
       </div>

@@ -7,12 +7,14 @@
 - `/marketplace` is public and reads only `marketplace_public_listings` through the bounded listing service.
 - URL-backed search, product type, and industry filters; loading, read error, no-result, and empty-catalog states are covered.
 - `/marketplace/:slug` shows public listing details and a sign-in handoff.
+- The homepage Affinity hero has an accessible AI Chat / Marketplace tab toggle. Both panels stay mounted to preserve the chat and Wizard state; Marketplace queries start only when that tab is selected.
 - No public route reads private release rows, snapshots, package paths, or creator identity.
 - Preview and install controls remain unavailable until real certified preview artifacts and install authorization exist; no mock listing or preview is seeded.
 
 ## Verification
 
 - Marketplace page and route contract tests pass.
+- Homepage tab integration, keyboard navigation, lazy listing load, and chat/Wizard state retention tests pass.
 - Full marketplace, type, lint, and production build checks pass for this phase.
 - The deployed public listing view currently has zero rows, so UI behavior is verified against empty and mocked catalog results, not live published products.
 
