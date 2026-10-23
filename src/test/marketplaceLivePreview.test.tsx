@@ -1,56 +1,37 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ALL_COMPOSITIONS } from '@/sections/templates';
-import { ART_DIRECTION_PACKS } from '@/sections/variants/artDirectionPacks';
-
-vi.mock('@/components/VFSPreview', () => ({
-  VFSPreview: ({ files, device }: { files: Record<string, string>; device: string }) => (
-    <div data-testid="live-vfs-preview" data-device={device}>
-      <pre data-testid="preview-page-source">{files['/src/pages/Home.tsx']}</pre>
-      <pre data-testid="preview-root-app">{files['/src/App.tsx']}</pre>
-      <pre data-testid="preview-base-css">{files['/src/index.css']}</pre>
-    </div>
-  ),
-}));
-
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 import { MarketplaceTemplateShowcase } from '@/marketplace/MarketplaceTemplateShowcase';
+import { AUTHORED_MARKETPLACE_TEMPLATES } from '@/marketplace/authoredTemplatePreviews';
 
-describe('Marketplace live template previews', () => {
+// Contract for the authored concept showcase. Real registry-backed candidate VFS
+// output is covered by marketplaceTemplateCuration.test.ts; certified release
+// previews will be covered by release-artifact tests once artifacts exist.
+describe('Marketplace concept previews', () => {
   afterEach(cleanup);
 
-  it('renders a real registry composition in the isolated live preview', async () => {
-    const template = ALL_COMPOSITIONS[0];
+  it('labels authored designs as concept previews, never certified releases', () => {
     render(<MarketplaceTemplateShowcase />);
+    const section = screen.getByRole('region', { name: 'Designed for a point of view' });
+    expect(within(section).getByText('Concept previews')).toBeInTheDocument();
+    expect(within(section).getByText(/cannot be purchased or installed/i)).toBeInTheDocument();
+    expect(within(section).getByText(/not real client endorsements/i)).toBeInTheDocument();
+  });
 
-    expect(screen.getByRole('heading', { name: 'Live template previews' })).toBeInTheDocument();
-    expect(screen.getByText('Certified marketplace releases', { exact: false })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Template category' })).toHaveClass('rounded-none');
-    expect(screen.getByRole('searchbox', { name: 'Search previews' })).toHaveClass('rounded-none');
-    expect(screen.getByRole('combobox', { name: 'Style card' })).toHaveClass('rounded-none');
-    expect(screen.getByRole('combobox', { name: 'Style card' })).toHaveValue('template');
-    expect(screen.getByRole('combobox', { name: 'Art direction' })).toHaveClass('rounded-none');
+  it('offers no price, purchase, claim, or install action for concepts', () => {
+    render(<MarketplaceTemplateShowcase />);
+    const section = screen.getByRole('region', { name: 'Designed for a point of view' });
+    expect(within(section).queryByText(/\$\d/)).not.toBeInTheDocument();
+    expect(within(section).queryByRole('button', { name: /buy|purchase|claim|install|checkout/i })).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: `Preview ${template.name} live` }));
-
-    expect(await screen.findByTestId('live-vfs-preview', {}, { timeout: 10_000 })).toHaveAttribute('data-device', 'desktop');
-    const renderedSource = screen.getByTestId('preview-page-source').textContent ?? '';
-    expect(renderedSource).toContain('const SECTIONS =');
-    expect(renderedSource).toContain(template.id);
-    const renderedRouter = screen.getByTestId('preview-root-app').textContent ?? '';
-    expect(renderedRouter).toContain('@unison-canonical-router');
-    expect(renderedRouter).toContain('path="/pricing"');
-    expect(renderedRouter).toContain('path="/faq"');
-    expect(screen.getByTestId('preview-base-css').textContent).toContain('ART DIRECTION:');
-
-    fireEvent.change(screen.getByRole('combobox', { name: 'Art direction' }), { target: { value: 'glass-tech' } });
-    await waitFor(() => {
-      expect(screen.getByTestId('preview-base-css').textContent).toContain(`ART DIRECTION: ${ART_DIRECTION_PACKS['glass-tech'].name}`);
-    }, { timeout: 10_000 });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Mobile preview' }));
-    expect(screen.getByTestId('live-vfs-preview')).toHaveAttribute('data-device', 'mobile');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  it('opens a concept in a dialog labelled concept preview only, with device toggle', () => {
+    render(<MarketplaceTemplateShowcase />);
+    const template = AUTHORED_MARKETPLACE_TEMPLATES[0];
+    fireEvent.click(screen.getByRole('button', { name: `Preview ${template.name}` }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/Concept preview only/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /buy|purchase|install/i })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Mobile preview' }));
+    expect(within(dialog).getByRole('button', { name: 'Mobile preview' })).toBeInTheDocument();
   });
 });
