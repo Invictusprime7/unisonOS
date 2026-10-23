@@ -8,6 +8,8 @@ import Landing from "@/pages/Landing";
 import NotFound from "@/pages/NotFound";
 
 const Pricing = lazy(() => import("@/pages/Pricing"));
+const Marketplace = lazy(() => import("@/pages/Marketplace"));
+const MarketplaceListing = lazy(() => import("@/pages/MarketplaceListing"));
 const CheckoutSuccess = lazy(() => import("@/pages/CheckoutSuccess"));
 const CheckoutCancel = lazy(() => import("@/pages/CheckoutCancel"));
 const WebBuilderPage = lazy(() => import("@/pages/WebBuilderPage"));
@@ -113,6 +115,28 @@ export const appRoutes: AppRouteConfig[] = [
       shell: "public",
       chrome: "none",
       primaryAction: "Choose plan",
+    },
+  },
+  {
+    path: "/marketplace",
+    element: withAsyncBoundary(<Marketplace />),
+    meta: {
+      id: "marketplace",
+      title: "Design Marketplace",
+      section: "public",
+      shell: "public",
+      chrome: "none",
+    },
+  },
+  {
+    path: "/marketplace/:slug",
+    element: withAsyncBoundary(<MarketplaceListing />),
+    meta: {
+      id: "marketplace-listing",
+      title: "Marketplace listing",
+      section: "public",
+      shell: "public",
+      chrome: "none",
     },
   },
   {

@@ -26,6 +26,7 @@ export interface PublicListingQueryClient {
 }
 
 export interface MarketplaceListingFilters {
+  slug?: string;
   industryKey?: string;
   productType?: MarketplaceProductType;
   minPriceCents?: number;
@@ -114,6 +115,7 @@ export async function listPublicMarketplaceListings(
   }
 
   let query = client.from('marketplace_public_listings').select(PUBLIC_LISTING_COLUMNS);
+  if (filters.slug) query = query.eq('slug', filters.slug);
   if (filters.industryKey) query = query.eq('industry_key', filters.industryKey);
   if (filters.productType) query = query.eq('product_type', filters.productType);
   if (filters.minPriceCents !== undefined) query = query.gte('price_cents', filters.minPriceCents);

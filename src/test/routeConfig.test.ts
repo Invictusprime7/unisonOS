@@ -52,6 +52,16 @@ describe("app route config", () => {
     expect(getRoutesBySection("operations").map((route) => route.meta.id)).toContain("crm");
   });
 
+  it("keeps marketplace discovery and listing details public", () => {
+    const browse = getRouteById("marketplace");
+    const detail = getRouteById("marketplace-listing");
+
+    expect(browse).toMatchObject({ path: "/marketplace", meta: { section: "public", shell: "public" } });
+    expect(detail).toMatchObject({ path: "/marketplace/:slug", meta: { section: "public", shell: "public" } });
+    expect(browse?.meta.requiresAuth).not.toBe(true);
+    expect(detail?.meta.requiresAuth).not.toBe(true);
+  });
+
   it("derives consistent browser titles from route metadata", () => {
     expect(getRouteDocumentTitle(getRouteById("landing")!.meta)).toBe("Unison");
     expect(getRouteDocumentTitle(getRouteById("web-builder")!.meta)).toBe("Web builder | Unison");
