@@ -27,6 +27,10 @@ function createSnapshot(): SiteBundleSnapshot {
       '/src/App.tsx': "import { Routes, Route } from 'react-router-dom'; import Home from './pages/Home'; export default function App() { return <Routes><Route path='/' element={<Home />} /></Routes>; }",
       '/src/pages/Home.tsx': 'export default function Home() { return <main>Export test</main>; }',
       '/src/index.css': ':root { --background: 0 0% 100%; --foreground: 0 0% 0%; }',
+      '/src/unison/ui/zod.ts': "export * from 'zod';",
+      '/src/unison/ui/forms.ts': "export * from 'react-hook-form'; export * from '@hookform/resolvers';",
+      '/src/unison/ui/radix/accordion.ts': "export * from '@radix-ui/react-accordion';",
+      '/src/unison/ui/radix/dialog.ts': "export * from '@radix-ui/react-dialog';",
       '/public/brand.svg': '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
     },
     routerFile: {
@@ -117,6 +121,11 @@ describe('exportSourceProject', () => {
     const packageJson = JSON.parse(await read('package.json'));
     expect(packageJson.dependencies.react).toBe('19.2.1');
     expect(packageJson.dependencies['react-router-dom']).toBe('7.18.4');
+      expect(packageJson.dependencies.zod).toBe('4.6.5');
+      expect(packageJson.dependencies['react-hook-form']).toBe('7.68.0');
+      expect(packageJson.dependencies['@hookform/resolvers']).toBe('5.2.2');
+      expect(packageJson.dependencies['@radix-ui/react-accordion']).toBeDefined();
+      expect(packageJson.dependencies['@radix-ui/react-dialog']).toBeDefined();
     expect(packageJson.devDependencies.vite).toBe('7.3.6');
     expect(JSON.stringify(packageJson)).not.toContain('latest');
 

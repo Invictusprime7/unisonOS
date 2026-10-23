@@ -30,6 +30,14 @@ const BASE_DEV_DEPS: Record<string, string> = {
   vite: '7.3.6',
 };
 
+const EXPORT_DEPENDENCY_PINS: Readonly<Record<string, string>> = {
+  zod: '4.6.5',
+  'react-hook-form': '7.68.0',
+  '@hookform/resolvers': '5.2.2',
+  'class-variance-authority': '0.7.1',
+  recharts: '3.5.1',
+};
+
 const DEP_BLOCKLIST = new Set([
   '@/', 'react', 'react-dom', // stripped/base
 ]);
@@ -43,12 +51,14 @@ function slugify(name: string): string {
 
 function scanImports(files: Record<string, string>): Set<string> {
   const out = new Set<string>();
-  const rx = /import\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/g;
+  const rx = /(?:import|export)\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/g;
+  const rxDynamicImport = /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
   const rxRequire = /require\(['"]([^'"]+)['"]\)/g;
   for (const [path, code] of Object.entries(files)) {
     if (!/\.(tsx?|jsx?|mjs|cjs)$/i.test(path)) continue;
     if (typeof code !== 'string') continue;
     for (const m of code.matchAll(rx)) out.add(m[1]);
+    for (const m of code.matchAll(rxDynamicImport)) out.add(m[1]);
     for (const m of code.matchAll(rxRequire)) out.add(m[1]);
   }
   return out;
@@ -96,12 +106,14 @@ export function synthesizeProjectFiles(
   for (const spec of scanned) {
     const pkg = extractPkgName(spec);
     if (!pkg || DEP_BLOCKLIST.has(pkg)) continue;
-    if (!dependencies[pkg]) dependencies[pkg] = resolvePinnedRuntimeVersion(pkg) ?? 'latest';
+    if (!dependencies[pkg]) {
+      dependencies[pkg] = resolvePinnedRuntimeVersion(pkg) ?? EXPORT_DEPENDENCY_PINS[pkg] ?? 'latest';
+    }
   }
   if (manifest?.dependencies) {
     for (const [k, v] of Object.entries(manifest.dependencies)) {
       if (k === 'react' || k === 'react-dom') continue;
-      dependencies[k] = resolvePinnedRuntimeVersion(k) ?? (v || dependencies[k] || 'latest');
+      dependencies[k] = resolvePinnedRuntimeVersion(k) ?? EXPORT_DEPENDENCY_PINS[k] ?? (v || dependencies[k] || 'latest');
     }
   }
 
