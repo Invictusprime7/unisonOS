@@ -50,7 +50,7 @@ describe('launch orchestrator canonical handoff', () => {
   });
 
   it('threads focused launch capabilities through authoring, preflight, seeding, commit and Live Preview', () => {
-    const resolvedCapabilities = position('const launchCapabilities = resolveLaunchCapabilities(');
+    const resolvedCapabilities = position('const businessLaunchPlan = resolveBusinessLaunchPlan({');
     const appBuilderContract = position('const appBuildContract = buildAppBuildContract({');
     const canonicalPreflight = position('await buildCanonicalLaunchArtifactsAsync(');
     const catalogSeed = position('await seedLaunchAssets({');
@@ -83,12 +83,21 @@ describe('launch orchestrator canonical handoff', () => {
 
     expect(source).toContain('const baseBusinessProfile: BusinessProfileDTO = loadedBusinessProfile || {');
     expect(source).toContain('const ownerParameters = plan.selections.businessParameters ?? {};');
+    expect(source).toContain("launchCapabilities.includes('booking') ||");
     expect(source).toContain('notificationEmail: ownerParameters.notificationEmail?.trim()');
     expect(source).toContain('if (input.existingBusinessId && !loadedBusinessProfile)');
     expect(source).toContain('businessRuntime,');
     expect(source).toContain('projectId: plan.confirmed.projectId');
     expect(source).toContain('siteId: plan.confirmed.siteId');
-    expect(source).toContain('requestedCapabilities: resolveLaunchBusinessCapabilities({');
+    expect(source).toContain('requestedCapabilities: plan.businessLaunchPlan.businessCapabilities');
+    expect(source).toContain("launchCapabilities.includes('booking') ||");
+    expect(source).toContain('const dataBindingsReady = plannedDataBindings.length === 0;');
+    expect(source).toContain('bindingsReady: dataBindingsReady');
+    expect(source).toContain('const bindingPersistenceReceipt = await autoEmitSectionBindings({');
+    expect(source).toContain('const intentBindingPersistenceReceipt = await persistGeneratedBindings({');
+    expect(source).toContain('bindingsReady: persistedDataBindingsReady && intentBindingsReady');
+    expect(source).toContain('businessRuntime: finalBusinessRuntime');
+    expect(source).not.toContain('bindingsReady: true');
     expect(stage4bResult).toBeLessThan(profileLoad);
     expect(profileLoad).toBeLessThan(dataBindings);
     expect(dataBindings).toBeLessThan(businessRuntime);

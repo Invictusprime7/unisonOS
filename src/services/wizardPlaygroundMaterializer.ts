@@ -777,18 +777,6 @@ export function materializePlayground(
     }
   }
 
-  if (selections.wantsLeadCapture || selections.businessModel === 'quote_lead' || selections.businessModel === 'saas_digital') {
-    const chatWidget = createCanonicalComponentInstance('chat-widget', {
-      label: 'Chat Widget',
-      usedOnPages: [homePageId].filter(Boolean),
-    });
-
-    if (chatWidget) {
-      chatWidget.status = 'stubbed';
-      creatorData.componentInstances[chatWidget.instanceId] = chatWidget;
-    }
-  }
-
   // 9. Assemble state
   const playground: PlaygroundState = {
     creatorData,

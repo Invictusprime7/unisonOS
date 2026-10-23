@@ -23,8 +23,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UseSetupWizardReturn, SetupStepId, SetupStep } from "@/hooks/useSetupWizard";
-import { loadSiteProfile, saveSiteProfile } from "@/services/businessProfileService";
-import type { BusinessProfileDTO, BusinessProfilePatch, WeekDay } from "@/types/businessProfile";
+import { loadSiteProfile, saveSiteProfile, type BusinessProfilePatch } from "@/services/businessProfileService";
+import type { BusinessProfileDTO, WeekDay } from "@/types/businessProfile";
 
 // ============================================================================
 // Step Icon Map

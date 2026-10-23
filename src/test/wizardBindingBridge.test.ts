@@ -22,6 +22,7 @@ describe('Wizard form binding aliases', () => {
   it('resolves booking, contact, and newsletter aliases to materialized canonical forms', () => {
     const capabilities = resolveCapabilities(salonSelections);
     const { playground, warnings } = materializePlayground(salonSelections, capabilities);
+    expect(Object.values(playground.creatorData.componentInstances).some((component) => component.componentSlug === 'chat-widget')).toBe(false);
     const formsByName = Object.fromEntries(
       Object.values(playground.creatorData.forms).map((form) => [form.name, form]),
     );

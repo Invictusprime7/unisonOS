@@ -31,7 +31,130 @@ import { getArtifact } from '@/platform/core/artifactRegistry';
 
 export const APP_BUILDER_PROTOCOL_VERSION = 'unison-app-builder/3' as const;
 
-export type AppBuildBusinessParameters = WizardBusinessParameters;
+export type AppBuildBusinessParameters = Pick<
+  WizardBusinessParameters,
+  | 'publicEmail'
+  | 'phone'
+  | 'tagline'
+  | 'description'
+  | 'website'
+  | 'logoUrl'
+  | 'brandColor'
+  | 'timezone'
+  | 'address'
+  | 'hours'
+  | 'socialLinks'
+> & { ctaDestinations?: { call?: string; email?: string } };
+
+export type AppBuildBusinessProfile = Pick<
+  CreatorBusinessInfo,
+  | 'businessName'
+  | 'tagline'
+  | 'description'
+  | 'website'
+  | 'logoUrl'
+  | 'brandColor'
+  | 'timezone'
+  | 'phone'
+  | 'email'
+  | 'address'
+  | 'hours'
+  | 'socialLinks'
+  | 'logoAssetId'
+  | 'faviconAssetId'
+  | 'brandProfile'
+>;
+
+const PRIVATE_ROUTING_PARAMETER_KEYS = [
+  'ownerEmail',
+  'notificationEmail',
+  'notificationPhone',
+  'crmDestination',
+  'bookingOwner',
+  'paymentProvider',
+  'followUpChannel',
+] as const;
+
+function getPrivateRoutingValues(
+  parameters: WizardBusinessParameters | undefined,
+  profile: CreatorBusinessInfo | undefined,
+): string[] {
+  const values = PRIVATE_ROUTING_PARAMETER_KEYS.flatMap((key) => {
+    const value = parameters?.[key];
+    return typeof value === 'string' && value.trim() ? [value.trim()] : [];
+  });
+  for (const key of PRIVATE_ROUTING_PARAMETER_KEYS) {
+    const value = profile?.[key];
+    if (typeof value === 'string' && value.trim()) values.push(value.trim());
+  }
+  return [...new Set(values)].sort((left, right) => right.length - left.length);
+}
+
+function redactPrivateRoutingValues(text: string | undefined, values: readonly string[]): string | undefined {
+  if (!text?.trim()) return undefined;
+  return values.reduce((result, value) => {
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return result.replace(new RegExp(escaped, 'gi'), '[private routing value omitted]');
+  }, text.trim());
+}
+
+function projectPublicBusinessParameters(
+  parameters: WizardBusinessParameters | undefined,
+): AppBuildBusinessParameters {
+  if (!parameters) return {};
+  const {
+    publicEmail, phone, tagline, description, website, logoUrl, brandColor, timezone,
+    address, hours, socialLinks, ctaDestinations,
+  } = parameters;
+  return {
+    publicEmail, phone, tagline, description, website, logoUrl, brandColor, timezone,
+    address, hours, socialLinks,
+    ctaDestinations: { call: ctaDestinations?.call, email: ctaDestinations?.email },
+  };
+}
+
+function projectPublicBusinessProfile(profile: CreatorBusinessInfo | undefined, businessName: string): AppBuildBusinessProfile {
+  if (!profile) return { businessName };
+  return {
+    businessName: profile.businessName,
+    tagline: profile.tagline,
+    description: profile.description,
+    website: profile.website,
+    logoUrl: profile.logoUrl,
+    brandColor: profile.brandColor,
+    timezone: profile.timezone,
+    phone: profile.phone,
+    email: profile.email,
+    address: profile.address,
+    hours: profile.hours,
+    socialLinks: profile.socialLinks,
+    logoAssetId: profile.logoAssetId,
+    faviconAssetId: profile.faviconAssetId,
+    brandProfile: profile.brandProfile,
+  };
+}
+
+function configuredBusinessFields(
+  parameters: WizardBusinessParameters | undefined,
+  profile: CreatorBusinessInfo | undefined,
+): string[] {
+  const configured = new Set<string>();
+  for (const [key, value] of Object.entries(parameters ?? {})) {
+    if (hasConfiguredBusinessValue(value)) configured.add(key);
+  }
+  for (const [key, value] of Object.entries(profile ?? {})) {
+    if (hasConfiguredBusinessValue(value)) configured.add(key);
+  }
+  for (const key of Object.keys(profile?.customValues ?? {})) configured.add(key);
+  return [...configured].sort();
+}
+
+function hasConfiguredBusinessValue(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === 'object') return Object.keys(value).length > 0;
+  return value !== undefined && value !== null;
+}
 
 export interface AppBuilderLogoContract {
   version: '1.0';
@@ -161,6 +284,9 @@ export interface AppBuildRegisteredComponent {
   instanceStatus: CreatorComponentInstance['status'];
   bindings: Record<string, string>;
   requiredBindingKeys: string[];
+  requiredWhenCapabilitiesEnabled?: string[];
+  requiredNativeFormFields?: string[];
+  nativeComponentTemplate?: string;
   requiredBusinessFields: string[];
   requiredSetupSteps: string[];
 }
@@ -185,6 +311,9 @@ function deriveRegisteredComponents(
       instanceStatus: instance.status,
       bindings: { ...instance.bindings },
       requiredBindingKeys: [...definition.requiredBindingKeys],
+      requiredWhenCapabilitiesEnabled: [...(definition.requiredWhenCapabilitiesEnabled ?? [])],
+      requiredNativeFormFields: [...(definition.requiredNativeFormFields ?? [])],
+      nativeComponentTemplate: definition.htmlTemplate.replace(/\sclass=/g, ' className='),
       requiredBusinessFields: [...(definition.requiredBusinessFields ?? [])],
       requiredSetupSteps: [...(definition.requiredSetupSteps ?? [])],
     }];
@@ -254,7 +383,9 @@ export interface AppBuildContract {
     visionBrief?: string;
     /** Business-provided routing/contact parameters used by registered actions. */
     parameters: AppBuildBusinessParameters;
-    businessProfile: CreatorBusinessInfo;
+    businessProfile: AppBuildBusinessProfile;
+    /** Field names with configured values; actual private values stay server-side. */
+    configuredBusinessFields: string[];
     /** Registered functional components available to own form/CRM/runtime actions. */
     registeredComponents: AppBuildRegisteredComponent[];
     /** Canonical slot bindings joined to registered intent and component contracts. */
@@ -293,7 +424,7 @@ export interface BuildAppBuildContractInput {
   industry: string;
   businessName: string;
   visionBrief?: string;
-  businessParameters?: AppBuildBusinessParameters;
+  businessParameters?: WizardBusinessParameters;
   businessProfile?: CreatorBusinessInfo;
   canonicalBindings?: readonly PlaygroundBinding[];
   registeredComponentInstances?: readonly CreatorComponentInstance[];
@@ -537,6 +668,7 @@ function assertAppBuildContract(value: unknown): asserts value is AppBuildContra
 }
 
 export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBuildContract {
+  const privateRoutingValues = getPrivateRoutingValues(input.businessParameters, input.businessProfile);
   const registeredComponents = deriveRegisteredComponents(
     input.registeredComponentInstances ?? [],
     input.capabilities,
@@ -568,13 +700,14 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
       industry: input.industry,
       businessName: input.businessName,
       branding: deriveAppBuilderLogoContract(input.businessName),
-      visionBrief: input.visionBrief?.trim() || undefined,
+      visionBrief: redactPrivateRoutingValues(input.visionBrief, privateRoutingValues),
       parameters: Object.fromEntries(
-        Object.entries(input.businessParameters ?? {})
+        Object.entries(projectPublicBusinessParameters(input.businessParameters))
           .filter(([, value]) => value !== undefined && value !== '')
           .sort(([left], [right]) => left.localeCompare(right)),
       ) as AppBuildBusinessParameters,
-      businessProfile: input.businessProfile ?? { businessName: input.businessName },
+      businessProfile: projectPublicBusinessProfile(input.businessProfile, input.businessName),
+      configuredBusinessFields: configuredBusinessFields(input.businessParameters, input.businessProfile),
       registeredComponents,
       intentBindings,
       goals: [...input.goals],

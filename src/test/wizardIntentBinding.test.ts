@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getIntentDef } from '@/platform/core';
 import { getIndustryIntentProfile } from '@/platform/core/industryIntentProfiles';
 import { resolveCapabilities } from '@/services/wizardCapabilityResolver';
+import { materializePlayground } from '@/services/wizardPlaygroundMaterializer';
 import { applyWizardBindingsToVfs } from '@/services/wizardBindingBridge';
 import type { BusinessModel, IndustryOverlay, WizardSelections } from '@/types/playground';
 
@@ -53,6 +54,34 @@ describe('wizard intent binding', () => {
     expect(slotIntent('appointment_service', 'salon', 'home', 'hero', 'primary-cta')).toBe('booking.create');
     expect(slotIntent('restaurant_hospitality', 'restaurant', 'home', 'hero', 'primary-cta')).toBe('booking.create');
     expect(slotIntent('nonprofit', 'nonprofit', 'home', 'hero', 'primary-cta')).toBe('donation.start');
+  });
+
+  it('provisions a generic booking calendar for focused booking journeys without an industry default', () => {
+    const capabilities = resolveCapabilities(selections('quote_lead', 'real-estate', { needsBooking: true }));
+
+    expect(capabilities.requiredPages).toContain('booking');
+    expect(capabilities.requiredCalendars).toContain('main_booking');
+  });
+
+  it('assigns real-estate launch components to canonical generated page IDs', () => {
+    const wizardSelections = selections('quote_lead', 'real_estate', {
+      needsBooking: true,
+      wantsLeadCapture: true,
+      requestedPages: ['about', 'services', 'gallery', 'contact', 'booking'],
+      primaryIntent: 'contact.submit',
+      themePresetId: 'editorial',
+    });
+    const pack = resolveCapabilities(wizardSelections);
+    const { playground, sitePlan } = materializePlayground(wizardSelections, pack);
+    const pagesById = new Map(sitePlan.pages.map((page) => [page.id, page]));
+    const components = Object.values(playground.creatorData.componentInstances);
+
+    expect(components.map((component) => component.componentSlug)).toContain('booking-scheduler');
+    for (const component of components) {
+      for (const pageId of component.usedOnPages) {
+        expect(pagesById.has(pageId), `${component.componentSlug} -> ${pageId}`).toBe(true);
+      }
+    }
   });
 
   it('resolves commerce card, checkout, and icon slots to business behavior', () => {

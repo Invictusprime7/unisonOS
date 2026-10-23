@@ -5,6 +5,7 @@ import type { ComposerLoopInput, ComposerLoopResult } from '@/services/builder/a
 import type { SiteAuthoringInput, SiteAuthoringResult } from '@/services/launch/siteAuthoringOrchestrator';
 import { APP_BUILDER_PROTOCOL_VERSION, type AppBuildRequest, type AppBuildResult } from './appBuilderContracts';
 import { findDesignSourceUsageIssues, validateAppBuildCandidate } from './appBuilderCandidate';
+import { materializeRegisteredComponents } from './registeredComponentMaterializer';
 import { evaluateDesignQuality } from './design/designQualityClosure';
 import { applyDesignSources } from './design/designSourceMaterializer';
 import { buildAppBuilderGenerationContext, reportDesignSourceUsage } from './appBuilderGenerationContext';
@@ -97,6 +98,7 @@ export async function orchestrateAppBuild(
   const compatibilityMode = Boolean(input.acceptPage);
   let candidateFiles = { ...authored.files };
   if (!compatibilityMode && input.preflight) candidateFiles = input.preflight(candidateFiles);
+  candidateFiles = materializeRegisteredComponents(input.contract, candidateFiles).files;
   let closure = await validateAppBuildCandidate({
     contract: input.contract,
     files: candidateFiles,
@@ -156,6 +158,7 @@ export async function orchestrateAppBuild(
       if (repaired.ok && repaired.prepared) {
         candidateFiles = repaired.prepared.nextFiles;
         if (input.preflight) candidateFiles = input.preflight(candidateFiles);
+        candidateFiles = materializeRegisteredComponents(input.contract, candidateFiles).files;
         closure = await validateAppBuildCandidate({
           contract: input.contract,
           files: candidateFiles,

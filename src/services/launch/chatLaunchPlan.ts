@@ -106,6 +106,7 @@ const FOCUSED_GOALS: Array<{ goal: PrimaryGoal; pattern: RegExp }> = [
   { goal: "drive_calls", pattern: /\b(call us|phone us|directions|visit us|walk[- ]?ins?)\b/i },
   { goal: "showcase_work", pattern: /\b(showcase|portfolio|gallery|our work|lookbook)\b/i },
   { goal: "grow_email_list", pattern: /\b(newsletter|email list|subscribe)\b/i },
+  { goal: "donate", pattern: /\b(donate|donation|give to (?:the )?cause)\b/i },
   { goal: "collect_leads", pattern: /\b(quote|estimate|contact us|inquiry|enquiry|lead form)\b/i },
 ];
 

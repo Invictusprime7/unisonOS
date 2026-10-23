@@ -4,7 +4,7 @@ import {
   getIndustrySeedDataTargets,
   getUnmappedIndustrySeedDataKeys,
 } from '@/services/app-builder/appBuilderGenerationContext';
-import { resolveLaunchCapabilities } from '@/services/launch/launchCapabilities';
+import { resolveBusinessLaunchPlan, resolveLaunchCapabilities } from '@/services/launch/launchCapabilities';
 import { getAllIndustries } from '@/platform/core/industryMatrix';
 import { getCapabilitiesForIndustry, getCapability, isCapabilitySupportedForIndustry } from '@/platform/core/capabilityRegistry';
 import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
@@ -205,6 +205,30 @@ describe('industry-aware generation context', () => {
     ]);
   });
 
+  it('compiles canonical aliases into the same versioned journey and capability plan', () => {
+    const canonical = resolveBusinessLaunchPlan({
+      industry: 'restaurant',
+      primaryGoal: 'reserve_table',
+      customerNeeds: ['reserve_table'],
+    });
+    const alias = resolveBusinessLaunchPlan({
+      industry: 'cafe',
+      primaryGoal: 'reserve_table',
+      customerNeeds: ['reserve_table'],
+    });
+
+    expect(canonical.version).toBe('unison-business-launch-plan/1');
+    expect(canonical).toEqual(alias);
+    expect(resolveBusinessLaunchPlan({
+      industry: 'not-a-registered-industry',
+      primaryGoal: 'collect_leads',
+    })).toMatchObject({
+      canonicalIndustryId: null,
+      operationalCapabilities: [],
+      blockedRequests: ['industry:not-registered'],
+    });
+  });
+
   it('keeps industry defaults supported and adds focused packs only when their registry allows them', () => {
     const focusedRequests = [
       { request: { primaryGoal: 'collect_leads' as const }, capability: 'lead-capture' as const },
@@ -231,6 +255,20 @@ describe('industry-aware generation context', () => {
           || getCapability(capability).supportedIndustries.includes(industry.industry);
         expect(resolved.includes(capability), `${industry.industry}.${capability}`).toBe(expected);
       }
+    }
+  });
+
+  it('compiles every canonical industry into a deterministic non-blocked plan', () => {
+    for (const industry of getAllIndustries()) {
+      const input = { industry: industry.industry, primaryGoal: null, customerNeeds: [] } as const;
+      const first = resolveBusinessLaunchPlan(input);
+      const second = resolveBusinessLaunchPlan(input);
+
+      expect(first, industry.industry).toEqual(second);
+      expect(first.canonicalIndustryId, industry.industry).toBe(industry.industry);
+      expect(first.operationalCapabilities, industry.industry).toEqual(industry.defaultCapabilities);
+      expect(first.businessCapabilities, industry.industry).toContain('business_profile');
+      expect(first.blockedRequests, industry.industry).toEqual([]);
     }
   });
 

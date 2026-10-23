@@ -506,6 +506,7 @@ export function resolveCapabilities(selections: WizardSelections): CapabilityPac
   // 4. Calendars
   const calendarSet = new Set<string>(MODEL_CALENDARS[model] || []);
   if (augment.calendars) augment.calendars.forEach((calendar) => calendarSet.add(calendar));
+  if (selections.needsBooking && calendarSet.size === 0) calendarSet.add('main_booking');
 
   // 5. Products
   const productSet = new Set<string>(augment.products || []);

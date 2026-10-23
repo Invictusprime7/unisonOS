@@ -202,6 +202,7 @@ const ARCHETYPES = {
   },
 } satisfies Record<string, PageArchetype>;
 
+export type PageArchetypeRole = keyof typeof ARCHETYPES;
 export const PAGE_ARCHETYPES: Readonly<Record<string, PageArchetype>> = ARCHETYPES;
 
 export const pageArchetypeFor = (role: string): PageArchetype =>

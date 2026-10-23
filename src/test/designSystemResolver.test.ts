@@ -63,6 +63,17 @@ describe('DesignSystemResolver', () => {
 });
 
 describe('AppBuilderGenerationContext (R0/R1)', () => {
+  it('keeps generated forms on the design system and chat opt-in', async () => {
+    const { buildAppBuilderGenerationContext } = await import('@/services/app-builder/appBuilderGenerationContext');
+    const context = buildAppBuilderGenerationContext(buildAppBuildContract(makeInput([])));
+
+    expect(context.runtimeContext).toContain('@/unison/ui/form-fields');
+    expect(context.runtimeContext).toContain('page-eligible certified design-source implementation');
+    expect(context.runtimeContext).toContain('Registered 21st.dev-derived designs may only be used through certified');
+    expect(context.runtimeContext).toContain('A contact, quote, newsletter, or lead-capture form does not imply a floating chat widget');
+    expect(context.runtimeContext).toContain('registered intents and exact Wizard CTA markers');
+  });
+
   it('derives runtime policy from the contract and reports design-source usage', async () => {
     const { buildAppBuilderGenerationContext, reportDesignSourceUsage } = await import('@/services/app-builder/appBuilderGenerationContext');
     const contract = buildAppBuildContract(makeInput([impl('hero:prisma-cinematic', 'hero'), impl('hero:generic', 'hero')]));

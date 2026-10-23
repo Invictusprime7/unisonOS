@@ -178,7 +178,7 @@ const Onboarding = () => {
           setLauncherOpen(true);
         }}
       />
-      <LauncherWizard open={launcherOpen} onOpenChange={handleLauncherClose} prefill={prefill} />
+      <LauncherWizard open={launcherOpen} onOpenChange={handleLauncherClose} prefill={prefill} draftScope={user?.id ?? 'anonymous'} />
     </div>
   );
 };

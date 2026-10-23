@@ -1,7 +1,22 @@
 import { getCapability, type CapabilityId } from '@/platform/core/capabilityRegistry';
 import type { BusinessCapability } from '@/platform/core/capabilityPacks';
-import { normalizeIndustryKey } from '@/platform/core/industryMatrix';
+import { getIndustryProfile, normalizeIndustryKey } from '@/platform/core/industryMatrix';
 import type { CustomerNeed, PrimaryGoal } from '@/components/onboarding/wizard/wizardCatalog';
+
+export const BUSINESS_LAUNCH_PLAN_VERSION = 'unison-business-launch-plan/1' as const;
+
+export interface BusinessLaunchPlan {
+  version: typeof BUSINESS_LAUNCH_PLAN_VERSION;
+  canonicalIndustryId: string | null;
+  journeyId: string;
+  primaryGoal: PrimaryGoal | null;
+  customerNeeds: CustomerNeed[];
+  primaryIntent: string | null;
+  automationPack: string | null;
+  operationalCapabilities: CapabilityId[];
+  businessCapabilities: BusinessCapability[];
+  blockedRequests: string[];
+}
 
 const GOAL_CAPABILITIES: Partial<Record<PrimaryGoal, CapabilityId>> = {
   collect_leads: 'lead-capture',
@@ -9,6 +24,7 @@ const GOAL_CAPABILITIES: Partial<Record<PrimaryGoal, CapabilityId>> = {
   sell_offers: 'commerce',
   drive_calls: 'contact',
   grow_email_list: 'newsletter',
+  donate: 'donation',
 };
 
 const NEED_CAPABILITIES: Partial<Record<CustomerNeed, CapabilityId>> = {
@@ -40,6 +56,9 @@ export function resolveLaunchBusinessCapabilities(
       break;
     case 'grow_email_list':
       add('crm.leads', 'notifications.email');
+      break;
+    case 'donate':
+      add('commerce.checkout', 'crm.contacts', 'notifications.email');
       break;
   }
 
@@ -89,4 +108,49 @@ export function resolveLaunchCapabilities(
     resolved.push(capability);
   }
   return resolved;
+}
+
+export function resolveBusinessLaunchPlan(input: {
+  industry: string;
+  primaryGoal?: PrimaryGoal | null;
+  customerNeeds?: readonly CustomerNeed[];
+}): BusinessLaunchPlan {
+  const profile = getIndustryProfile(input.industry);
+  const canonicalIndustryId = profile?.industry ?? null;
+  const primaryGoal = input.primaryGoal ?? null;
+  const customerNeeds = [...new Set(input.customerNeeds ?? [])];
+  const focusedIntent = { primaryGoal, customerNeeds };
+  const requestedOperational = new Set<CapabilityId>();
+  const goalCapability = primaryGoal ? GOAL_CAPABILITIES[primaryGoal] : undefined;
+  if (goalCapability) requestedOperational.add(goalCapability);
+  for (const need of customerNeeds) {
+    const capability = NEED_CAPABILITIES[need];
+    if (capability) requestedOperational.add(capability);
+  }
+
+  const blockedRequests = profile
+    ? [...requestedOperational].filter((capability) =>
+        !profile.defaultCapabilities.includes(capability)
+        && !getCapability(capability).supportedIndustries.includes(canonicalIndustryId),
+      )
+    : ['industry:not-registered'];
+  const operationalCapabilities = profile
+    ? resolveLaunchCapabilities(profile.defaultCapabilities, canonicalIndustryId, focusedIntent)
+    : [];
+  const businessCapabilities = profile && blockedRequests.length === 0
+    ? resolveLaunchBusinessCapabilities(focusedIntent)
+    : ['business_profile' as const];
+
+  return {
+    version: BUSINESS_LAUNCH_PLAN_VERSION,
+    canonicalIndustryId,
+    journeyId: `${canonicalIndustryId ?? normalizeIndustryKey(input.industry)}:${primaryGoal ?? 'unspecified'}`,
+    primaryGoal,
+    customerNeeds,
+    primaryIntent: profile?.primaryIntent ?? null,
+    automationPack: profile?.automationPack ?? null,
+    operationalCapabilities,
+    businessCapabilities,
+    blockedRequests,
+  };
 }

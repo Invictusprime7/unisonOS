@@ -53,6 +53,7 @@ import {
   type WizardExperiencePreference,
 } from "@/services/wizardDesignSelection";
 import type { VariantId } from "@/sections/variants/types";
+import { clearLaunchInterviewDraft, readLaunchInterviewDraft, saveLaunchInterviewDraft } from '@/services/launch/interviewDraftService';
 
 
 import { ImportProjectZipButton } from "@/components/onboarding/ImportProjectZipButton";
@@ -72,6 +73,7 @@ import {
 } from "@/services/launch/launchRun";
 import { LaunchStageTimeline } from "./LaunchStageTimeline";
 import { VFSPreview } from '@/components/VFSPreview';
+import { getOwnerInterviewQuestions } from '@/platform/core/ownerInterviewRegistry';
 
 import {
   classifyPromptForWizard,
@@ -99,6 +101,8 @@ export interface LauncherWizardProps {
   presentation?: "dialog" | "chat";
   /** True when this run is the account's one free Live Demo generation. */
   demoGeneration?: boolean;
+  /** Account scope shared by Home Chat, Onboarding, and Builder launch surfaces. */
+  draftScope?: string;
   guidedStep?: ChatWizardStep;
   guidancePending?: boolean;
   onSelectionConfirmed?: (answer: string) => void;
@@ -149,6 +153,7 @@ export const LauncherWizard = ({
   prefill,
   presentation = "dialog",
   demoGeneration = false,
+  draftScope = 'anonymous',
   guidedStep,
   guidancePending = false,
   onSelectionConfirmed,
@@ -157,6 +162,7 @@ export const LauncherWizard = ({
   const { setLaunch } = useLaunch();
 
   const [step, setStep] = useState<SelectionStep>("industry");
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const isChat = presentation === "chat";
   const stepOrder: readonly SelectionStep[] = isChat ? CHAT_STEP_ORDER : STEP_ORDER;
   const [completedTurns, setCompletedTurns] = useState<{ step: SelectionStep; answer: string }[]>([]);
@@ -229,6 +235,30 @@ export const LauncherWizard = ({
     return () => { mountedRef.current = false; };
   }, []);
 
+  useEffect(() => {
+    if (!open) {
+      setDraftHydrated(false);
+      return;
+    }
+    setDraftHydrated(false);
+    const draft = readLaunchInterviewDraft(draftScope);
+    if (draft) {
+      setSelectedIndustry(draft.selections.industry);
+      setSystemId(draft.selections.systemId);
+      setBusinessName(draft.selections.businessName);
+      setPrimaryGoal(draft.selections.primaryGoal);
+      setCustomerNeeds(draft.selections.customerNeeds);
+      setSelectedPages(draft.selections.selectedPages);
+      setTheme(THEME_PRESETS.find((preset) => preset.id === draft.selections.themePresetId) ?? THEME_PRESETS[0] ?? null);
+      setExperience(draft.selections.experience);
+      setSectionPins(draft.selections.sectionPins as Record<string, VariantId>);
+      setSocialLinks(draft.selections.socialLinks);
+      setBusinessParameters((current) => ({ ...current, ...draft.publicAnswers, ...draft.privateAnswers }));
+      seededFromChatRef.current = true;
+    }
+    setDraftHydrated(true);
+  }, [open, draftScope]);
+
   const reset = useCallback(() => {
     generationRef.current++;
     reviewDecision.current?.(false);
@@ -288,7 +318,7 @@ export const LauncherWizard = ({
     chatPlanRef.current = plan;
     // Keep the live brief current, but never replay defaults over choices
     // already made in this mounted conversation.
-    if (guidedStep && seededFromChatRef.current) {
+    if (seededFromChatRef.current) {
       if (plan.businessName) setBusinessName(current => current || plan.businessName!);
       if (plan.industry && plan.systemId) {
         setSelectedIndustry(current => current ?? plan.industry);
@@ -310,6 +340,27 @@ export const LauncherWizard = ({
     setCustomerNeeds(plan.customerNeeds);
     if (!guidedStep) setStep("goals");
   }, [open, initialVisionPrompt, prefill?.businessName, prefill?.notificationEmail, prefill?.email, prefill?.phone, prefill?.notificationPhone, prefill?.socialLinks, prefill?.tagline, prefill?.description, prefill?.website, prefill?.logoUrl, prefill?.brandColor, prefill?.timezone, prefill?.address, prefill?.hours, guidedStep]);
+
+  useEffect(() => {
+    if (!open || !draftHydrated) return;
+    const { ownerEmail, notificationEmail, notificationPhone, ...publicAnswers } = businessParameters;
+    saveLaunchInterviewDraft(draftScope, {
+      selections: {
+        industry: selectedIndustry,
+        systemId,
+        businessName,
+        primaryGoal,
+        customerNeeds,
+        selectedPages,
+        themePresetId: theme?.id ?? null,
+        experience,
+        sectionPins,
+        socialLinks,
+      },
+      publicAnswers,
+      privateAnswers: { ownerEmail, notificationEmail, notificationPhone },
+    });
+  }, [open, draftHydrated, draftScope, selectedIndustry, systemId, businessName, primaryGoal, customerNeeds, selectedPages, theme, experience, sectionPins, socialLinks, businessParameters]);
 
   // After the user answers, the chat must move forward at least one step —
   // even when the AI re-asks the same question (e.g. after Back + correction).
@@ -531,6 +582,7 @@ export const LauncherWizard = ({
       };
       const result = await runLaunchPipeline({ ...input, demoGeneration }, callbacks);
       if (generation !== generationRef.current) return;
+      clearLaunchInterviewDraft(draftScope);
       onLaunchComplete?.();
       setLaunch(result.launchState);
       navigate("/web-builder", {
@@ -782,9 +834,12 @@ function OwnerBrandFields({
   parameters: NonNullable<LaunchOrchestratorInput['businessParameters']>;
   update: (patch: Partial<NonNullable<LaunchOrchestratorInput['businessParameters']>>) => void;
 }) {
-  const industryKey = (industry || '').toLowerCase().replace(/[_\s]+/g, '-');
-  const localBusiness = ['salon', 'barber', 'medspa', 'wellness', 'dental', 'fitness', 'local-service', 'contractor', 'hvac', 'cleaning', 'landscaping', 'auto-detailing', 'moving', 'restaurant', 'cafe', 'bakery', 'real-estate'].includes(industryKey);
-  const showHours = localBusiness || primaryGoal === 'book_appointments';
+  const ownerQuestions = getOwnerInterviewQuestions(industry || '', primaryGoal);
+  const hasOwnerQuestion = (fieldId: string) => ownerQuestions.some((question) => question.fieldId === fieldId);
+  const ownerEmailQuestion = ownerQuestions.find((question) => question.fieldId === 'ownerEmail');
+  const showAddress = hasOwnerQuestion('address');
+  const showHours = hasOwnerQuestion('hours');
+  const showNotificationPhone = hasOwnerQuestion('notificationPhone');
   const address = parameters.address || {};
   const hours = parameters.hours || [];
   const days = [
@@ -804,13 +859,20 @@ function OwnerBrandFields({
 
   return (
     <div className="mt-4 space-y-3 border-t border-border/60 pt-4">
-      <p className="text-xs font-semibold text-foreground">Owner and visitor contact</p>
+      <p className="text-xs font-semibold text-foreground">Public contact details</p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm">Owner email<Input aria-label="Owner email" type="email" value={parameters.ownerEmail || ''} onChange={(event) => update({ ownerEmail: event.target.value, notificationEmail: event.target.value })} placeholder="owner@business.com" className="mt-1.5" /></label>
-        <label className="block text-sm">Public email<Input aria-label="Public email" type="email" value={parameters.publicEmail || ''} onChange={(event) => update({ publicEmail: event.target.value })} placeholder="hello@business.com" className="mt-1.5" /></label>
-        <label className="block text-sm">Business phone<Input aria-label="Business phone" type="tel" value={parameters.phone || ''} onChange={(event) => update({ phone: event.target.value })} placeholder="+1 555 0100" className="mt-1.5" /></label>
-        <label className="block text-sm">Website<Input aria-label="Business website" type="url" value={parameters.website || ''} onChange={(event) => update({ website: event.target.value })} placeholder="https://business.com" className="mt-1.5" /></label>
+        {hasOwnerQuestion('publicEmail') && <label className="block text-sm">Public email<Input aria-label="Public email" type="email" value={parameters.publicEmail || ''} onChange={(event) => update({ publicEmail: event.target.value })} placeholder="hello@business.com" className="mt-1.5" /></label>}
+        {hasOwnerQuestion('phone') && <label className="block text-sm">Business phone<Input aria-label="Business phone" type="tel" value={parameters.phone || ''} onChange={(event) => update({ phone: event.target.value })} placeholder="+1 555 0100" className="mt-1.5" /></label>}
+        {hasOwnerQuestion('website') && <label className="block text-sm">Website<Input aria-label="Business website" type="url" value={parameters.website || ''} onChange={(event) => update({ website: event.target.value })} placeholder="https://business.com" className="mt-1.5" /></label>}
       </div>
+      {ownerEmailQuestion && <div className="border-t border-border/60 pt-3">
+        <p className="text-xs font-medium text-muted-foreground">Private owner notifications</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">Owner email<Input aria-label="Owner email" type="email" value={parameters.ownerEmail || ''} onChange={(event) => update({ ownerEmail: event.target.value, notificationEmail: event.target.value })} placeholder="owner@business.com" className="mt-1.5" /></label>
+          {ownerEmailQuestion.requiredAt && <p className="self-end text-xs text-muted-foreground">Private destination; required before {ownerEmailQuestion.requiredAt}.</p>}
+          {showNotificationPhone && <label className="block text-sm">Notification phone<Input aria-label="Notification phone" type="tel" value={parameters.notificationPhone || ''} onChange={(event) => update({ notificationPhone: event.target.value })} placeholder="Optional SMS number" className="mt-1.5" /></label>}
+        </div>
+      </div>}
       <details className="group border-t border-border/60 pt-3">
         <summary className="cursor-pointer text-xs font-medium text-muted-foreground group-open:text-foreground">More brand details</summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -818,13 +880,12 @@ function OwnerBrandFields({
           <label className="block text-sm">Brand color<Input aria-label="Business brand color" type="color" value={parameters.brandColor || '#111827'} onChange={(event) => update({ brandColor: event.target.value })} className="mt-1.5 h-9 p-1" /></label>
           <div className="sm:col-span-2"><p className="mb-1.5 text-sm">Logo</p><BusinessLogoInput value={parameters.logoUrl} onChange={(logoUrl) => update({ logoUrl: logoUrl || undefined })} compact /></div>
           <label className="block text-sm sm:col-span-2">About the business<Textarea aria-label="Business description" value={parameters.description || ''} onChange={(event) => update({ description: event.target.value })} rows={2} placeholder="What should visitors know?" className="mt-1.5" /></label>
-          <label className="block text-sm">Notification phone<Input aria-label="Notification phone" type="tel" value={parameters.notificationPhone || ''} onChange={(event) => update({ notificationPhone: event.target.value })} placeholder="Optional SMS number" className="mt-1.5" /></label>
         </div>
       </details>
-      {(localBusiness || showHours) && <details className="group border-t border-border/60 pt-3">
-        <summary className="cursor-pointer text-xs font-medium text-muted-foreground group-open:text-foreground">{localBusiness ? 'Location and business hours' : 'Business hours'}</summary>
+      {(showAddress || showHours) && <details className="group border-t border-border/60 pt-3">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground group-open:text-foreground">{showAddress ? 'Location and business hours' : 'Business hours'}</summary>
         <div className="mt-3 space-y-4">
-          {localBusiness && <div className="grid gap-3 sm:grid-cols-2">
+          {showAddress && <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm sm:col-span-2">Street address<Input aria-label="Street address" value={address.line1 || ''} onChange={(event) => updateAddress('line1', event.target.value)} className="mt-1.5" /></label>
             <label className="block text-sm">City<Input aria-label="Business city" value={address.city || ''} onChange={(event) => updateAddress('city', event.target.value)} className="mt-1.5" /></label>
             <label className="block text-sm">State or region<Input aria-label="Business region" value={address.region || ''} onChange={(event) => updateAddress('region', event.target.value)} className="mt-1.5" /></label>

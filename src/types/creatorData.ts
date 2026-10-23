@@ -206,7 +206,7 @@ export interface CreatorBusinessInfo {
   crmDestination?: string;
   publishDomain?: string;
   followUpChannel?: string;
-  hours?: Array<{ day: string; open: string; close: string; closed?: boolean }>;
+  hours?: Array<{ day: string; open?: string; close?: string; closed?: boolean }>;
   socialLinks?: Record<string, string>;
   logoAssetId?: string;
   faviconAssetId?: string;

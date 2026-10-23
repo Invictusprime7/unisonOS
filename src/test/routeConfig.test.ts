@@ -79,7 +79,8 @@ describe("app route config", () => {
     const builderIds = getNavigableRoutesForShell("builder").map((route) => route.meta.id);
 
     expect(workspaceIds).toContain("dashboard");
-    expect(workspaceIds).not.toContain("home");
+    expect(workspaceIds).toContain("home");
+    expect(getRouteById("home")?.meta.deprecatedAliasFor).toBeUndefined();
     expect(builderIds).toContain("web-builder");
     expect(builderIds).not.toContain("ai-generator");
     expect(getNavigableRoutesForShell("public").map((route) => route.meta.id)).not.toContain("not-found");
@@ -104,7 +105,7 @@ describe("app route config", () => {
   });
 
   it("resolves primary routes for shell entry points", () => {
-    expect(getPrimaryRouteForShell("workspace")?.meta.id).toBe("dashboard");
+    expect(getPrimaryRouteForShell("workspace")?.meta.id).toBe("home");
     expect(getPrimaryRouteForShell("builder")?.meta.id).toBe("web-builder");
     expect(getPrimaryRouteForShell("focus")).toBeNull();
   });

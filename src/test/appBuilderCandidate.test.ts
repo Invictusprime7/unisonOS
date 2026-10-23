@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { compileResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import { validateAppBuildCandidate } from '@/services/app-builder/appBuilderCandidate';
+import { materializeRegisteredComponents } from '@/services/app-builder/registeredComponentMaterializer';
 import { APP_BUILDER_PROTOCOL_VERSION, type AppBuildContract } from '@/services/app-builder/appBuilderContracts';
+import { getCanonicalComponentDefinition } from '@/services/canonicalComponentRegistry';
 
 function contract(): AppBuildContract {
   const resolvedSiteDesignContext = compileResolvedSiteDesignContext({
@@ -24,7 +26,7 @@ function contract(): AppBuildContract {
     },
     business: {
       industry: 'salon', businessName: 'Northstar', goals: [], intents: [], capabilities: [], bindingGuide: '',
-      parameters: {}, registeredComponents: [], intentBindings: [],
+      parameters: {}, configuredBusinessFields: [], registeredComponents: [], intentBindings: [],
       businessProfile: { businessName: 'Northstar' },
       branding: {
         version: '1.0',
@@ -59,11 +61,52 @@ const initialFiles = {
 function bookingContract(): AppBuildContract {
   const value = contract();
   value.business.capabilities = ['booking'];
+  value.business.configuredBusinessFields = ['notificationEmail', 'bookingOwner'];
   value.topology.sitePlan.pages.push({
     id: 'booking', name: 'booking', title: 'Booking', route: '/booking', role: 'booking',
     filePath: '/src/pages/Booking.tsx', visibleInNav: true, isHome: false, generatedBy: 'wizard',
   });
+  value.business.registeredComponents = [{
+    runtime: {
+      instanceId: 'cmp-booking', componentSlug: 'booking-scheduler', usedOnPages: ['booking'],
+      requiredCapabilities: ['booking'], catalogSurfaces: ['services', 'availability_slots'],
+      writeIntent: 'booking.create', slotBindings: ['form-submit', 'primary-cta', 'card-cta'], status: 'ready', blockers: [],
+    },
+    label: 'Booking Scheduler', targetType: 'calendar', instanceStatus: 'ready',
+    bindings: { calendarId: 'calendar-main' }, requiredBindingKeys: ['calendarId'],
+    nativeComponentTemplate: getCanonicalComponentDefinition('booking-scheduler')!.htmlTemplate,
+    requiredBusinessFields: ['notificationEmail', 'bookingOwner'],
+    requiredNativeFormFields: ['serviceId', 'slotId', 'customerName', 'customerEmail'],
+    requiredSetupSteps: ['booking_calendar'],
+  }];
   return value;
+}
+
+function registeredComponentFixture(slug: string, instanceId: string, pageId: string, bindings: Record<string, string>) {
+  const definition = getCanonicalComponentDefinition(slug)!;
+  return {
+    runtime: {
+      instanceId,
+      componentSlug: slug,
+      usedOnPages: [pageId],
+      requiredCapabilities: [...definition.requiredCapabilities],
+      catalogSurfaces: [...(definition.catalogSurfaces ?? [])],
+      writeIntent: definition.writeIntent ?? null,
+      slotBindings: [...definition.slotBindings],
+      status: 'ready' as const,
+      blockers: [],
+    },
+    label: definition.name,
+    targetType: definition.targetType,
+    instanceStatus: 'ready' as const,
+    bindings,
+    requiredBindingKeys: [...definition.requiredBindingKeys],
+    requiredWhenCapabilitiesEnabled: [...(definition.requiredWhenCapabilitiesEnabled ?? [])],
+    requiredNativeFormFields: [...(definition.requiredNativeFormFields ?? [])],
+    nativeComponentTemplate: definition.htmlTemplate,
+    requiredBusinessFields: [...(definition.requiredBusinessFields ?? [])],
+    requiredSetupSteps: [...(definition.requiredSetupSteps ?? [])],
+  };
 }
 
 function contactCrmContract(): AppBuildContract {
@@ -71,15 +114,11 @@ function contactCrmContract(): AppBuildContract {
   value.business.capabilities = ['contact'];
   value.business.intents = ['contact.submit'];
   value.business.parameters = {
-    ownerEmail: 'owner@example.test',
-    notificationEmail: 'owner@example.test',
-    crmDestination: 'unison_crm',
+    publicEmail: 'hello@example.test',
   };
+  value.business.configuredBusinessFields = ['notificationEmail', 'crmDestination', 'bookingOwner'];
   value.business.businessProfile = {
     businessName: 'Northstar',
-    notificationEmail: 'owner@example.test',
-    bookingOwner: 'owner@example.test',
-    crmDestination: 'unison_crm',
   };
   value.business.bindingGuide = '- Page Contact (/contact), slot contact.form-submit: label "Send", marker data-ut-cta="cta.form-submit", intent contact.submit, target form-contact';
   value.business.registeredComponents = [{
@@ -105,6 +144,96 @@ function contactCrmContract(): AppBuildContract {
 const contactCrmPage = '<section data-ut-component-slug="contact-form"><form data-intent-form="contact.submit"><input name="name" /><input name="email" /><button type="submit" data-ut-cta="cta.form-submit">Send</button></form></section>';
 
 describe('App Builder candidate closure', () => {
+  it('materializes registered booking forms on assigned pages before candidate closure', () => {
+    const booking = bookingContract();
+    const files = {
+      ...initialFiles,
+      '/src/pages/Booking.tsx': 'export default function Booking(){return <div className="page"><h1>Schedule a viewing</h1></div>}',
+    };
+
+    const first = materializeRegisteredComponents(booking, files);
+    const second = materializeRegisteredComponents(booking, first.files);
+    const bookingPage = first.files['/src/pages/Booking.tsx'];
+
+    expect(bookingPage).toContain('data-ut-component-slug="booking-scheduler"');
+    expect(bookingPage).toContain('data-ut-component-instance-id="cmp-booking"');
+    expect(bookingPage).toContain('<form data-intent-form="booking.create"');
+    expect(bookingPage).toContain('name="serviceId"');
+    expect(bookingPage).toContain('name="slotId"');
+    expect(bookingPage).toContain('name="customerName"');
+    expect(bookingPage).toContain('name="customerEmail"');
+    expect(first.files['/src/pages/Home.tsx']).toBe(files['/src/pages/Home.tsx']);
+    expect(second.files).toEqual(first.files);
+  });
+
+  it('repairs an existing registered scheduler host when its native form is missing', () => {
+    const booking = bookingContract();
+    const files = {
+      ...initialFiles,
+      '/src/pages/Booking.tsx': 'export default function Booking(){return <section data-ut-component-slug="booking-scheduler"><h1>Schedule a viewing</h1></section>}',
+    };
+
+    const result = materializeRegisteredComponents(booking, files);
+    const bookingPage = result.files['/src/pages/Booking.tsx'];
+
+    expect(bookingPage).toContain('<h1>Schedule a viewing</h1>');
+    expect(bookingPage).toContain('data-ut-component-instance-id="cmp-booking"');
+    expect(bookingPage).toContain('<form data-intent-form="booking.create"');
+    expect(bookingPage).toContain('name="serviceId"');
+    expect(bookingPage).toContain('name="slotId"');
+    expect(bookingPage).toContain('name="customerName"');
+    expect(bookingPage).toContain('name="customerEmail"');
+  });
+
+  it('replaces a malformed registered form instead of preserving a local success handler', () => {
+    const booking = bookingContract();
+    const files = {
+      ...initialFiles,
+      '/src/pages/Booking.tsx': 'export default function Booking(){return <section data-ut-component-slug="booking-scheduler"><form data-intent-form="booking.create" onSubmit={()=>true}><button>Confirm</button></form></section>}',
+    };
+
+    const result = materializeRegisteredComponents(booking, files);
+    const bookingPage = result.files['/src/pages/Booking.tsx'];
+
+    expect(bookingPage.match(/<form\b/g)).toHaveLength(1);
+    expect(bookingPage).not.toContain('onSubmit=');
+    expect(bookingPage).toContain('name="serviceId"');
+    expect(bookingPage).toContain('name="slotId"');
+    expect(bookingPage).toContain('name="customerName"');
+    expect(bookingPage).toContain('name="customerEmail"');
+  });
+
+  it('closes a booking/contact/newsletter candidate with several registered instances', async () => {
+    const launchContract = bookingContract();
+    launchContract.business.capabilities = ['booking', 'contact', 'newsletter'];
+    launchContract.business.configuredBusinessFields = ['notificationEmail', 'crmDestination', 'bookingOwner'];
+    launchContract.business.registeredComponents = [
+      registeredComponentFixture('booking-scheduler', 'cmp-booking', 'booking', { calendarId: 'calendar-main' }),
+      registeredComponentFixture('contact-form', 'cmp-contact-home', 'home', { formId: 'form-home' }),
+      registeredComponentFixture('contact-form', 'cmp-contact', 'contact', { formId: 'form-contact' }),
+      registeredComponentFixture('newsletter-signup', 'cmp-newsletter', 'home', { formId: 'form-newsletter' }),
+    ];
+    const authoredFiles = {
+      ...initialFiles,
+      '/src/pages/Home.tsx': 'export default function Home(){return <div><h1>Estate listings</h1></div>}',
+      '/src/pages/Contact.tsx': 'export default function Contact(){return <section><h1>Contact</h1></section>',
+      '/src/pages/Booking.tsx': 'export default function Booking(){return <div><h1>Book a viewing</h1></div>',
+    };
+    const materializedFiles = materializeRegisteredComponents(launchContract, authoredFiles).files;
+    const report = await validateAppBuildCandidate({ contract: launchContract, files: materializedFiles, initialFiles });
+
+    expect(report.issues.filter((issue) => [
+      'required-capability-host-missing',
+      'registered-component-not-rendered',
+      'registered-component-native-form-incomplete',
+      'registered-component-business-fields-missing',
+    ].includes(issue.code))).toEqual([]);
+    expect(materializedFiles['/src/pages/Home.tsx']).toContain('data-ut-component-slug="contact-form"');
+    expect(materializedFiles['/src/pages/Home.tsx']).toContain('data-ut-component-slug="newsletter-signup"');
+    expect(materializedFiles['/src/pages/Contact.tsx']).toContain('data-ut-component-slug="contact-form"');
+    expect(materializedFiles['/src/pages/Booking.tsx']).toContain('data-ut-component-slug="booking-scheduler"');
+  });
+
   it('blocks locally fabricated booking confirmations without the registered runtime form', async () => {
     const files = {
       ...initialFiles,
@@ -115,7 +244,7 @@ describe('App Builder candidate closure', () => {
     expect(report.ok).toBe(false);
     expect(report.issues).toContainEqual(expect.objectContaining({
       severity: 'blocker',
-      code: 'booking-runtime-contract-missing',
+      code: 'registered-component-not-rendered',
       path: '/src/pages/Booking.tsx',
     }));
   });
@@ -127,7 +256,7 @@ describe('App Builder candidate closure', () => {
     };
     const report = await validateAppBuildCandidate({ contract: bookingContract(), files, initialFiles });
 
-    expect(report.issues.some((issue) => issue.code === 'booking-runtime-contract-missing')).toBe(false);
+    expect(report.issues.some((issue) => issue.code === 'registered-component-native-form-incomplete')).toBe(false);
   });
 
   it('accepts a complete multi-page candidate with project-local companion modules', async () => {
@@ -190,6 +319,24 @@ describe('App Builder candidate closure', () => {
     };
 
     const report = await validateAppBuildCandidate({ contract: withBindingGuide, files, initialFiles });
+
+    expect(report.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
+  });
+
+  it('recognizes binding markers provided by an imported protected shared component', async () => {
+    const withBindingGuide = contract();
+    withBindingGuide.business.bindingGuide = '- Page Home (/), slot navbar.icon-search: label "Search", marker data-ut-cta="icon.search", intent nav.goto, target /search';
+    const sharedNavigation = '<button type="button" aria-label="Search" data-ut-cta="icon.search">Search</button>';
+    const sourceFiles = {
+      ...initialFiles,
+      '/src/components/SiteNavigation.tsx': `export default function SiteNavigation(){return ${sharedNavigation}}`,
+    };
+    const files = {
+      ...sourceFiles,
+      '/src/pages/Home.tsx': 'import SiteNavigation from "../components/SiteNavigation"; export default function Home(){return <main><SiteNavigation /></main>}',
+    };
+
+    const report = await validateAppBuildCandidate({ contract: withBindingGuide, files, initialFiles: sourceFiles });
 
     expect(report.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
   });
@@ -266,8 +413,7 @@ describe('App Builder candidate closure', () => {
   it('validates registered non-form writers through their declared native action target', async () => {
     const checkout = contactCrmContract();
     checkout.business.capabilities = ['commerce'];
-    checkout.business.parameters.paymentProvider = 'connected';
-    checkout.business.businessProfile.paymentProvider = 'connected';
+    checkout.business.configuredBusinessFields.push('paymentProvider');
     checkout.business.bindingGuide = '- Page Home (/), slot shop-grid.card-cta: label "Buy", marker data-ut-cta="cta.card", intent pay.checkout, target product-1';
     checkout.business.registeredComponents[0] = {
       ...checkout.business.registeredComponents[0],

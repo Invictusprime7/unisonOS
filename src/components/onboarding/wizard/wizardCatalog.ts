@@ -45,7 +45,8 @@ export type PrimaryGoal =
   | "sell_offers"
   | "showcase_work"
   | "drive_calls"
-  | "grow_email_list";
+  | "grow_email_list"
+  | "donate";
 
 export type CustomerNeed =
   | "request_quote"
@@ -79,6 +80,7 @@ export const PRIMARY_GOALS: {
   { id: "showcase_work", label: "Showcase Work", icon: "🎨", description: "Display your portfolio and past projects" },
   { id: "drive_calls", label: "Drive Calls", icon: "📞", description: "Get prospects to call or message you" },
   { id: "grow_email_list", label: "Grow Email List", icon: "📧", description: "Build a subscriber list for marketing" },
+  { id: "donate", label: "Accept Donations", icon: "💝", description: "Let supporters contribute to your mission" },
 ];
 
 export const CUSTOMER_NEEDS: { id: CustomerNeed; label: string; icon: string }[] = [
@@ -133,6 +135,7 @@ export const GOAL_TO_NEEDS: Record<
   showcase_work: {},
   drive_calls: { wantsLeadCapture: true },
   grow_email_list: { wantsLeadCapture: true },
+  donate: {},
 };
 
 export const INDUSTRY_DISPLAY: Record<string, { label: string; icon: string }> = {
@@ -416,7 +419,7 @@ export function getIndustryPrimaryGoal(industry: string): PrimaryGoal {
   switch (profile?.primaryIntent) {
     case "booking.create": return "book_appointments";
     case "cart.add": return "sell_offers";
-    case "donation.start": return "grow_email_list";
+    case "donation.start": return "donate";
     case "contact.submit":
       return profile?.systemType === "portfolio" ? "showcase_work" : "collect_leads";
     case "quote.request":

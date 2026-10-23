@@ -66,7 +66,7 @@ export function MarketplaceCatalog({ embedded = false, enabled = true }: { embed
         <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Design Marketplace</p>
         <h1 className={embedded ? 'text-2xl font-semibold tracking-tight' : 'text-3xl font-semibold tracking-tight'}>Browse templates</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Explore real live composition previews alongside certified releases for the Unison App Builder.
+          Explore original design concepts and certified releases for the Unison App Builder.
         </p>
       </div>
 

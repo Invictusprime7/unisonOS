@@ -149,8 +149,19 @@ describe('AppBuildContract', () => {
       });
       input.registeredComponentInstances.push(component!);
     }
-    expect(buildAppBuildContract(input).business.registeredComponents.map((component) => component.runtime.componentSlug).sort())
+    const contract = buildAppBuildContract(input);
+    const registeredComponents = contract.business.registeredComponents;
+    expect(registeredComponents.map((component) => component.runtime.componentSlug).sort())
       .toEqual(CANONICAL_COMPONENT_DEFINITIONS.map((definition) => definition.slug).sort());
+    expect(registeredComponents.find((component) => component.runtime.componentSlug === 'booking-scheduler')?.nativeComponentTemplate)
+      .toContain('data-ut-component-slug="booking-scheduler"');
+    expect(registeredComponents.find((component) => component.runtime.componentSlug === 'booking-scheduler')?.nativeComponentTemplate)
+      .toContain('name="serviceId"');
+      const modelContext = buildAppBuilderGenerationContext(contract).runtimeContext.slice(0, 12_000);
+      expect(modelContext).toContain('booking-scheduler');
+      expect(modelContext).toContain('name="serviceId"');
+      expect(modelContext).toContain('contact-form');
+      expect(modelContext).toContain('newsletter-signup');
   });
 
   it('fails closed instead of dropping an unknown registered component slug', () => {
@@ -180,7 +191,13 @@ describe('AppBuildContract', () => {
       artifactId: 'logo-cloud', source: 'owner-authored', minimumItems: 4,
       emptyBehavior: 'hide_section', generatedEntriesAllowed: false,
     }));
-    expect(contract.business.parameters).toEqual(input.businessParameters);
+    expect(contract.business.parameters).toEqual(expect.objectContaining({
+      publicEmail: 'hello@example.test',
+      phone: '+1 555 0100',
+      ctaDestinations: { call: 'tel:+15550100', email: 'mailto:hello@example.test' },
+    }));
+    expect(contract.business.parameters).not.toHaveProperty('ownerEmail');
+    expect(contract.business.configuredBusinessFields).toEqual(expect.arrayContaining(['ownerEmail', 'notificationEmail']));
     expect(contract.design.resolvedSiteDesignContext).toBe(input.designContext);
     expect(contract.design.resolvedSiteDesignContext.contract).toBe(input.designContext.contract);
     expect(contract.design.registryContext).toBe(input.registryContext);
@@ -199,6 +216,57 @@ describe('AppBuildContract', () => {
     expect(first).toBe(second);
     expect(parsed).toEqual(contract);
     expect(serializeAppBuildContract(parsed)).toBe(first);
+  });
+
+  it('prioritizes exact wizard slot markers before context that may be truncated', () => {
+    const input = makeInput();
+    input.bindingGuide = '- Page Home (/), slot navbar.icon-search: label "Search", marker data-ut-cta="icon.search", intent nav.goto, target /search';
+    const runtimeContext = buildAppBuilderGenerationContext(buildAppBuildContract(input)).runtimeContext;
+
+    expect(runtimeContext.startsWith('WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS)')).toBe(true);
+    expect(runtimeContext.slice(0, 12_000)).toContain('data-ut-cta="icon.search"');
+  });
+
+  it('keeps private routing out of serialized contracts and generation context', () => {
+    const input = makeInput();
+    input.visionBrief = 'Send confirmations to owner-secret@example.test and crm-private-destination.';
+    input.businessParameters = {
+      ...input.businessParameters,
+      ownerEmail: 'owner-secret@example.test',
+      notificationEmail: 'owner-secret@example.test',
+      notificationPhone: '+1-555-999-0000',
+      crmDestination: 'crm-private-destination',
+      bookingOwner: 'booking-owner-secret',
+      paymentProvider: 'payment-private-provider',
+      followUpChannel: 'private-followup-channel',
+    };
+    input.businessProfile = {
+      businessName: 'Northstar Studio',
+      email: 'hello@example.test',
+      notificationEmail: 'owner-secret@example.test',
+      notificationPhone: '+1-555-999-0000',
+      crmDestination: 'crm-private-destination',
+      bookingOwner: 'booking-owner-secret',
+      paymentProvider: 'payment-private-provider',
+      followUpChannel: 'private-followup-channel',
+      customValues: { privateRecipient: 'owner-secret@example.test' },
+    };
+
+    const contract = buildAppBuildContract(input);
+    const modelContext = buildAppBuilderGenerationContext(contract).runtimeContext;
+    const serializedContract = serializeAppBuildContract(contract);
+
+    for (const privateValue of [
+      'owner-secret@example.test', '+1-555-999-0000', 'crm-private-destination',
+      'booking-owner-secret', 'payment-private-provider', 'private-followup-channel',
+    ]) {
+      expect(serializedContract).not.toContain(privateValue);
+      expect(modelContext).not.toContain(privateValue);
+    }
+    expect(modelContext).toContain('hello@example.test');
+    expect(contract.business.configuredBusinessFields).toEqual(expect.arrayContaining([
+      'notificationEmail', 'notificationPhone', 'crmDestination', 'bookingOwner',
+    ]));
   });
 
   it('joins a CRM form binding to its registered component and intent handler', () => {
@@ -264,6 +332,10 @@ describe('AppBuildContract', () => {
     const generationContext = buildAppBuilderGenerationContext(contract);
     expect(generationContext.runtimeContext).toContain('DOM intent contact.submit');
     expect(generationContext.runtimeContext).toContain('data-ut-cta="cta.form-submit"');
+    expect(generationContext.runtimeContext).toContain('REGISTERED COMPONENT BLUEPRINTS');
+    expect(generationContext.runtimeContext).toContain('data-ut-component-slug="contact-form"');
+    expect(generationContext.runtimeContext).toContain('<form data-intent-form="contact.submit"');
+    expect(generationContext.runtimeContext).toContain('name="message"');
   });
 
   it('rejects unknown protocol versions and incomplete topology', () => {

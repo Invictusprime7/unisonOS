@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { LauncherWizard } from "@/components/onboarding/wizard/LauncherWizard";
 import { runLaunchPipeline } from "@/services/launch/launchOrchestrator";
+import { saveLaunchInterviewDraft } from '@/services/launch/interviewDraftService';
 
 vi.mock("@/services/launch/launchOrchestrator", () => ({ runLaunchPipeline: vi.fn() }));
 vi.mock("@/contexts/useLaunchHooks", () => ({ useLaunch: () => ({ setLaunch: vi.fn() }) }));
@@ -13,9 +14,30 @@ vi.mock("@/components/VFSPreview", () => ({ VFSPreview: ({ onReady, files }: { o
 vi.mock("@/components/onboarding/StyleTokenCard", () => ({ StyleTokenCard: () => null }));
 vi.mock("@/components/onboarding/wizard/DesignContractInspector", () => ({ DesignContractInspector: () => null }));
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
 
 describe("Launcher Wizard guided flow", () => {
+  it('restores structured owner answers instead of replaying conflicting chat defaults', async () => {
+    saveLaunchInterviewDraft('shared-user', {
+      selections: {
+        industry: 'salon', systemId: 'booking', businessName: 'Studio Glow',
+        primaryGoal: 'book_appointments', customerNeeds: ['book_service'], selectedPages: ['booking'],
+        themePresetId: null, experience: 'standard', sectionPins: {}, socialLinks: {},
+      },
+      publicAnswers: { publicEmail: 'hello@studioglow.test' },
+      privateAnswers: { ownerEmail: 'owner@studioglow.test', notificationEmail: 'owner@studioglow.test' },
+    });
+
+    render(<MemoryRouter><LauncherWizard
+      open presentation="chat" onOpenChange={vi.fn()} draftScope="shared-user" guidedStep="brand"
+      initialVisionPrompt="A restaurant with pickup orders"
+    /></MemoryRouter>);
+
+    expect(await screen.findByLabelText('Business name')).toHaveValue('Studio Glow');
+    expect(screen.getByLabelText('Owner email')).toHaveValue('owner@studioglow.test');
+    expect(screen.getByLabelText('Public email')).toHaveValue('hello@studioglow.test');
+  });
+
   it('matches the AI question without replaying defaults over selections on later turns', async () => {
     const answer = vi.fn();
     const props = { open: true, presentation: 'chat' as const, onOpenChange: vi.fn(), onSelectionConfirmed: answer };

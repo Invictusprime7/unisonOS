@@ -22,6 +22,8 @@ export interface CanonicalComponentDefinition {
   category: CanonicalComponentCategory;
   targetType: "form" | "calendar" | "product" | "checkout" | "chat";
   requiredBindingKeys: string[];
+  requiredWhenCapabilitiesEnabled?: CapabilityId[];
+  requiredNativeFormFields?: string[];
   requiredBusinessFields?: string[];
   requiredSetupSteps?: string[];
   outputEvents: string[];
@@ -45,6 +47,7 @@ const registry: CanonicalComponentDefinition[] = [
     category: "leads",
     targetType: "form",
     requiredBindingKeys: ["formId"],
+    requiredNativeFormFields: ['name', 'email', 'message'],
     requiredBusinessFields: ["notificationEmail", "crmDestination"],
     outputEvents: ["lead.created", "form.submitted", "contact.submitted"],
     requiredCapabilities: ['contact'],
@@ -73,6 +76,7 @@ const registry: CanonicalComponentDefinition[] = [
     category: "leads",
     targetType: "form",
     requiredBindingKeys: ["formId"],
+    requiredNativeFormFields: ['name', 'email', 'message'],
     requiredBusinessFields: ["notificationEmail", "crmDestination"],
     outputEvents: ["quote.requested", "lead.created", "form.submitted"],
     requiredCapabilities: ['quoting'],
@@ -101,6 +105,7 @@ const registry: CanonicalComponentDefinition[] = [
     category: "leads",
     targetType: "form",
     requiredBindingKeys: ["formId"],
+    requiredNativeFormFields: ['email'],
     requiredBusinessFields: ["notificationEmail"],
     outputEvents: ["newsletter.subscribed", "lead.created", "form.submitted"],
     requiredCapabilities: ['newsletter'],
@@ -125,6 +130,8 @@ const registry: CanonicalComponentDefinition[] = [
     category: "booking",
     targetType: "calendar",
     requiredBindingKeys: ["calendarId"],
+    requiredWhenCapabilitiesEnabled: ['booking'],
+    requiredNativeFormFields: ['serviceId', 'slotId', 'customerName', 'customerEmail'],
     requiredBusinessFields: ["notificationEmail", "bookingOwner"],
     requiredSetupSteps: ["booking_calendar"],
     outputEvents: ["booking.requested", "booking.confirmed", "calendar.opened"],
@@ -212,6 +219,11 @@ export function validateCanonicalComponentDefinition(
   if (!definition.requiredBindingKeys.every((key) => key.trim())) add('Required binding keys must be non-empty.');
   if (!definition.htmlTemplate.includes(`data-ut-component-slug="${definition.slug}"`)) {
     add('Template must declare its registered data-ut-component-slug.');
+  }
+  for (const field of definition.requiredNativeFormFields ?? []) {
+    if (!new RegExp(`name=["']${field}["']`).test(definition.htmlTemplate)) {
+      add(`Template is missing required native form field ${field}.`);
+    }
   }
   for (const capability of definition.requiredCapabilities) {
     try {

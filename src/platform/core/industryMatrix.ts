@@ -305,6 +305,7 @@ export const INDUSTRY_MATRIX: Record<string, IndustryProfile> = {
 const INDUSTRY_ALIASES: Record<string, string> = {
   barber: 'salon',
   barbershop: 'salon',
+  beauty: 'salon',
   'hair-salon': 'salon',
   'beauty-salon': 'salon',
   medspa: 'salon',

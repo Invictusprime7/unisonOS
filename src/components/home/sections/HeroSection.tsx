@@ -217,8 +217,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
             </div>
             <div className={chatGlow ? "affinity-home-chat-glow" : undefined}>
             <AIAssistantCore
-              key={user ? `site-discovery:${user.id}` : "site-discovery:anonymous"}
-              key={chatResetKey}
+              key={`${user ? `site-discovery:${user.id}` : "site-discovery:anonymous"}:${chatResetKey}`}
               appearance="unison"
               className={cn("transition-[height] duration-500 motion-reduce:transition-none", launcherOpen || discoveryActive ? "h-[min(740px,85dvh)]" : "h-[250px] sm:h-[270px]")}
               placeholder="Tell Affinity about your idea..."
@@ -230,6 +229,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               discoverySelections={(turn, answer) => <LauncherWizard
                 open
                 presentation="chat"
+                draftScope={user?.id ?? 'anonymous'}
                 guidedStep={turn.step}
                 guidancePending={turn.pending}
                 initialVisionPrompt={turn.brief}
@@ -242,6 +242,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
                 open
                 demoGeneration={demoGeneration}
                 presentation="chat"
+                draftScope={user?.id ?? 'anonymous'}
                 initialVisionPrompt={launchBrief}
                 onOpenChange={onLauncherOpenChange}
                 onLaunchComplete={() => setChatResetKey(key => key + 1)}

@@ -82,6 +82,15 @@ export interface PersistGeneratedBindingsResult {
   failed: number;
 }
 
+export function countExpectedGeneratedBindingReceipts(
+  bindings: readonly { route: string; sourceSlot: string; missingCapabilities: readonly string[] }[],
+): number {
+  return new Set(bindings
+    .filter((binding) => binding.missingCapabilities.length === 0)
+    .map((binding) => `${binding.route}::${binding.sourceSlot}`),
+  ).size;
+}
+
 /**
  * Upsert harvested bindings. Best-effort — never throws, never blocks launch.
  * Returns counts for diagnostics.

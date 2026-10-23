@@ -80,7 +80,7 @@ interface PreviewCompileState {
 }
 
 const MAX_SANDPACK_TIMEOUT_RECOVERIES = 3;
-const MAX_SANDPACK_RENDER_RECOVERIES = 1;
+const MAX_SANDPACK_RENDER_RECOVERIES = 2;
 const PREVIEW_RENDER_READY_TIMEOUT_MS = 20_000;
 // Large generated multi-page sites can legitimately take longer than 45s on a
 // cold worker. Keep this aligned with Sandpack's own startup budget.
@@ -828,7 +828,6 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
   // Resolve a target window for posting bridge messages (Sandpack iframe or docker iframe)
   const getPreviewWindow = useCallback((): Window | null => {
-    if (sandpackIframeRef.current?.isConnected && sandpackIframeRef.current.contentWindow) return sandpackIframeRef.current.contentWindow;
     const sp = previewContainerRef.current?.querySelector(
       'iframe.sp-preview-iframe, .sp-preview iframe, iframe[title*="Sandpack"], iframe[src*="csb.app"], iframe[src*="codesandbox"]',
     ) as HTMLIFrameElement | null;
@@ -836,6 +835,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       sandpackIframeRef.current = sp;
       return sp.contentWindow;
     }
+    if (sandpackIframeRef.current?.isConnected && sandpackIframeRef.current.contentWindow) return sandpackIframeRef.current.contentWindow;
     if (iframeRef.current?.contentWindow) return iframeRef.current.contentWindow;
     return null;
   }, []);
@@ -883,6 +883,41 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     }
     onError?.(message);
   }, [onError]);
+
+  const previewLifecycleRef = useRef({ handleSandpackRunning, handleSandpackError, onReady });
+  previewLifecycleRef.current = { handleSandpackRunning, handleSandpackError, onReady };
+
+  useEffect(() => {
+    const handlePreviewLifecycleMessage = (event: MessageEvent) => {
+      if (event.source !== getPreviewWindow()) return;
+      const data = event.data;
+      if (!data?.type) return;
+
+      if (data.type === 'UNISON_PREVIEW_RENDER_READY') {
+        renderReadyRef.current = true;
+        previewLifecycleRef.current.handleSandpackRunning();
+        renderWatchKeyRef.current = null;
+        renderRecoveryCountRef.current = 0;
+        setSandpackRenderExhausted(false);
+        if (renderReadyTimeoutRef.current !== null) {
+          window.clearTimeout(renderReadyTimeoutRef.current);
+          renderReadyTimeoutRef.current = null;
+        }
+        reportPreviewRunning();
+        previewLifecycleRef.current.onReady?.();
+        return;
+      }
+
+      if (data.type === 'UNISON_PREVIEW_RENDER_ERROR') {
+        const message = typeof data.error === 'string' ? data.error : 'The preview application failed to render.';
+        reportPreviewError(message);
+        previewLifecycleRef.current.handleSandpackError(message);
+      }
+    };
+
+    window.addEventListener('message', handlePreviewLifecycleMessage);
+    return () => window.removeEventListener('message', handlePreviewLifecycleMessage);
+  }, [getPreviewWindow]);
 
   // Push the current Edit-mode state into the preview iframe.
   // Retries briefly to cover the brief window before the bridge boots.
@@ -1011,32 +1046,6 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       if (event.source !== getPreviewWindow()) return;
       const data = event.data;
       if (!data?.type) return;
-
-      if (data.type === 'UNISON_PREVIEW_RENDER_READY') {
-        handleSandpackRunning();
-        renderReadyRef.current = true;
-        renderWatchKeyRef.current = null;
-        renderRecoveryCountRef.current = 0;
-        setSandpackRenderExhausted(false);
-        if (renderReadyTimeoutRef.current !== null) {
-          window.clearTimeout(renderReadyTimeoutRef.current);
-          renderReadyTimeoutRef.current = null;
-        }
-        reportPreviewRunning();
-        onReady?.();
-        return;
-      }
-      if (data.type === 'UNISON_PREVIEW_RENDER_ERROR') {
-        renderWatchKeyRef.current = null;
-        if (renderReadyTimeoutRef.current !== null) {
-          window.clearTimeout(renderReadyTimeoutRef.current);
-          renderReadyTimeoutRef.current = null;
-        }
-        const message = typeof data.error === 'string' ? data.error : 'The preview application failed to render.';
-        reportPreviewError(message);
-        onError?.(message);
-        return;
-      }
 
       // ── Selection bridge ────────────────────────────────────────────────
       if (data.type === 'EDIT_MODE_BRIDGE_READY' || data.type === 'EDIT_MODE_READY') {
@@ -1221,7 +1230,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
     window.addEventListener('message', handlePreviewMessage);
     return () => window.removeEventListener('message', handlePreviewMessage);
-  }, [builderSession.projectId, builderSession.runtimeContext?.projectId, onNavigate, onIntentTrigger, businessId, siteId, revisionId, onError, onReady, onElementSelect, onInlineTextCommit, enableSelection, getPreviewWindow, clearDirectPreviewSelection, handleSandpackRunning]);
+  }, [builderSession.projectId, builderSession.runtimeContext?.projectId, onNavigate, onIntentTrigger, businessId, siteId, revisionId, onError, onElementSelect, onInlineTextCommit, enableSelection, getPreviewWindow, clearDirectPreviewSelection]);
 
 
   

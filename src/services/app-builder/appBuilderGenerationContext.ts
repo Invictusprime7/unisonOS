@@ -159,19 +159,25 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     `Preserve the logo's intrinsic ratio with object-fit: contain within ${business.branding.brandMark.image.maxWidthPx}x${business.branding.brandMark.image.maxHeightPx}px; use accessible name "${business.branding.brandMark.accessibleName}". If the profile has no logo, render the text wordmark "${business.branding.brandMark.missingAssetFallback.text}"; do not generate or source a replacement mark.`,
     `Logo cloud is separate social proof: use ${business.branding.logoCloud.artifactId} only with owner-authored entries, at least ${business.branding.logoCloud.minimumItems}; generated entries are forbidden and the empty behavior is ${business.branding.logoCloud.emptyBehavior}.`,
   ].join('\n');
+  const registeredComponentContext = `REGISTERED COMPONENT CONTRACT: ${business.registeredComponents.length ? business.registeredComponents.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; pages ${component.runtime.usedOnPages.join(', ') || 'not page-bound'}; target ${component.targetType}; status ${component.runtime.status}; write intent ${component.runtime.writeIntent ?? 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required native form fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this launch.'}`;
+  const registeredComponentBlueprints = 'REGISTERED COMPONENT PRESENTATION: the component contracts above define functional identity, intent, required fields, and bindings; they are not visual templates. Use the page-eligible certified design-source implementation for presentation when one is available, and use Unison form controls and semantic theme tokens. Preserve the registered component host, exact data-intent-form, required field names, and intent trigger; never copy a generic HTML layout in place of an eligible design source.';
   const businessParameterContext = [
-    `BUSINESS PARAMETER CONTRACT: use the exact owner-provided values ${JSON.stringify(business.parameters)} and canonical profile ${JSON.stringify(business.businessProfile)} for contact details and action destinations; do not substitute, infer, or fabricate routing values.`,
-    `REGISTERED COMPONENT CONTRACT: ${business.registeredComponents.length ? business.registeredComponents.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; target ${component.targetType}; status ${component.runtime.status}; write intent ${component.runtime.writeIntent ?? 'none'}; slots ${component.runtime.slotBindings.join(', ') || 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required business fields ${component.requiredBusinessFields.join(', ') || 'none'}; required setup ${component.requiredSetupSteps.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this launch.'}`,
+    `PUBLIC BUSINESS FACTS: use only these public contact and brand values ${JSON.stringify(business.parameters)} and public profile projection ${JSON.stringify(business.businessProfile)}. Private notification recipients, payment routing, and CRM destinations are intentionally excluded and are resolved by the tenant-scoped runtime.`,
+    `CONFIGURATION READINESS: these business fields are configured: ${business.configuredBusinessFields.join(', ') || 'none'}. The field names are readiness metadata only; do not infer or emit their values.`,
     `CANONICAL INTENT BINDINGS: ${business.intentBindings.length ? business.intentBindings.map((binding) => `${binding.route} ${binding.sourceSection}.${binding.sourceSlot} -> core intent ${binding.coreIntent}, DOM intent ${binding.domIntent}, required marker ${binding.ctaMarkers.map((marker) => `data-ut-cta="${marker}"`).join(' or ') || 'none'}, handler ${binding.intentHandler}, target ${binding.targetType}:${binding.targetId}${binding.componentSlug ? `, registered ${binding.componentSlug} instance ${binding.componentInstanceId} (write intent ${binding.componentWriteIntent ?? 'none'})` : ''}${binding.missingCapabilities.length ? `, INACTIVE missing capabilities ${binding.missingCapabilities.join(', ')}; omit this interaction` : ''}`).join('\n') : 'none.'}`,
-    'For CRM-backed interactions, render the exact registered component assigned to the target, bind its declared write intent with data-intent-form, and use the configured CRM destination and owner notification parameters. Do not invent component IDs, alternate intent handlers, direct database writes, or local success handlers.',
+    'For operational interactions, render only the exact registered component and intent handler assigned by the contract. Tenant-scoped server handlers resolve private CRM destinations and notification recipients; never place those values in generated markup or client source. Do not invent component IDs, alternate intent handlers, direct database writes, or local success handlers.',
   ].join('\n');
-  const bookingRuntimeContext = business.capabilities.includes('booking')
-    ? [
-        'BOOKING RUNTIME CONTRACT (HARD REQUIREMENT): render the registered booking-scheduler host with data-ut-component-slug="booking-scheduler" (or its exact registered data-ut-component-instance-id). Inside it, render a native <form data-intent-form="booking.create"> with named serviceId, slotId, customerName, and customerEmail controls; customerPhone and notes are optional.',
-        'Do not use a local onSubmit success state, hard-coded services/availability, fake booking confirmation, or promise that email/calendar invitations were sent. The published runtime owns availability, commit, CRM lead creation, and notification status; show success only after its committed result.',
-      ].join('\n')
-    : '';
+  const interactiveSurfaceContract = [
+    'FORM AND CHAT AUTHORING CONTRACT:',
+    'Use @/unison/ui/form-fields controls and @/unison/ui/button actions for form UI. Every field needs a visible label and semantic theme tokens.',
+    'Registered 21st.dev-derived designs may only be used through certified @/unison/design-sources modules listed for this page; never import raw 21st.dev components, invent variants, or add unregistered dependencies.',
+    'Only emit form actions and data-ut-intent values covered by the registered intents and exact Wizard CTA markers in this contract. A design component does not authorize a new action or intent.',
+    'A contact, quote, newsletter, or lead-capture form does not imply a floating chat widget. Add chat only when the owner explicitly requests it, and only wire it to an intent registered in this contract.',
+  ].join('\n');
   const compose = (modules: string) => [
+    business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '',
+    registeredComponentContext,
+    registeredComponentBlueprints,
     `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}.`,
     industryContext,
     iconContext,
@@ -179,12 +185,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     logoContext,
     businessParameterContext,
     `Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.`,
-    bookingRuntimeContext,
-    business.capabilities.includes('booking') ? [
-      'BOOKING RUNTIME CONTRACT (HARD REQUIREMENT): render the registered booking-scheduler host with data-ut-component-slug="booking-scheduler" (or its exact registered data-ut-component-instance-id). Inside it, render a native <form data-intent-form="booking.create"> with named serviceId, slotId, customerName, and customerEmail controls; customerPhone and notes are optional.',
-      'Do not use a local onSubmit success state, hard-coded services/availability, fake booking confirmation, or promise that email/calendar invitations were sent. The published runtime owns availability, commit, CRM activity, and notification status; show success only after its committed result.',
-    ].join('\n') : '',
-    business.bindingGuide ? `Binding guide: ${business.bindingGuide}` : '',
+    interactiveSurfaceContract,
     `Protected paths: ${runtime.protectedPaths.join(', ')}.`,
     `Approved dependencies: ${runtime.approvedDependencies.join(', ')}.`,
     modules,

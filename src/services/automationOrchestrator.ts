@@ -14,6 +14,7 @@
 
 import type { CoreIntent } from '@/platform/core/coreIntents';
 import { isActionIntent, isAutomationIntent } from '@/platform/core/coreIntents';
+import { getIndustryProfile, normalizeIndustryKey } from '@/platform/core/industryMatrix';
 import { isAutomatable } from '@/runtime/intentClassifier';
 import {
   BUILT_IN_RECIPE_PACKS,
@@ -39,55 +40,20 @@ import type { IntentContext, IntentResult, EmittedEvent } from '@/runtime/intent
 // Industry Normalization
 // ============================================================================
 
-/**
- * Canonical industry map — resolves all variants to recipe pack industry keys.
- * Blueprint uses "salon_spa", pipeline uses "general", recipes use "salon".
- * This single map is the source of truth.
- */
-const INDUSTRY_ALIASES: Record<string, string> = {
-  // Blueprint → Recipe industry
-  salon_spa: 'salon',
-  salon: 'salon',
-  beauty: 'salon',
-  spa: 'salon',
-  barbershop: 'salon',
-
-  restaurant: 'restaurant',
-  cafe: 'restaurant',
-  food_service: 'restaurant',
-  bar: 'restaurant',
-
-  ecommerce: 'ecommerce',
-  online_store: 'ecommerce',
-  retail: 'ecommerce',
-  shop: 'ecommerce',
-
-  local_service: 'contractor',
-  contractor: 'contractor',
-  plumber: 'contractor',
-  electrician: 'contractor',
-  handyman: 'contractor',
-  hvac: 'contractor',
-  cleaning: 'contractor',
-
-  coaching_consulting: 'agency',
-  agency: 'agency',
-  consulting: 'agency',
-  coaching: 'agency',
-
-  creator_portfolio: 'agency',
-  freelancer: 'agency',
-  portfolio: 'agency',
-
-  real_estate: 'contractor', // similar lead-followup pattern
-  nonprofit: 'agency',
-
-  general: 'contractor', // default to lead-followup
-  other: 'contractor',
+const RECIPE_INDUSTRY_ALIASES: Record<string, string> = {
+  'local-service': 'contractor',
 };
 
-export function normalizeIndustry(raw: string): string {
-  return INDUSTRY_ALIASES[raw.toLowerCase()] || 'contractor';
+export function normalizeIndustry(raw: string): string | undefined {
+  const canonicalIndustry = normalizeIndustryKey(raw);
+  if (!getIndustryProfile(canonicalIndustry)) return undefined;
+  return RECIPE_INDUSTRY_ALIASES[canonicalIndustry] ?? canonicalIndustry;
+}
+
+export function getRecipePacksForIndustry(industry: string): RecipePack[] {
+  const normalizedIndustry = normalizeIndustry(industry);
+  if (!normalizedIndustry) return [];
+  return BUILT_IN_RECIPE_PACKS.filter(pack => pack.industry === normalizedIndustry);
 }
 
 // ============================================================================
@@ -202,17 +168,8 @@ export async function installAutomationsForBusiness(
   bindingsCreated: number;
   recipesEnabled: number;
 }> {
-  const normalizedIndustry = normalizeIndustry(industry);
-
   // 1. Find matching recipe packs
-  const recommendedPacks = BUILT_IN_RECIPE_PACKS.filter(
-    pack => pack.industry === normalizedIndustry
-  );
-
-  // Always include packs that match; also install the first free pack as fallback
-  const packsToInstall = recommendedPacks.length > 0
-    ? recommendedPacks
-    : BUILT_IN_RECIPE_PACKS.filter(p => p.tier === 'free').slice(0, 1);
+  const packsToInstall = getRecipePacksForIndustry(industry);
 
   const installedPacks: string[] = [];
   let recipesEnabled = 0;

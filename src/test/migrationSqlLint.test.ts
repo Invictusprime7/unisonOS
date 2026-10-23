@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { lintMigrationSql } from '@/services/migrationSqlLint';
 
 const GOOD = `
@@ -37,5 +39,13 @@ describe('lintMigrationSql', () => {
     const result = lintMigrationSql(`${GOOD}\nCREATE POLICY "p" ON public.widgets FOR SELECT USING (true);`);
     expect(result.ok).toBe(true);
     expect(result.warnings.map((w) => w.code)).toContain('permissive-policy');
+  });
+
+  it('accepts the site_profiles migration with grants, RLS, and scoped policies', () => {
+    const sql = readFileSync(resolve(process.cwd(), 'supabase/migrations/20261022225127_site_profiles.sql'), 'utf8');
+    const result = lintMigrationSql(sql);
+
+    expect(result.ok, JSON.stringify(result.blockers)).toBe(true);
+    expect(result.createdTables).toContain('site_profiles');
   });
 });

@@ -46,7 +46,8 @@ import {
   type PublishedRuntimeConfig,
 } from "@/services/canonicalLaunchVfs";
 import { loadBusinessProfile, saveSiteProfile } from "@/services/businessProfileService";
-import { planSectionDataBindings } from "@/services/autoEmitSectionBindings";
+import { autoEmitSectionBindings, planSectionDataBindings } from "@/services/autoEmitSectionBindings";
+import { countExpectedGeneratedBindingReceipts, persistGeneratedBindings } from '@/services/persistGeneratedBindings';
 import { buildBusinessRuntimeContract } from "@/platform/core/businessRuntimeContract";
 import {
   buildNativePublishReadinessManifest,
@@ -86,7 +87,7 @@ import { resolveApprovedExperienceCapabilities } from "@/services/experienceCapa
 import { runExperiencePreflight } from "@/services/experiencePreflightGate";
 import type { BuilderIdentity } from "@/types/builderIdentity";
 import type { BusinessProfileDTO } from "@/types/businessProfile";
-import type { WizardSelections } from "@/types/playground";
+import type { WizardBusinessParameters, WizardSelections } from "@/types/playground";
 import {
   getLanguageFromFileName,
   type VirtualNode,
@@ -115,7 +116,7 @@ import {
 import { buildWizardBindingGuide } from '@/services/wizardBindingBridge';
 import type { CommitMutationResult } from "@/services/vfsCommitService";
 import { compileResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
-import { buildAppBuildContract, type AppBuildBusinessParameters } from '@/services/app-builder/appBuilderContracts';
+import { buildAppBuildContract } from '@/services/app-builder/appBuilderContracts';
 import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { WIZARD_LANE_B_PROTECTED_PATHS } from '@/services/wizardLaneBEnrichment';
 import {
@@ -123,7 +124,7 @@ import {
   projectCanonicalLaunchCandidateSnapshot,
 } from '@/services/launch/canonicalLaunchPlan';
 import { createWizardCompileArtifact } from '@/platform/core/snapshotSeal';
-import { resolveLaunchBusinessCapabilities, resolveLaunchCapabilities } from '@/services/launch/launchCapabilities';
+import { resolveBusinessLaunchPlan } from '@/services/launch/launchCapabilities';
 
 export interface LaunchOrchestratorInput {
   demoGeneration?: boolean;
@@ -139,7 +140,7 @@ export interface LaunchOrchestratorInput {
   customerNeeds: CustomerNeed[];
   selectedPages: PageChoice[];
   socialLinks?: Record<string, string>;
-  businessParameters?: AppBuildBusinessParameters;
+  businessParameters?: WizardBusinessParameters;
   existingBusinessId?: string | null;
 }
 
@@ -276,11 +277,17 @@ async function runReservedLaunchPipeline(
       systemIndustry: SYSTEM_TO_INDUSTRY_OVERLAY[input.systemId],
     });
     const compositionMeta = getCompositionMeta(generationCategory);
-    const launchCapabilities = resolveLaunchCapabilities(
-      industryProfile?.defaultCapabilities ?? [],
-      industryProfile?.industry || input.template.industry,
-      { primaryGoal: input.primaryGoal, customerNeeds: input.customerNeeds },
-    );
+    const businessLaunchPlan = resolveBusinessLaunchPlan({
+      industry: industryProfile?.industry || input.template.industry,
+      primaryGoal: input.primaryGoal,
+      customerNeeds: input.customerNeeds,
+    });
+    if (businessLaunchPlan.blockedRequests.length > 0) {
+      throw new LaunchFatalError(
+        `This launch requests unsupported capabilities: ${businessLaunchPlan.blockedRequests.join(', ')}.`,
+      );
+    }
+    const launchCapabilities = businessLaunchPlan.operationalCapabilities;
     const canonicalIntents = uniqueValues<string>([
       ...(industryProfile
         ? getAllowedIntents(launchCapabilities)
@@ -353,6 +360,7 @@ async function runReservedLaunchPipeline(
       primaryGoal,
       secondaryGoals: customerNeeds as string[],
       needsBooking:
+        launchCapabilities.includes('booking') ||
         launchContract.forcedNeeds.booking ||
         !!goalNeeds.needsBooking ||
         customerNeeds.includes("book_service"),
@@ -392,6 +400,7 @@ async function runReservedLaunchPipeline(
       industryOverlay,
       industryProfile,
       launchCapabilities,
+      businessLaunchPlan,
       canonicalIntents,
       launchContract,
       seed,
@@ -625,6 +634,15 @@ async function runReservedLaunchPipeline(
       pages: canonicalPages,
       capabilities: plan.launchCapabilities,
       intents: plan.canonicalIntents,
+      businessLaunchPlan: {
+        version: plan.businessLaunchPlan.version,
+        journeyId: plan.businessLaunchPlan.journeyId,
+        canonicalIndustryId: plan.businessLaunchPlan.canonicalIndustryId,
+        primaryGoal: plan.businessLaunchPlan.primaryGoal,
+        customerNeeds: plan.businessLaunchPlan.customerNeeds,
+        operationalCapabilities: plan.businessLaunchPlan.operationalCapabilities,
+        businessCapabilities: plan.businessLaunchPlan.businessCapabilities,
+      },
     },
     generation: {
       ...wizardSeedFile.generation,
@@ -636,19 +654,17 @@ async function runReservedLaunchPipeline(
     bindingGuide,
   };
   const plannedDataBindings = planSectionDataBindings(siteBundleSnapshot);
+  const dataBindingsReady = plannedDataBindings.length === 0;
   const businessRuntime = buildBusinessRuntimeContract({
     businessId: plan.confirmed.businessId,
     projectId: plan.confirmed.projectId,
     siteId: plan.confirmed.siteId,
     locationId: null,
-    requestedCapabilities: resolveLaunchBusinessCapabilities({
-      primaryGoal: input.primaryGoal,
-      customerNeeds: input.customerNeeds,
-    }),
+    requestedCapabilities: plan.businessLaunchPlan.businessCapabilities,
     profile: businessProfile,
     snapshotId: siteBundleSnapshot.snapshotId,
     expectedBindingCount: plannedDataBindings.length,
-    bindingsReady: true,
+    bindingsReady: dataBindingsReady,
   });
   const nativeSetupSnapshot = buildNativePublishSetupSnapshot({
     enabled: plan.launchContract.nativePublishCapable,
@@ -886,6 +902,67 @@ async function runReservedLaunchPipeline(
     return { confirmed, result };
   }, { timeoutMs: 120_000 });
 
+  const bindingPersistenceReceipt = await autoEmitSectionBindings({
+    businessId: commit.confirmed.businessId,
+    projectId: commit.confirmed.projectId,
+    snapshot: commit.result.siteBundleSnapshot ?? siteBundleSnapshot,
+  });
+  const persistedDataBindingsReady = bindingPersistenceReceipt.errors === 0
+    && bindingPersistenceReceipt.emitted === plannedDataBindings.length;
+  if (!persistedDataBindingsReady) {
+    run.degrade(
+      'commit',
+      'commit.data_bindings_pending',
+      'Catalog bindings are not fully installed yet; preview is available, but operational publishing remains blocked.',
+      `Expected ${plannedDataBindings.length}, emitted ${bindingPersistenceReceipt.emitted}, errors ${bindingPersistenceReceipt.errors}.`,
+    );
+  }
+
+  const requiredIntentBindingCount = countExpectedGeneratedBindingReceipts(appBuildContract.business.intentBindings);
+  const intentBindingPersistenceReceipt = await persistGeneratedBindings({
+    businessId: commit.confirmed.businessId,
+    projectId: commit.confirmed.projectId,
+    files: commit.result.vfsFiles,
+  });
+  const intentBindingsReady = intentBindingPersistenceReceipt.failed === 0
+    && intentBindingPersistenceReceipt.persisted === intentBindingPersistenceReceipt.attempted
+    && intentBindingPersistenceReceipt.persisted >= requiredIntentBindingCount;
+  const finalBusinessRuntime = buildBusinessRuntimeContract({
+    businessId: commit.confirmed.businessId,
+    projectId: commit.confirmed.projectId,
+    siteId: commit.confirmed.siteId,
+    locationId: null,
+    requestedCapabilities: plan.businessLaunchPlan.businessCapabilities,
+    profile: businessProfile,
+    snapshotId: siteBundleSnapshot.snapshotId,
+    expectedBindingCount: plannedDataBindings.length,
+    bindingsReady: persistedDataBindingsReady && intentBindingsReady,
+  });
+  const bindingReadinessReceipt = {
+    catalog: {
+      expected: plannedDataBindings.length,
+      attempted: bindingPersistenceReceipt.emitted + bindingPersistenceReceipt.errors,
+      persisted: bindingPersistenceReceipt.emitted,
+      errors: bindingPersistenceReceipt.errors,
+      ready: persistedDataBindingsReady,
+    },
+    intents: {
+      expected: requiredIntentBindingCount,
+      attempted: intentBindingPersistenceReceipt.attempted,
+      persisted: intentBindingPersistenceReceipt.persisted,
+      errors: intentBindingPersistenceReceipt.failed,
+      ready: intentBindingsReady,
+    },
+  };
+  if (!intentBindingsReady) {
+    run.degrade(
+      'commit',
+      'commit.intent_bindings_pending',
+      'The site is saved for preview, but operational actions remain blocked until intent bindings are verified.',
+      `Expected ${requiredIntentBindingCount}, attempted ${intentBindingPersistenceReceipt.attempted}, persisted ${intentBindingPersistenceReceipt.persisted}, errors ${intentBindingPersistenceReceipt.failed}.`,
+    );
+  }
+
   try {
     const formDefinitionPersistence = await persistLaunchFormDefinitions({
       businessId: commit.confirmed.businessId,
@@ -985,6 +1062,8 @@ async function runReservedLaunchPipeline(
       themePresetId: input.theme.id,
       preloadedIntents: plan.canonicalIntents,
       launchContract: plan.launchContract,
+      businessRuntime: finalBusinessRuntime,
+      bindingReadinessReceipt,
       vfsFiles: committed.vfsFiles,
       siteBundleSnapshot: committed.siteBundleSnapshot,
       runtimeManifest: committed.runtimeManifest,

@@ -13,6 +13,7 @@ import {
 } from '@/services/composition';
 import { enforceSiteDesignContract } from '@/services/launch/homepageFirstContract';
 import { assertSiteShellClosure, buildSiteShellTopology } from '@/services/siteShellTopology';
+import { CANONICAL_COMPONENT_DEFINITIONS } from '@/services/canonicalComponentRegistry';
 import type {
   AppBuildCandidateClosureIssue,
   AppBuildCandidateClosureReport,
@@ -369,7 +370,7 @@ export async function validateAppBuildCandidate(input: {
     // A page's surface includes the authored components it renders (shared
     // nav, footer, newsletter band); the binder stamps markers there too.
     const surface = page?.filePath && files[page.filePath]
-      ? collectLocalImportClosure(files, page.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path))
+      ? collectLocalImportClosure(files, page.filePath, (path) => /^\/src\/.*\.[jt]sx?$/.test(path))
       : [];
     const hasMarker = surface.some((path) => requirement.markers.some((marker) => hasCtaMarker(files[path] ?? '', marker)));
     if (!page || !hasMarker) {
@@ -411,6 +412,19 @@ export async function validateAppBuildCandidate(input: {
     }
   }
 
+  for (const definition of CANONICAL_COMPONENT_DEFINITIONS.filter((candidate) =>
+    candidate.requiredWhenCapabilitiesEnabled?.some((capability) => input.contract.business.capabilities.includes(capability)),
+  )) {
+    if (input.contract.business.registeredComponents.some((component) => component.runtime.componentSlug === definition.slug)) continue;
+    const targetPage = pages.find((page) => page.role === 'booking') ?? pages.find((page) => page.route === '/');
+    issues.push({
+      severity: 'blocker',
+      code: 'required-capability-host-missing',
+      path: targetPage?.filePath,
+      message: `Capability ${definition.requiredCapabilities.join(', ')} requires registered runtime host ${definition.slug}.`,
+    });
+  }
+
   for (const component of input.contract.business.registeredComponents) {
     if (component.runtime.requiredCapabilities.some((capability) => !input.contract.business.capabilities.includes(capability))) continue;
     const writeIntent = component.runtime.writeIntent;
@@ -423,20 +437,8 @@ export async function validateAppBuildCandidate(input: {
       });
       continue;
     }
-    const profile = input.contract.business.businessProfile as unknown as Record<string, unknown>;
-    const profileCustomValues = profile.customValues && typeof profile.customValues === 'object'
-      ? profile.customValues as Record<string, unknown>
-      : {};
-    const parameterValues = input.contract.business.parameters as unknown as Record<string, unknown>;
-    const industryValues = input.contract.business.parameters.industry ?? {};
-    const missingBusinessFields = component.requiredBusinessFields.filter((field) => ![
-      profile[field],
-      profileCustomValues[field],
-      parameterValues[field],
-      industryValues[field],
-      field === 'notificationEmail' ? input.contract.business.parameters.ownerEmail : undefined,
-      field === 'bookingOwner' ? input.contract.business.parameters.ownerEmail : undefined,
-    ].some(hasConfiguredValue));
+    const configuredFields = new Set(input.contract.business.configuredBusinessFields);
+    const missingBusinessFields = component.requiredBusinessFields.filter((field) => !configuredFields.has(field));
     if (missingBusinessFields.length > 0) {
       issues.push({
         severity: 'blocker',
@@ -465,70 +467,53 @@ export async function validateAppBuildCandidate(input: {
         .map((binding) => pages.find((page) => page.route === binding.route)).filter((page) => !!page),
     ];
     const uniquePages = [...new Map(componentPages.map((page) => [page!.id, page!])).values()];
-    const rendered = uniquePages.some((page) => {
+    const componentSources = uniquePages.map((page) => {
       const surface = collectLocalImportClosure(files, page.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path));
-      const source = surface.map((path) => files[path] ?? '').join('\n');
-      const escapedSlug = component.runtime.componentSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const escapedId = component.runtime.instanceId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const registeredHost = new RegExp(
-        `(?:data-ut-component-slug\\s*=\\s*["']${escapedSlug}["']|data-ut-component-instance-id\\s*=\\s*["']${escapedId}["'])`,
-      ).test(source);
-      if (!registeredHost) return false;
-      if (component.targetType === 'form' || component.targetType === 'calendar') {
-        const form = new RegExp(`<form\\b(?=[^>]*data-intent-form\\s*=\\s*["']${writeIntent}["'])[^>]*>`, 'i').exec(source)?.[0];
-        return Boolean(form) && !/\\bonSubmit\\s*=/.test(form ?? '');
-      }
-      return new RegExp(`(?:data-intent-trigger|data-ut-intent)\\s*=\\s*["']${writeIntent}["']`).test(source);
+      return { page, source: surface.map((path) => files[path] ?? '').join('\n') };
     });
-    if (!rendered) {
+    const escapedSlug = component.runtime.componentSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedId = component.runtime.instanceId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hasRegisteredHost = componentSources.some(({ source }) => new RegExp(
+      `(?:data-ut-component-slug\\s*=\\s*["']${escapedSlug}["']|data-ut-component-instance-id\\s*=\\s*["']${escapedId}["'])`,
+    ).test(source));
+    if (!hasRegisteredHost) {
       issues.push({
         severity: 'blocker',
         code: 'registered-component-not-rendered',
+        path: componentSources[0]?.page.filePath,
         message: `Render registered ${component.runtime.componentSlug} with its native ${component.targetType === 'form' || component.targetType === 'calendar' ? `data-intent-form="${writeIntent}"` : `intent trigger "${writeIntent}"`} on its assigned page.`,
       });
+      continue;
     }
-  }
-
-  if (input.contract.business.capabilities.includes('booking')) {
-    const bookingPage = pages.find((page) => page.role === 'booking')
-      ?? pages.find((page) => page.route.replace(/\/$/, '').toLowerCase() === '/booking');
-    const bookingSurface = bookingPage?.filePath
-      ? collectLocalImportClosure(files, bookingPage.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path))
-      : [];
-    const bookingSources = bookingSurface.map((path) => files[path] ?? '').join('\n');
-    const bookingForm = /<form\b[^>]*data-intent-form\s*=\s*["']booking\.create["'][^>]*>/i.exec(bookingSources)?.[0] ?? '';
-    const missingFields = ['serviceId', 'slotId', 'customerName', 'customerEmail']
-      .filter((field) => !new RegExp(`name\\s*=\\s*["']${field}["']`).test(bookingSources));
-    const hasRegisteredHost = /data-ut-component-slug\s*=\s*["']booking-scheduler["']|data-ut-component-instance-id\s*=/.test(bookingSources);
-    const hasLocalSubmitHandler = /<form\b[^>]*data-intent-form\s*=\s*["']booking\.create["'][^>]*\bonSubmit\s*=/.test(bookingSources);
-    if (!bookingPage || !hasRegisteredHost || !bookingForm || hasLocalSubmitHandler || missingFields.length > 0) {
-      issues.push({
-        severity: 'blocker',
-        code: 'booking-runtime-contract-missing',
-        path: bookingPage?.filePath,
-        message: `Booking requires a registered booking-scheduler host and a native form[data-intent-form="booking.create"] with serviceId, slotId, customerName, and customerEmail fields${missingFields.length ? ` (missing: ${missingFields.join(', ')})` : ''}; local submit handlers cannot claim success.`,
+    if (component.targetType === 'form' || component.targetType === 'calendar') {
+      const escapedIntent = writeIntent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const formPattern = new RegExp(`<form\\b(?=[^>]*data-intent-form\\s*=\\s*["']${escapedIntent}["'])[^>]*>[\\s\\S]*?<\\/form>`, 'i');
+      const incompleteForm = componentSources.find(({ source }) => {
+        const form = formPattern.exec(source)?.[0];
+        return !form || /\bonSubmit\s*=/.test(form)
+          || (component.requiredNativeFormFields ?? []).some((field) =>
+            !new RegExp(`name\\s*=\\s*["']${field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'i').test(form),
+          );
       });
-    }
-  }
-
-  if (input.contract.business.capabilities.includes('booking')) {
-    const bookingPage = pages.find((page) => page.role === 'booking')
-      ?? pages.find((page) => page.route.replace(/\/$/, '').toLowerCase() === '/booking');
-    const bookingSurface = bookingPage?.filePath
-      ? collectLocalImportClosure(files, bookingPage.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path))
-      : [];
-    const bookingSources = bookingSurface.map((path) => files[path] ?? '').join('\n');
-    const bookingForm = /<form\b[^>]*data-intent-form\s*=\s*["']booking\.create["'][^>]*>/i.exec(bookingSources)?.[0] ?? '';
-    const missingFields = ['serviceId', 'slotId', 'customerName', 'customerEmail']
-      .filter((field) => !new RegExp(`name\\s*=\\s*["']${field}["']`).test(bookingSources));
-    const hasRegisteredHost = /data-ut-component-slug\s*=\s*["']booking-scheduler["']|data-ut-component-instance-id\s*=/.test(bookingSources);
-    const hasLocalSubmitHandler = /\bonSubmit\s*=/.test(bookingForm);
-    if (!bookingPage || !hasRegisteredHost || !bookingForm || hasLocalSubmitHandler || missingFields.length > 0) {
+      if (incompleteForm) {
+        const form = formPattern.exec(incompleteForm.source)?.[0] ?? '';
+        const missingFields = (component.requiredNativeFormFields ?? []).filter((field) =>
+          !new RegExp(`name\\s*=\\s*["']${field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'i').test(form),
+        );
+        issues.push({
+          severity: 'blocker',
+          code: 'registered-component-native-form-incomplete',
+          path: incompleteForm.page.filePath,
+          message: `Render registered ${component.runtime.componentSlug} with native form data-intent-form="${writeIntent}"${missingFields.length ? ` and required fields ${missingFields.join(', ')}` : ''}; local submit handlers cannot claim success.`,
+        });
+      }
+    } else if (!componentSources.some(({ source }) =>
+      new RegExp(`(?:data-intent-trigger|data-ut-intent)\\s*=\\s*["']${writeIntent}["']`).test(source),
+    )) {
       issues.push({
         severity: 'blocker',
-        code: 'booking-runtime-contract-missing',
-        path: bookingPage?.filePath,
-        message: `Booking requires a registered booking-scheduler host and a native form[data-intent-form="booking.create"] with serviceId, slotId, customerName, and customerEmail fields${missingFields.length ? ` (missing: ${missingFields.join(', ')})` : ''}; local submit handlers cannot claim success.`,
+        code: 'registered-component-action-missing',
+        message: `Render registered ${component.runtime.componentSlug} with its native intent trigger "${writeIntent}" on its assigned page.`,
       });
     }
   }

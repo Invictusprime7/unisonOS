@@ -178,6 +178,8 @@ describe('Web Builder preview ownership', () => {
       sharedPreview.indexOf('const clearSelectedElement ='),
     );
 
+    expect(previewWindowLookup.indexOf('previewContainerRef.current?.querySelector('))
+      .toBeLessThan(previewWindowLookup.indexOf('sandpackIframeRef.current?.isConnected'));
     expect(previewWindowLookup).toContain('iframe[title*="Sandpack"]');
     expect(previewWindowLookup).toContain('iframe[src*="csb.app"]');
     expect(previewWindowLookup).toContain('iframe[src*="codesandbox"]');
@@ -191,9 +193,11 @@ describe('Web Builder preview ownership', () => {
   it('recovers when Sandpack connects but the generated app never reports render-ready', () => {
     const sharedPreview = readSource('src/components/VFSPreview.tsx');
 
-    expect(sharedPreview).toContain('MAX_SANDPACK_RENDER_RECOVERIES = 1');
+    expect(sharedPreview).toContain('MAX_SANDPACK_RENDER_RECOVERIES = 2');
     expect(sharedPreview).toContain('PREVIEW_RENDER_READY_TIMEOUT_MS = 20_000');
     expect(sharedPreview).toContain('renderReadyTimeoutRef.current = window.setTimeout');
+    expect(sharedPreview).toContain('const previewLifecycleRef = useRef({ handleSandpackRunning, handleSandpackError, onReady });');
+    expect(sharedPreview).toContain('}, [getPreviewWindow]);');
     expect(sharedPreview).toContain("data.type === 'UNISON_PREVIEW_RENDER_READY'");
     expect(sharedPreview).toContain('if (renderReadyRef.current) return;');
     expect(sharedPreview).toContain('renderWatchKeyRef.current === watchKey && renderReadyTimeoutRef.current !== null');

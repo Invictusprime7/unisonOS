@@ -32,6 +32,8 @@ export const MARKETPLACE_TEMPLATE_DESIGN_PRESETS: Readonly<Record<string, Market
   'local-service-premium': { themePresetId: 'modern', artDirectionPackId: 'bold-commercial' },
   'contractor-premium': { themePresetId: 'bold', artDirectionPackId: 'bold-commercial' },
   'real-estate-premium': { themePresetId: 'editorial', artDirectionPackId: 'luxury-minimal' },
+  'profile-derived-modernist-studio': { themePresetId: 'minimalist', artDirectionPackId: 'swiss-grid' },
+  'profile-derived-warm-property-collection': { themePresetId: 'editorial', artDirectionPackId: 'warm-craft' },
 };
 
 export function getMarketplaceTemplateDesignPreset(templateId: string): MarketplaceTemplateDesignPreset {
