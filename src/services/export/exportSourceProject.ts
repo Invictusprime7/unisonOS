@@ -24,6 +24,9 @@ import {
   UNISON_ATTRIBUTION_SCRIPT,
   injectPoweredByUnisonScript,
 } from './unisonAttribution';
+import { buildProjectExportMetadata } from './exportMetadata';
+import { runExportPreflight } from './exportPreflight';
+import { describeUnresolvedImports, findUnresolvedLocalImports } from '@/services/laneBCompanionModules';
 
 export interface ExportSourceProjectOptions {
   projectName: string;
@@ -39,7 +42,6 @@ export interface SourceProjectExportResult {
 
 // Toolchain files we regenerate at export time — the scaffold synth owns them.
 const SKIP_PATH_PREFIXES = [
-  '/.unison/',
   '/node_modules/',
 ];
 
@@ -81,6 +83,11 @@ export async function exportSourceProject(
   const resolution = resolveSnapshot(vfsFiles);
   const projected = projectSnapshotVfsFiles(vfsFiles, resolution);
 
+  const unresolvedSourceImports = findUnresolvedLocalImports(projected);
+  if (unresolvedSourceImports.length > 0) {
+    throw new Error(`Source export preflight failed: unresolved local imports: ${describeUnresolvedImports(unresolvedSourceImports)}`);
+  }
+
   // 2. Normalize through the sandpack prep pipeline so @/ aliases, dep
   //    injection, and lint-repairs match what the preview actually ran.
   const prepared = prepareSandpackFiles(projected, {
@@ -107,10 +114,13 @@ export async function exportSourceProject(
   };
   prepared['/.unison/runtime-manifest.json'] = JSON.stringify(manifestForZip, null, 2);
 
-  // Preserve the snapshot verbatim if already threaded through the projector.
-  if (typeof vfsFiles['/.unison/site-bundle-snapshot.json'] === 'string'
-      && !prepared['/.unison/site-bundle-snapshot.json']) {
-    prepared['/.unison/site-bundle-snapshot.json'] = vfsFiles['/.unison/site-bundle-snapshot.json'];
+  // Sandpack preparation drops internal sidecars. Restore every source sidecar
+  // byte-for-byte for import round trips, except the runtime manifest above,
+  // which is deliberately normalized for this exported project.
+  for (const [path, contents] of Object.entries(vfsFiles)) {
+    if (!path.startsWith('/.unison/') || typeof contents !== 'string') continue;
+    if (path === '/.unison/runtime-manifest.json' && prepared[path]) continue;
+    if (!prepared[path]) prepared[path] = contents;
   }
 
   const zip = new JSZip();
@@ -137,7 +147,7 @@ export async function exportSourceProject(
     return flat;
   };
 
-  let fileCount = 0;
+  const sourceProjectFiles: Record<string, string> = {};
   const emitted = new Set<string>();
   for (const [path, contents] of Object.entries(prepared)) {
     if (typeof contents !== 'string') continue;
@@ -145,8 +155,8 @@ export async function exportSourceProject(
     const outPath = toSourceProjectPath(path);
     if (emitted.has(outPath)) continue;
     emitted.add(outPath);
+    sourceProjectFiles[outPath] = contents;
     root.file(zipPath(outPath), contents);
-    fileCount++;
   }
 
   // 5. Emit toolchain scaffolding.
@@ -159,9 +169,48 @@ export async function exportSourceProject(
   root.file('index.html', injectPoweredByUnisonScript(scaffold.indexHtml));
   root.file('.gitignore', scaffold.gitignore);
   root.file('README.md', scaffold.readme);
+  root.file('AGENTS.md', scaffold.agentsMd);
+  root.file('UNISON_PROJECT.md', scaffold.unisonProjectMd);
   if (scaffold.envExample.trim()) {
     root.file('.env.example', scaffold.envExample);
   }
+
+  const exportMetadata = await buildProjectExportMetadata({
+    projectName: options.projectName,
+    entryPoint: manifestForZip.entryPoint,
+    files: sourceProjectFiles,
+    snapshot: resolution.snapshot,
+    runtimeManifest: options.manifest,
+  });
+
+  const preflightFiles = {
+    ...sourceProjectFiles,
+    '/index.html': scaffold.indexHtml,
+    '/vite.config.ts': scaffold.viteConfig,
+    '/tailwind.config.ts': scaffold.tailwindConfig,
+  };
+  const exportPreflight = runExportPreflight({
+    files: preflightFiles,
+    entryPoint: manifestForZip.entryPoint,
+    packageJson: scaffold.packageJson,
+    hasLockfile: false,
+  });
+  if (!exportPreflight.passed) {
+    const summary = exportPreflight.issues
+      .slice(0, 6)
+      .map((issue) => `${issue.code}: ${issue.path}${issue.reference ? ` -> ${issue.reference}` : ''}`)
+      .join('; ');
+    throw new Error(`Source export preflight failed: ${summary}`);
+  }
+
+  root.file('project-manifest.json', JSON.stringify(exportMetadata.projectManifest, null, 2));
+  if (exportMetadata.designContext) {
+    root.file('design-context.json', JSON.stringify(exportMetadata.designContext, null, 2));
+  }
+  root.file('unison.runtime.json', JSON.stringify(exportMetadata.runtimeManifest, null, 2));
+  root.file('backend-capabilities.json', JSON.stringify(exportMetadata.backendCapabilities, null, 2));
+  root.file('asset-manifest.json', JSON.stringify(exportMetadata.assetManifest, null, 2));
+  root.file('export-preflight.json', JSON.stringify(exportPreflight, null, 2));
 
   // 6. Static-host SPA fallbacks (live at project root so `dist/` deploys
   //    pick them up when copied alongside).
@@ -170,9 +219,6 @@ export async function exportSourceProject(
   publicFolder.file('_redirects', netlifyRedirects());
   root.file('vercel.json', vercelJson());
   root.file('netlify.toml', netlifyToml());
-
-  fileCount += 11;
-
 
   const blob = await zip.generateAsync({
     type: 'blob',
@@ -183,7 +229,7 @@ export async function exportSourceProject(
   return {
     blob,
     fileName: `${projectSlug}-source.zip`,
-    fileCount,
+    fileCount: Object.values(zip.files).filter((entry) => !entry.dir).length,
   };
 }
 

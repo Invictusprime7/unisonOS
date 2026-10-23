@@ -34,6 +34,14 @@ const TOOLCHAIN_SKIP = new Set([
   '.env.local',
   '.env.example',
   'README.md',
+  'AGENTS.md',
+  'UNISON_PROJECT.md',
+  'project-manifest.json',
+  'design-context.json',
+  'unison.runtime.json',
+  'backend-capabilities.json',
+  'asset-manifest.json',
+  'export-preflight.json',
   'netlify.toml',
   'vercel.json',
   '_redirects',
@@ -128,7 +136,7 @@ export async function importSourceProjectZip(
   const warnings: string[] = [];
   const vfsFiles: Record<string, string> = {};
   let packageJsonObj: Record<string, unknown> | undefined;
-  let unisonMetadata: Record<string, string> = {};
+  const unisonMetadata: Record<string, string> = {};
 
   for (const zipPath of rawPaths) {
     const relPath = commonRoot ? zipPath.slice(commonRoot.length) : zipPath;

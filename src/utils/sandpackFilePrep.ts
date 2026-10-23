@@ -4271,7 +4271,7 @@ export function normalizeLauncherFiles(
     if (typeof fContent === 'string' && fContent.trimStart().startsWith('{')) {
       try {
         const parsed = JSON.parse(fContent);
-        if (parsed && typeof parsed === 'object' && parsed.files && typeof parsed.files === 'object') {
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed.files) && parsed.files && typeof parsed.files === 'object') {
           console.warn(`[normalizeLauncherFiles] Unwrapping JSON envelope in ${fPath}`);
           resolvedFiles = {};
           for (const [innerPath, innerContent] of Object.entries(parsed.files)) {
@@ -4291,7 +4291,7 @@ export function normalizeLauncherFiles(
         if (jsonIdx > 0) {
           try {
             const embedded = JSON.parse(fContent.slice(jsonIdx));
-            if (embedded?.files && typeof embedded.files === 'object') {
+            if (!Array.isArray(embedded?.files) && embedded?.files && typeof embedded.files === 'object') {
               console.warn(`[normalizeLauncherFiles] Extracting embedded JSON from ${fPath}`);
               resolvedFiles = {};
               for (const [innerPath, innerContent] of Object.entries(embedded.files)) {

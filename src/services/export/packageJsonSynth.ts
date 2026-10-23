@@ -7,27 +7,27 @@
  */
 
 import type { RuntimeManifest } from '@/types/runtimeManifest';
-import { GENERATED_RUNTIME_PROFILE } from '@/platform/core/generatedRuntimeCapabilities';
+import { resolvePinnedRuntimeVersion } from '@/utils/sandpackDependencies';
 
 const BASE_DEPS: Record<string, string> = {
-  react: GENERATED_RUNTIME_PROFILE.react,
-  'react-dom': GENERATED_RUNTIME_PROFILE.reactDom,
-  'react-router-dom': '^6.26.2',
-  'lucide-react': '^0.462.0',
-  'framer-motion': '^11.11.11',
-  clsx: '^2.1.1',
-  'tailwind-merge': '^2.5.4',
+  react: '19.2.1',
+  'react-dom': '19.2.1',
+  'react-router-dom': '7.18.4',
+  'lucide-react': '0.545.0',
+  'framer-motion': '12.29.2',
+  clsx: '2.1.1',
+  'tailwind-merge': '3.4.0',
 };
 
 const BASE_DEV_DEPS: Record<string, string> = {
-  '@types/react': GENERATED_RUNTIME_PROFILE.reactTypes,
-  '@types/react-dom': GENERATED_RUNTIME_PROFILE.reactDomTypes,
-  '@vitejs/plugin-react': '^4.3.3',
-  autoprefixer: '^10.4.20',
-  postcss: '^8.4.47',
-  tailwindcss: '^3.4.14',
-  typescript: '^5.6.3',
-  vite: '^5.4.10',
+  '@types/react': '19.2.7',
+  '@types/react-dom': '19.2.3',
+  '@vitejs/plugin-react-swc': '4.3.2',
+  autoprefixer: '10.5.4',
+  postcss: '8.5.24',
+  tailwindcss: '3.4.19',
+  typescript: '5.9.3',
+  vite: '7.3.6',
 };
 
 const DEP_BLOCKLIST = new Set([
@@ -80,6 +80,8 @@ export interface SynthesizedProject {
   envExample: string;
   readme: string;
   gitignore: string;
+  agentsMd: string;
+  unisonProjectMd: string;
 }
 
 export function synthesizeProjectFiles(
@@ -94,12 +96,12 @@ export function synthesizeProjectFiles(
   for (const spec of scanned) {
     const pkg = extractPkgName(spec);
     if (!pkg || DEP_BLOCKLIST.has(pkg)) continue;
-    if (!dependencies[pkg]) dependencies[pkg] = 'latest';
+    if (!dependencies[pkg]) dependencies[pkg] = resolvePinnedRuntimeVersion(pkg) ?? 'latest';
   }
   if (manifest?.dependencies) {
     for (const [k, v] of Object.entries(manifest.dependencies)) {
       if (k === 'react' || k === 'react-dom') continue;
-      dependencies[k] = v || dependencies[k] || 'latest';
+      dependencies[k] = resolvePinnedRuntimeVersion(k) ?? (v || dependencies[k] || 'latest');
     }
   }
 
@@ -122,7 +124,7 @@ export function synthesizeProjectFiles(
   ) + '\n';
 
   const viteConfig = `import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
 export default defineConfig({
@@ -256,6 +258,30 @@ dist
 *.log
 `;
 
+  const agentsMd = `# Exported Project Instructions
+
+- Keep application routes and page ownership in the exported source files; do not add Unison service-role credentials.
+- Preserve ".unison/" metadata when updating or re-importing this project.
+- Treat ".unison/site-bundle-snapshot.json" as the exported design snapshot; edit the site through its source and re-export from Unison to refresh metadata.
+- Configure required environment variables locally from ".env.example"; never commit secret values.
+- Run "npm run build" before deployment.
+`;
+
+  const unisonProjectMd = `# ${projectName}
+
+This project was exported from Unison as a Vite + React source archive.
+
+- Entry point: \`${entry.startsWith('src/') ? entry : 'src/main.tsx'}\`
+- Project metadata: \`project-manifest.json\`
+- Design context: \`design-context.json\`
+- Runtime contract: \`unison.runtime.json\`
+- Backend requirements: \`backend-capabilities.json\`
+- Asset inventory: \`asset-manifest.json\`
+- Unison round-trip metadata: \`.unison/\`
+
+See \`README.md\` for local development and build commands.
+`;
+
   return {
     packageJson,
     viteConfig,
@@ -267,5 +293,7 @@ dist
     envExample,
     readme,
     gitignore,
+    agentsMd,
+    unisonProjectMd,
   };
 }
