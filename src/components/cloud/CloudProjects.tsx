@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   FolderKanban, Plus, Globe, Settings, Trash2, ExternalLink,
   Sparkles, Rocket, Layout, Palette, Clock, ChevronRight,
-  MoreVertical, Copy, Star, FileText, Home, Download,
+  MoreVertical, Copy, Check, Star, FileText, Home, Download,
   Building2, Users, Loader2, Paintbrush, ArrowLeft,
   BarChart3, Target, Workflow, Zap,
   Search, Grid3X3, List, Edit3, Eye, ChevronDown, Database
