@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   FolderKanban, Plus, Globe, Settings, Trash2, ExternalLink,
   Sparkles, Rocket, Layout, Palette, Clock, ChevronRight,
-  MoreVertical, Copy, Star, FileText, Home, Download,
+  MoreVertical, Copy, Check, Star, FileText, Home, Download,
   Building2, Users, Loader2, Paintbrush, ArrowLeft,
   BarChart3, Target, Workflow, Zap,
   Search, Grid3X3, List, Edit3, Eye, ChevronDown, Database
@@ -196,6 +196,28 @@ interface CloudProjectsLocationState {
   businessId?: string;
   projectId?: string;
   crmView?: CRMView;
+}
+
+function ProjectIdChip({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      title="Copy project ID"
+      aria-label={`Copy project ID ${id}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        void navigator.clipboard?.writeText(id).then(() => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+      className="mt-1 inline-flex max-w-full items-center gap-1 text-left font-mono text-[11px] text-white/40 hover:text-white/80"
+    >
+      <span className="truncate">ID {id}</span>
+      {copied ? <Check className="h-3 w-3 shrink-0" /> : <Copy className="h-3 w-3 shrink-0" />}
+    </button>
+  );
 }
 
 export function CloudProjects({ userId, businessId: propBusinessId, onProjectSelect }: CloudProjectsProps) {
@@ -1244,6 +1266,7 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium text-white">{project.name}</p>
+                    <ProjectIdChip id={project.id} />
                     <p className="mt-1 text-xs text-white/40">
                       Updated {formatSavedAt(project.updated_at || project.created_at)}
                     </p>
@@ -1625,6 +1648,7 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                                   {project.name}
                                 </h4>
                                 <p className="text-xs text-white/30 font-mono">/{project.slug}</p>
+                                <ProjectIdChip id={project.id} />
                               </div>
                               <Badge 
                                 variant="outline" 
@@ -1736,6 +1760,7 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                                 <div>
                                   <p className="font-medium">{project.name}</p>
                                   <p className="text-xs text-white/30 font-mono">/{project.slug}</p>
+                                  <ProjectIdChip id={project.id} />
                                 </div>
                                 </div>
                               </td>
