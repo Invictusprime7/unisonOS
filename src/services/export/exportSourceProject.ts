@@ -25,7 +25,6 @@ import {
   injectPoweredByUnisonScript,
 } from './unisonAttribution';
 import { buildProjectExportMetadata } from './exportMetadata';
-import { runExportPreflight } from './exportPreflight';
 import { describeUnresolvedImports, findUnresolvedLocalImports } from '@/services/laneBCompanionModules';
 
 export interface ExportSourceProjectOptions {
@@ -38,7 +37,9 @@ export interface SourceProjectExportResult {
   blob: Blob;
   fileName: string;
   fileCount: number;
+  preflight: ExportPreflightResult;
 }
+import { runExportPreflight, type ExportPreflightResult } from './exportPreflight';
 
 // Toolchain files we regenerate at export time — the scaffold synth owns them.
 const SKIP_PATH_PREFIXES = [
@@ -230,6 +231,7 @@ export async function exportSourceProject(
     blob,
     fileName: `${projectSlug}-source.zip`,
     fileCount: Object.values(zip.files).filter((entry) => !entry.dir).length,
+    preflight: exportPreflight,
   };
 }
 

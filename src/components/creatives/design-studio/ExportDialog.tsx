@@ -42,6 +42,8 @@ export const ExportDialog = ({
 }: ExportDialogProps) => {
   const [copiedTab, setCopiedTab] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [sourceExportWarnings, setSourceExportWarnings] = useState<string[] | null>(null);
+  const hasCanonicalVfs = Boolean(vfsFiles && Object.keys(vfsFiles).length > 0);
 
   // Extract JavaScript from HTML if not provided separately
   const extractedJS = useMemo(() => {
@@ -97,7 +99,7 @@ ${extractedJS ? `  <script>\n${extractedJS}\n  </script>` : ''}
       .join('');
 
     // Convert HTML to JSX-compatible format
-    let jsxContent = html
+    const jsxContent = html
       .replace(/class=/g, 'className=')
       .replace(/for=/g, 'htmlFor=')
       .replace(/onclick=/gi, 'onClick=')
@@ -171,7 +173,7 @@ ${css}
       .map(w => w.charAt(0).toUpperCase() + w.slice(1))
       .join('');
 
-    let jsxContent = html
+    const jsxContent = html
       .replace(/class=/g, 'className=')
       .replace(/for=/g, 'htmlFor=')
       .replace(/onclick=/gi, 'onClick=')
@@ -392,34 +394,40 @@ export default function RootLayout({
             Export Project
           </DialogTitle>
           <DialogDescription>
-            Export your design as production-ready code in multiple formats
+            {hasCanonicalVfs
+              ? 'Download the canonical source archive with Unison metadata and export checks.'
+              : 'Export the current standalone code snippets.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
           {/* Portable Vite source project (Mode B) — top priority when VFS available */}
-          {vfsFiles && Object.keys(vfsFiles).length > 0 && (
+          {hasCanonicalVfs && (
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-sm font-medium flex items-center gap-2">
                   <FolderArchive className="h-4 w-4 text-primary" />
-                  Vite Source Project
+                  Vite + React source archive
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Full runnable project (React + Vite + Tailwind). Drop into
-                  Vercel, Netlify, Cloudflare Pages, or run <code>npm i &amp;&amp; npm run dev</code> locally.
+                  Canonical source with design context, runtime/backend metadata, assets, and round-trip Unison files.
                 </p>
               </div>
               <Button
                 onClick={async () => {
                   setIsExporting(true);
                   try {
-                    const result = await exportSourceProject(vfsFiles, {
+                    const result = await exportSourceProject(vfsFiles!, {
                       projectName,
                       manifest: runtimeManifest,
                       entryPoint: runtimeManifest?.entryPoint,
                     });
                     downloadBlob(result.blob, result.fileName);
+                    setSourceExportWarnings(result.preflight.warnings.map((warning) => (
+                      warning.code === 'lockfile-missing'
+                        ? 'No project-specific lockfile is included.'
+                        : `Dependency version needs pinning: ${warning.packageName ?? 'unknown package'}.`
+                    )));
                     toast.success(`Exported ${result.fileCount} files → ${result.fileName}`);
                   } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
@@ -432,12 +440,38 @@ export default function RootLayout({
                 className="shrink-0"
               >
                 <Download className="mr-2 h-4 w-4" />
-                Download .zip
+                {isExporting ? 'Preparing…' : 'Download .zip'}
               </Button>
             </div>
           )}
 
-          {/* Quick Export Buttons */}
+          {hasCanonicalVfs && (
+            <>
+              <ul className="grid gap-x-6 gap-y-2 border-b border-border pb-4 text-xs text-muted-foreground sm:grid-cols-2">
+                <li><FileJson className="mr-2 inline h-3.5 w-3.5" />project-manifest.json</li>
+                <li><FileCode className="mr-2 inline h-3.5 w-3.5" />design-context.json</li>
+                <li><FileCode className="mr-2 inline h-3.5 w-3.5" />unison.runtime.json</li>
+                <li><FileCode className="mr-2 inline h-3.5 w-3.5" />backend-capabilities.json</li>
+                <li><FileJson className="mr-2 inline h-3.5 w-3.5" />asset-manifest.json</li>
+                <li><FolderArchive className="mr-2 inline h-3.5 w-3.5" />.unison/ round-trip metadata</li>
+              </ul>
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Base toolchain versions are pinned. No project-specific lockfile is generated; see export-preflight.json for dependency warnings.
+              </p>
+              {sourceExportWarnings && (
+                <div role="status" className="border-t border-border pt-3 text-xs text-muted-foreground">
+                  Archive prepared and downloaded.
+                  {sourceExportWarnings.length === 0
+                    ? <p className="mt-1">No dependency-closure warnings.</p>
+                    : sourceExportWarnings.map((warning) => <p key={warning} className="mt-1">{warning}</p>)}
+                </div>
+              )}
+            </>
+          )}
+
+          {!hasCanonicalVfs && (
+            <>
+          {/* Quick Export Buttons (legacy snippet-only mode) */}
           <div className="flex flex-wrap gap-2">
 
             <Button onClick={() => downloadZip('html')} variant="default" disabled={isExporting}>
@@ -547,6 +581,8 @@ export default function RootLayout({
             <span>CSS: {css.length.toLocaleString()} chars</span>
             {extractedJS && <span>JS: {extractedJS.length.toLocaleString()} chars</span>}
           </div>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
