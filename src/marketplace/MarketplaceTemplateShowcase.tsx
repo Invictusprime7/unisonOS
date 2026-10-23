@@ -163,7 +163,7 @@ export function MarketplaceTemplateShowcase() {
               return (
                 <li key={template.id} className="flex min-h-36 flex-col border-t border-border py-4">
                   <p className="text-xs capitalize text-muted-foreground">
-                    {template.category} · {templateTheme.label} · {artDirection.name}
+                    {template.category} · {template.tags?.includes('profile-derived') ? 'Profile-derived · ' : ''}{templateTheme.label} · {artDirection.name}
                   </p>
                   <h3 className="mt-1 text-base font-medium">{template.name}</h3>
                   <p className="mt-1 line-clamp-2 flex-1 text-sm text-muted-foreground">{template.description}</p>

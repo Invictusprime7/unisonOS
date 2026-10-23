@@ -67,4 +67,15 @@ describe('Marketplace template curation', () => {
     expect(usedPresets.size).toBeGreaterThan(1);
     expect(usedPacks.size).toBeGreaterThan(1);
   });
+
+  it('includes generic profile-derived portfolio and property templates without source-project branding', () => {
+    const portfolio = ALL_COMPOSITIONS.find((template) => template.id === 'profile-derived-modernist-studio');
+    const property = ALL_COMPOSITIONS.find((template) => template.id === 'profile-derived-warm-property-collection');
+
+    expect(portfolio).toMatchObject({ name: 'Modernist Studio Portfolio', industry: 'portfolio' });
+    expect(property).toMatchObject({ name: 'Warm Property Collection', industry: 'realestate' });
+    expect(portfolio?.tags).toContain('profile-derived');
+    expect(property?.tags).toContain('profile-derived');
+    expect(JSON.stringify([portfolio, property])).not.toMatch(/Zen Site|Esteem Site/);
+  });
 });
