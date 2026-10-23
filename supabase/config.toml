@@ -162,3 +162,6 @@ verify_jwt = false
 
 [functions.resolve-published-site-backend]
 verify_jwt = false
+
+[functions.marketplace-stage-release]
+verify_jwt = false
