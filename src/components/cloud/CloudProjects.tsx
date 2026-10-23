@@ -1244,6 +1244,7 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium text-white">{project.name}</p>
+                    <ProjectIdChip id={project.id} />
                     <p className="mt-1 text-xs text-white/40">
                       Updated {formatSavedAt(project.updated_at || project.created_at)}
                     </p>
@@ -1625,6 +1626,7 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                                   {project.name}
                                 </h4>
                                 <p className="text-xs text-white/30 font-mono">/{project.slug}</p>
+                                <ProjectIdChip id={project.id} />
                               </div>
                               <Badge 
                                 variant="outline" 
@@ -1736,6 +1738,7 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                                 <div>
                                   <p className="font-medium">{project.name}</p>
                                   <p className="text-xs text-white/30 font-mono">/{project.slug}</p>
+                                  <ProjectIdChip id={project.id} />
                                 </div>
                                 </div>
                               </td>
