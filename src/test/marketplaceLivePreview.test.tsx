@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ALL_COMPOSITIONS } from '@/sections/templates';
 import { ART_DIRECTION_PACKS } from '@/sections/variants/artDirectionPacks';
@@ -31,15 +31,20 @@ describe('Marketplace live template previews', () => {
 
     fireEvent.click(screen.getByRole('button', { name: `Preview ${template.name} live` }));
 
-    expect(await screen.findByTestId('live-vfs-preview')).toHaveAttribute('data-device', 'desktop');
+    expect(await screen.findByTestId('live-vfs-preview', {}, { timeout: 10_000 })).toHaveAttribute('data-device', 'desktop');
     const renderedSource = screen.getByTestId('preview-page-source').textContent ?? '';
     expect(renderedSource).toContain('const SECTIONS =');
     expect(renderedSource).toContain(template.id);
-    expect(screen.getByTestId('preview-root-app')).toHaveTextContent("import Page from './pages/Home'");
+    const renderedRouter = screen.getByTestId('preview-root-app').textContent ?? '';
+    expect(renderedRouter).toContain('@unison-canonical-router');
+    expect(renderedRouter).toContain('path="/pricing"');
+    expect(renderedRouter).toContain('path="/faq"');
     expect(screen.getByTestId('preview-base-css').textContent).toContain('ART DIRECTION:');
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Art direction' }), { target: { value: 'glass-tech' } });
-    expect(screen.getByTestId('preview-base-css').textContent).toContain(`ART DIRECTION: ${ART_DIRECTION_PACKS['glass-tech'].name}`);
+    await waitFor(() => {
+      expect(screen.getByTestId('preview-base-css').textContent).toContain(`ART DIRECTION: ${ART_DIRECTION_PACKS['glass-tech'].name}`);
+    }, { timeout: 10_000 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Mobile preview' }));
     expect(screen.getByTestId('live-vfs-preview')).toHaveAttribute('data-device', 'mobile');

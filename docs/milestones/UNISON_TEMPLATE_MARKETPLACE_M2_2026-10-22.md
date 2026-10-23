@@ -8,7 +8,7 @@
 - URL-backed search, product type, and industry filters; loading, read error, no-result, and empty-catalog states are covered.
 - `/marketplace/:slug` shows public listing details and a sign-in handoff.
 - The homepage Affinity hero has an accessible AI Chat / Marketplace tab toggle. Both panels stay mounted to preserve the chat and Wizard state; Marketplace queries start only when that tab is selected.
-- The Marketplace preview library compiles first-party `TemplateComposition` entries through `compositionToReactFileSet`, the design implementation and Art Direction registries, and Stage 4b theme CSS. Style-card, Art Direction, category, and device controls are square-cornered. These previews are explicitly separate from certified marketplace releases.
+- Every preview-library composition is curated through the canonical launch plan: industry context and theme-derived seed resolve page topology and intent bindings; `AppBuildContract` and `DesignSourceBundle` bound the design implementation registry, 21st portable recipes, and installed UI primitives; the topology scaffolder emits all planned routes through the canonical component compiler. Style-card, Art Direction, category, and device controls are square-cornered. These previews are separate from certified marketplace releases.
 - No public route reads private release rows, snapshots, package paths, or creator identity.
 - Certified listing-detail preview and install remain unavailable until release preview artifacts and install authorization exist; no mock listing is seeded.
 

@@ -1,12 +1,11 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Eye, LoaderCircle, Monitor, Smartphone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { buildThemedIndexCss } from '@/components/onboarding/themePresetToIndexCss';
 import { THEME_PRESETS } from '@/components/onboarding/themePresets';
-import { compositionToReactFileSet } from '@/sections/compositionToFileSet';
 import { ALL_COMPOSITIONS } from '@/sections/templates';
 import type { TemplateComposition } from '@/sections/types';
 import { ART_DIRECTION_PACKS, resolveArtDirectionPack } from '@/sections/variants/artDirectionPacks';
+import type { CuratedMarketplaceTemplate } from '@/marketplace/curateMarketplaceTemplate';
 
 const VFSPreview = lazy(() => import('@/components/VFSPreview').then((module) => ({ default: module.VFSPreview })));
 
@@ -32,6 +31,8 @@ export function MarketplaceTemplateShowcase() {
   const [activeTemplate, setActiveTemplate] = useState<TemplateComposition | null>(null);
   const [device, setDevice] = useState<PreviewDevice>('desktop');
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [curatedTemplate, setCuratedTemplate] = useState<CuratedMarketplaceTemplate | null>(null);
+  const [curationLoading, setCurationLoading] = useState(false);
 
   const visibleTemplates = ALL_COMPOSITIONS.filter((template) => {
     const matchesCategory = category === 'all' || template.category === category;
@@ -39,32 +40,37 @@ export function MarketplaceTemplateShowcase() {
     return matchesCategory && searchText.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
   });
 
-  const previewFiles = useMemo(() => {
-    if (!activeTemplate) return {};
+  useEffect(() => {
+    if (!activeTemplate) {
+      setCuratedTemplate(null);
+      setCurationLoading(false);
+      return;
+    }
+
+    let current = true;
     const themePreset = THEME_PRESETS.find((preset) => preset.id === themePresetId) ?? THEME_PRESETS[0];
-    const seed = `marketplace-preview:${activeTemplate.id}`;
-    const artDirectionPack = getPreviewArtDirectionPack(activeTemplate, themePreset.id, artDirectionPackId);
-    return {
-      ...compositionToReactFileSet(activeTemplate, '/src/pages/Home.tsx', {
-        designIntervention: {
-          sectionVariants: [],
-          industry: activeTemplate.industry,
-          themePresetId: themePreset.id,
-          artDirectionPackId: artDirectionPack.id,
-          seed,
-        },
-      }),
-      '/src/App.tsx': "import Page from './pages/Home';\nexport default function App() { return <Page />; }\n",
-      '/src/index.css': buildThemedIndexCss(themePreset, {
-        sealedPackId: artDirectionPack.id,
-        industry: activeTemplate.industry,
-        seed,
-      }),
-    };
+    setCuratedTemplate(null);
+    setPreviewError(null);
+    setCurationLoading(true);
+    void import('@/marketplace/curateMarketplaceTemplate').then(({ curateMarketplaceTemplate }) => {
+      const curated = curateMarketplaceTemplate(
+        activeTemplate,
+        themePreset,
+        artDirectionPackId === 'auto' ? undefined : artDirectionPackId,
+      );
+      if (current) setCuratedTemplate(curated);
+    }).catch((error: unknown) => {
+      if (current) setPreviewError(error instanceof Error ? error.message : 'Template curation failed.');
+    }).finally(() => {
+      if (current) setCurationLoading(false);
+    });
+
+    return () => { current = false; };
   }, [activeTemplate, artDirectionPackId, themePresetId]);
 
   function openPreview(template: TemplateComposition) {
     setPreviewError(null);
+    setCuratedTemplate(null);
     setDevice('desktop');
     setActiveTemplate(template);
   }
@@ -162,7 +168,9 @@ export function MarketplaceTemplateShowcase() {
             <div className="min-w-0">
               <DialogTitle className="truncate text-base font-semibold">{activeTemplate?.name} live preview</DialogTitle>
               <p className="mt-1 text-xs capitalize text-muted-foreground">
-                {activeTemplate?.category} · {activeTemplate && getPreviewArtDirectionPack(activeTemplate, themePresetId, artDirectionPackId).name}
+                {curatedTemplate
+                  ? `${curatedTemplate.contract.business.industry} · ${curatedTemplate.designSourceBundle.identity.artDirectionPackId} · ${curatedTemplate.routeCount} pages · ${curatedTemplate.intentCount} bindings · ${curatedTemplate.portableRecipeCount} portable recipes`
+                  : `${activeTemplate?.category} · ${activeTemplate && getPreviewArtDirectionPack(activeTemplate, themePresetId, artDirectionPackId).name}`}
               </p>
             </div>
             <div aria-label="Preview size" className="flex shrink-0 border border-border">
@@ -190,12 +198,16 @@ export function MarketplaceTemplateShowcase() {
             <div className="h-full overflow-hidden rounded-none border border-border bg-white">
               {previewError ? (
                 <p role="alert" className="p-4 text-sm text-destructive">Live preview could not be rendered: {previewError}</p>
+              ) : curationLoading || !curatedTemplate ? (
+                <div role="status" className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />Curating routes, intents, and portable recipes
+                </div>
               ) : activeTemplate ? (
                 <Suspense fallback={<div role="status" className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />Preparing live preview</div>}>
                   <VFSPreview
                     key={activeTemplate.id}
                     nodes={[]}
-                    files={previewFiles}
+                    files={curatedTemplate.files}
                     forceBackend="sandpack"
                     device={device}
                     showToolbar={false}
