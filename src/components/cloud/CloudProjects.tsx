@@ -198,6 +198,28 @@ interface CloudProjectsLocationState {
   crmView?: CRMView;
 }
 
+function ProjectIdChip({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      title="Copy project ID"
+      aria-label={`Copy project ID ${id}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        void navigator.clipboard?.writeText(id).then(() => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+      className="mt-1 inline-flex max-w-full items-center gap-1 text-left font-mono text-[11px] text-white/40 hover:text-white/80"
+    >
+      <span className="truncate">ID {id}</span>
+      {copied ? <Check className="h-3 w-3 shrink-0" /> : <Copy className="h-3 w-3 shrink-0" />}
+    </button>
+  );
+}
+
 export function CloudProjects({ userId, businessId: propBusinessId, onProjectSelect }: CloudProjectsProps) {
   const [migrationProgress, setMigrationProgress] = useState<{ completed: number; total: number } | null>(null);
   const [migrationResults, setMigrationResults] = useState<CloudMigrationResult[] | null>(null);
