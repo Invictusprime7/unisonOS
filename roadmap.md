@@ -127,3 +127,10 @@
 - [ ] Batch 6 Tests/docs/scripts: restore removed test coverage, README/AGENTS/roadmap entries, exemption registry, lint allowlist
 - [ ] Delete 39 dead -UnrealDev parallel files + 3 dead SocialIcon.tsx duplicates (keep vendor design-system tree intact)
 - [ ] Full verification: vitest, tsgo, build log
+
+## Active: Marketplace R6
+- [x] R6-P0 replace stale concept-preview test
+- [x] M2.1 concept labelling, no price/purchase on concepts
+- [ ] R6-P1 apply trusted-promotion SQL to UNISON (blocked: migration must be committed via GitHub)
+- [ ] R6-P1 certify one design-only release (blocked: needs admin reviewer + accepted revision)
+- [ ] R6-P2..P5 certified preview, free-claim install, brand contract, Stripe

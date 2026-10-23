@@ -280,10 +280,13 @@ export function MarketplaceTemplateShowcase() {
     <>
       <section aria-labelledby="marketplace-live-previews-title" className="border-y border-border py-7">
         <div className="mb-5 flex flex-col gap-2">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Original design concepts</p>
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Concept previews</p>
           <h2 id="marketplace-live-previews-title" className="text-xl font-semibold tracking-tight">Designed for a point of view</h2>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Individually authored website previews with distinct audiences, page structures, and visual systems. Concepts are not certified marketplace releases.
+            Individually authored website previews with distinct audiences, page structures, and visual systems. Concepts are not certified marketplace releases and cannot be purchased or installed.
+          </p>
+          <p className="max-w-2xl text-xs text-muted-foreground">
+            Sample photography, names, and testimonials are illustrative placeholders, not real client endorsements.
           </p>
         </div>
 
