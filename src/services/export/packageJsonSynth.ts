@@ -7,7 +7,7 @@
  */
 
 import type { RuntimeManifest } from '@/types/runtimeManifest';
-import { resolvePinnedRuntimeVersion } from '@/utils/sandpackDependencies';
+import { resolvePinnedRuntimeVersion, SANDPACK_RUNTIME_PACKAGE_VERSIONS } from '@/utils/sandpackDependencies';
 
 const BASE_DEPS: Record<string, string> = {
   react: '19.2.1',
@@ -31,10 +31,21 @@ const BASE_DEV_DEPS: Record<string, string> = {
 };
 
 const EXPORT_DEPENDENCY_PINS: Readonly<Record<string, string>> = {
+  ...SANDPACK_RUNTIME_PACKAGE_VERSIONS,
+  'framer-motion': '12.29.2',
+  'tailwind-merge': '3.4.0',
   zod: '4.6.5',
   'react-hook-form': '7.68.0',
   '@hookform/resolvers': '5.2.2',
   'class-variance-authority': '0.7.1',
+  'date-fns': '4.1.0',
+  'react-day-picker': '9.12.0',
+  'embla-carousel-react': '8.6.0',
+  cmdk: '1.1.1',
+  vaul: '1.1.2',
+  'input-otp': '1.4.2',
+  'react-resizable-panels': '3.0.6',
+  sonner: '2.0.7',
   recharts: '3.5.1',
 };
 
@@ -65,13 +76,14 @@ function scanImports(files: Record<string, string>): Set<string> {
 }
 
 function extractPkgName(spec: string): string | null {
-  if (!spec || spec.startsWith('.') || spec.startsWith('/')) return null;
-  if (spec.startsWith('@/')) return null;
+  if (!spec || spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('@/') || spec.startsWith('~/') || spec.startsWith('node:')) return null;
   if (spec.startsWith('@')) {
     const [scope, name] = spec.split('/');
     return name ? `${scope}/${name}` : null;
   }
-  return spec.split('/')[0];
+  const name = spec.split('/')[0];
+  if (['assert', 'buffer', 'crypto', 'events', 'fs', 'http', 'https', 'module', 'os', 'path', 'process', 'stream', 'url', 'util', 'zlib'].includes(name)) return null;
+  return name;
 }
 
 export interface SynthesizeOptions {

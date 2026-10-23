@@ -126,6 +126,9 @@ describe('exportSourceProject', () => {
       expect(packageJson.dependencies['@hookform/resolvers']).toBe('5.2.2');
       expect(packageJson.dependencies['@radix-ui/react-accordion']).toBeDefined();
       expect(packageJson.dependencies['@radix-ui/react-dialog']).toBeDefined();
+      expect(packageJson.dependencies).not.toHaveProperty('@/unison');
+      expect(packageJson.dependencies).not.toHaveProperty('@/project-components');
+      expect(packageJson.dependencies).not.toHaveProperty('path');
     expect(packageJson.devDependencies.vite).toBe('7.3.6');
     expect(JSON.stringify(packageJson)).not.toContain('latest');
 
