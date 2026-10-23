@@ -9,6 +9,7 @@
 - `/marketplace/:slug` shows public listing details and a sign-in handoff.
 - The homepage Affinity hero has an accessible AI Chat / Marketplace tab toggle. Both panels stay mounted to preserve the chat and Wizard state; Marketplace queries start only when that tab is selected.
 - Every preview-library composition is curated through the canonical launch plan: industry context and theme-derived seed resolve page topology and intent bindings; `AppBuildContract` and `DesignSourceBundle` bound the design implementation registry, 21st portable recipes, and installed UI primitives; the topology scaffolder emits all planned routes through the canonical component compiler. Style-card, Art Direction, category, and device controls are square-cornered. These previews are separate from certified marketplace releases.
+- All 25 registered compositions have an authored recommended style-card and Art Direction pairing; the style and direction selectors remain available as global overrides, with rendered metadata showing each template's effective design.
 - No public route reads private release rows, snapshots, package paths, or creator identity.
 - Certified listing-detail preview and install remain unavailable until release preview artifacts and install authorization exist; no mock listing is seeded.
 

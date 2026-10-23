@@ -6,17 +6,29 @@ import { ALL_COMPOSITIONS } from '@/sections/templates';
 import type { TemplateComposition } from '@/sections/types';
 import { ART_DIRECTION_PACKS, resolveArtDirectionPack } from '@/sections/variants/artDirectionPacks';
 import type { CuratedMarketplaceTemplate } from '@/marketplace/curateMarketplaceTemplate';
+import { getMarketplaceTemplateDesignPreset, getMarketplaceTemplateStylePresetId } from '@/marketplace/templateDesignPresets';
 
 const VFSPreview = lazy(() => import('@/components/VFSPreview').then((module) => ({ default: module.VFSPreview })));
 
 type PreviewDevice = 'desktop' | 'mobile';
 
 const previewCategories = Array.from(new Set(ALL_COMPOSITIONS.map((template) => template.category))).sort();
-const defaultThemePresetId = THEME_PRESETS.find((preset) => preset.id === 'editorial')?.id ?? THEME_PRESETS[0].id;
+const TEMPLATE_STYLE_PRESET = 'template';
+const TEMPLATE_ART_DIRECTION = 'template';
+
+function resolveThemePreset(template: TemplateComposition, selection: string) {
+  const presetId = selection === TEMPLATE_STYLE_PRESET
+    ? getMarketplaceTemplateStylePresetId(template.id)
+    : selection;
+  return THEME_PRESETS.find((preset) => preset.id === presetId) ?? THEME_PRESETS[0];
+}
 
 function getPreviewArtDirectionPack(template: TemplateComposition, themePresetId: string, packId: string) {
+  const sealedPackId = packId === TEMPLATE_ART_DIRECTION
+    ? getMarketplaceTemplateDesignPreset(template.id).artDirectionPackId
+    : packId === 'auto' ? undefined : packId;
   return resolveArtDirectionPack({
-    sealedPackId: packId === 'auto' ? undefined : packId,
+    sealedPackId,
     industry: template.industry,
     themePresetId,
     seed: `marketplace-preview:${template.id}`,
@@ -26,8 +38,8 @@ function getPreviewArtDirectionPack(template: TemplateComposition, themePresetId
 export function MarketplaceTemplateShowcase() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
-  const [themePresetId, setThemePresetId] = useState(defaultThemePresetId);
-  const [artDirectionPackId, setArtDirectionPackId] = useState('auto');
+  const [themePresetId, setThemePresetId] = useState(TEMPLATE_STYLE_PRESET);
+  const [artDirectionPackId, setArtDirectionPackId] = useState(TEMPLATE_ART_DIRECTION);
   const [activeTemplate, setActiveTemplate] = useState<TemplateComposition | null>(null);
   const [device, setDevice] = useState<PreviewDevice>('desktop');
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -48,7 +60,7 @@ export function MarketplaceTemplateShowcase() {
     }
 
     let current = true;
-    const themePreset = THEME_PRESETS.find((preset) => preset.id === themePresetId) ?? THEME_PRESETS[0];
+    const themePreset = resolveThemePreset(activeTemplate, themePresetId);
     setCuratedTemplate(null);
     setPreviewError(null);
     setCurationLoading(true);
@@ -56,7 +68,9 @@ export function MarketplaceTemplateShowcase() {
       const curated = curateMarketplaceTemplate(
         activeTemplate,
         themePreset,
-        artDirectionPackId === 'auto' ? undefined : artDirectionPackId,
+        artDirectionPackId === TEMPLATE_ART_DIRECTION
+          ? getMarketplaceTemplateDesignPreset(activeTemplate.id).artDirectionPackId
+          : artDirectionPackId === 'auto' ? undefined : artDirectionPackId,
       );
       if (current) setCuratedTemplate(curated);
     }).catch((error: unknown) => {
@@ -117,6 +131,7 @@ export function MarketplaceTemplateShowcase() {
               onChange={(event) => setThemePresetId(event.target.value)}
               className="h-10 rounded-none border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
+              <option value={TEMPLATE_STYLE_PRESET}>Template design</option>
               {THEME_PRESETS.map((preset) => (
                 <option key={preset.id} value={preset.id}>{preset.label}</option>
               ))}
@@ -129,6 +144,7 @@ export function MarketplaceTemplateShowcase() {
               onChange={(event) => setArtDirectionPackId(event.target.value)}
               className="h-10 rounded-none border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
+              <option value={TEMPLATE_ART_DIRECTION}>Template direction</option>
               <option value="auto">Recommended for industry</option>
               {Object.values(ART_DIRECTION_PACKS).map((pack) => (
                 <option key={pack.id} value={pack.id}>{pack.name}</option>
@@ -141,23 +157,27 @@ export function MarketplaceTemplateShowcase() {
           <p className="border-t border-border py-6 text-sm text-muted-foreground">No previews match these filters.</p>
         ) : (
           <ul className="grid gap-x-6 sm:grid-cols-2 xl:grid-cols-3">
-            {visibleTemplates.map((template) => (
-              <li key={template.id} className="flex min-h-36 flex-col border-t border-border py-4">
-                <p className="text-xs capitalize text-muted-foreground">
-                  {template.category} · {getPreviewArtDirectionPack(template, themePresetId, artDirectionPackId).name}
-                </p>
-                <h3 className="mt-1 text-base font-medium">{template.name}</h3>
-                <p className="mt-1 line-clamp-2 flex-1 text-sm text-muted-foreground">{template.description}</p>
-                <button
-                  type="button"
-                  onClick={() => openPreview(template)}
-                  aria-label={`Preview ${template.name} live`}
-                  className="mt-4 inline-flex min-h-9 w-fit items-center gap-2 border border-input px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-                >
-                  <Eye aria-hidden="true" className="h-4 w-4" /> Live preview
-                </button>
-              </li>
-            ))}
+            {visibleTemplates.map((template) => {
+              const templateTheme = resolveThemePreset(template, themePresetId);
+              const artDirection = getPreviewArtDirectionPack(template, templateTheme.id, artDirectionPackId);
+              return (
+                <li key={template.id} className="flex min-h-36 flex-col border-t border-border py-4">
+                  <p className="text-xs capitalize text-muted-foreground">
+                    {template.category} · {templateTheme.label} · {artDirection.name}
+                  </p>
+                  <h3 className="mt-1 text-base font-medium">{template.name}</h3>
+                  <p className="mt-1 line-clamp-2 flex-1 text-sm text-muted-foreground">{template.description}</p>
+                  <button
+                    type="button"
+                    onClick={() => openPreview(template)}
+                    aria-label={`Preview ${template.name} live`}
+                    className="mt-4 inline-flex min-h-9 w-fit items-center gap-2 border border-input px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    <Eye aria-hidden="true" className="h-4 w-4" /> Live preview
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
@@ -168,9 +188,9 @@ export function MarketplaceTemplateShowcase() {
             <div className="min-w-0">
               <DialogTitle className="truncate text-base font-semibold">{activeTemplate?.name} live preview</DialogTitle>
               <p className="mt-1 text-xs capitalize text-muted-foreground">
-                {curatedTemplate
-                  ? `${curatedTemplate.contract.business.industry} · ${curatedTemplate.designSourceBundle.identity.artDirectionPackId} · ${curatedTemplate.routeCount} pages · ${curatedTemplate.intentCount} bindings · ${curatedTemplate.portableRecipeCount} portable recipes`
-                  : `${activeTemplate?.category} · ${activeTemplate && getPreviewArtDirectionPack(activeTemplate, themePresetId, artDirectionPackId).name}`}
+                {curatedTemplate && activeTemplate
+                  ? `${curatedTemplate.contract.business.industry} · ${resolveThemePreset(activeTemplate!, themePresetId).label} · ${curatedTemplate.designSourceBundle.identity.artDirectionPackId} · ${curatedTemplate.routeCount} pages · ${curatedTemplate.intentCount} bindings · ${curatedTemplate.portableRecipeCount} portable recipes`
+                  : `${activeTemplate?.category} · ${activeTemplate && resolveThemePreset(activeTemplate, themePresetId).label} · ${activeTemplate && getPreviewArtDirectionPack(activeTemplate, resolveThemePreset(activeTemplate, themePresetId).id, artDirectionPackId).name}`}
               </p>
             </div>
             <div aria-label="Preview size" className="flex shrink-0 border border-border">

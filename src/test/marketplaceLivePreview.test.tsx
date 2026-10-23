@@ -27,6 +27,7 @@ describe('Marketplace live template previews', () => {
     expect(screen.getByRole('combobox', { name: 'Template category' })).toHaveClass('rounded-none');
     expect(screen.getByRole('searchbox', { name: 'Search previews' })).toHaveClass('rounded-none');
     expect(screen.getByRole('combobox', { name: 'Style card' })).toHaveClass('rounded-none');
+    expect(screen.getByRole('combobox', { name: 'Style card' })).toHaveValue('template');
     expect(screen.getByRole('combobox', { name: 'Art direction' })).toHaveClass('rounded-none');
 
     fireEvent.click(screen.getByRole('button', { name: `Preview ${template.name} live` }));
@@ -48,5 +49,8 @@ describe('Marketplace live template previews', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Mobile preview' }));
     expect(screen.getByTestId('live-vfs-preview')).toHaveAttribute('data-device', 'mobile');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { THEME_PRESETS } from '@/components/onboarding/themePresets';
 import { ALL_COMPOSITIONS } from '@/sections/templates';
 import { curateMarketplaceTemplate } from '@/marketplace/curateMarketplaceTemplate';
+import { getMarketplaceTemplateDesignPreset, MARKETPLACE_TEMPLATE_DESIGN_PRESETS } from '@/marketplace/templateDesignPresets';
 import { buildWizardDesignIntervention } from '@/services/wizardDesignIntervention';
 
 describe('Marketplace template curation', () => {
@@ -45,17 +46,25 @@ describe('Marketplace template curation', () => {
   });
 
   it('curates every registered composition into a routed, registry-backed preview', () => {
-    const themePreset = THEME_PRESETS.find((preset) => preset.id === 'editorial')!;
-
+    const usedPresets = new Set<string>();
+    const usedPacks = new Set<string>();
     for (const template of ALL_COMPOSITIONS) {
-      const curated = curateMarketplaceTemplate(template, themePreset);
+      const designPreset = getMarketplaceTemplateDesignPreset(template.id);
+      const themePreset = THEME_PRESETS.find((preset) => preset.id === designPreset.themePresetId)!;
+      const curated = curateMarketplaceTemplate(template, themePreset, designPreset.artDirectionPackId);
       const pageFiles = curated.contract.topology.sitePlan.pages.map((page) => page.filePath);
 
+      usedPresets.add(themePreset.id);
+      usedPacks.add(designPreset.artDirectionPackId);
       expect(curated.contract.design.themePresetId, template.id).toBe(themePreset.id);
       expect(curated.contract.design.registryContext.generationPolicy, template.id).toBe('21st-only');
       expect(curated.designSourceBundle.implementations.length, template.id).toBeGreaterThan(0);
       expect(pageFiles.every((path) => Boolean(curated.files[path])), template.id).toBe(true);
       expect(curated.files['/.unison/marketplace-curation.json'], template.id).toBeDefined();
     }
+
+    expect(Object.keys(MARKETPLACE_TEMPLATE_DESIGN_PRESETS).sort()).toEqual(ALL_COMPOSITIONS.map((template) => template.id).sort());
+    expect(usedPresets.size).toBeGreaterThan(1);
+    expect(usedPacks.size).toBeGreaterThan(1);
   });
 });
