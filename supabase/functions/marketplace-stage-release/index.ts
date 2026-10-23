@@ -62,7 +62,7 @@ serve(async (req) => {
     .limit(1)
     .maybeSingle();
   if (revisionError) return json({ success: false, error: 'Accepted revision could not be read.' }, 500);
-  if (!revision || revision.business_id !== project.business_id) {
+  if (!revision || typeof revision.id !== "string" || revision.business_id !== project.business_id) {
     return json({ success: false, error: 'Project has no accepted committed revision for its business.' }, 409);
   }
   const snapshot = revision.site_bundle_snapshot as Record<string, unknown> | null;
