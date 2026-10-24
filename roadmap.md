@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Active: Marketplace preview draft installation
+- [ ] Diagnose and correct content-entry-create 500 during installed draft content setup; verify the real transaction where an authoritative session is available.
 - [x] Correct Lowtide House preview-dependency acceptance: caller page checks trigger closure repair and remain enforced afterward; preserve terminal OpenAI credit failures rather than accepting untouched previews.
 - [x] App Builder page writing/repair/Builder edits switched to Gemini-only (no OpenAI attempts).
 - [ ] Retry Lowtide House install → saved draft → reopen: needs the backend deploy workflow run and a signed-in UNISON session.
