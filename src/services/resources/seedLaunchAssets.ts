@@ -26,7 +26,7 @@ export const SEED_CONTENT_TYPES: Record<string, { displayName: string; fields: {
     { key: 'bio', label: 'Bio', type: 'textarea' },
     { key: 'sort_order', label: 'Order', type: 'number' },
     { key: 'avatar_url', label: 'Avatar', type: 'image' },
-    { key: 'social_links', label: 'Social links', type: 'json' },
+    { key: 'social_links', label: 'Social links', type: 'textarea' },
   ] },
   gallery: { displayName: 'Gallery', fields: [
     { key: 'caption', label: 'Caption', type: 'text' },
@@ -185,7 +185,7 @@ export async function seedLaunchAssets(input: { businessId: string; projectId?: 
     })),
     ...Object.values(data.team ?? {}).filter((m) => m.name?.trim()).map((m) => ({
       type: 'team', title: m.name,
-      data: { role: m.role, bio: m.bio, sort_order: m.sortOrder, avatar_url: mediaUrl(m.avatarAssetId), social_links: m.socialLinks },
+      data: { role: m.role, bio: m.bio, sort_order: m.sortOrder, avatar_url: mediaUrl(m.avatarAssetId), social_links: m.socialLinks && Object.keys(m.socialLinks).length ? JSON.stringify(m.socialLinks) : undefined },
     })),
     ...Object.values(data.gallery ?? {}).filter((g) => g.caption?.trim() || g.assetId).map((g) => ({
       type: 'gallery', title: g.caption?.trim() || 'Gallery item',
