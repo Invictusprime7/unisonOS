@@ -10,6 +10,7 @@ import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import type { ConfirmedLaunchIds } from '@/services/confirmedLaunchProvisioner';
 import type { WizardSelections } from '@/types/playground';
 import type { PageRole } from '@/platform/core/siteTopologyPlanner';
+import { materializePreviewImages } from './materializePreviewImages';
 
 const PAGE_ROLES = new Set<string>(['home', 'about', 'services', 'contact', 'pricing', 'gallery', 'faq', 'booking', 'checkout', 'thank_you', 'blog', 'shop', 'immersive', 'custom']);
 function templatePageRole(role: string): PageRole {
@@ -55,7 +56,8 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
     uiFoundation: plan.uiFoundationContract, registryContext: snapshot.meta.registryContext ?? plan.registryContext,
     protectedPaths: WIZARD_LANE_B_PROTECTED_PATHS,
   });
-  const initialFiles = { ...plan.infrastructureFiles, ...material.files,
+  const sourceFiles = await materializePreviewImages(material.files);
+  const initialFiles = { ...plan.infrastructureFiles, ...sourceFiles,
     '/src/App.tsx': generateCanonicalRouter(snapshot.pageRegistry, snapshot.businessName) };
   const result = await unisonAppBuilder.generate({
     operationId: `marketplace-install:${ids.draftId}:app-build`, contract, initialFiles, entryPoint: '/src/App.tsx', baseRevisionId: null, budgetMs: 280_000,

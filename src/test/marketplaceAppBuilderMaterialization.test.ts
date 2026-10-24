@@ -4,6 +4,7 @@ import { buildConceptDraftSource } from '@/marketplace/conceptDraftSource';
 const mocks = vi.hoisted(() => ({ generate: vi.fn(), compile: vi.fn() }));
 vi.mock('@/services/app-builder/UnisonAppBuilder', () => ({ unisonAppBuilder: { generate: mocks.generate } }));
 vi.mock('@/services/canonicalLaunchVfs', () => ({ buildCanonicalLaunchArtifacts: mocks.compile }));
+vi.mock('@/marketplace/materializePreviewImages', () => ({ materializePreviewImages: async (files: Record<string, string>) => files }));
 import { materializeTemplateWithAppBuilder } from '@/marketplace/materializeTemplateWithAppBuilder';
 
 describe('marketplace App Builder convergence', () => {
