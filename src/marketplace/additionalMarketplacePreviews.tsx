@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowRight, ArrowUpRight, Plus } from "lucide-react";
 import type { SectionEntry } from "@/sections/types";
+import { MARKETPLACE_SAMPLE_IMAGES } from "@/marketplace/marketplaceImagePlaceholders";
 import {
   MarketplaceRegisteredSection,
   MARKETPLACE_TEMPLATE_VARIANT_PROFILES,
@@ -684,6 +685,7 @@ const pollenFeatures: SectionEntry<"features"> = {
         title: "Made to be used",
         description:
           "Thoughtful shapes and durable finishes, not shelf-only objects.",
+        image: MARKETPLACE_SAMPLE_IMAGES.objects,
       },
       {
         title: "Maker-led",
