@@ -1,5 +1,9 @@
 # Roadmap
 
+## Active: Marketplace concept action repair
+- [ ] Replace the shared informational cart action overlay with functional, template-scoped persistent cart actions and quantity badges; audit sibling concept actions without authorizing creator services.
+- [ ] Run marketplace action regressions and verify add → bag → reload in the public marketplace preview.
+
 ## Active: Marketplace cart and capability persistence
 - [x] Enable canonical add-to-cart with site-scoped browser persistence, quantity badges, restored saved capabilities and runtime-connected bag icons.
 - [x] Preserve declared capability requirements and portable slot bindings in staged manifests and buyer packages without copying creator approvals or record payloads.
