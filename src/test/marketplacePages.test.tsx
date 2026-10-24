@@ -5,6 +5,7 @@ import type { PublicMarketplaceListing } from '@/marketplace/contracts';
 
 const listPublicMarketplaceListings = vi.hoisted(() => vi.fn());
 vi.mock('@/marketplace/listingService', () => ({ listPublicMarketplaceListings }));
+vi.mock('@/marketplace/stageReleaseClient', () => ({ loadMarketplaceReleasePreview: vi.fn().mockRejectedValue(new Error('none')) }));
 
 import Marketplace from '@/pages/Marketplace';
 import MarketplaceListing from '@/pages/MarketplaceListing';

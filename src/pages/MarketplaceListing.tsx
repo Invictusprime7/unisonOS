@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { listPublicMarketplaceListings } from '@/marketplace/listingService';
 import type { PublicMarketplaceListing } from '@/marketplace/contracts';
+import { loadMarketplaceReleasePreview, type MarketplaceReleasePreview } from '@/marketplace/stageReleaseClient';
+
+const VFSPreview = lazy(() => import('@/components/VFSPreview').then((m) => ({ default: m.VFSPreview })));
+type Device = 'desktop' | 'tablet' | 'mobile';
 
 function formatPrice(priceCents: number, currency: string): string {
   return new Intl.NumberFormat(undefined, {
@@ -17,6 +21,23 @@ export default function MarketplaceListing() {
   const [listing, setListing] = useState<PublicMarketplaceListing | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [preview, setPreview] = useState<MarketplaceReleasePreview | null>(null);
+  const [previewState, setPreviewState] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
+  const [device, setDevice] = useState<Device>('desktop');
+
+  useEffect(() => {
+    if (!listing) return;
+    let active = true;
+    setPreviewState('loading');
+    void loadMarketplaceReleasePreview(listing.slug).then((result) => {
+      if (!active) return;
+      setPreview(result);
+      setPreviewState('ready');
+    }).catch(() => {
+      if (active) setPreviewState('unavailable');
+    });
+    return () => { active = false; };
+  }, [listing]);
 
   useEffect(() => {
     let active = true;
@@ -56,18 +77,47 @@ export default function MarketplaceListing() {
         ) : (
           <article className="grid gap-10 py-10 md:grid-cols-[minmax(0,1.4fr)_minmax(260px,0.6fr)]">
             <div>
-              <div className="flex aspect-[16/10] items-center justify-center border border-border bg-muted text-sm text-muted-foreground">
-                Certified preview unavailable
-              </div>
+              {previewState === 'ready' && preview ? (
+                <div>
+                  <div role="group" aria-label="Preview device" className="mb-3 flex gap-2">
+                    {(['desktop', 'tablet', 'mobile'] as Device[]).map((d) => (
+                      <button key={d} type="button" aria-pressed={device === d} onClick={() => setDevice(d)}
+                        className={`border border-border px-3 py-1 text-xs capitalize ${device === d ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="aspect-[16/10] overflow-hidden border border-border bg-muted">
+                    <Suspense fallback={<p role="status" className="p-6 text-sm text-muted-foreground">Loading preview…</p>}>
+                      <VFSPreview nodes={[]} files={preview.files} activeFile="/src/App.tsx" device={device}
+                        forceBackend="sandpack" showToolbar={false} showConsole={false} enableSelection={false} />
+                    </Suspense>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex aspect-[16/10] items-center justify-center border border-border bg-muted text-sm text-muted-foreground">
+                  {previewState === 'loading' ? 'Loading preview…' : 'Certified preview unavailable'}
+                </div>
+              )}
               <p className="mt-8 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 {listing.industryKey} · {listing.productType.replace(/_/g, ' ')}
               </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">{listing.title}</h1>
               <p className="mt-4 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{listing.summary}</p>
+              {preview && (
+                <dl className="mt-8 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-6 text-sm sm:grid-cols-3">
+                  <div><dt className="text-muted-foreground">Version</dt><dd className="mt-1">{preview.version}</dd></div>
+                  <div><dt className="text-muted-foreground">Pages</dt><dd className="mt-1 capitalize">{preview.details.pageRoles.join(', ') || '—'}</dd></div>
+                  <div><dt className="text-muted-foreground">Design direction</dt><dd className="mt-1">{preview.details.artDirectionPackId ?? '—'}</dd></div>
+                  <div><dt className="text-muted-foreground">Media</dt><dd className="mt-1">{preview.details.placeholderAssetCount} of {preview.details.assetCount} replaced with “add your own” placeholders</dd></div>
+                  <div><dt className="text-muted-foreground">Files</dt><dd className="mt-1">{preview.details.fileCount}</dd></div>
+                  <div><dt className="text-muted-foreground">Published</dt><dd className="mt-1">{new Date(listing.updatedAt).toLocaleDateString()}</dd></div>
+                </dl>
+              )}
             </div>
             <aside className="border-t border-border pt-6 md:border-l md:border-t-0 md:pl-8">
               <p className="text-2xl font-semibold">{formatPrice(listing.priceCents, listing.currency)}</p>
-              <p className="mt-3 text-sm text-muted-foreground">Preview and install are unavailable until this release has certified preview and licensing evidence.</p>
+              <p className="mt-3 text-sm text-muted-foreground">{previewState === 'ready' ? 'Live preview shown with placeholder media. Install opens soon.' : 'Preview and install are unavailable until this release has certified preview and licensing evidence.'}</p>
               <button disabled className="mt-6 h-11 w-full border border-input bg-muted text-sm text-muted-foreground disabled:cursor-not-allowed">
                 Install unavailable
               </button>
