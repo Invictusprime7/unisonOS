@@ -31,6 +31,7 @@ describe('template draft acceptance', () => {
     const result = await installTemplateDraft(selection);
     expect(mocks.build).toHaveBeenCalledOnce();
     expect(mocks.build.mock.invocationCallOrder[0]).toBeLessThan(mocks.commit.mock.invocationCallOrder[0]);
+    expect(mocks.commit.mock.calls[0][0].current.activePagePath).toBe('/src/App.tsx');
     expect(mocks.commit).toHaveBeenCalledWith(expect.objectContaining({ identity: expect.objectContaining({ userId: 'buyer', projectId: 'project', draftId: 'draft' }) }));
     expect(result).toMatchObject({ draftId: 'draft', revisionId: 'revision' });
     expect(mocks.seed).toHaveBeenCalledWith(expect.objectContaining({ businessId: 'business', projectId: 'project' }));
@@ -63,5 +64,13 @@ describe('template draft acceptance', () => {
   it('reports saved draft data setup failures rather than claiming full installation', async () => {
     mocks.seed.mockRejectedValue(new Error('Catalog unavailable'));
     await expect(installTemplateDraft(selection)).rejects.toThrow('draft was saved, but its editable data setup did not finish');
+  });
+});import { installActivePagePath } from '@/marketplace/installTemplateDraft';
+describe('template draft opening page', () => {
+  it('opens on the Home page file that was saved', () => {
+    const snapshot = { pageRegistry: { homePageId: 'home', pages: { home: { id: 'home', filePath: '/src/pages/home.tsx', isHome: true }, rooms: { id: 'rooms', filePath: '/src/pages/rooms.tsx' } } } };
+    expect(installActivePagePath({ files: { '/src/pages/home.tsx': 'a', '/src/pages/rooms.tsx': 'b' }, siteBundleSnapshot: snapshot as never, entryPoint: '/src/App.tsx' })).toBe('/src/pages/home.tsx');
+    expect(installActivePagePath({ files: { '/src/pages/rooms.tsx': 'b' }, siteBundleSnapshot: snapshot as never, entryPoint: '/src/App.tsx' })).toBe('/src/pages/rooms.tsx');
+    expect(installActivePagePath({ files: {}, siteBundleSnapshot: snapshot as never, entryPoint: '/src/App.tsx' })).toBeNull();
   });
 });
