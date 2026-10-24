@@ -66,16 +66,16 @@ export function MarketplaceCatalog({ embedded = false, enabled = true }: { embed
         <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Design Marketplace</p>
         <h1 className={embedded ? 'text-2xl font-semibold tracking-tight' : 'text-3xl font-semibold tracking-tight'}>Browse templates</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Explore original design concepts and certified releases for the Unison App Builder.
+          Explore original design concepts and published site templates for the Unison App Builder.
         </p>
       </div>
 
-      <MarketplaceTemplateShowcase />
+      <MarketplaceTemplateShowcase>
+        <div className="border-t border-border pt-7">
+          <h2 className="text-lg font-semibold">Published site templates</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Released sites from Unison creators, ready to preview and install.</p>
+        </div>
 
-      <div className="border-b border-border pb-3 pt-7">
-        <h2 className="text-lg font-semibold">Certified marketplace releases</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Published releases with verified source and licensing evidence.</p>
-      </div>
 
       <section aria-label="Marketplace filters" className="grid gap-3 border-b border-border py-5 md:grid-cols-[minmax(220px,1fr)_220px_190px]">
         <label className="relative block">
@@ -128,7 +128,7 @@ export function MarketplaceCatalog({ embedded = false, enabled = true }: { embed
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
             {query || industryKey || productType
               ? 'Try changing or clearing your filters.'
-              : 'Certified releases will appear here when they are ready to preview and install.'}
+              : 'Published site templates will appear here once a release is live.'}
           </p>
         </div>
       ) : (
@@ -153,6 +153,7 @@ export function MarketplaceCatalog({ embedded = false, enabled = true }: { embed
           ))}
         </ul>
       )}
+      </MarketplaceTemplateShowcase>
     </div>
   );
 }
