@@ -66,8 +66,6 @@ function MarketplaceIntentRedirect({
     : template.id === 'formworks-studio'
       ? { surface: 'bg-[#f7f8f5] text-[#182c3a]', border: 'border-[#182c3a]/20', muted: 'text-[#5a6870]', button: 'bg-[#f05a3b] text-white' }
       : { surface: 'bg-[#f3efe4] text-[#203b2c]', border: 'border-[#203b2c]/20', muted: 'text-[#536254]', button: 'bg-[#a34a32] text-white' });
-  const overlayName = binding.definition.overlayId?.replace(/-/g, ' ')
-    ?? (binding.definition.name === 'cart.view' ? 'cart' : binding.definition.surface);
   const flowLabel = 'Sample action';
   const flowDescription = binding.definition.surface === 'redirect'
     ? 'This sample does not take payments or start an external checkout.'

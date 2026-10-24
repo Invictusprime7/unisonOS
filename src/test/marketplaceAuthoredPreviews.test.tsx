@@ -296,6 +296,17 @@ describe('authored marketplace previews', () => {
     expect(redirect).toHaveTextContent('does not take payments');
   });
 
+  it('adds registered catalog products through the same persistent cart', async () => {
+    render(<MarketplaceTemplateShowcase />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Pollen Objects' }));
+    fireEvent.click(screen.getAllByRole('link', { name: 'Add to Bag', exact: true })[1]);
+    await waitFor(() => expect(screen.getByLabelText('Bag item count')).toHaveTextContent('1'));
+    fireEvent.click(screen.getByRole('button', { name: /Bag/ }));
+    const bag = screen.getByRole('dialog', { name: 'Shopping bag' });
+    expect(within(bag).getByLabelText('Field watch quantity')).toHaveTextContent('1');
+    expect(bag).toHaveTextContent('Total: $165.00');
+  });
+
   it('supports keyboard focus, Tab containment, Escape, and focus restoration', async () => {
     render(<MarketplaceTemplateShowcase />);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Sorella House' }));
