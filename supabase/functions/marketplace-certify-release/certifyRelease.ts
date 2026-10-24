@@ -5,7 +5,7 @@
 export interface ManifestAssetEntry {
   path: string;
   sha256: string;
-  licenseClass: 'owned' | 'redistributable' | 'buyer-supplied' | 'reference-only';
+  licenseClass: 'owned' | 'redistributable' | 'buyer-supplied' | 'reference-only' | 'excluded';
 }
 
 export interface AssetRightsDecision {
@@ -114,7 +114,7 @@ export function applyAssetRightsToManifest<T extends { assets: ManifestAssetEntr
       if (decision.decision === 'include') {
         return { ...asset, licenseClass: 'redistributable' as const };
       }
-      return { ...asset, licenseClass: decision.buyerSupplied ? ('buyer-supplied' as const) : ('reference-only' as const) };
+      return { ...asset, licenseClass: decision.buyerSupplied ? ('buyer-supplied' as const) : ('excluded' as const) };
     }),
   };
 }
