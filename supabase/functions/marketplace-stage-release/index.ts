@@ -143,6 +143,8 @@ serve(async (req) => {
     status: release.status,
     acceptedRevisionId: revision.id,
     snapshotSha256,
+    assetCount: assets.length,
+    unresolvableAssets: assets.filter((asset) => !asset.contentAddressed).map((asset) => asset.path),
     nextSteps: [
       'Record asset rights for every bundled image.',
       'Run the isolated export build and reimport, then upload the private package.',
