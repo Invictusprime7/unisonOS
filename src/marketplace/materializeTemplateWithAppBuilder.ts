@@ -9,6 +9,14 @@ import { createWizardDesignSelection } from '@/services/wizardDesignSelection';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import type { ConfirmedLaunchIds } from '@/services/confirmedLaunchProvisioner';
 import type { WizardSelections } from '@/types/playground';
+import type { PageRole } from '@/platform/core/siteTopologyPlanner';
+
+const PAGE_ROLES = new Set<string>(['home', 'about', 'services', 'contact', 'pricing', 'gallery', 'faq', 'booking', 'checkout', 'thank_you', 'blog', 'shop', 'immersive', 'custom']);
+function templatePageRole(role: string): PageRole {
+  if (role === 'service') return 'services';
+  if (role === 'thankyou') return 'thank_you';
+  return PAGE_ROLES.has(role) ? role as PageRole : 'custom';
+}
 
 export interface MarketplaceTemplateMaterial {
   files: Record<string, string>;
@@ -31,7 +39,7 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   const plan = buildCanonicalLaunchPlan(selections);
   plan.playground.pageRegistry = snapshot.pageRegistry;
   plan.sitePlan.pages = Object.values(snapshot.pageRegistry.pages).map(page => ({
-    id: page.id, name: page.id, title: page.title, route: page.path, role: page.pageRole ?? page.pageType,
+    id: page.pageId, name: page.pageId, title: page.title, route: page.path, role: templatePageRole(page.pageRole ?? page.pageType),
     filePath: page.filePath ?? '', isHome: page.isHome, visibleInNav: true, generatedBy: 'wizard' as const,
   }));
   if (plan.sitePlan.pages.some(page => !page.filePath)) throw new Error('The template has an incomplete page source registry.');

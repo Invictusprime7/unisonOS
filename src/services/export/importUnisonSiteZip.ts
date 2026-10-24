@@ -223,3 +223,12 @@ export async function importUnisonSiteZip(
     preloadedIntents: readPreloadedIntents(artifacts.siteBundleSnapshot),
   };
 }
+
+/** Read a licensed package as App Builder input, without accepting/preflighting its page bodies. */
+export async function readUnisonSiteMaterial(file: File | Blob, options?: { fallbackName?: string }) {
+  const imported = await importSourceProjectZip(file, options);
+  const snapshot = requireUnisonSnapshot(imported.vfsFiles, imported.projectName);
+  const manifest = readJsonRecord(imported.vfsFiles, '/.unison/runtime-manifest.json');
+  if (!manifest || typeof manifest.entryPoint !== 'string') throw new Error('The template package has no runtime entry point.');
+  return { files: imported.vfsFiles, siteBundleSnapshot: snapshot, entryPoint: manifest.entryPoint };
+}

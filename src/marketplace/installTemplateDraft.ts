@@ -4,7 +4,7 @@ import { commitMutation } from '@/services/vfsCommitService';
 import { legacyFilesToPatchPlan } from '@/types/patchPlan';
 import type { AuthoredMarketplaceTemplate } from './marketplaceTemplatePrimitives';
 import { getSupabaseFunctionHeaders, getSupabaseFunctionUrl } from '@/integrations/supabase/supabaseFunctionRequest';
-import { importUnisonSiteZip } from '@/services/export/importUnisonSiteZip';
+import { readUnisonSiteMaterial } from '@/services/export/importUnisonSiteZip';
 import { buyerDraftSnapshot } from './buyerDraftSnapshot';
 import { materializeTemplateWithAppBuilder, type MarketplaceTemplateMaterial } from './materializeTemplateWithAppBuilder';
 
@@ -28,8 +28,7 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection)
     receipt = { installationId: payload.installationId };
     const packageResponse = await fetch(payload.packageUrl);
     if (!packageResponse.ok) throw new Error('The template package could not be loaded.');
-    const imported = await importUnisonSiteZip(await packageResponse.blob(), { fallbackName: selection.title });
-    artifacts = { files: imported.vfsFiles, siteBundleSnapshot: imported.siteBundleSnapshot, entryPoint: imported.entryPoint };
+    artifacts = await readUnisonSiteMaterial(await packageResponse.blob(), { fallbackName: selection.title });
   }
   if (!artifacts.siteBundleSnapshot) throw new Error('The template has no editable page registry.');
   const snapshot = buyerDraftSnapshot(artifacts.siteBundleSnapshot);
