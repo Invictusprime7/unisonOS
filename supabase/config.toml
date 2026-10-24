@@ -165,3 +165,6 @@ verify_jwt = false
 
 [functions.marketplace-stage-release]
 verify_jwt = false
+
+[functions.marketplace-certify-release]
+verify_jwt = false
