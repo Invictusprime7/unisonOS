@@ -76,28 +76,16 @@ Deno.test("parses explicit Gemini/OpenAI traffic weights", () => {
   assertEquals(parseProviderDistribution("invalid"), { gemini: 100, openai: 0 });
 });
 
-Deno.test('App Builder always leads with funded Gemini while retaining hybrid fallbacks', () => {
+Deno.test('App Builder page writing, repair and Builder edits use only Gemini', () => {
+  const env = (name: string) => name === 'LOVABLE_API_KEY' ? 'lovable-test-key'
+    : name === 'AI_PROVIDER_DISTRIBUTION' ? 'gemini=0,openai=100' : bothProviders(name);
   for (const type of ['site_page_author', 'site_page_repair', 'builder_source_edit'] as const) {
-    const plan = buildProviderPlan({ ...task, type }, true, undefined, 'complex', 'composer',
-      name => name === 'AI_PROVIDER_DISTRIBUTION' ? 'gemini=0,openai=100' : bothProviders(name));
+    const plan = buildProviderPlan({ ...task, type }, true, undefined, 'complex', 'composer', env);
     assertEquals(plan.primaryProvider, 'gemini');
-    assertEquals(plan.gatewayModels[0].id, 'google/gemini-3.8-flash');
-    assertEquals(plan.gatewayModels.some(model => model.id.startsWith('openai/')), true);
-    assertEquals(plan.raceGateway, undefined);
+    assertEquals(plan.geminiOnly, true);
+    assertEquals(plan.gatewayLeads, undefined);
+    assertEquals(plan.gatewayModels.map(model => model.id), ['google/gemini-3.8-flash']);
   }
-});
-
-Deno.test('Hybrid launch page writing: managed gateway leads, funded Gemini backs it up', () => {
-  const withGateway = (name: string) => name === 'LOVABLE_API_KEY' ? 'lovable-test-key' : bothProviders(name);
-  for (const type of ['site_page_author', 'site_page_repair'] as const) {
-    const plan = buildProviderPlan({ ...task, type }, true, undefined, 'complex', 'composer', withGateway);
-    assertEquals(plan.gatewayLeads, true);
-    assertEquals(plan.gatewayModels[0].id, 'google/gemini-3.8-flash');
-  }
-  const edit = buildProviderPlan({ ...task, type: 'builder_source_edit' }, true, undefined, 'complex', 'composer', withGateway);
-  assertEquals(edit.gatewayLeads, true);
-  const noGateway = buildProviderPlan({ ...task, type: 'site_page_author' }, true, undefined, 'complex', 'composer', bothProviders);
-  assertEquals(noGateway.gatewayLeads, undefined);
 });
 
 Deno.test("honors fixed Gemini and OpenAI distributions", () => {
@@ -273,12 +261,10 @@ Deno.test("keeps Wizard content enrichment bounded to small structured-output mo
   assertEquals(plan.perModelTimeoutMs, 35_000);
 });
 
-Deno.test("Gemini-primary mode retains hybrid fallbacks even when a gateway is configured", () => {
+Deno.test("Gemini-primary mode keeps App Builder page writing on Gemini only", () => {
   const plan = buildProviderPlan({ ...task, type: "site_page_author" }, true, undefined, "complex", "composer",
     name => name === "AI_PROVIDER_MODE" ? "gemini-primary" : name === "LOVABLE_API_KEY" ? "test-key" : bothProviders(name));
   assertEquals(plan.primaryProvider, "gemini");
   assertEquals(plan.gatewayLeads, undefined);
-  assertEquals(plan.gatewayModels[0].id, "google/gemini-3.8-flash");
-  assertEquals(plan.gatewayModels.some(model => model.id.startsWith("openai/")), true);
-  assertEquals(new Set(plan.gatewayModels.map(model => model.id)).size, plan.gatewayModels.length);
+  assertEquals(plan.gatewayModels.some(model => model.id.startsWith("openai/")), false);
 });
