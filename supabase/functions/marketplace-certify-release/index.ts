@@ -247,6 +247,10 @@ async function autoRelease(body: Json, reviewerId: string) {
   const loaded = await loadRelease(releaseId);
   if ('error' in loaded) return { status: 404, body: { success: false, error: loaded.error } };
   if (loaded.release.status === 'published') return { status: 200, body: { success: true, releaseId, status: 'published' } };
+  const listingId = loaded.release.listing_id;
+  if (typeof listingId !== 'string' || !isValidUUID(listingId)) {
+    return { status: 409, body: { success: false, error: 'Release is missing its marketplace listing.' } };
+  }
 
   const manifest = loaded.release.manifest_json as { assets?: ManifestAssetEntry[] };
   const decisions: AssetRightsDecision[] = (Array.isArray(manifest?.assets) ? manifest.assets : [])
@@ -281,7 +285,7 @@ async function autoRelease(body: Json, reviewerId: string) {
   const { error: listingError } = await admin
     .from('marketplace_listings')
     .update({ current_release_id: releaseId, status: 'published' })
-    .eq('id', loaded.release.listing_id);
+    .eq('id', listingId);
   if (listingError) return { status: 409, body: { success: false, error: `Listing could not be published: ${listingError.message}` } };
 
   return { status: 200, body: { success: true, releaseId, reviewId, status: 'published', placeholderAssets: decisions.length } };
