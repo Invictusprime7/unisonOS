@@ -26,7 +26,7 @@ import { executeIntent, configureIntentExecutor } from './intentExecutor';
 import { createCheckoutSession, resolveCheckoutSessionBody } from './checkoutClient';
 import { setupEventBridge, createInngestEventsManager } from '@/lib/inngest-event-bridge';
 import type { InteractiveIconProps } from '@/components/ui/InteractiveIcon';
-import { BROWSER_CART_EVENT, readBrowserCart } from './browserCartManager';
+import { BROWSER_CART_EVENT, buildBrowserCartStorageKey, readBrowserCart } from './browserCartManager';
 
 // ============ TYPES ============
 
@@ -81,7 +81,7 @@ export interface TemplateRuntimeContextValue {
   getIconProps: (iconKey: string) => Partial<InteractiveIconProps>;
 }
 
-const TemplateRuntimeContext = createContext<TemplateRuntimeContextValue | null>(null);
+export const TemplateRuntimeContext = createContext<TemplateRuntimeContextValue | null>(null);
 
 // ============ CART MANAGER WITH SUPABASE ============
 
@@ -359,10 +359,10 @@ export function TemplateRuntimeProvider({ config, children }: TemplateRuntimePro
   // Session ID for guest carts
   const sessionId = useMemo(() => {
     if (typeof window !== 'undefined') {
-      let id = sessionStorage.getItem('cart_session_id');
+      let id = localStorage.getItem('cart_session_id');
       if (!id) {
         id = `sess_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        sessionStorage.setItem('cart_session_id', id);
+        localStorage.setItem('cart_session_id', id);
       }
       return id;
     }
@@ -484,8 +484,11 @@ export function TemplateRuntimeProvider({ config, children }: TemplateRuntimePro
     if (typeof window === 'undefined') return;
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as
-        | { items?: Array<{ quantity?: number; price?: number }>; total?: number }
+        | { items?: Array<{ quantity?: number; price?: number }>; total?: number; storageKey?: string }
         | undefined;
+      if (detail?.storageKey && detail.storageKey !== buildBrowserCartStorageKey({
+        businessId: config.businessId, siteId: config.siteId, sessionId,
+      })) return;
       if (detail?.items) {
         const count = detail.items.reduce((sum, it) => sum + (it.quantity || 1), 0);
         setCartItemCount(count);
@@ -496,8 +499,15 @@ export function TemplateRuntimeProvider({ config, children }: TemplateRuntimePro
       }
     };
     window.addEventListener(BROWSER_CART_EVENT, handler as EventListener);
-    return () => window.removeEventListener(BROWSER_CART_EVENT, handler as EventListener);
-  }, [refreshCart]);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === buildBrowserCartStorageKey({ businessId: config.businessId, siteId: config.siteId, sessionId })) void refreshCart();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(BROWSER_CART_EVENT, handler as EventListener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [refreshCart, config.businessId, config.siteId, sessionId]);
 
   // Auth actions
   const signIn = async (email: string, password: string) => {

@@ -16,11 +16,11 @@ interface StoredBrowserCart extends Cart {
 function getFallbackSessionId(): string {
   if (typeof window === 'undefined') return 'server-session';
 
-  const existing = window.sessionStorage.getItem('unison:cart:session-id');
+  const existing = window.localStorage.getItem('unison:cart:session-id');
   if (existing) return existing;
 
   const next = generateUUID();
-  window.sessionStorage.setItem('unison:cart:session-id', next);
+  window.localStorage.setItem('unison:cart:session-id', next);
   return next;
 }
 
@@ -113,7 +113,7 @@ function persistBrowserCart(cart: StoredBrowserCart, context: BrowserCartContext
 
   const storageKey = buildBrowserCartStorageKey(context);
   window.localStorage.setItem(storageKey, JSON.stringify(nextCart));
-  window.dispatchEvent(new CustomEvent(BROWSER_CART_EVENT, { detail: nextCart }));
+  window.dispatchEvent(new CustomEvent(BROWSER_CART_EVENT, { detail: { ...nextCart, storageKey } }));
   return nextCart;
 }
 
@@ -166,7 +166,7 @@ export function createBrowserCartManager(
       }
 
       const nextCart = persistBrowserCart(cart, context);
-      return { cartId: nextCart.id, itemCount: nextCart.items.length };
+      return { cartId: nextCart.id, itemCount: nextCart.items.reduce((sum, item) => sum + (item.quantity ?? 1), 0) };
     },
 
     get: async () => {
@@ -192,14 +192,14 @@ export function createBrowserCartManager(
       }
 
       const nextCart = persistBrowserCart(cart, context);
-      return { cartId: nextCart.id, itemCount: nextCart.items.length };
+      return { cartId: nextCart.id, itemCount: nextCart.items.reduce((sum, item) => sum + (item.quantity ?? 1), 0) };
     },
 
     remove: async (productId) => {
       const cart = readBrowserCart(context);
       cart.items = cart.items.filter((item) => item.productId !== productId);
       const nextCart = persistBrowserCart(cart, context);
-      return { cartId: nextCart.id, itemCount: nextCart.items.length };
+      return { cartId: nextCart.id, itemCount: nextCart.items.reduce((sum, item) => sum + (item.quantity ?? 1), 0) };
     },
 
     clear: async () => {

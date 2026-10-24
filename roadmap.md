@@ -1,5 +1,12 @@
 # Roadmap
 
+## Active: Marketplace cart and capability persistence
+- [x] Enable canonical add-to-cart with site-scoped browser persistence, quantity badges, restored saved capabilities and runtime-connected bag icons.
+- [x] Preserve declared capability requirements and portable slot bindings in staged manifests and buyer packages without copying creator approvals or record payloads.
+- [ ] Buyer-owned marketplace installation/provisioning: blocked by absent authorized installation endpoint and authoritative UNISON session; the current marketplace Install control remains unavailable. Requirements transfer is not working-installation proof.
+- [x] Run focused cart, published adapter, capability hydration and release requirements regressions.
+- [ ] Real installed-template add → bag → reload and booking/payment persistence: requires the buyer installation path, canonical GitHub deployment of changed release functions, and authoritative UNISON session.
+
 ## Marketplace card covers
 - [x] Use the shared Concept Preview static cover surface for published cards; remove embedded Sandpack runtimes and verify safe image selection.
 

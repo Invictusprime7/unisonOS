@@ -89,7 +89,7 @@ serve(async (req) => {
   // so the rights review must record a decision per asset before certification.
   const assetRefs = extractAssetReferences(snapshot.vfsFiles as Record<string, unknown>);
   const assets = await fingerprintAssetReferences(assetRefs);
-  const manifest = buildDesignOnlyManifest({ revisionId: revision.id, snapshotSha256, industryKey, meta, assets });
+  const manifest = buildDesignOnlyManifest({ revisionId: revision.id, snapshotSha256, industryKey, meta, assets, snapshot });
   const slug = slugifyListing(String(project.name ?? 'template'), projectId);
 
   const { data: existing } = await admin
@@ -107,7 +107,9 @@ serve(async (req) => {
         product_type: 'site_template',
         title: String(project.name ?? 'Untitled template'),
         industry_key: industryKey,
-        summary: 'Design-only site template. Bookings and checkout are not included.',
+        summary: manifest.requirements.runtimeMode === 'requires-provisioning'
+          ? 'Site template with reusable capability bindings. Connect your own services before publishing.'
+          : 'Design-only site template.',
         status: 'draft',
         price_cents: 0,
       })

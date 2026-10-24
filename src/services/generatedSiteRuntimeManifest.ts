@@ -93,7 +93,7 @@ export interface GeneratedSiteRuntimeManifest {
 
 export interface CompileGeneratedSiteRuntimeManifestInput {
   siteId?: string | null;
-  snapshot?: Pick<SiteBundleSnapshot, 'snapshotId' | 'componentInstances'> | null;
+  snapshot?: Pick<SiteBundleSnapshot, 'snapshotId' | 'componentInstances'> & Pick<Partial<SiteBundleSnapshot>, 'businessSystem'> | null;
   enabledCapabilities?: readonly CapabilityId[];
   generatedAt?: string;
 }
@@ -220,7 +220,11 @@ function toComponentContract(
 export function compileGeneratedSiteRuntimeManifest(
   input: CompileGeneratedSiteRuntimeManifestInput,
 ): GeneratedSiteRuntimeManifest {
-  const enabledCapabilities = Array.from(new Set(input.enabledCapabilities || [])).sort();
+  const persistedCapabilities = input.snapshot?.businessSystem?.capabilities
+    .filter((capability) => capability.status === 'approved' || capability.status === 'provisioned')
+    .map((capability) => capability.id) ?? [];
+  // Explicit caller selection (including an empty list) wins; hydration reads saved approvals only.
+  const enabledCapabilities = Array.from(new Set(input.enabledCapabilities ?? persistedCapabilities)).sort();
   const components = Object.values(input.snapshot?.componentInstances || {})
     .map((instance) => toComponentContract(instance, enabledCapabilities));
   const reads = Array.from(new Set(components.flatMap((component) => component.catalogSurfaces))).sort();

@@ -50,6 +50,15 @@ export interface DesignReleaseManifestV1 {
     capabilityIds: string[];
     requiredResourceKeys: string[];
     optionalIntegrations: string[];
+    /** Portable slot identities only. Creator record IDs, payloads and approvals never transfer. */
+    bindings?: Array<{
+      elementKey: string;
+      intent: string;
+      sourcePageId?: string;
+      sourceSection?: string;
+      sourceSlot?: string;
+      requiredCapabilities: string[];
+    }>;
   };
   assets: Array<{
     path: string;

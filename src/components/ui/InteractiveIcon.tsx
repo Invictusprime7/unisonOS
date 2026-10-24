@@ -16,7 +16,8 @@
  * (expanded, collapsed, etc.) — components don't need to implement behavior.
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useContext } from 'react';
+import { TemplateRuntimeContext } from '@/runtime/TemplateRuntimeProvider';
 import * as LucideIcons from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -90,6 +91,8 @@ export function InteractiveIcon({
   onFavoriteToggle,
   currentTheme,
 }: InteractiveIconProps) {
+  const runtime = useContext(TemplateRuntimeContext);
+  const count = badgeCount ?? (iconKey === 'cart' ? runtime?.cartItemCount : 0) ?? 0;
   const [isOpen, setIsOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [isFavorited, setIsFavorited] = useState(false);
@@ -133,6 +136,10 @@ export function InteractiveIcon({
       onClick();
       return;
     }
+    if (iconKey === 'cart' && runtime) {
+      void runtime.executeIntent('cart.view');
+      return;
+    }
 
     // State-toggle icons don't need open/close
     if (binding?.uiBehavior === 'state-toggle') {
@@ -149,7 +156,7 @@ export function InteractiveIcon({
     }
 
     setIsOpen(prev => !prev);
-  }, [onClick, binding, iconKey, isFavorited, onThemeToggle, onFavoriteToggle]);
+  }, [onClick, binding, iconKey, isFavorited, onThemeToggle, onFavoriteToggle, runtime]);
 
   const handleSearchSubmit = useCallback((e?: React.FormEvent) => {
     e?.preventDefault();
@@ -206,9 +213,9 @@ export function InteractiveIcon({
         )}
 
         {/* Badge */}
-        {def.hasBadge && (badgeCount ?? 0) > 0 && (
+        {def.hasBadge && count > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-            {(badgeCount ?? 0) > 99 ? '99+' : badgeCount}
+            {count > 99 ? '99+' : count}
           </span>
         )}
       </button>

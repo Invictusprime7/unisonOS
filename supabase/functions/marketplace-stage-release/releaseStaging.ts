@@ -1,5 +1,6 @@
 // Pure helpers for trusted release staging. Kept identical to
 // src/marketplace/snapshotFingerprint.ts so client and server hashes agree.
+import { extractRuntimeRequirements } from './runtimeRequirements.ts';
 
 export function stableJson(value: unknown): string {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
@@ -167,6 +168,7 @@ export function buildDesignOnlyManifest(input: {
   industryKey: string;
   meta: Record<string, any>;
   assets?: ManifestAsset[];
+  snapshot?: Record<string, unknown>;
 }) {
   const contract = input.meta?.templateDesignContract ?? {};
   const pages = Array.isArray(input.meta?.pages) ? input.meta.pages : [];
@@ -187,7 +189,7 @@ export function buildDesignOnlyManifest(input: {
       registrySignature: String(contract.registrySignature ?? 'unrecorded'),
       ...(typeof contract.layoutSignature === 'string' ? { designContractFingerprint: contract.layoutSignature } : {}),
     },
-    requirements: { runtimeMode: 'design-only', capabilityIds: [], requiredResourceKeys: [], optionalIntegrations: [] },
+    requirements: extractRuntimeRequirements(input.snapshot ?? {}),
     assets: (input.assets ?? []).map((asset) => ({
       path: asset.path,
       sha256: asset.sha256,

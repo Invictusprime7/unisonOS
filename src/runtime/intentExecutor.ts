@@ -681,7 +681,10 @@ const INTENT_HANDLERS: Record<CoreIntent, IntentHandler> = {
       };
     }
 
-    const result = await managers?.cart?.add({
+    if (!managers?.cart) {
+      return { ok: false, error: { code: 'CART_UNAVAILABLE', message: 'Cart is not connected for this site' } };
+    }
+    const result = await managers.cart.add({
       productId,
       name: productName,
       price,
