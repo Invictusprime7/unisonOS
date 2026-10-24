@@ -1,9 +1,6 @@
 import { it, vi } from 'vitest';
 const seen: unknown[] = [];
-vi.mock('@/services/app-builder/UnisonAppBuilder', async () => {
-  const actual = await vi.importActual<any>('@/services/app-builder/UnisonAppBuilder');
-  return { unisonAppBuilder: actual.createUnisonAppBuilder({ invokePage: async (req: unknown) => { seen.push(req); throw new Error('stop'); } }) };
-});
+vi.mock('@/services/builderBrainClient', async () => ({ ...(await vi.importActual<any>('@/services/builderBrainClient')), runBuilderTurn: async (req: unknown) => { seen.push(req); throw new Error('stop'); } }));
 vi.mock('@/marketplace/materializePreviewImages', () => ({ materializePreviewImages: async (f: any) => f }));
 import { aiComposerRequestSchema } from '@/contracts/aiComposerContract';
 import { AUTHORED_MARKETPLACE_TEMPLATES } from '@/marketplace/authoredTemplatePreviews';
