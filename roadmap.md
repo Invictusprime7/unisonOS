@@ -131,6 +131,8 @@
 ## Active: Marketplace R6
 - [x] R6-P0 replace stale concept-preview test
 - [x] M2.1 concept labelling, no price/purchase on concepts
-- [ ] R6-P1 apply trusted-promotion SQL to UNISON (blocked: migration must be committed via GitHub)
+- [x] R6-P1 move trusted-promotion SQL into canonical timestamped migrations; remove parallel pending SQL
+- [ ] R6-P1 verify certification guards and staging regressions
+- [ ] R6-P1 apply trusted-promotion SQL to UNISON (blocked: requires canonical GitHub workflow deployment)
 - [ ] R6-P1 certify one design-only release (blocked: needs admin reviewer + accepted revision)
 - [ ] R6-P2..P5 certified preview, free-claim install, brand contract, Stripe
