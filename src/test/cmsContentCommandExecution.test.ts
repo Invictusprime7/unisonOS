@@ -16,7 +16,10 @@ const typeId = '44444444-4444-4444-8444-444444444444';
 const entryId = '55555555-5555-4555-8555-555555555555';
 
 describe('CMS content command execution', () => {
-  it.each([true, false])('creates content with every required RPC argument (idempotent=%s)', async idempotent => {
+  it.each([
+    ['content-entry-create', true], ['content-entry-create', false],
+    ['content-entry-update', true], ['content-entry-update', false],
+  ] as const)('%s supplies every required RPC argument (idempotent=%s)', async (action, idempotent) => {
     let handler: ((request: Request) => Promise<Response>) | undefined;
     const record = { id: entryId, project_id: projectId, title: 'When can I check in?' };
     const signaturePath = resolve(process.cwd(), idempotent
@@ -38,8 +41,12 @@ describe('CMS content command execution', () => {
         const query = {
           select: () => query,
           eq: () => query,
+          or: () => query,
+          update: () => query,
+          is: async () => ({ error: null }),
           maybeSingle: async () => ({ data: table === 'projects'
             ? { business_id: businessId }
+            : table === 'content_entries' ? { ...record, content_type_id: typeId }
             : { id: typeId, business_id: businessId, field_schema: { fields: [{ key: 'answer', type: 'textarea' }] } }, error: null }),
         };
         return query;
@@ -65,11 +72,12 @@ describe('CMS content command execution', () => {
     if (!handler) throw new Error('CMS handler was not registered');
     const response = await handler(new Request('https://cms.example.test', {
       method: 'POST', headers: { Authorization: 'Bearer test-session', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'content-entry-create', businessId, projectId, contentTypeId: typeId,
+      body: JSON.stringify({ action, businessId, projectId, contentTypeId: typeId,
+        ...(action === 'content-entry-update' ? { recordId: entryId } : {}),
         ...(idempotent ? { idempotencyKey: '66666666-6666-4666-8666-666666666666' } : {}),
         values: { title: record.title, data: { answer: 'After three.' } } }),
     }));
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(action === 'content-entry-create' ? 201 : 200);
     expect(await response.json()).toMatchObject({ success: true, record });
     expect(rpc).toHaveBeenCalledWith(idempotent ? 'cms_apply_content_entry_command_idempotent' : 'cms_apply_content_entry_command_audited', expect.objectContaining({
       p_actor_id: actorId, p_project_id: projectId, p_target_status: null,
