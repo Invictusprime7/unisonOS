@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Eye, Monitor, Smartphone, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -228,7 +228,7 @@ function MarketplaceTemplateRoutePage({
   );
 }
 
-export function MarketplaceTemplateShowcase() {
+export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode }) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [activeTemplate, setActiveTemplate] = useState<AuthoredMarketplaceTemplate | null>(null);
@@ -341,6 +341,7 @@ export function MarketplaceTemplateShowcase() {
             ))}
           </ul>
         )}
+        {children}
       </section>
 
       <Dialog open={activeTemplate !== null} onOpenChange={(open) => !open && setActiveTemplate(null)}>
