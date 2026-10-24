@@ -16,6 +16,8 @@ import type { IndustryOverlay, WizardSelections } from '@/types/playground';
 
 const vendorSources = import.meta.glob('/src/design-system/unison-x-loveable-design-d5be96/design-system/unison/**/*.tsx', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const vendorSupport = import.meta.glob('/src/design-system/unison-x-loveable-design-d5be96/design-system/unison/{types,themeUtils}.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const vendorHelpers = import.meta.glob('/src/design-system/unison-x-loveable-design-d5be96/design-system/unison/components/**/*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const pageFile = (id: string) => `/src/pages/${id.replace(/[^a-zA-Z0-9]/g, '_')}.tsx`;
 
 const industries: Record<string, IndustryOverlay> = {
   Hospitality: 'restaurant', Architecture: 'agency', Software: 'saas', 'Beauty & Wellness': 'wellness',
@@ -76,11 +78,11 @@ export function buildConceptDraftSource(template: AuthoredMarketplaceTemplate) {
   const registry = createEmptyPageRegistry();
   const destinations = [{ id: 'home', path: '/', title: template.name, archetype: 'home' }, ...template.pages];
   for (const [index, page] of destinations.entries()) registry.pages[page.id] = createBuilderPage(page.id, page.title, page.path, page.archetype as never, {
-    filePath: `/src/pages/${page.id}.tsx`, isHome: index === 0, navOrder: index, routeState: 'generated',
+    filePath: pageFile(page.id), isHome: index === 0, navOrder: index, routeState: 'generated',
   });
   registry.homePageId = 'home';
   plan.playground.pageRegistry = registry;
-  plan.sitePlan.pages = destinations.map(page => ({ id: page.id, route: page.path, role: page.archetype, title: page.title, isHome: page.id === 'home', filePath: `/src/pages/${page.id}.tsx` })) as typeof plan.sitePlan.pages;
+  plan.sitePlan.pages = destinations.map(page => ({ id: page.id, route: page.path, role: page.archetype, title: page.title, isHome: page.id === 'home', filePath: pageFile(page.id) })) as typeof plan.sitePlan.pages;
   const files = { ...plan.infrastructureFiles };
   files['/src/App.tsx'] = generateCanonicalRouter(registry, template.name);
   const tokens = buildMarketplaceRhythmTokens(packId, 'home');
@@ -91,10 +93,10 @@ export function buildConceptDraftSource(template: AuthoredMarketplaceTemplate) {
   const vendorRoot = '/src/design-system/unison-x-loveable-design-d5be96/design-system/unison/';
   const vendorImports: string[] = [];
   const vendorMap: string[] = [];
-  for (const [path, source] of Object.entries({ ...vendorSources, ...vendorSupport })) {
+  for (const [path, source] of Object.entries({ ...vendorSources, ...vendorSupport, ...vendorHelpers })) {
     if (!path.includes('/components/') && !path.endsWith('/types.ts') && !path.endsWith('/themeUtils.ts')) continue;
     files[path] = source;
-    const id = source.match(/data-ut-variant(?:-id)?=["']([^"']+)["']/)?.[1];
+    const id = source.match(/(?:data-ut-variant(?:-id)?|variantId)=["']([^"']+)["']/)?.[1];
     const name = source.match(/export (?:const|function) (\w+)/)?.[1];
     if (id && name) { vendorImports.push(`import { ${name} } from ${JSON.stringify(path.replace('/src/', '@/').replace(/\.tsx$/, ''))};`); vendorMap.push(`${JSON.stringify(id)}: ${name}`); }
   }
@@ -123,7 +125,7 @@ export const RegistryBoundButton = ({binding, onIntent, ...props}: any) => <butt
 export const RegistryBoundForm = ({binding, onIntent, ...props}: any) => <form {...props} {...marketplaceBindingAttributes(binding)} />;
 export const MarketplacePageNavigation = ({pages, currentPagePath, className}: any) => <nav className={className}>{[{id:'home',path:'/',label:'Home'},...pages].map((p: any) => <a key={p.id} href={'#'+p.path} aria-current={p.path===currentPagePath?'page':undefined}>{p.label}</a>)}</nav>;`;
   files['/src/sections/types.ts'] = `export type SectionEntry<T = string> = any;`;
-  for (const page of destinations) files[`/src/pages/${page.id}.tsx`] = `import React from 'react';
+  for (const page of destinations) files[pageFile(page.id)] = `import React from 'react';
 import Preview from '@/marketplace/selectedPreview';
 import template from '@/marketplace/template.json';
 import { MarketplaceRegisteredSection } from '@/marketplace/MarketplaceRegisteredSection';
