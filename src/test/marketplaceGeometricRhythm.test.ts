@@ -24,3 +24,21 @@ describe('marketplace geometric rhythm', () => {
     expect(contact['--ut-type-hero']).toBe(home['--ut-type-hero']);
   });
 });
+
+describe('registered sections follow the sealed pack geometry', () => {
+  it('renders every template section with its pack radius, not the colour preset radius', async () => {
+    const { render, cleanup } = await import('@testing-library/react');
+    const { createElement } = await import('react');
+    const { MarketplaceRegisteredSection } = await import('@/marketplace/MarketplaceRegisteredSection');
+    const { getMarketplaceVariantTheme } = await import('@/marketplace/marketplaceTemplatePrimitives');
+    const theme = { ...getMarketplaceVariantTheme('modern', {}), radius: '99rem' };
+    const section = { id: 'faq', type: 'faq', props: { heading: 'FAQ', items: [{ question: 'Q', answer: 'A' }] } } as never;
+    for (const id of ['pollen-objects', 'relay-operations', 'openbook-academy', 'aster-skin-studio'] as const) {
+      const { container } = render(createElement(MarketplaceRegisteredSection, { templateId: id, section, theme }));
+      const radius = ART_DIRECTION_PACKS[MARKETPLACE_TEMPLATE_VARIANT_PROFILES[id].artDirectionPackId].design.radius;
+      expect(container.innerHTML, id).not.toContain('99rem');
+      expect(container.innerHTML.includes(`border-radius: ${radius}`) || radius === '0', id).toBe(true);
+      cleanup();
+    }
+  });
+});
