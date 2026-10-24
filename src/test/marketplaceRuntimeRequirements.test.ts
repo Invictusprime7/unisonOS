@@ -4,11 +4,13 @@ import { extractRuntimeRequirements } from '../../supabase/functions/marketplace
 describe('marketplace reusable capability requirements', () => {
   it('retains declared commerce and booking rather than silently making a functional template design-only', () => {
     const result = extractRuntimeRequirements({ businessSystem: { capabilities: [
-      { id: 'commerce', status: 'provisioned', approval: { approvedBy: 'creator' } },
+      { id: 'commerce', status: 'provisioned', provides: ['commerce.cart'], approval: { approvedBy: 'creator' } },
       { id: 'booking', status: 'approved' }, { id: 'auth', status: 'failed' },
     ] } });
     expect(result.capabilityIds).toEqual(['booking', 'commerce']);
     expect(result.runtimeMode).toBe('requires-provisioning');
+    expect(result.requiredResourceKeys).toContain('cart_items');
+    expect(result.requiredResourceKeys).toContain('products');
     expect(JSON.stringify(result)).not.toContain('creator');
   });
   it('preserves slot intent identities but excludes creator record payloads and connected targets', () => {

@@ -1,11 +1,17 @@
 /** A release carries requirements, never the creator's approvals, sessions or connected services. */
+import { resolveDatabaseContracts } from '../_shared/capabilityPackContracts.ts';
 export function extractRuntimeRequirements(snapshot: Record<string, unknown>) {
   const system = snapshot.businessSystem as { capabilities?: Array<{ id?: unknown; status?: unknown }> } | undefined;
   const bindings = snapshot.bindings && typeof snapshot.bindings === 'object'
     ? Object.values(snapshot.bindings as Record<string, unknown>) : [];
   const capabilityIds = new Set<string>();
+  const provided = new Set<string>();
   for (const capability of system?.capabilities ?? []) {
-    if (typeof capability.id === 'string' && ['approved', 'provisioned'].includes(String(capability.status))) capabilityIds.add(capability.id);
+    if (typeof capability.id === 'string' && ['approved', 'provisioned'].includes(String(capability.status))) {
+      capabilityIds.add(capability.id);
+      const provides = (capability as { provides?: unknown }).provides;
+      if (Array.isArray(provides)) for (const id of provides) if (typeof id === 'string') provided.add(id);
+    }
   }
   const portableBindings: Array<{ elementKey: string; intent: string; sourcePageId?: string; sourceSection?: string; sourceSlot?: string; requiredCapabilities: string[] }> = [];
   for (const value of bindings) {
@@ -25,7 +31,7 @@ export function extractRuntimeRequirements(snapshot: Record<string, unknown>) {
   return {
     runtimeMode: capabilityIds.size ? 'requires-provisioning' as const : 'design-only' as const,
     capabilityIds: [...capabilityIds].sort(),
-    requiredResourceKeys: [] as string[],
+    requiredResourceKeys: [...new Set(resolveDatabaseContracts([...provided]).order.flatMap((pack) => pack.tables.map((table) => table.table)))].sort(),
     optionalIntegrations: [] as string[],
     bindings: portableBindings,
   };

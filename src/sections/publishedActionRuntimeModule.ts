@@ -218,6 +218,7 @@ function requestBody(controller: RuntimeController, intent: string, element: HTM
   if (controller.functionName === 'create-order-checkout') {
     return {
       ...params,
+      ...(intent === 'cart.checkout' ? { items: readCart().map((item) => ({ productId: item.productId, quantity: item.quantity })) } : {}),
       businessId: runtime.businessId,
       sessionId,
       successUrl: window.location.origin + '/thank-you',
@@ -443,6 +444,7 @@ export function usePublishedActionRuntime() {
       const controller = controllerForIntent(intent);
       if (!controller || controller.transport !== 'supabase-function') return;
       event.preventDefault();
+      if (element.getAttribute('aria-busy') === 'true') return;
       element.setAttribute('aria-busy', 'true');
       void dispatchBackendIntent(controller, intent, element)
         .catch((error) => showActionStatus(
