@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
-import { Eye, Monitor, Smartphone, X } from 'lucide-react';
+import { ChevronDown, Eye, Monitor, Smartphone, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AUTHORED_MARKETPLACE_TEMPLATES,
@@ -218,6 +218,7 @@ function MarketplaceTemplateRoutePage({
 export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode }) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
+  const [showDescriptions, setShowDescriptions] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<AuthoredMarketplaceTemplate | null>(null);
   const [device, setDevice] = useState<PreviewDevice>('desktop');
   const [activePagePath, setActivePagePath] = useState('/');
