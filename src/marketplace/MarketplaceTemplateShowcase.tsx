@@ -83,11 +83,11 @@ function MarketplaceIntentRedirect({
   }
 
   return (
-    <div className="bg-background" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', overflowY: 'auto', padding: 'var(--ut-density-padding)' }} onKeyDown={handleKeyDown}>
-      <section role="dialog" aria-modal="true" aria-labelledby="marketplace-intent-title" aria-describedby="marketplace-intent-description" data-unison-preview-redirect={binding.definition.name} className="bg-card text-card-foreground" style={{ width: '100%', padding: 'var(--ut-density-padding)' }}>
-        <div style={{ display: 'grid', gap: 'var(--ut-density-gap)' }}>
-          <p className="text-muted-foreground" style={{ fontFamily: 'var(--ut-font-mono)' }}>{flowLabel}</p>
-          <h2 id="marketplace-intent-title" style={{ fontFamily: 'var(--ut-font-display)' }}>{binding.label}</h2>
+    <div className="marketplace-action-surface bg-background" onKeyDown={handleKeyDown}>
+      <section role="dialog" aria-modal="true" aria-labelledby="marketplace-intent-title" aria-describedby="marketplace-intent-description" data-unison-preview-redirect={binding.definition.name} className="marketplace-action-panel bg-card text-card-foreground">
+        <div className="marketplace-action-stack">
+          <p className="marketplace-action-label text-muted-foreground">{flowLabel}</p>
+          <h2 id="marketplace-intent-title" className="marketplace-action-heading">{binding.label}</h2>
           <p id="marketplace-intent-description" className="text-muted-foreground">
             {flowDescription}
           </p>
