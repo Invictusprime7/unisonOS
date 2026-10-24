@@ -32,3 +32,4 @@
 - Edit gates retain compile/imports, ownership, protected paths, data-loss and binding safety; design/scope is advisory. Queue rebase checks domain dependencies, not age; reviews remain revision-bound. Why: independent saves must not block edits.
 
 - Affinity shows public paragraphs, never native thinking. Why: explanations without private deliberation.
+- Marketplace certification evidence is server-owned and source-bound; client preflight stays non-publishing and deployment SQL lives only in canonical migrations. Why: local checks and concept previews are not release authorization.
