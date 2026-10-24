@@ -95,11 +95,11 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection,
     runtimeManifest: commit.runtimeManifest, canonicalPlayground: commit.playground, entryPoint: artifacts.entryPoint, themePresetId };
 }
 /** The saved draft must open on a page that exists in the accepted files: Home first, then the entry file. */
-export function installActivePagePath(artifacts: Pick<MarketplaceTemplateMaterial, 'files' | 'siteBundleSnapshot' | 'entryPoint'>): string | null {
+export function installActivePagePath(artifacts: { files?: Record<string, string>; siteBundleSnapshot?: { pageRegistry?: { homePageId?: string; pages?: Record<string, unknown> } } | null; entryPoint?: string }): string | null {
   const files = artifacts.files ?? {};
   const registry = artifacts.siteBundleSnapshot?.pageRegistry;
   const pages = Object.values(registry?.pages ?? {}) as Array<{ id?: string; filePath?: string; isHome?: boolean }>;
-  const home = (registry?.homePageId ? (registry.pages as Record<string, { filePath?: string }>)[registry.homePageId] : undefined)
+  const home = (registry?.homePageId ? (registry.pages as Record<string, { filePath?: string }> | undefined)?.[registry.homePageId] : undefined)
     ?? pages.find(page => page.isHome);
   const candidates = [home?.filePath, ...pages.map(page => page.filePath), artifacts.entryPoint, '/src/App.tsx'];
   return candidates.find((path): path is string => Boolean(path && path in files)) ?? null;
