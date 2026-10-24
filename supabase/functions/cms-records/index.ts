@@ -452,6 +452,8 @@ serve(async (req) => {
       p_slug: entryValidation.slug,
       p_title: entryValidation.title,
       p_data: entryValidation.data,
+      // Required by both RPC signatures; creation/update do not transition workflow.
+      p_target_status: null,
       p_change_summary: body.changeSummary ?? null,
       p_expected_updated_at: body.expectedUpdatedAt ?? null,
       ...(body.idempotencyKey ? { p_idempotency_key: body.idempotencyKey } : {}),

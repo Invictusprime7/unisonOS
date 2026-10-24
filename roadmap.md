@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Active: Marketplace preview draft installation
+- [x] Correct missing required p_target_status in content create/update RPC requests; four handler execution regressions cover audited/idempotent signatures, 20 focused checks pass.
+- [ ] Verify corrected content setup on a signed-in Lowtide House install: requires canonical GitHub deployment of cms-records and an authoritative UNISON session; supplied managed session belongs to the other backend.
 - [x] Correct Lowtide House preview-dependency acceptance: caller page checks trigger closure repair and remain enforced afterward; preserve terminal OpenAI credit failures rather than accepting untouched previews.
 - [x] App Builder page writing/repair/Builder edits switched to Gemini-only (no OpenAI attempts).
 - [ ] Retry Lowtide House install → saved draft → reopen: needs the backend deploy workflow run and a signed-in UNISON session.
