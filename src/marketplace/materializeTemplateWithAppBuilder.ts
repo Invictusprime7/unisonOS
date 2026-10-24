@@ -30,8 +30,13 @@ export interface MarketplaceTemplateMaterial {
   mediaAssets?: Array<{ id: string; kind: string; url: string }>;
 }
 
+export interface MaterializeOptions {
+  signal?: AbortSignal;
+  onPage?: (event: { title: string; index: number; total: number; phase: string }) => void;
+}
+
 /** Candidate-only bridge. The installer remains responsible for one durable acceptance. */
-export async function materializeTemplateWithAppBuilder(material: MarketplaceTemplateMaterial, ids: ConfirmedLaunchIds) {
+export async function materializeTemplateWithAppBuilder(material: MarketplaceTemplateMaterial, ids: ConfirmedLaunchIds, options: MaterializeOptions = {}) {
   const snapshot = material.siteBundleSnapshot;
   const packId = snapshot.meta.artDirectionPackId;
   if (!snapshot.themeTokens || !packId) throw new Error('This template is missing its saved design contract.');
@@ -85,7 +90,8 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
     '/src/App.tsx': generateCanonicalRouter(snapshot.pageRegistry, snapshot.businessName) };
   const result = await unisonAppBuilder.generate({
     operationId: `marketplace-install:${ids.draftId}:app-build`, contract, initialFiles, entryPoint: '/src/App.tsx', baseRevisionId: null, budgetMs: 280_000,
-    reuseAcceptedPages: false,
+    reuseAcceptedPages: false, signal: options.signal,
+    onProgress: event => options.onPage?.({ title: event.page.title, index: event.index, total: event.total, phase: event.phase }),
     pageCheck: (path, source, files) => {
       const reference = collectLocalImportClosure({ ...initialFiles, ...files, [path]: source }, path)
         .find(imported => imported.startsWith('/src/marketplace/'));
@@ -96,8 +102,9 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
       `BUYER STARTER CONTENT (saved after acceptance): ${starterSummary(plan.playground.creatorData)}`,
     ].join('\n').slice(0, 3500),
   });
+  if (options.signal?.aborted) throw new Error('Installation was cancelled. Nothing was saved.');
   if (result.candidate.status !== 'ready-for-commit' || result.stopReason !== 'complete') {
-    throw new Error(`App Builder could not prepare this template: ${result.candidate.diagnostics.slice(0, 6).join(' ') || result.stopReason}`);
+    throw new Error(`App Builder could not prepare this template: ${result.candidate.diagnostics?.slice(0, 6).join(' ') || result.stopReason}`);
   }
   const files = await materializePreviewImages(result.candidateFiles);
   for (const page of plan.sitePlan.pages) {
