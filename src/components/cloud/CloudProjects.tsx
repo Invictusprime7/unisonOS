@@ -1716,6 +1716,7 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                                 </h4>
                                 <p className="text-xs text-white/30 font-mono">/{project.slug}</p>
                                 <ProjectIdChip id={project.id} />
+                                <MarketplaceStageChip projectId={project.id} />
                               </div>
                               <Badge 
                                 variant="outline" 
@@ -1828,6 +1829,7 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                                   <p className="font-medium">{project.name}</p>
                                   <p className="text-xs text-white/30 font-mono">/{project.slug}</p>
                                   <ProjectIdChip id={project.id} />
+                                  <MarketplaceStageChip projectId={project.id} />
                                 </div>
                                 </div>
                               </td>
