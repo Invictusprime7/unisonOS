@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { createElement } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -17,18 +18,18 @@ afterEach(() => { cleanup(); window.localStorage.clear(); });
 
 describe('authored marketplace previews', () => {
   it('shows only the authored concepts instead of generic registry compositions', () => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
 
     expect(AUTHORED_MARKETPLACE_TEMPLATES).toHaveLength(12);
     for (const template of AUTHORED_MARKETPLACE_TEMPLATES) {
       expect(screen.getByRole('heading', { name: template.name })).toBeInTheDocument();
     }
     expect(screen.queryByText('Portfolio Photography')).not.toBeInTheDocument();
-    expect(screen.getByText(/not certified marketplace releases/i)).toBeInTheDocument();
+    expect(screen.getByText(/installed as editable project drafts/i)).toBeInTheDocument();
   });
 
   it('filters authored concepts by their design details', () => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search previews' }), {
       target: { value: 'ingredient-first' },
@@ -90,7 +91,7 @@ describe('authored marketplace previews', () => {
         expect(eligible.some((variant) => variant.id === variantId), `${templateId}:${variantId}`).toBe(true);
       }
 
-      const { unmount } = render(<MarketplaceTemplateShowcase />);
+      const { unmount } = render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
       fireEvent.click(screen.getByRole('button', { name: `Preview ${template.name}` }));
       const surface = screen.getByRole('region', { name: `${template.name} page preview` });
       const renderedVariantIds = Array.from(surface.querySelectorAll('[data-ut-variant-id]'))
@@ -130,7 +131,7 @@ describe('authored marketplace previews', () => {
     for (const template of AUTHORED_MARKETPLACE_TEMPLATES) {
       const templateId = template.id as keyof typeof MARKETPLACE_TEMPLATE_VARIANT_PROFILES;
       const pack = ART_DIRECTION_PACKS[MARKETPLACE_TEMPLATE_VARIANT_PROFILES[templateId].artDirectionPackId];
-      const { unmount } = render(<MarketplaceTemplateShowcase />);
+      const { unmount } = render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
       fireEvent.click(screen.getByRole('button', { name: `Preview ${template.name}` }));
 
       for (const page of template.pages) {
@@ -182,7 +183,7 @@ describe('authored marketplace previews', () => {
   });
 
   it('redirects a bound action into the registry overlay without exposing submitted details', () => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Sorella House' }));
 
     const previewSurface = screen.getByRole('region', { name: 'Sorella House page preview' });
@@ -203,7 +204,7 @@ describe('authored marketplace previews', () => {
   });
 
   it('routes a bound in-template link to its section without opening an intent overlay', () => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Sorella House' }));
 
     const previewSurface = screen.getByRole('region', { name: 'Sorella House page preview' });
@@ -214,7 +215,7 @@ describe('authored marketplace previews', () => {
   });
 
   it('navigates between full template pages from the template header without changing the marketplace URL', () => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Sorella House' }));
 
     const pageNavigation = screen.getByRole('navigation', { name: 'Sorella House pages' });
@@ -239,7 +240,7 @@ describe('authored marketplace previews', () => {
   });
 
   it('keeps secondary pages in their template theme and previews date-based inquiries locally', () => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Sorella House' }));
     fireEvent.click(screen.getByRole('link', { name: 'Menu' }));
 
@@ -263,7 +264,7 @@ describe('authored marketplace previews', () => {
   });
 
   it('persists collection cart additions and quantity totals across remounts', async () => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Pollen Objects' }));
     const collectionLink = screen.getByRole('link', { name: 'Shop the collection' });
     fireEvent.click(collectionLink);
@@ -282,7 +283,7 @@ describe('authored marketplace previews', () => {
     fireEvent.click(within(bag).getByRole('button', { name: 'Increase The Sunday cup' }));
     await waitFor(() => expect(bag).toHaveTextContent('Total: $114.00'));
     cleanup();
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Pollen Objects' }));
     await waitFor(() => expect(screen.getByLabelText('Bag item count')).toHaveTextContent('3'));
     fireEvent.click(screen.getByRole('button', { name: /Bag/ }));
@@ -291,7 +292,7 @@ describe('authored marketplace previews', () => {
   });
 
   it('simulates nonprofit donation redirects without launching checkout', () => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Common Ground Fund' }));
     fireEvent.click(screen.getByRole('button', { name: 'Give today' }));
 
@@ -301,7 +302,7 @@ describe('authored marketplace previews', () => {
   });
 
   it('adds registered catalog products through the same persistent cart', async () => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Pollen Objects' }));
     fireEvent.click(screen.getAllByRole('link', { name: 'Add to Bag', exact: true })[1]);
     await waitFor(() => expect(screen.getByLabelText('Bag item count')).toHaveTextContent('1'));
@@ -312,7 +313,7 @@ describe('authored marketplace previews', () => {
   });
 
   it('supports keyboard focus, Tab containment, Escape, and focus restoration', async () => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Sorella House' }));
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-11-15' } });
     fireEvent.change(screen.getByLabelText('Time'), { target: { value: '6:30 PM' } });
@@ -335,7 +336,7 @@ describe('authored marketplace previews', () => {
     { template: 'Formworks Studio', previewButton: 'Preview Formworks Studio', actionButton: 'Request a project conversation', intent: 'quote.request', overlay: 'quote' },
     { template: 'Relay Operations', previewButton: 'Preview Relay Operations', actionButton: 'Request a product demo', intent: 'demo.request', overlay: 'contact' },
   ])('redirects $template actions to the registered $overlay overlay', ({ previewButton, actionButton, intent, overlay }) => {
-    render(<MarketplaceTemplateShowcase />);
+    render(<MemoryRouter><MarketplaceTemplateShowcase /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: previewButton }));
 
     const actionForm = screen.getByRole('button', { name: actionButton }).closest('form');
