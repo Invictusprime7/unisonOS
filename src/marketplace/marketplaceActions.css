@@ -28,3 +28,8 @@
 }
 .marketplace-action-label { font-family: var(--ut-font-mono); }
 .marketplace-action-heading { font-family: var(--ut-font-display); }
+/* Marketplace templates: sealed-pack geometry governs every registered section,
+   overriding hardcoded corner classes so inner pages match Home. */
+[data-ut-marketplace-geometry] :is([class*="rounded-"]:not(.rounded-full), .rounded) {
+  border-radius: var(--ut-marketplace-radius) !important;
+}
