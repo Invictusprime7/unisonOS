@@ -9,6 +9,7 @@ import { createWizardDesignSelection } from '@/services/wizardDesignSelection';
 import { ART_DIRECTION_PACKS, type ArtDirectionPackId } from '@/sections/variants';
 import { MARKETPLACE_TEMPLATE_VARIANT_PROFILES } from './MarketplaceRegisteredSection';
 import { buildMarketplaceRhythmTokens } from './marketplaceGeometricRhythm';
+import { THEME_PRESET_TO_PACKS } from '@/sections/variants/artDirectionPacks';
 import actionsCss from './marketplaceActions.css?raw';
 import type { AuthoredMarketplaceTemplate } from './marketplaceTemplatePrimitives';
 import type { IndustryOverlay, WizardSelections } from '@/types/playground';
@@ -64,7 +65,7 @@ export function buildConceptDraftSource(template: AuthoredMarketplaceTemplate) {
   const profile = MARKETPLACE_TEMPLATE_VARIANT_PROFILES[template.id as keyof typeof MARKETPLACE_TEMPLATE_VARIANT_PROFILES];
   if (!profile) throw new Error('Template design direction is unavailable.');
   const packId = profile.artDirectionPackId as ArtDirectionPackId;
-  const family = ART_DIRECTION_PACKS[packId].family;
+  const family = Object.entries(THEME_PRESET_TO_PACKS).find(([, packs]) => packs.includes(packId))?.[0] ?? 'modern';
   const selections: WizardSelections = {
     businessName: template.name, businessModel: 'general', industryOverlay: industries[template.category] ?? 'agency',
     systemType: 'agency', primaryGoal: 'lead_capture', secondaryGoals: [], requestedPages: ['home'],
