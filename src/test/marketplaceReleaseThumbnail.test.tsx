@@ -1,29 +1,18 @@
-import { cleanup, render, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { resolveReleaseCoverImage } from '@/marketplace/releaseCoverImage';
 
-const { loadPreview, renderPreview } = vi.hoisted(() => ({ loadPreview: vi.fn(), renderPreview: vi.fn() }));
-vi.mock('@/marketplace/stageReleaseClient', () => ({ loadMarketplaceReleasePreview: loadPreview }));
-vi.mock('@/components/VFSPreview', () => ({ VFSPreview: (props: unknown) => { renderPreview(props); return null; } }));
-import { MarketplaceReleaseThumbnail } from '@/marketplace/MarketplaceReleaseThumbnail';
-
-describe('published release thumbnails', () => {
-  beforeEach(() => { loadPreview.mockReset(); renderPreview.mockClear(); });
-  afterEach(cleanup);
-
-  it('renders the published package rather than original project assets', async () => {
-    const files = { '/src/App.tsx': 'export default function App(){return <main>Site</main>}' };
-    loadPreview.mockResolvedValue({ success: true, files });
-    render(<MarketplaceReleaseThumbnail slug="published-site" releaseId="release-1" />);
-    await waitFor(() => expect(renderPreview).toHaveBeenCalled());
-    expect(loadPreview).toHaveBeenCalledWith('published-site');
-    expect(renderPreview.mock.calls[0][0]).toMatchObject({ files, enableSelection: false, showToolbar: false, forceBackend: 'sandpack' });
+describe('published static cover selection', () => {
+  it('uses the packaged buyer-supplied placeholder without requesting private original media', () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
+    expect(resolveReleaseCoverImage({
+      '/src/Home.tsx': '<img src="/assets/marketplace-placeholder.svg" />',
+      '/assets/marketplace-placeholder.svg': svg,
+    })).toBe(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
   });
-
-  it('reloads when a new release replaces the listing', async () => {
-    loadPreview.mockResolvedValue({ success: true, files: { '/src/App.tsx': 'first' } });
-    const view = render(<MarketplaceReleaseThumbnail slug="published-site" releaseId="release-1" />);
-    await waitFor(() => expect(loadPreview).toHaveBeenCalledTimes(1));
-    view.rerender(<MarketplaceReleaseThumbnail slug="published-site" releaseId="release-2" />);
-    await waitFor(() => expect(loadPreview).toHaveBeenCalledTimes(2));
+  it('selects a static published image without executing page source', () => {
+    expect(resolveReleaseCoverImage({ '/src/Home.tsx': 'throw new Error(); const cover="https://example.org/cover.webp";' })).toBe('https://example.org/cover.webp');
+  });
+  it('does not request unresolved local files or unsafe protocols', () => {
+    expect(resolveReleaseCoverImage({ '/src/Home.tsx': '<img src="/assets/missing.png"/><img src="javascript:alert(1)"/>' })).toBeUndefined();
   });
 });

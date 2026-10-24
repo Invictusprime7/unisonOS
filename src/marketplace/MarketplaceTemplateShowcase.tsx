@@ -12,6 +12,7 @@ import {
 import { MarketplaceRegisteredSection, MARKETPLACE_TEMPLATE_VARIANT_PROFILES } from '@/marketplace/MarketplaceRegisteredSection';
 import { pageArchetypeIssues, resolvePageArchetype } from '@/sections/pageArchetypeContract';
 import type { MarketplacePreviewSection, MarketplaceTemplatePage } from '@/marketplace/marketplaceTemplatePrimitives';
+import { MarketplaceThumbnailSurface } from '@/marketplace/MarketplaceThumbnailSurface';
 
 type PreviewDevice = 'desktop' | 'mobile';
 
@@ -322,10 +323,7 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
           <ul className="grid gap-x-6 sm:grid-cols-2 xl:grid-cols-3">
             {visibleTemplates.map((template) => (
               <li key={template.id} className="flex min-h-36 flex-col border-t border-border py-4">
-                <div className="relative mb-4 aspect-[16/10] overflow-hidden bg-muted">
-                  <img src={template.coverImage} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-                  <span className="absolute bottom-3 left-3 bg-background px-2 py-1 text-[10px] font-medium uppercase tracking-[0.1em]">{template.category}</span>
-                </div>
+                <MarketplaceThumbnailSurface src={template.coverImage} category={template.category} />
                 <p className="text-xs text-muted-foreground">{template.artDirection}</p>
                 <h3 className="mt-1 text-base font-medium">{template.name}</h3>
                 <p className="mt-1 line-clamp-2 flex-1 text-sm text-muted-foreground">{template.description}</p>
