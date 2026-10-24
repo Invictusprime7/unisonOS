@@ -59,9 +59,11 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection,
   if (!buyerArtifacts.siteBundleSnapshot) throw new Error('The buyer draft could not be prepared.');
   if (options.signal?.aborted) throw new Error(String(options.signal.reason ?? 'Installation was stopped before the draft was saved.'));
   status({ label: 'Saving your draft' });
+  const activePagePath = installActivePagePath(buyerArtifacts);
+  if (!activePagePath) throw new Error('The template draft has no Home page to open.');
   const commit = await commitMutation({ source: 'wizard-launch', identity: {
     userId: user.id, businessId: ids.businessId, projectId: ids.projectId, draftId: ids.draftId, revisionId: '', sessionId: `marketplace-install:${ids.draftId}`,
-  }, current: { vfsFiles: {} }, patch: legacyFilesToPatchPlan(buyerArtifacts.files, `Install ${title} as a project draft`), options: {
+  }, current: { vfsFiles: {}, activePagePath }, patch: legacyFilesToPatchPlan(buyerArtifacts.files, `Install ${title} as a project draft`), options: {
     requirePreviewPass: true, requireReadinessPass: false, businessName: title, industry: snapshot.industry, themePresetId,
     reviewedArtifact: { siteBundleSnapshot: buyerArtifacts.siteBundleSnapshot, runtimeManifest: buyerArtifacts.runtimeManifest,
       playground: buyerArtifacts.canonicalPlayground as never },
@@ -91,4 +93,14 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection,
   return { businessId: ids.businessId, projectId: ids.projectId, draftId: ids.draftId, revisionId: commit.persistedRevisionId,
     templateName: title, startInPreview: true, fromLauncher: true, vfsFiles: commit.vfsFiles, siteBundleSnapshot: commit.siteBundleSnapshot,
     runtimeManifest: commit.runtimeManifest, canonicalPlayground: commit.playground, entryPoint: artifacts.entryPoint, themePresetId };
+}
+/** The saved draft must open on a page that exists in the accepted files: Home first, then the entry file. */
+export function installActivePagePath(artifacts: { files?: Record<string, string>; siteBundleSnapshot?: { pageRegistry?: { homePageId?: string; pages?: Record<string, unknown> } } | null; entryPoint?: string }): string | null {
+  const files = artifacts.files ?? {};
+  const registry = artifacts.siteBundleSnapshot?.pageRegistry;
+  const pages = Object.values(registry?.pages ?? {}) as Array<{ id?: string; filePath?: string; isHome?: boolean }>;
+  const home = (registry?.homePageId ? (registry.pages as Record<string, { filePath?: string }> | undefined)?.[registry.homePageId] : undefined)
+    ?? pages.find(page => page.isHome);
+  const candidates = [home?.filePath, ...pages.map(page => page.filePath), artifacts.entryPoint, '/src/App.tsx'];
+  return candidates.find((path): path is string => Boolean(path && path in files)) ?? null;
 }
