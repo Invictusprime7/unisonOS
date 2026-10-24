@@ -237,6 +237,13 @@ export function MarketplaceRegisteredSection({
     throw new Error(`Marketplace variant ${variantId} is not certified for ${templateId} ${role}.`);
   }
 
+  const packTokens = buildArtDirectionTokens(pack);
+  // Sealed-pack geometry wins over the colour preset, exactly as Stage 4b does for App Builder sites.
+  const packTheme: ThemeTokens = {
+    ...theme,
+    radius: packTokens['--ut-radius-base'],
+    sectionPadding: `var(--ut-rhythm-space, ${packTokens['--ut-rhythm-space']}) var(--ut-inline-gutter, ${packTokens['--ut-inline-gutter']})`,
+  };
   const VariantComponent = getVariantById(variantId)?.component;
   if (!VariantComponent) throw new Error(`Marketplace variant ${variantId} has no registered renderer.`);
 
@@ -276,7 +283,7 @@ export function MarketplaceRegisteredSection({
       }}
       onSubmitCapture={(event) => handlePreviewContactSubmit(event, templateId, section, onIntent)}
     >
-      <VariantComponent section={withMarketplaceImagePlaceholders(templateId, section)} theme={theme} />
+      <VariantComponent section={withMarketplaceImagePlaceholders(templateId, section)} theme={packTheme} />
     </div>
   );
 }
