@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Active: Marketplace preview draft installation
+- [x] Materialize standalone pages through App Builder (including preview-dependency repair checks) and seed buyer-owned editable data and capability bindings through canonical launch services; 68 focused checks pass.
 - [x] Route concept and published installation material through App Builder before canonical acceptance; generated routers use syntax-safe aliases and retain colliding page basenames.
 - [x] Give published listings the same full-window preview shell and cascading description as concept previews; Zen Site renders full-width in browser.
 - [x] Expose draft installation in every template preview using canonical, buyer-owned draft acceptance; all 12 concept source packages pass local validation.

@@ -453,6 +453,10 @@ export interface AppBuildRequest {
   /** Extra runtime context appended to the derived generation context. */
   runtimeContext?: string;
   maxPages?: number;
+  /** Marketplace material is reference input, not an already accepted application. */
+  reuseAcceptedPages?: boolean;
+  /** Additional candidate requirements run inside the existing Composer repair loop. */
+  pageCheck?: (path: string, source: string, files?: Readonly<Record<string, string>>) => string[];
   concurrency?: number;
   preflight?: (files: Record<string, string>) => Record<string, string>;
   onProgress?: (event: {

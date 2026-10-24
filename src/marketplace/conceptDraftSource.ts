@@ -14,6 +14,7 @@ import imagePlaceholderSource from './marketplaceImagePlaceholders.ts?raw';
 import { MARKETPLACE_SAMPLE_IMAGES } from './marketplaceImagePlaceholders';
 import type { AuthoredMarketplaceTemplate } from './marketplaceTemplatePrimitives';
 import type { IndustryOverlay, WizardSelections } from '@/types/playground';
+import { templateStarterData } from './templateStarterData';
 
 const vendorSources = import.meta.glob('/src/design-system/unison-x-loveable-design-d5be96/design-system/unison/**/*.tsx', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const vendorSupport = import.meta.glob('/src/design-system/unison-x-loveable-design-d5be96/design-system/unison/{types,themeUtils}.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
@@ -25,6 +26,7 @@ const industries: Record<string, IndustryOverlay> = {
   'Real Estate': 'real_estate', 'Objects & Retail': 'ecommerce', 'Retail & Objects': 'ecommerce',
   'Nonprofit & Community': 'nonprofit', 'Local Services': 'local-service', 'Fitness & Movement': 'fitness',
   Education: 'coaching', 'Boutique Lodging': 'restaurant', Photography: 'photographer',
+  'Retail & E-commerce': 'ecommerce', Nonprofit: 'nonprofit', 'Contractor & Trades': 'contractor',
 };
 
 /** Select real authored declarations, not rendered HTML or a newly generated design. */
@@ -158,6 +160,9 @@ export default function Page() { return <main data-marketplace-preview-surface>$
   // Unverified stock references stay buyer supplied; never bundle their bytes or grant rights.
   for (const path of Object.keys(files).filter(p => p.startsWith('/src/marketplace/'))) files[path] = files[path].replace(/https:\/\/images\.unsplash\.com\/[^'"\s)]+/g, '/assets/marketplace-placeholder.svg');
   const snapshot = projectCanonicalLaunchCandidateSnapshot(plan, selections, files);
+  const starter = templateStarterData(template);
+  snapshot.creatorData = starter.creatorData;
   // Material only: App Builder must converge this source before canonical acceptance.
-  return { files, siteBundleSnapshot: snapshot, canonicalPlayground: plan.playground, entryPoint: '/src/App.tsx', plan, selections };
+  return { files, siteBundleSnapshot: snapshot, canonicalPlayground: plan.playground, entryPoint: '/src/App.tsx', plan, selections,
+    mediaAssets: starter.mediaAssets, templateIntents: template.bindings.map(binding => binding.intent) };
 }
