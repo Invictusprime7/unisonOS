@@ -81,7 +81,7 @@ export interface TemplateRuntimeContextValue {
   getIconProps: (iconKey: string) => Partial<InteractiveIconProps>;
 }
 
-const TemplateRuntimeContext = createContext<TemplateRuntimeContextValue | null>(null);
+export const TemplateRuntimeContext = createContext<TemplateRuntimeContextValue | null>(null);
 
 // ============ CART MANAGER WITH SUPABASE ============
 
@@ -359,10 +359,10 @@ export function TemplateRuntimeProvider({ config, children }: TemplateRuntimePro
   // Session ID for guest carts
   const sessionId = useMemo(() => {
     if (typeof window !== 'undefined') {
-      let id = sessionStorage.getItem('cart_session_id');
+      let id = localStorage.getItem('cart_session_id');
       if (!id) {
         id = `sess_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        sessionStorage.setItem('cart_session_id', id);
+        localStorage.setItem('cart_session_id', id);
       }
       return id;
     }

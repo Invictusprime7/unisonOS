@@ -51,7 +51,8 @@ function refreshCartBadges() {
       badge = document.createElement('span');
       badge.setAttribute('data-ut-cart-count', '');
       badge.setAttribute('aria-live', 'polite');
-      badge.className = 'bg-primary text-primary-foreground';
+      host.classList.add('relative');
+      badge.className = 'absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground';
       host.appendChild(badge);
     }
     badge.textContent = String(count);

@@ -40,6 +40,11 @@ function createManagers(overrides: Partial<IntentManagers> = {}): IntentManagers
 }
 
 describe('intentExecutor overlay fallbacks', () => {
+  it('does not report a successful add-to-cart without a connected manager', async () => {
+    const result = await executeIntent('cart.add', { payload: { productId: 'product-1', price: 29 }, managers: createManagers() });
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('CART_UNAVAILABLE');
+  });
   beforeEach(() => {
     vi.clearAllMocks();
   });
