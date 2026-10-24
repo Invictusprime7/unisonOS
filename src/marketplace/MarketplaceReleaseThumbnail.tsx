@@ -4,7 +4,7 @@ import { MarketplaceThumbnailSurface } from '@/marketplace/MarketplaceThumbnailS
 import { resolveReleaseCoverImage } from '@/marketplace/releaseCoverImage';
 
 /** Static cover from the placeholder-safe package; never mounts a preview runtime. */
-export function MarketplaceReleaseThumbnail({ slug, releaseId, category }: { slug: string; releaseId: string; category: string }) {
+export function MarketplaceReleaseThumbnail({ slug, releaseId, category, coverImageUrl }: { slug: string; releaseId: string; category: string; coverImageUrl?: string }) {
   const container = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [cover, setCover] = useState<string>();
@@ -28,6 +28,7 @@ export function MarketplaceReleaseThumbnail({ slug, releaseId, category }: { slu
   }, []);
 
   useEffect(() => {
+    if (coverImageUrl) return;
     if (!visible) return;
     let active = true;
     setCover(undefined);
@@ -42,7 +43,11 @@ export function MarketplaceReleaseThumbnail({ slug, releaseId, category }: { slu
       if (active) setFailed(true);
     });
     return () => { active = false; };
-  }, [visible, slug, releaseId]);
+  }, [visible, slug, releaseId, coverImageUrl]);
+
+  if (coverImageUrl) {
+    return <MarketplaceThumbnailSurface src={coverImageUrl} category={category} />;
+  }
 
   return (
     <div ref={container}>
