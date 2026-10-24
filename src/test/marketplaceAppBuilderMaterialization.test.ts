@@ -12,7 +12,10 @@ describe('marketplace App Builder convergence', () => {
     const template = AUTHORED_MARKETPLACE_TEMPLATES.find(item => item.id === 'pollen-objects');
     if (!template) throw new Error('Missing Pollen template');
     const material = buildConceptDraftSource(template);
-    const files = { ...material.files, '/src/pages/home.tsx': 'export default function Home(){ return <main>Accepted by App Builder</main> }' };
+    const files = { ...material.files };
+    for (const page of Object.values(material.siteBundleSnapshot.pageRegistry.pages)) {
+      if (page.filePath) files[page.filePath] = 'export default function Page(){ return <main>Accepted by App Builder</main> }';
+    }
     mocks.generate.mockResolvedValue({ candidate: { status: 'ready-for-commit' }, stopReason: 'complete', candidateFiles: files });
     mocks.compile.mockReturnValue({ files });
     const result = await materializeTemplateWithAppBuilder(material, { projectId: 'buyer-project', businessId: 'buyer-business', siteId: 'buyer-site', draftId: 'buyer-draft', buildId: 'build', bundleId: 'bundle' });
