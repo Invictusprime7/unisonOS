@@ -3,7 +3,7 @@ export function resolveReleaseCoverImage(files: Record<string, string>): string 
   const source = Object.entries(files)
     .filter(([path]) => /\.(tsx?|jsx?|html|css)$/.test(path))
     .map(([, text]) => text).join('\n');
-  const refs = source.match(/https:\/\/[^\s"'`<>\\)]+\.(?:png|jpe?g|webp|avif)(?:\?[^\s"'`<>\\)]*)?|\/(?:assets\/)[^\s"'`<>\\)]+\.(?:png|jpe?g|webp|avif|svg)/gi) ?? [];
+  const refs = source.match(/https:\/\/images\.unsplash\.com\/photo-[^\s"'`<>\\)]+|https:\/\/[^\s"'`<>\\)]+\.(?:png|jpe?g|webp|avif)(?:\?[^\s"'`<>\\)]*)?|\/(?:assets\/)[^\s"'`<>\\)]+\.(?:png|jpe?g|webp|avif|svg)/gi) ?? [];
   for (const ref of refs) {
     if (ref.startsWith('https://')) return ref;
     // Local package assets must be self-contained, never requested from the host app.

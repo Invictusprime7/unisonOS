@@ -15,4 +15,8 @@ describe('published static cover selection', () => {
   it('does not request unresolved local files or unsafe protocols', () => {
     expect(resolveReleaseCoverImage({ '/src/Home.tsx': '<img src="/assets/missing.png"/><img src="javascript:alert(1)"/>' })).toBeUndefined();
   });
+  it('recognizes existing extensionless photo URLs', () => {
+    const photo = 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1600&q=80';
+    expect(resolveReleaseCoverImage({ '/src/pages/Home.tsx': `const hero = '${photo}';` })).toBe(photo);
+  });
 });

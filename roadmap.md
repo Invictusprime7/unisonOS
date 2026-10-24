@@ -1,5 +1,8 @@
 # Roadmap
 
+## Marketplace card covers
+- [x] Use the shared Concept Preview static cover surface for published cards; remove embedded Sandpack runtimes and verify safe image selection.
+
 ## Active: Marketplace trusted promotion (R6)
 - [x] Staging extracts every photo/font reference into the release manifest with content fingerprints; unreachable assets stay reference-only
 - [x] Certification service (marketplace-certify-release): per-asset include/exclude rights with license evidence, immutable six-verdict reviews, private ZIP package with excluded assets rewritten to placeholders
