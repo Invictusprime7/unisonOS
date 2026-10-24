@@ -33,3 +33,4 @@
 
 - Affinity shows public paragraphs, never native thinking. Why: explanations without private deliberation.
 - Marketplace certification evidence is server-owned and source-bound; client preflight stays non-publishing and deployment SQL lives only in canonical migrations. Why: local checks and concept previews are not release authorization.
+- Marketplace card thumbnails reuse the published package preview service and VFSPreview, loading only visible cards. Why: keep cards consistent with details without a parallel renderer or unrestricted source media.
