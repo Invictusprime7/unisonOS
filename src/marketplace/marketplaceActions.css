@@ -33,3 +33,16 @@
 [data-ut-marketplace-geometry] :is([class*="rounded-"]:not(.rounded-full), .rounded) {
   border-radius: var(--ut-marketplace-radius) !important;
 }
+/* Marketplace templates: card and category imagery fills its frame edge-to-edge.
+   Vendor layouts cap some images (e.g. collection tiles at 45% width, product
+   art with object-contain); the lightbox figure keeps its contain fit. */
+[data-ut-marketplace-geometry] img.object-contain:not(figure *) {
+  object-fit: cover !important;
+  max-width: none !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+/* The wrapper around a full-bleed card image carries no inset of its own. */
+[data-ut-marketplace-geometry] :has(> img.object-contain) {
+  padding: 0 !important;
+}
