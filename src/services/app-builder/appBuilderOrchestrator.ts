@@ -97,19 +97,27 @@ export async function orchestrateAppBuild(
   });
 
   const compatibilityMode = Boolean(input.acceptPage);
+  // A valid baseline is not an authored application. Preserve terminal provider
+  // failures instead of accepting the untouched reference source or retrying it.
+  const terminalAuthoringFailure = authored.outcomes.some((outcome) =>
+    outcome.status !== 'authored' && ['credits', 'denied', 'provider', 'rate_limited', 'invalid_response', 'aborted'].includes(outcome.reason));
+  const validateClosure = async (files: Record<string, string>) => {
+    const report = await validateAppBuildCandidate({ contract: input.contract, files, initialFiles: baseFiles });
+    const pageIssues = pages.flatMap((page) =>
+      (input.pageCheck?.(page.filePath, files[page.filePath] ?? '', files) ?? []).map((message) => ({
+        severity: 'blocker' as const, code: 'page-contract', path: page.filePath, message,
+      })));
+    return { ...report, ok: report.ok && pageIssues.length === 0, issues: [...report.issues, ...pageIssues] };
+  };
   let candidateFiles = { ...authored.files };
   if (!compatibilityMode && input.preflight) candidateFiles = input.preflight(candidateFiles);
   candidateFiles = materializeRegisteredComponents(input.contract, candidateFiles).files;
-  let closure = await validateAppBuildCandidate({
-    contract: input.contract,
-    files: candidateFiles,
-    initialFiles: baseFiles,
-  });
+  let closure = await validateClosure(candidateFiles);
   let closureRepairAttempts = 0;
 
   // One site-wide repair attempt sees the complete closure diagnostics and protected-path constraints.
   const closureTimeLeftMs = startedAt + totalBudgetMs - Date.now();
-  if (!compatibilityMode && !closure.ok && !input.signal?.aborted && closureTimeLeftMs >= MIN_CLOSURE_REPAIR_MS) {
+  if (!compatibilityMode && !terminalAuthoringFailure && !closure.ok && !input.signal?.aborted && closureTimeLeftMs >= MIN_CLOSURE_REPAIR_MS) {
     const home = pages.find((page) => page.pageId === input.contract.topology.sitePlan.homePageId) ?? pages[0];
     if (home) {
       const diagnostics = closure.issues
@@ -139,7 +147,7 @@ export async function orchestrateAppBuild(
         })(),
         routes: pages.map((page) => ({ title: page.title, route: page.route })),
         registryContext: input.contract.design.registryContext,
-        runtimeContext: `${generation.runtimeContext}`.slice(0, 12000),
+        runtimeContext: [input.runtimeContext, generation.runtimeContext].filter(Boolean).join('\n').slice(0, 12000),
         diagnostics,
       });
       const repaired = await dependencies.runComposer({
@@ -160,17 +168,13 @@ export async function orchestrateAppBuild(
         candidateFiles = repaired.prepared.nextFiles;
         if (input.preflight) candidateFiles = input.preflight(candidateFiles);
         candidateFiles = materializeRegisteredComponents(input.contract, candidateFiles).files;
-        closure = await validateAppBuildCandidate({
-          contract: input.contract,
-          files: candidateFiles,
-          initialFiles: baseFiles,
-        });
+        closure = await validateClosure(candidateFiles);
       }
     }
   }
 
   const cancelled = input.signal?.aborted === true;
-  const ready = compatibilityMode || closure.ok;
+  const ready = !terminalAuthoringFailure && (compatibilityMode || closure.ok);
   const authorDiagnostics = authored.outcomes.flatMap((outcome) => outcome.errors);
   const closureDiagnostics = closure.issues
     .filter((issue) => issue.severity === 'blocker')
@@ -203,7 +207,7 @@ export async function orchestrateAppBuild(
     protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
     candidate,
     candidateFiles,
-    stopReason: cancelled ? 'cancelled' : ready ? 'complete' : closureRepairAttempts ? 'repair-exhausted' : 'validation-failed',
+    stopReason: cancelled ? 'cancelled' : ready ? 'complete' : terminalAuthoringFailure ? 'provider-error' : closureRepairAttempts ? 'repair-exhausted' : 'validation-failed',
     outcomes: authored.outcomes,
     revisionId: authored.revisionId,
   };
