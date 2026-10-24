@@ -33,6 +33,7 @@ function contract(): AppBuildContract {
     },
     business: {
       industry: 'salon', businessName: 'Northstar', goals: [], intents: [], capabilities: [], bindingGuide: '',
+      registeredComponents: [], intentBindings: [], configuredBusinessFields: [], parameters: {}, businessProfile: { businessName: 'Northstar' },
       branding: {
         version: '1.0',
         brandMark: {
@@ -122,9 +123,11 @@ describe('UnisonAppBuilder facade', () => {
     const result = await builder.generate({
       operationId: 'operation-1', contract: contract(), initialFiles: baseFiles,
       entryPoint: '/src/main.tsx', baseRevisionId: 'revision-1',
+      runtimeContext: 'Preserve the selected marketplace preview material.',
     });
 
     expect(authorSite).toHaveBeenCalledOnce();
+    expect(authorSite.mock.calls[0]?.[0].runtimeContextForPage?.('home')).toContain('Preserve the selected marketplace preview material.');
     expect(listContentTypes).toHaveBeenCalledWith({ businessId: 'business-1', projectId: 'project-1' });
     expect(result.candidate.status).toBe('ready-for-commit');
     expect(result.candidate.files['/src/pages/Home.tsx']).toContain('After');

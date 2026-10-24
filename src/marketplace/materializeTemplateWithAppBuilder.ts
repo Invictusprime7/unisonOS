@@ -68,6 +68,8 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   }
   const files = { ...result.candidateFiles };
   const acceptedSnapshot = projectCanonicalLaunchCandidateSnapshot(plan, selections, files);
+  acceptedSnapshot.meta = { ...acceptedSnapshot.meta, generationSeed: seed,
+    artDirection: snapshot.meta.artDirection ?? plan.artDirection, artDirectionPackId: packId };
   return buildCanonicalLaunchArtifacts({ generatedFiles: files, siteBundleSnapshot: acceptedSnapshot, canonicalPlayground: plan.playground,
     preferredEntryPoint: '/src/App.tsx', businessId: ids.businessId, projectId: ids.projectId, siteId: ids.siteId,
     mergeWithCanonicalSnapshot: true, allowCanonicalPageFallback: false, preservePageSources: true, strictPreflight: true,
