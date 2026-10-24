@@ -54,3 +54,35 @@ describe('marketplace stage release client', () => {
     await expect(stageMarketplaceRelease('project-2')).rejects.toThrow('You need the admin role.');
   });
 });
+
+describe('marketplace certification client', () => {
+  it('records asset rights decisions against the release', async () => {
+    const { recordMarketplaceAssetRights } = await import('@/marketplace/stageReleaseClient');
+    const result = await recordMarketplaceAssetRights('release-1', [{
+      path: '/assets/logo.svg',
+      sha256: 'b'.repeat(64),
+      decision: 'exclude',
+      license: '',
+      evidenceSource: '',
+      commercialUseAllowed: false,
+      bundleRedistributionAllowed: false,
+      buyerSupplied: true,
+    }]);
+    expect(result).toEqual({ releaseId: 'release-1', decided: 1 });
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('marketplace-certify-release'), expect.objectContaining({
+      body: expect.stringContaining('"action":"recordAssetRights"'),
+    }));
+  });
+
+  it('records review verdicts and builds the private package', async () => {
+    const { recordMarketplaceReview, buildMarketplacePackage } = await import('@/marketplace/stageReleaseClient');
+    await recordMarketplaceReview('release-1', {
+      design: 'pass', asset: 'pass', security: 'pass', build: 'pass', a11y: 'pass', mobile: 'pass',
+    }, ['evidence-1']);
+    const pkg = await buildMarketplacePackage('release-1', 'review-1');
+    expect(pkg.storageKey).toBe('marketplace-releases/release-1/package.zip');
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('marketplace-certify-release'), expect.objectContaining({
+      body: expect.stringContaining('"action":"buildPackage"'),
+    }));
+  });
+});
