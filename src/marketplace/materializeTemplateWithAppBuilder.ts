@@ -115,7 +115,8 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   acceptedSnapshot.meta = { ...acceptedSnapshot.meta, generationSeed: seed,
     artDirection: snapshot.meta.artDirection ?? plan.artDirection, artDirectionPackId: packId };
   return buildCanonicalLaunchArtifacts({ generatedFiles: files, siteBundleSnapshot: acceptedSnapshot, canonicalPlayground: plan.playground,
-    preferredEntryPoint: '/src/App.tsx', businessId: ids.businessId, projectId: ids.projectId, siteId: ids.siteId,
+    // Same workspace identity as fresh launch: without it the saved draft cannot open in the Builder.
+    preferredEntryPoint: '/src/App.tsx', organizationId: ids.businessId, businessId: ids.businessId, projectId: ids.projectId, siteId: ids.siteId,
     mergeWithCanonicalSnapshot: true, allowCanonicalPageFallback: false, preservePageSources: true, strictPreflight: true,
     themePresetId: plan.themePresetId, businessName: snapshot.businessName, industry: snapshot.industry });
 }
