@@ -1,0 +1,30 @@
+.marketplace-action-surface {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: var(--ut-density-padding);
+}
+.marketplace-action-panel {
+  width: 100%;
+  padding: var(--ut-density-padding);
+}
+.marketplace-action-stack {
+  display: grid;
+  gap: var(--ut-density-gap);
+}
+.marketplace-cart-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ut-density-gap);
+}
+.marketplace-cart-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--ut-density-gap);
+}
+.marketplace-action-label { font-family: var(--ut-font-mono); }
+.marketplace-action-heading { font-family: var(--ut-font-display); }

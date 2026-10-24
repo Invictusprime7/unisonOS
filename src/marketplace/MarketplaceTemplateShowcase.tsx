@@ -13,6 +13,10 @@ import { MarketplaceRegisteredSection, MARKETPLACE_TEMPLATE_VARIANT_PROFILES } f
 import { pageArchetypeIssues, resolvePageArchetype } from '@/sections/pageArchetypeContract';
 import type { MarketplacePreviewSection, MarketplaceTemplatePage } from '@/marketplace/marketplaceTemplatePrimitives';
 import { MarketplaceThumbnailSurface } from '@/marketplace/MarketplaceThumbnailSurface';
+import { MarketplaceCartCountContext, MarketplacePreviewCart } from '@/marketplace/MarketplacePreviewCart';
+import { BROWSER_CART_EVENT, buildBrowserCartStorageKey, createBrowserCartManager, readBrowserCart } from '@/runtime/browserCartManager';
+import type { Cart } from '@/runtime/intentExecutor';
+import { Button } from '@/components/ui/button';
 
 type PreviewDevice = 'desktop' | 'mobile';
 
@@ -58,23 +62,10 @@ function MarketplaceIntentRedirect({
   onClose: () => void;
 }) {
   const returnButtonRef = useRef<HTMLButtonElement>(null);
-  const theme = template.intentPreviewTheme ?? (template.id === 'relay-operations'
-    ? { surface: 'bg-[#111916] text-[#f2f4e9]', border: 'border-white/15', muted: 'text-white/65', button: 'bg-[#c8f169] text-[#111916]' }
-    : template.id === 'formworks-studio'
-      ? { surface: 'bg-[#f7f8f5] text-[#182c3a]', border: 'border-[#182c3a]/20', muted: 'text-[#5a6870]', button: 'bg-[#f05a3b] text-white' }
-      : { surface: 'bg-[#f3efe4] text-[#203b2c]', border: 'border-[#203b2c]/20', muted: 'text-[#536254]', button: 'bg-[#a34a32] text-white' });
-  const overlayName = binding.definition.overlayId?.replace(/-/g, ' ')
-    ?? (binding.definition.name === 'cart.view' ? 'cart' : binding.definition.surface);
-  const flowLabel = binding.definition.surface === 'redirect'
-    ? 'Unison redirect preview'
-    : binding.definition.surface === 'inline'
-      ? 'Unison inline action preview'
-      : `Unison flow · ${overlayName}`;
+  const flowLabel = 'Sample action';
   const flowDescription = binding.definition.surface === 'redirect'
-    ? `${binding.definition.description} This preview shows the registered redirect target without starting an external checkout.`
-    : binding.definition.surface === 'inline'
-      ? `${binding.definition.description} This preview shows the inline action target without changing cart or backend state.`
-      : `${binding.definition.description} This preview opens the registered ${overlayName} surface without contacting a business backend.`;
+    ? 'This sample does not take payments or start an external checkout.'
+    : 'Your sample request is complete. No real reservation or business request was created.';
 
   useEffect(() => {
     returnButtonRef.current?.focus();
@@ -92,28 +83,18 @@ function MarketplaceIntentRedirect({
   }
 
   return (
-    <div className="absolute inset-0 z-30 grid place-items-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm" onKeyDown={handleKeyDown}>
-      <section role="dialog" aria-modal="true" aria-labelledby="marketplace-intent-title" aria-describedby="marketplace-intent-description" data-unison-preview-redirect={binding.definition.name} className={`my-auto w-full max-w-xl overflow-hidden border shadow-2xl ${theme.surface} ${theme.border}`}>
-        <img src={template.coverImage} alt="" className="h-36 w-full object-cover" />
-        <div className="p-5 sm:p-7">
-          <p className={`font-mono text-[10px] uppercase tracking-[0.16em] ${theme.muted}`}>{flowLabel}</p>
-          <h2 id="marketplace-intent-title" className="mt-3 text-2xl font-semibold">{binding.label}</h2>
-          <p id="marketplace-intent-description" className={`mt-3 text-sm leading-6 ${theme.muted}`}>
+    <div className="marketplace-action-surface bg-background" onKeyDown={handleKeyDown}>
+      <section role="dialog" aria-modal="true" aria-labelledby="marketplace-intent-title" aria-describedby="marketplace-intent-description" data-unison-preview-redirect={binding.definition.name} className="marketplace-action-panel bg-card text-card-foreground">
+        <div className="marketplace-action-stack">
+          <p className="marketplace-action-label text-muted-foreground">{flowLabel}</p>
+          <h2 id="marketplace-intent-title" className="marketplace-action-heading">{binding.label}</h2>
+          <p id="marketplace-intent-description" className="text-muted-foreground">
             {flowDescription}
           </p>
-          {binding.capabilities.length > 0 && (
-            <div className={`mt-5 border-t pt-4 ${theme.border}`}>
-              <p className="text-xs font-semibold">Required capability</p>
-              <p className={`mt-1 text-sm ${theme.muted}`}>{binding.capabilities.map((capability) => capability.name).join(', ')}</p>
-            </div>
-          )}
-          {binding.definition.readinessFixture && (
-            <p className={`mt-4 text-xs leading-5 ${theme.muted}`}>Release readiness: {binding.definition.readinessFixture.description}</p>
-          )}
-          <p className={`mt-4 text-xs ${theme.muted}`}>Preview only. No cart or backend state is changed; no form details are sent or saved.</p>
-          <button ref={returnButtonRef} type="button" onClick={onClose} className={`mt-6 inline-flex min-h-11 items-center justify-center px-4 text-sm font-semibold ${theme.button}`}>
+          <p className="text-muted-foreground">Sample only; no form details are sent or saved.</p>
+          <Button ref={returnButtonRef} type="button" onClick={onClose}>
             Return to {template.name}
-          </button>
+          </Button>
         </div>
       </section>
     </div>
@@ -241,6 +222,28 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
   } | null>(null);
   const previewActionTriggerRef = useRef<HTMLElement | null>(null);
   const previewSurfaceRef = useRef<HTMLDivElement>(null);
+  const [cart, setCart] = useState<Cart>({ id: 'concept', items: [], total: 0 });
+  const [cartOpen, setCartOpen] = useState(false);
+
+  useEffect(() => {
+    if (!activeTemplate) return;
+    const context = { siteId: `marketplace-concept:${activeTemplate.id}` };
+    const storageKey = buildBrowserCartStorageKey(context);
+    const refresh = () => setCart(readBrowserCart(context));
+    const handleCart = (event: Event) => {
+      if ((event as CustomEvent).detail?.storageKey === storageKey) refresh();
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === storageKey || event.key === null) refresh();
+    };
+    refresh();
+    window.addEventListener(BROWSER_CART_EVENT, handleCart);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener(BROWSER_CART_EVENT, handleCart);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [activeTemplate]);
 
   const visibleTemplates = AUTHORED_MARKETPLACE_TEMPLATES.filter((template) => {
     const matchesCategory = category === 'all' || template.category === category;
@@ -253,6 +256,7 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
     setActivePagePath('/');
     setActiveTemplate(template);
     setPreviewAction(null);
+    setCartOpen(false);
   }
 
   function navigatePage(path: string) {
@@ -263,6 +267,16 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
 
   function showPreviewAction(template: AuthoredMarketplaceTemplate, binding: MarketplaceTemplateBinding) {
     const resolved = resolveMarketplaceTemplateBinding(binding);
+    if (resolved.intent === 'cart.add' && binding.product) {
+      void createBrowserCartManager({ siteId: `marketplace-concept:${template.id}` }).add(binding.product);
+      setPreviewAction(null);
+      return;
+    }
+    if (resolved.intent === 'cart.view') {
+      setCartOpen(true);
+      setPreviewAction(null);
+      return;
+    }
     if (binding.targetSectionId && resolved.definition.surface === 'client') {
       setPreviewAction(null);
       return;
@@ -381,7 +395,7 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
               className="relative h-full min-h-0 overflow-y-auto overscroll-contain rounded-none border border-border bg-background"
             >
               {activeTemplate && (
-                <>
+                <MarketplaceCartCountContext.Provider value={cart.items.reduce((sum, item) => sum + (item.quantity ?? 1), 0)}>
                   <div className={`mx-auto min-h-full ${device === 'mobile' ? 'max-w-[390px] border-x border-border' : 'w-full'}`}>
                     {activePagePath === '/' ? (
                       <activeTemplate.preview
@@ -412,7 +426,10 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
                       onClose={closePreviewAction}
                     />
                   )}
-                </>
+                  <MarketplacePreviewCart cart={cart} open={cartOpen} onClose={() => setCartOpen(false)} onUpdate={(productId, quantity) => {
+                    void createBrowserCartManager({ siteId: `marketplace-concept:${activeTemplate.id}` }).update(productId, quantity);
+                  }} />
+                </MarketplaceCartCountContext.Provider>
               )}
             </div>
           </div>

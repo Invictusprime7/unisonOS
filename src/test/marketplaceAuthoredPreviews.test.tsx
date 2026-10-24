@@ -12,7 +12,7 @@ import {
 } from '@/marketplace/authoredTemplatePreviews';
 import { MARKETPLACE_TEMPLATE_VARIANT_PROFILES, type MarketplaceSectionVariantSlot } from '@/marketplace/MarketplaceRegisteredSection';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); window.localStorage.clear(); });
 
 describe('authored marketplace previews', () => {
   it('shows only the authored concepts instead of generic registry compositions', () => {
@@ -193,7 +193,6 @@ describe('authored marketplace previews', () => {
 
     const redirect = screen.getByRole('dialog', { name: 'Request a table' });
     expect(redirect).toHaveAttribute('data-unison-preview-redirect', 'booking.create');
-    expect(redirect).toHaveTextContent('Booking & Scheduling');
     expect(redirect).toHaveTextContent('no form details are sent or saved');
     expect(redirect).not.toHaveTextContent('guest@example.com');
     expect(screen.getByRole('button', { name: 'Request a table' })).toHaveAttribute('data-ut-cta', 'sorella:reservation-submit');
@@ -259,7 +258,7 @@ describe('authored marketplace previews', () => {
     expect(window.location.pathname).toBe('/');
   });
 
-  it('keeps collection navigation local and simulates inline cart actions', () => {
+  it('persists collection cart additions and quantity totals across remounts', async () => {
     render(<MarketplaceTemplateShowcase />);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Pollen Objects' }));
     const collectionLink = screen.getByRole('link', { name: 'Shop the collection' });
@@ -270,11 +269,21 @@ describe('authored marketplace previews', () => {
     expect(screen.getByRole('region', { name: 'Pollen Objects page preview' })).toHaveAttribute('data-marketplace-current-section', 'collections');
 
     fireEvent.click(screen.getByRole('button', { name: /Add to bag/ }));
-    const redirect = screen.getByRole('dialog', { name: 'Add the Sunday cup to bag' });
-    expect(redirect).toHaveAttribute('data-unison-preview-redirect', 'cart.add');
-    expect(redirect).toHaveTextContent('Unison inline action preview');
-    expect(redirect).toHaveTextContent('E-Commerce');
-    expect(redirect).toHaveTextContent('No cart or backend state is changed');
+    fireEvent.click(screen.getByRole('button', { name: /Add to bag/ }));
+    await waitFor(() => expect(screen.getByLabelText('Bag item count')).toHaveTextContent('2'));
+    fireEvent.click(screen.getByRole('button', { name: /Bag/ }));
+    const bag = screen.getByRole('dialog', { name: 'Shopping bag' });
+    expect(within(bag).getByLabelText('The Sunday cup quantity')).toHaveTextContent('2');
+    expect(bag).toHaveTextContent('Total: $76.00');
+    fireEvent.click(within(bag).getByRole('button', { name: 'Increase The Sunday cup' }));
+    await waitFor(() => expect(bag).toHaveTextContent('Total: $114.00'));
+    cleanup();
+    render(<MarketplaceTemplateShowcase />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Pollen Objects' }));
+    await waitFor(() => expect(screen.getByLabelText('Bag item count')).toHaveTextContent('3'));
+    fireEvent.click(screen.getByRole('button', { name: /Bag/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove The Sunday cup' }));
+    await waitFor(() => expect(screen.getByLabelText('Bag item count')).toHaveTextContent('0'));
   });
 
   it('simulates nonprofit donation redirects without launching checkout', () => {
@@ -284,9 +293,18 @@ describe('authored marketplace previews', () => {
 
     const redirect = screen.getByRole('dialog', { name: 'Fund a neighborhood garden' });
     expect(redirect).toHaveAttribute('data-unison-preview-redirect', 'donation.start');
-    expect(redirect).toHaveTextContent('Unison redirect preview');
-    expect(redirect).toHaveTextContent('Donations');
-    expect(redirect).toHaveTextContent('without starting an external checkout');
+    expect(redirect).toHaveTextContent('does not take payments');
+  });
+
+  it('adds registered catalog products through the same persistent cart', async () => {
+    render(<MarketplaceTemplateShowcase />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Pollen Objects' }));
+    fireEvent.click(screen.getAllByRole('link', { name: 'Add to Bag', exact: true })[1]);
+    await waitFor(() => expect(screen.getByLabelText('Bag item count')).toHaveTextContent('1'));
+    fireEvent.click(screen.getByRole('button', { name: /Bag/ }));
+    const bag = screen.getByRole('dialog', { name: 'Shopping bag' });
+    expect(within(bag).getByLabelText('Field watch quantity')).toHaveTextContent('1');
+    expect(bag).toHaveTextContent('Total: $165.00');
   });
 
   it('supports keyboard focus, Tab containment, Escape, and focus restoration', async () => {
@@ -322,7 +340,6 @@ describe('authored marketplace previews', () => {
 
     const redirect = screen.getByRole('dialog', { name: actionButton });
     expect(redirect).toHaveAttribute('data-unison-preview-redirect', intent);
-    expect(redirect).toHaveTextContent(`Unison flow · ${overlay}`);
     expect(redirect).toHaveTextContent('no form details are sent or saved');
   });
 });

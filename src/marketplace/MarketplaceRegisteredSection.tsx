@@ -244,6 +244,32 @@ export function MarketplaceRegisteredSection({
       data-ut-section-type={section.type}
       data-ut-variant-id={variantId}
       onClickCapture={(event) => {
+        const control = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-ut-intent]');
+        const intent = control?.getAttribute('data-ut-intent');
+        if (control && intent === 'cart.add' && section.type === 'services') {
+          const article = control.closest('article');
+          const index = Array.from(event.currentTarget.querySelectorAll('article')).findIndex((entry) => entry === article);
+          const item = section.props.items[index];
+          if (item) {
+            event.preventDefault();
+            event.stopPropagation();
+            const binding = {
+              id: `${templateId}:${section.id}:product:${index}`,
+              intent,
+              label: item.title,
+              sourceSection: section.id,
+              sourceSlot: `product:${index}`,
+              product: {
+                productId: `${templateId}:${section.id}:${index}`,
+                name: item.title,
+                price: Number.parseFloat(String(item.price ?? '0').replace(/[^\d.]/g, '')) || 0,
+                quantity: 1,
+              },
+            } satisfies MarketplaceTemplateBinding;
+            onIntent?.(binding);
+            return;
+          }
+        }
         handlePreviewRouteNavigation(event, templateId, section, pages, onNavigate);
         interceptJournalLink(event, templateId, variantId, section, onIntent);
       }}
