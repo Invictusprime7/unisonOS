@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Marketplace preview draft installation
+- [ ] Give published listings the same full-window preview shell and cascading description as concept previews.
+- [ ] Expose draft installation in every template preview using canonical, buyer-owned draft acceptance.
+- [ ] Verify preview controls and installation persistence; report any authoritative-backend deployment/session blockers.
+
 ## Active: Marketplace image placeholders
 - [x] Persist real sample images for image-bearing sections and repeated content across all concept pages without changing vendor layouts or redistribution rights.
 - [x] Run image assignment regressions and verify Terra House imagery survives page navigation and reload.
