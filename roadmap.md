@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: Marketplace trusted promotion (R6)
+- [x] Staging extracts every photo/font reference into the release manifest with content fingerprints; unreachable assets stay reference-only
+- [x] Certification service (marketplace-certify-release): per-asset include/exclude rights with license evidence, immutable six-verdict reviews, private ZIP package with excluded assets rewritten to placeholders
+- [x] Client calls + tests: 12 Deno service tests, 35 marketplace vitest suites pass; tsgo and build clean
+- [ ] Deploy marketplace-certify-release via the UNISON deploy workflow, then run the review on release f200a98e-75dd-42eb-8107-9b2c6cad2d87 from a staff account
+
 ## Active: Builder prompted-edit completion
 - [x] Resolve prompted parts against visible-page source owners; site-wide navigation unions owners without guessing unrelated pages
 - [x] Preserve selected-element instructions and complete conversation context through canonical App Builder edits; interpretation failures close the pending turn and timers clear on every exit

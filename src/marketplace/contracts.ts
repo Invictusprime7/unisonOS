@@ -54,7 +54,7 @@ export interface DesignReleaseManifestV1 {
   assets: Array<{
     path: string;
     sha256: string;
-    licenseClass: 'owned' | 'redistributable' | 'buyer-supplied' | 'reference-only';
+    licenseClass: 'owned' | 'redistributable' | 'buyer-supplied' | 'reference-only' | 'excluded';
   }>;
   export: {
     formats: Array<'unison-project' | 'vite-react-zip'>;
