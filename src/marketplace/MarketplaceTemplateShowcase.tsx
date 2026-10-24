@@ -218,7 +218,7 @@ function MarketplaceTemplateRoutePage({
 export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode }) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
-  const [showDescriptions, setShowDescriptions] = useState(false);
+  const [showShellDescription, setShowShellDescription] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<AuthoredMarketplaceTemplate | null>(null);
   const [device, setDevice] = useState<PreviewDevice>('desktop');
   const [activePagePath, setActivePagePath] = useState('/');
@@ -309,15 +309,6 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
           <p className="max-w-2xl text-xs text-muted-foreground">
             Sample photography, names, and testimonials are illustrative placeholders, not real client endorsements.
           </p>
-          <button
-            type="button"
-            onClick={() => setShowDescriptions((value) => !value)}
-            aria-expanded={showDescriptions}
-            className="mt-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            <ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 transition-transform motion-reduce:transition-none ${showDescriptions ? 'rotate-180' : ''}`} />
-            Template descriptions
-          </button>
         </div>
 
         <div className="mb-5 grid gap-3 sm:grid-cols-2">
@@ -355,7 +346,6 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
                 <MarketplaceThumbnailSurface src={template.coverImage} category={template.category} />
                 <p className="text-xs text-muted-foreground">{template.artDirection}</p>
                 <h3 className="mt-1 text-base font-medium">{template.name}</h3>
-                {showDescriptions && <p className="mt-1 line-clamp-2 flex-1 text-sm text-muted-foreground">{template.description}</p>}
                 <button
                   type="button"
                   onClick={() => openPreview(template)}
@@ -374,9 +364,24 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
       <Dialog open={activeTemplate !== null} onOpenChange={(open) => !open && setActiveTemplate(null)}>
         <DialogContent className="flex h-dvh w-screen max-w-none flex-col gap-0 rounded-none p-0">
           <DialogHeader className="flex flex-row items-center justify-between gap-4 border-b border-border px-4 py-3 pr-12 text-left">
-            <div className="min-w-0">
-              <DialogTitle className="truncate text-base font-semibold">{activeTemplate?.name} design preview</DialogTitle>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <DialogTitle className="truncate text-base font-semibold">{activeTemplate?.name} design preview</DialogTitle>
+                <button
+                  type="button"
+                  onClick={() => setShowShellDescription((value) => !value)}
+                  aria-expanded={showShellDescription}
+                  aria-label="Template description"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  <ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 transition-transform motion-reduce:transition-none ${showShellDescription ? 'rotate-180' : ''}`} />
+                  Description
+                </button>
+              </div>
               <p className="mt-1 text-xs text-muted-foreground">{activeTemplate?.category} · {activeTemplate?.artDirection} · Concept preview only</p>
+              {showShellDescription && (
+                <p className="marketplace-description-cascade mt-1 max-w-3xl text-xs text-muted-foreground">{activeTemplate?.description}</p>
+              )}
             </div>
             <div aria-label="Preview size" className="flex shrink-0 border border-border">
               <button
