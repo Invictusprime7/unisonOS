@@ -95,13 +95,25 @@ export function buildConceptDraftSource(template: AuthoredMarketplaceTemplate) {
   const vendorRoot = '/src/design-system/unison-x-loveable-design-d5be96/design-system/unison/';
   const vendorImports: string[] = [];
   const vendorMap: string[] = [];
-  for (const [path, source] of Object.entries({ ...vendorSources, ...vendorSupport, ...vendorHelpers })) {
-    if (!path.includes('/components/') && !path.endsWith('/types.ts') && !path.endsWith('/themeUtils.ts')) continue;
-    if (/\/components\/(registry|public|index|types)\.ts$/.test(path)) continue;
+  const sourcePool = { ...vendorSources, ...vendorSupport, ...vendorHelpers };
+  const includeVendor = (path: string) => {
+    if (files[path]) return;
+    const source = sourcePool[path];
+    if (!source) throw new Error(`Missing Unison source dependency: ${path}`);
     files[path] = source;
+    for (const match of source.matchAll(/from\s*['"](\.[^'"]+)['"]/g)) {
+      const parts = path.split('/'); parts.pop();
+      for (const part of match[1].split('/')) { if (part === '..') parts.pop(); else if (part !== '.') parts.push(part); }
+      const base = parts.join('/');
+      const dependency = [base, base + '.tsx', base + '.ts'].find(p => sourcePool[p]);
+      if (!dependency) throw new Error(`Missing Unison source dependency: ${base}`);
+      includeVendor(dependency);
+    }
+  };
+  for (const [path, source] of Object.entries(sourcePool)) {
     const id = source.match(/(?:data-ut-variant(?:-id)?|variantId)=["']([^"']+)["']/)?.[1];
     const name = source.match(/export (?:const|function) (\w+)/)?.[1];
-    if (id && name) { vendorImports.push(`import { ${name} } from ${JSON.stringify(path.replace('/src/', '@/').replace(/\.tsx$/, ''))};`); vendorMap.push(`${JSON.stringify(id)}: ${name}`); }
+    if (id && name) { includeVendor(path); vendorImports.push(`import { ${name} } from ${JSON.stringify(path.replace('/src/', '@/').replace(/\.tsx$/, ''))};`); vendorMap.push(`${JSON.stringify(id)}: ${name}`); }
   }
   if (!Object.keys(files).some(p => p.startsWith(vendorRoot))) throw new Error('Unison layout source is unavailable.');
   files['/src/marketplace/MarketplaceRegisteredSection.tsx'] = `${vendorImports.join('\n')}
