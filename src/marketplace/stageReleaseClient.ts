@@ -97,3 +97,9 @@ export async function buildMarketplacePackage(
     rewrittenRefs: Array.isArray(payload.rewrittenRefs) ? payload.rewrittenRefs.map(String) : [],
   };
 }
+
+/** Certify and publish a staged release in one step; unverified assets ship as buyer-supplied placeholders. */
+export async function autoReleaseMarketplaceRelease(releaseId: string): Promise<{ releaseId: string; status: string }> {
+  const payload = await callCertifyRelease('autoRelease', { releaseId });
+  return { releaseId: String(payload.releaseId), status: String(payload.status) };
+}

@@ -55,7 +55,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { downloadMultiPageSite } from '@/utils/multiPageExporter';
-import { stageMarketplaceRelease } from '@/marketplace/stageReleaseClient';
+import { autoReleaseMarketplaceRelease, stageMarketplaceRelease } from '@/marketplace/stageReleaseClient';
 import {
   createProjectCompat,
   listProjectIdsByBusinessCompat,
@@ -205,6 +205,7 @@ function MarketplaceStageChip({ projectId }: { projectId: string }) {
     try {
       const result = await stageMarketplaceRelease(projectId);
       setReleaseId(result.releaseId);
+      await autoReleaseMarketplaceRelease(result.releaseId);
       setPhase('done');
     } catch (stageError) {
       setError(stageError instanceof Error ? stageError.message : 'Staging failed.');
@@ -227,7 +228,7 @@ function MarketplaceStageChip({ projectId }: { projectId: string }) {
         }}
         className="mt-1 inline-flex max-w-full items-center gap-1 text-left font-mono text-[11px] text-cyan-300 hover:text-cyan-200"
       >
-        <span className="truncate">Release {releaseId}</span>
+        <span className="truncate">Published · {releaseId}</span>
         {copied ? <Check className="h-3 w-3 shrink-0" /> : <Copy className="h-3 w-3 shrink-0" />}
       </button>
     );
@@ -244,12 +245,12 @@ function MarketplaceStageChip({ projectId }: { projectId: string }) {
       {phase === 'loading' ? (
         <>
           <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
-          <span>Staging…</span>
+          <span>Publishing…</span>
         </>
       ) : phase === 'error' ? (
-        <span className="text-red-400" title={error}>Staging failed — hover for detail</span>
+        <span className="text-red-400" title={error}>Publishing failed — hover for detail</span>
       ) : (
-        <span>Stage for marketplace review</span>
+        <span>Publish to marketplace</span>
       )}
     </button>
   );
