@@ -168,3 +168,6 @@ verify_jwt = false
 
 [functions.marketplace-certify-release]
 verify_jwt = false
+
+[functions.marketplace-release-preview]
+verify_jwt = false
