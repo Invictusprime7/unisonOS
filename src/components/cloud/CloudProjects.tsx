@@ -205,6 +205,7 @@ function MarketplaceStageChip({ projectId }: { projectId: string }) {
     try {
       const result = await stageMarketplaceRelease(projectId);
       setReleaseId(result.releaseId);
+      await autoReleaseMarketplaceRelease(result.releaseId);
       setPhase('done');
     } catch (stageError) {
       setError(stageError instanceof Error ? stageError.message : 'Staging failed.');

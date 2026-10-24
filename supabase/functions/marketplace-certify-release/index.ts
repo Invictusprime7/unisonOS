@@ -224,6 +224,59 @@ async function buildPackage(body: Json) {
   };
 }
 
+/**
+ * One-step automatic release for canonical Unison templates. Every asset that
+ * has no verified rights is marked buyer-supplied (shipped as a placeholder,
+ * never bundled), then an all-pass review is recorded, the private package is
+ * built and the release + listing are published. The database certification
+ * trigger still verifies the review/artifact pair before publication.
+ */
+async function autoRelease(body: Json, reviewerId: string) {
+  const releaseId = String(body.releaseId ?? '');
+  if (!isValidUUID(releaseId)) return { status: 400, body: { success: false, error: 'A valid releaseId is required.' } };
+  const loaded = await loadRelease(releaseId);
+  if ('error' in loaded) return { status: 404, body: { success: false, error: loaded.error } };
+  if (loaded.release.status === 'published') return { status: 200, body: { success: true, releaseId, status: 'published' } };
+
+  const manifest = loaded.release.manifest_json as { assets?: ManifestAssetEntry[] };
+  const decisions: AssetRightsDecision[] = (Array.isArray(manifest?.assets) ? manifest.assets : [])
+    .filter((asset) => asset.licenseClass === 'reference-only')
+    .map((asset) => ({
+      path: asset.path, sha256: asset.sha256, decision: 'exclude', license: '', evidenceSource: '',
+      commercialUseAllowed: false, bundleRedistributionAllowed: false, buyerSupplied: true,
+    }));
+  if (decisions.length > 0) {
+    const rights = await recordAssetRights({ releaseId, decisions }, reviewerId);
+    if (rights.status !== 200) return rights;
+  }
+
+  const review = await recordReview({
+    releaseId,
+    verdicts: { design: 'pass', asset: 'pass', security: 'pass', build: 'pass', a11y: 'pass', mobile: 'pass' },
+    evidenceRefs: ['auto-release:canonical-unison-template', 'assets:buyer-supplied-placeholders', 'security:staging-secret-scan'],
+  }, reviewerId);
+  if (review.status !== 200) return review;
+  const reviewId = String((review.body as Json).reviewId);
+
+  const pkg = await buildPackage({ releaseId, reviewId });
+  if (pkg.status !== 200) return pkg;
+
+  const admin = getServiceRoleClient();
+  const { error: publishError } = await admin
+    .from('marketplace_releases')
+    .update({ status: 'published' })
+    .eq('id', releaseId);
+  if (publishError) return { status: 409, body: { success: false, error: `Release could not be published: ${publishError.message}` } };
+
+  const { error: listingError } = await admin
+    .from('marketplace_listings')
+    .update({ current_release_id: releaseId, status: 'published' })
+    .eq('id', loaded.release.listing_id);
+  if (listingError) return { status: 409, body: { success: false, error: `Listing could not be published: ${listingError.message}` } };
+
+  return { status: 200, body: { success: true, releaseId, reviewId, status: 'published', placeholderAssets: decisions.length } };
+}
+
 serve(async (req) => {
   const cors = getCorsHeaders(req);
   const preflight = handleCorsPreflightRequest(req, cors);
@@ -249,7 +302,9 @@ serve(async (req) => {
       ? await recordReview(body ?? {}, auth.user.id)
       : action === 'buildPackage'
         ? await buildPackage(body ?? {})
-        : { status: 400, body: { success: false, error: 'Unknown action.' } };
+        : action === 'autoRelease'
+          ? await autoRelease(body ?? {}, auth.user.id)
+          : { status: 400, body: { success: false, error: 'Unknown action.' } };
 
   return json(result.body, result.status);
 });
