@@ -190,6 +190,71 @@ function formatSavedAt(value?: string | null): string {
 type ViewMode = 'grid' | 'list';
 type BusinessSection = 'projects' | 'crm' | 'automations' | 'team' | 'settings' | 'database';
 
+/** Stages the project for marketplace review and surfaces the returned release ID. */
+function MarketplaceStageChip({ projectId }: { projectId: string }) {
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [releaseId, setReleaseId] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState('');
+
+  const stage = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    setPhase('loading');
+    setError('');
+    try {
+      const result = await stageMarketplaceRelease(projectId);
+      setReleaseId(result.releaseId);
+      setPhase('done');
+    } catch (stageError) {
+      setError(stageError instanceof Error ? stageError.message : 'Staging failed.');
+      setPhase('error');
+    }
+  };
+
+  if (phase === 'done') {
+    return (
+      <button
+        type="button"
+        title={`Copy marketplace release ID ${releaseId}`}
+        aria-label={`Copy marketplace release ID ${releaseId}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          void navigator.clipboard?.writeText(releaseId).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1500);
+          });
+        }}
+        className="mt-1 inline-flex max-w-full items-center gap-1 text-left font-mono text-[11px] text-cyan-300 hover:text-cyan-200"
+      >
+        <span className="truncate">Release {releaseId}</span>
+        {copied ? <Check className="h-3 w-3 shrink-0" /> : <Copy className="h-3 w-3 shrink-0" />}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      title="Stage this project for marketplace review"
+      onClick={stage}
+      disabled={phase === 'loading'}
+      className="mt-1 inline-flex max-w-full items-center gap-1 text-left text-[11px] text-white/40 hover:text-cyan-300 disabled:opacity-50"
+    >
+      {phase === 'loading' ? (
+        <>
+          <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+          <span>Staging…</span>
+        </>
+      ) : phase === 'error' ? (
+        <span className="text-red-400" title={error}>Staging failed — hover for detail</span>
+      ) : (
+        <span>Stage for marketplace review</span>
+      )}
+    </button>
+  );
+}
+
+
 interface CloudProjectsLocationState {
   tab?: 'overview' | 'projects' | 'assets' | 'email' | 'integrations' | 'security' | 'profile';
   workspaceSection?: BusinessSection;
