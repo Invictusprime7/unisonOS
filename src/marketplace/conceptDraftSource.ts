@@ -57,7 +57,9 @@ function selectAuthoredSource(templateId: string) {
       walk(statement, node => { if (node.type === 'Identifier' && typeof node.name === 'string') include(node.name); });
     };
     include(previewName);
-    const imports = ast.program.body.filter(s => s.type === 'ImportDeclaration' && s.importKind !== 'type').map(s => source.slice(s.start ?? 0, s.end ?? 0));
+    const used = new Set<string>();
+    for (const statement of selected) walk(statement, node => { if (node.type === 'Identifier' && typeof node.name === 'string') used.add(node.name); });
+    const imports = ast.program.body.filter(s => s.type === 'ImportDeclaration' && s.importKind !== 'type' && s.specifiers.some(spec => used.has(spec.local.name))).map(s => source.slice(s.start ?? 0, s.end ?? 0));
     return `${imports.join('\n')}\n${ast.program.body.filter(s => selected.has(s)).map(s => source.slice(s.start ?? 0, s.end ?? 0)).join('\n')}\nexport default ${previewName};`;
   }
   throw new Error('This template has no authored source to install.');
@@ -95,6 +97,7 @@ export function buildConceptDraftSource(template: AuthoredMarketplaceTemplate) {
   const vendorMap: string[] = [];
   for (const [path, source] of Object.entries({ ...vendorSources, ...vendorSupport, ...vendorHelpers })) {
     if (!path.includes('/components/') && !path.endsWith('/types.ts') && !path.endsWith('/themeUtils.ts')) continue;
+    if (/\/(registry|public|index)\.ts$/.test(path)) continue;
     files[path] = source;
     const id = source.match(/(?:data-ut-variant(?:-id)?|variantId)=["']([^"']+)["']/)?.[1];
     const name = source.match(/export (?:const|function) (\w+)/)?.[1];
