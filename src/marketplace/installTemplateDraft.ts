@@ -59,9 +59,11 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection,
   if (!buyerArtifacts.siteBundleSnapshot) throw new Error('The buyer draft could not be prepared.');
   if (options.signal?.aborted) throw new Error(String(options.signal.reason ?? 'Installation was stopped before the draft was saved.'));
   status({ label: 'Saving your draft' });
+  const activePagePath = installActivePagePath(buyerArtifacts);
+  if (!activePagePath) throw new Error('The template draft has no Home page to open.');
   const commit = await commitMutation({ source: 'wizard-launch', identity: {
     userId: user.id, businessId: ids.businessId, projectId: ids.projectId, draftId: ids.draftId, revisionId: '', sessionId: `marketplace-install:${ids.draftId}`,
-  }, current: { vfsFiles: {} }, patch: legacyFilesToPatchPlan(buyerArtifacts.files, `Install ${title} as a project draft`), options: {
+  }, current: { vfsFiles: {}, activePagePath }, patch: legacyFilesToPatchPlan(buyerArtifacts.files, `Install ${title} as a project draft`), options: {
     requirePreviewPass: true, requireReadinessPass: false, businessName: title, industry: snapshot.industry, themePresetId,
     reviewedArtifact: { siteBundleSnapshot: buyerArtifacts.siteBundleSnapshot, runtimeManifest: buyerArtifacts.runtimeManifest,
       playground: buyerArtifacts.canonicalPlayground as never },
