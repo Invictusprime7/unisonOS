@@ -1,0 +1,48 @@
+import house from '@/assets/marketplace-sample-house.jpg';
+import objects from '@/assets/marketplace-sample-objects.jpg';
+import food from '@/assets/marketplace-sample-food.jpg';
+import portrait from '@/assets/marketplace-sample-portrait.jpg';
+import workspace from '@/assets/marketplace-sample-workspace.jpg';
+import wellness from '@/assets/marketplace-sample-wellness.jpg';
+import type { MarketplacePreviewSection } from './marketplaceTemplatePrimitives';
+
+// Durable project assets, not temporary URLs or DOM-only repairs. Existing
+// authored pictures and release asset-rights decisions remain untouched.
+export const MARKETPLACE_SAMPLE_IMAGES = { house, objects, food, portrait, workspace, wellness };
+
+function sampleForTemplate(templateId: string): string {
+  if (templateId === 'sorella-house') return food;
+  if (templateId === 'pollen-objects') return objects;
+  if (templateId === 'aster-skin-studio' || templateId === 'tempo-field-club') return wellness;
+  if (['terra-house', 'formworks-studio', 'lowtide-house', 'northline-works', 'juniper-frame'].includes(templateId)) return house;
+  return workspace;
+}
+
+/** Pure, deterministic content hydration used on Home and every secondary page. */
+export function withMarketplaceImagePlaceholders(
+  templateId: string,
+  section: MarketplacePreviewSection,
+): MarketplacePreviewSection {
+  const sample = sampleForTemplate(templateId);
+  switch (section.type) {
+    case 'about':
+      return { ...section, props: { ...section.props, image: section.props.image || sample } };
+    case 'services':
+    case 'features':
+      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, image: item.image || sample })) } };
+    case 'gallery':
+      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, src: item.src || sample })) } };
+    case 'team':
+      return { ...section, props: { ...section.props, members: section.props.members.map((member) => ({ ...member, image: member.image || portrait })) } };
+    case 'testimonials':
+      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, avatar: item.avatar || portrait })) } };
+    case 'blog-preview':
+      return { ...section, props: { ...section.props, posts: section.props.posts.map((post) => ({ ...post, image: post.image || sample })) } };
+    case 'before-after':
+      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, before: item.before || sample, after: item.after || sample })) } };
+    case 'cta':
+      return { ...section, props: { ...section.props, backgroundImage: section.props.backgroundImage || sample } };
+    default:
+      return section;
+  }
+}

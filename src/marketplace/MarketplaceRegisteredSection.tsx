@@ -11,6 +11,7 @@ import {
 import { getIntentDef } from '@/platform/core/intentSurfaceRegistry';
 import { marketplaceBindingAttributes } from '@/marketplace/marketplaceTemplatePrimitives';
 import type { AuthoredMarketplaceTemplate, MarketplacePreviewSection, MarketplaceTemplateBinding } from '@/marketplace/marketplaceTemplatePrimitives';
+import { withMarketplaceImagePlaceholders } from '@/marketplace/marketplaceImagePlaceholders';
 
 export type MarketplaceRegisteredSectionEntry = MarketplacePreviewSection;
 
@@ -275,7 +276,7 @@ export function MarketplaceRegisteredSection({
       }}
       onSubmitCapture={(event) => handlePreviewContactSubmit(event, templateId, section, onIntent)}
     >
-      <VariantComponent section={section} theme={theme} />
+      <VariantComponent section={withMarketplaceImagePlaceholders(templateId, section)} theme={theme} />
     </div>
   );
 }
