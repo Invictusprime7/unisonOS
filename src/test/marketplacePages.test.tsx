@@ -48,6 +48,7 @@ function renderDetail(path = '/marketplace/editorial-salon') {
 describe('marketplace public pages', () => {
   beforeEach(() => {
     listPublicMarketplaceListings.mockReset();
+    (loadMarketplaceReleasePreview as ReturnType<typeof vi.fn>).mockClear();
   });
   afterEach(cleanup);
 
