@@ -83,6 +83,11 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   const result = await unisonAppBuilder.generate({
     operationId: `marketplace-install:${ids.draftId}:app-build`, contract, initialFiles, entryPoint: '/src/App.tsx', baseRevisionId: null, budgetMs: 280_000,
     reuseAcceptedPages: false,
+    pageCheck: (path, source, files) => {
+      const reference = collectLocalImportClosure({ ...initialFiles, ...files, [path]: source }, path)
+        .find(imported => imported.startsWith('/src/marketplace/'));
+      return reference ? [`Materialize this page as standalone source using canonical design-source modules; remove its dependency on preview-only ${reference}.`] : [];
+    },
     runtimeContext: [
       'MARKETPLACE INSTALLATION: Author real standalone pages and shared site components, not wrappers around Preview, MarketplaceRegisteredSection, or selectedPreview. The /src/marketplace sources are reference-only; installed page import closures must not depend on them. Preserve their content, imagery and sealed design while adapting to the canonical design-source modules and buyer runtime. Use registered Resource Runtime reads and data-ut-resource marks for editable records, not static catalog arrays. Never use seller resource IDs or service authorizations. Do not edit canonical App.tsx or protected infrastructure.',
       `BUYER STARTER CONTENT (canonical CreatorData, saved after acceptance): ${JSON.stringify(plan.playground.creatorData)}`,

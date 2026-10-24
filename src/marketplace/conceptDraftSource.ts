@@ -26,6 +26,7 @@ const industries: Record<string, IndustryOverlay> = {
   'Real Estate': 'real_estate', 'Objects & Retail': 'ecommerce', 'Retail & Objects': 'ecommerce',
   'Nonprofit & Community': 'nonprofit', 'Local Services': 'local-service', 'Fitness & Movement': 'fitness',
   Education: 'coaching', 'Boutique Lodging': 'restaurant', Photography: 'photographer',
+  'Retail & E-commerce': 'ecommerce', Nonprofit: 'nonprofit', 'Contractor & Trades': 'contractor',
 };
 
 /** Select real authored declarations, not rendered HTML or a newly generated design. */

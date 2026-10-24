@@ -61,6 +61,7 @@ export async function orchestrateAppBuild(
   const photoUrls = verifiedPhotosFor(input.contract.design.resolvedSiteDesignContext?.contract.industry ?? input.contract.business.industry);
   const pageCheck = (path: string, source: string, files?: Readonly<Record<string, string>>) => {
     const messages = findDesignSourceUsageIssues(manifestSource, source).map((issue) => issue.message);
+    messages.push(...(input.pageCheck?.(path, source, files) ?? []));
     const role = roleByPath.get(path);
     if (role) {
       const requirement = pageStructureRequirement(role, contractPages[role]?.densityBudget?.min, photoUrls);
