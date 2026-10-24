@@ -12,7 +12,14 @@ import { serve } from 'serve';
 import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
 import { authError, getServiceRoleClient, verifyAuth } from '../_shared/auth.ts';
 import { isValidUUID, safeParseBody } from '../_shared/validate.ts';
-import { buildDesignOnlyManifest, scanSnapshotForSecrets, sha256StableJson, slugifyListing } from './releaseStaging.ts';
+import {
+  buildDesignOnlyManifest,
+  extractAssetReferences,
+  fingerprintAssetReferences,
+  scanSnapshotForSecrets,
+  sha256StableJson,
+  slugifyListing,
+} from './releaseStaging.ts';
 
 serve(async (req) => {
   const cors = getCorsHeaders(req);
@@ -78,7 +85,11 @@ serve(async (req) => {
 
   const snapshotSha256 = await sha256StableJson(snapshot);
   const industryKey = typeof business?.industry === 'string' && business.industry.trim() ? business.industry : 'general';
-  const manifest = buildDesignOnlyManifest({ revisionId: revision.id, snapshotSha256, industryKey, meta });
+  // Every photo, artwork and font the site references is listed in the manifest
+  // so the rights review must record a decision per asset before certification.
+  const assetRefs = extractAssetReferences(snapshot.vfsFiles as Record<string, unknown>);
+  const assets = await fingerprintAssetReferences(assetRefs);
+  const manifest = buildDesignOnlyManifest({ revisionId: revision.id, snapshotSha256, industryKey, meta, assets });
   const slug = slugifyListing(String(project.name ?? 'template'), projectId);
 
   const { data: existing } = await admin
