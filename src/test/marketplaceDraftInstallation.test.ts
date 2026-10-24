@@ -48,6 +48,18 @@ describe('template draft acceptance', () => {
     await expect(installTemplateDraft(selection)).rejects.toThrow('not saved');
     expect(mocks.seed).not.toHaveBeenCalled();
   });
+  it('reports page progress and never saves a stopped install', async () => {
+    const controller = new AbortController();
+    const statuses: string[] = [];
+    mocks.build.mockImplementation(async (_material: unknown, _ids: unknown, options: { onPage?: (event: object) => void }) => {
+      options.onPage?.({ title: 'Home', index: 0, total: 2, phase: 'authoring' });
+      controller.abort('Stopped');
+      return { files: {}, siteBundleSnapshot: {} };
+    });
+    await expect(installTemplateDraft(selection, { signal: controller.signal, onStatus: s => statuses.push(s.label) })).rejects.toThrow('Stopped');
+    expect(statuses).toContain('Building Home');
+    expect(mocks.commit).not.toHaveBeenCalled();
+  });
   it('reports saved draft data setup failures rather than claiming full installation', async () => {
     mocks.seed.mockRejectedValue(new Error('Catalog unavailable'));
     await expect(installTemplateDraft(selection)).rejects.toThrow('draft was saved, but its editable data setup did not finish');

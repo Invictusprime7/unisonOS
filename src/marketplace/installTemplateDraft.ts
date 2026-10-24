@@ -14,7 +14,12 @@ import { persistLaunchFormDefinitions } from '@/services/launchFormDefinitionPer
 
 export type MarketplaceDraftSelection = { kind: 'concept'; template: AuthoredMarketplaceTemplate } | { kind: 'release'; slug: string; title: string };
 
-export async function installTemplateDraft(selection: MarketplaceDraftSelection) {
+export interface InstallProgress { label: string; done?: number; total?: number }
+export interface InstallOptions { signal?: AbortSignal; onStatus?: (status: InstallProgress) => void }
+
+export async function installTemplateDraft(selection: MarketplaceDraftSelection, options: InstallOptions = {}) {
+  const status = (next: InstallProgress) => options.onStatus?.(next);
+  status({ label: 'Checking your account' });
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) throw new Error('Sign in before installing a template draft.');
   let artifacts: MarketplaceTemplateMaterial;
@@ -38,10 +43,22 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection)
   const snapshot = buyerDraftSnapshot(artifacts.siteBundleSnapshot);
   const title = selection.kind === 'concept' ? selection.template.name : selection.title;
   const themePresetId = String(snapshot.meta.themePresetId ?? 'modern');
+  status({ label: 'Creating your project' });
   const ids = await provisionConfirmedLaunchSite({ ids: createConfirmedLaunchIds(), businessName: title, siteName: title,
     industry: snapshot.industry, systemType: String(snapshot.meta.systemId ?? 'agency'), templateId: String(snapshot.meta.templateId ?? ''), themePresetId });
-  const buyerArtifacts = await materializeTemplateWithAppBuilder({ ...artifacts, siteBundleSnapshot: snapshot }, ids);
+  const pageCount = Object.keys(snapshot.pageRegistry?.pages ?? {}).length;
+  status({ label: 'Building pages', done: 0, total: pageCount });
+  let built = 0;
+  const buyerArtifacts = await materializeTemplateWithAppBuilder({ ...artifacts, siteBundleSnapshot: snapshot }, ids, {
+    signal: options.signal,
+    onPage: event => {
+      if (event.phase !== 'authoring') built = Math.min(event.total, built + 1);
+      status({ label: event.phase === 'authoring' ? `Building ${event.title}` : 'Building pages', done: built, total: event.total });
+    },
+  });
   if (!buyerArtifacts.siteBundleSnapshot) throw new Error('The buyer draft could not be prepared.');
+  if (options.signal?.aborted) throw new Error(String(options.signal.reason ?? 'Installation was stopped before the draft was saved.'));
+  status({ label: 'Saving your draft' });
   const commit = await commitMutation({ source: 'wizard-launch', identity: {
     userId: user.id, businessId: ids.businessId, projectId: ids.projectId, draftId: ids.draftId, revisionId: '', sessionId: `marketplace-install:${ids.draftId}`,
   }, current: { vfsFiles: {} }, patch: legacyFilesToPatchPlan(buyerArtifacts.files, `Install ${title} as a project draft`), options: {
@@ -50,6 +67,7 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection)
       playground: buyerArtifacts.canonicalPlayground as never },
   } });
   if (commit.status !== 'committed' || !commit.persistedRevisionId) throw new Error('The template draft was not saved.');
+  status({ label: 'Setting up products, content and buttons' });
   // Match fresh-launch setup: records/actions belong to the confirmed buyer scope.
   try {
     await seedLaunchAssets({ businessId: ids.businessId, projectId: ids.projectId, industry: snapshot.industry,
