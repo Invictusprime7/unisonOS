@@ -11,6 +11,7 @@ import {
   resolveMarketplaceTemplateBinding,
 } from '@/marketplace/authoredTemplatePreviews';
 import { MARKETPLACE_TEMPLATE_VARIANT_PROFILES, type MarketplaceSectionVariantSlot } from '@/marketplace/MarketplaceRegisteredSection';
+import { MARKETPLACE_SAMPLE_IMAGES } from '@/marketplace/marketplaceImagePlaceholders';
 
 afterEach(() => { cleanup(); window.localStorage.clear(); });
 
@@ -168,6 +169,9 @@ describe('authored marketplace previews', () => {
       }));
       const imageUrls = [template.coverImage, ...Array.from(container.querySelectorAll('img[src]'), (image) => image.getAttribute('src')!)];
       for (const imageUrl of imageUrls) {
+        // Intentional shared generated placeholders are durable project assets;
+        // the original authored photographs must still remain distinct.
+        if (Object.values(MARKETPLACE_SAMPLE_IMAGES).includes(imageUrl)) continue;
         const photoId = imageUrl.match(/images\.unsplash\.com\/(photo-[^?]+)/)?.[1];
         expect(photoId, `${template.id} image ${imageUrl}`).toBeDefined();
         expect(seenImages.has(photoId!), `${photoId} is reused by ${seenImages.get(photoId!) ?? template.id} and ${template.id}`).toBe(false);
