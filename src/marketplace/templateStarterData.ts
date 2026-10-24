@@ -27,6 +27,11 @@ export function templateStarterData(template: AuthoredMarketplaceTemplate) {
       const id = `${section.id}:${index}`;
       const name = text(row.title ?? row.name);
       const imageAssetId = image(`${id}:image`, row.image ?? row.src ?? row.avatar);
+      if (section.type === 'pricing' && name) {
+        const amount = price(row.price);
+        if (amount !== undefined) data.products[id] = { productId: id, catalogSurface: 'pricing', name,
+          description: text(row.description), price: amount, currency: 'USD', sortOrder: index };
+      }
       if (section.type === 'services' && name) {
         const amount = price(row.price);
         if (commerce && amount !== undefined) data.products[id] = { productId: id, catalogSurface: 'products', name,
