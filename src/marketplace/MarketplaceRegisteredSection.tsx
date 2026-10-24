@@ -1,3 +1,4 @@
+import '@/marketplace/marketplaceActions.css';
 import type { FormEvent, MouseEvent } from 'react';
 import type { ThemeTokens } from '@/sections/types';
 import {
@@ -252,6 +253,8 @@ export function MarketplaceRegisteredSection({
     <div
       data-ut-section-type={section.type}
       data-ut-variant-id={variantId}
+      data-ut-marketplace-geometry=""
+      style={{ ['--ut-marketplace-radius' as string]: packTokens['--ut-radius-base'] }}
       onClickCapture={(event) => {
         const control = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-ut-intent]');
         const intent = control?.getAttribute('data-ut-intent');
