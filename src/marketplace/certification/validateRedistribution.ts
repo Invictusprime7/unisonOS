@@ -70,6 +70,9 @@ export function validateRedistribution(
     }
     seenPaths.add(asset.path);
 
+    // Excluded assets ship as placeholders, so they need no rights review.
+    if (asset.licenseClass === 'excluded') continue;
+
     const review = reviewByPath.get(asset.path);
     if (!review) {
       issues.push({

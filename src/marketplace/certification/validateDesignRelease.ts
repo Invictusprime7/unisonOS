@@ -100,6 +100,7 @@ export function validateDesignRelease(
   }
 
   for (const asset of manifest.assets) {
+    if (asset.licenseClass === 'excluded') continue;
     if (asset.licenseClass === 'reference-only') {
       issues.push({
         code: 'asset-not-redistributable',

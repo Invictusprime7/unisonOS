@@ -181,7 +181,7 @@ async function buildPackage(body: Json) {
 
   const manifest = release.manifest_json as { assets?: ManifestAssetEntry[] };
   const excludedRefs = (Array.isArray(manifest?.assets) ? manifest.assets : [])
-    .filter((asset) => asset.licenseClass === 'buyer-supplied' || asset.licenseClass === 'reference-only')
+    .filter((asset) => asset.licenseClass !== 'redistributable' && asset.licenseClass !== 'owned')
     .map((asset) => asset.path);
   const { files, rewrittenRefs } = buildReleasePackageFiles(snapshot.vfsFiles, excludedRefs);
 
