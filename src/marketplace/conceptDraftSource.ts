@@ -59,7 +59,14 @@ function selectAuthoredSource(templateId: string) {
     include(previewName);
     const used = new Set<string>();
     for (const statement of selected) walk(statement, node => { if (node.type === 'Identifier' && typeof node.name === 'string') used.add(node.name); });
-    const imports = ast.program.body.filter(s => s.type === 'ImportDeclaration' && s.importKind !== 'type' && s.specifiers.some(spec => used.has(spec.local.name))).map(s => source.slice(s.start ?? 0, s.end ?? 0));
+    const imports = ast.program.body.flatMap(statement => {
+      if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type') return [];
+      const specifiers = statement.specifiers.filter(spec => used.has(spec.local.name) && !(spec.type === 'ImportSpecifier' && spec.importKind === 'type'));
+      if (!specifiers.length) return [];
+      const named = specifiers.filter(spec => spec.type === 'ImportSpecifier').map(spec => spec.type === 'ImportSpecifier' ? (spec.imported.type === 'Identifier' ? spec.imported.name : spec.imported.value) + (spec.local.name !== (spec.imported.type === 'Identifier' ? spec.imported.name : spec.imported.value) ? ` as ${spec.local.name}` : '') : '');
+      const defaults = specifiers.filter(spec => spec.type === 'ImportDefaultSpecifier').map(spec => spec.local.name);
+      return [`import ${[...defaults, ...(named.length ? [`{ ${named.join(', ')} }`] : [])].join(', ')} from ${JSON.stringify(statement.source.value)};`];
+    });
     return `${imports.join('\n')}\n${ast.program.body.filter(s => selected.has(s)).map(s => source.slice(s.start ?? 0, s.end ?? 0)).join('\n')}\nexport default ${previewName};`;
   }
   throw new Error('This template has no authored source to install.');
