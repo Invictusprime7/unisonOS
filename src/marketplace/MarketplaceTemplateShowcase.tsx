@@ -13,6 +13,7 @@ import { MarketplaceRegisteredSection, MARKETPLACE_TEMPLATE_VARIANT_PROFILES } f
 import { pageArchetypeIssues, resolvePageArchetype } from '@/sections/pageArchetypeContract';
 import type { MarketplacePreviewSection, MarketplaceTemplatePage } from '@/marketplace/marketplaceTemplatePrimitives';
 import { MarketplaceThumbnailSurface } from '@/marketplace/MarketplaceThumbnailSurface';
+import { marketplaceRhythmStyle } from '@/marketplace/marketplaceGeometricRhythm';
 import { MarketplaceCartCountContext, MarketplacePreviewCart } from '@/marketplace/MarketplacePreviewCart';
 import { BROWSER_CART_EVENT, buildBrowserCartStorageKey, createBrowserCartManager, readBrowserCart } from '@/runtime/browserCartManager';
 import type { Cart } from '@/runtime/intentExecutor';
@@ -176,7 +177,11 @@ function MarketplaceTemplateRoutePage({
       data-ut-page-role={page.archetype}
       data-marketplace-required-families={archetype.requiredFamilies.join(',')}
       data-marketplace-archetype-purpose={archetype.purpose}
-      style={{ backgroundColor: `hsl(${template.theme.colors.background})`, color: `hsl(${template.theme.colors.foreground})`, fontFamily: template.theme.typography.bodyFont }}
+      data-ut-art-direction={MARKETPLACE_TEMPLATE_VARIANT_PROFILES[templateId].artDirectionPackId}
+      style={{
+        ...marketplaceRhythmStyle(MARKETPLACE_TEMPLATE_VARIANT_PROFILES[templateId].artDirectionPackId, page.archetype),
+        backgroundColor: `hsl(${template.theme.colors.background})`, color: `hsl(${template.theme.colors.foreground})`, fontFamily: template.theme.typography.bodyFont,
+      }}
     >
       <header className="border-b px-5 py-4" style={{ backgroundColor: `hsl(${template.theme.colors.background})`, borderColor: `hsl(${template.theme.colors.border})` }}>
         <MarketplaceRegisteredSection
@@ -187,7 +192,7 @@ function MarketplaceTemplateRoutePage({
           onNavigate={onNavigate}
         />
       </header>
-      <section className="grid gap-6 border-b px-7 py-10 sm:px-12 md:grid-cols-[1fr_0.7fr]" style={{ backgroundColor: `hsl(${template.theme.colors.muted})`, borderColor: `hsl(${template.theme.colors.border})` }}>
+      <section className="grid border-b md:grid-cols-[1fr_0.7fr]" style={{ gap: 'var(--ut-grid-gap)', paddingBlock: 'var(--ut-rhythm-space)', paddingInline: 'var(--ut-inline-gutter)', backgroundColor: `hsl(${template.theme.colors.muted})`, borderColor: `hsl(${template.theme.colors.border})` }}>
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.16em]" style={{ color: `hsl(${template.theme.colors.mutedForeground})` }}>{template.category} · {page.path}</p>
           <h1 className="mt-3 text-4xl font-semibold" style={{ color: `hsl(${template.theme.colors.foreground})`, fontFamily: template.theme.typography.headingFont }}>{page.title}</h1>
