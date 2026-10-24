@@ -183,6 +183,16 @@ async function buildPackage(body: Json) {
     .map((asset) => asset.path);
   const { files, rewrittenRefs } = buildReleasePackageFiles(snapshot.vfsFiles, excludedRefs);
 
+  // Keep the reviewed requirements in the buyer ZIP without creator-owned data or approvals.
+  const releaseManifest = release.manifest_json as { requirements?: Record<string, unknown> };
+  if (releaseManifest.requirements) {
+    files['/.unison/marketplace-runtime-requirements.json'] = JSON.stringify({
+      schemaVersion: 'marketplace-runtime-requirements/1',
+      releaseId,
+      requirements: releaseManifest.requirements,
+    }, null, 2);
+  }
+
   const zip = new JSZip();
   for (const [path, contents] of Object.entries(files)) {
     zip.file(path.replace(/^\//, ''), contents);

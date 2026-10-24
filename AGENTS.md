@@ -34,3 +34,5 @@
 - Affinity shows public paragraphs, never native thinking. Why: explanations without private deliberation.
 - Marketplace certification evidence is server-owned and source-bound; client preflight stays non-publishing and deployment SQL lives only in canonical migrations. Why: local checks and concept previews are not release authorization.
 - Marketplace cards share MarketplaceThumbnailSurface; published covers read image references from the safe package without executing source, while VFSPreview stays on details. Why: static cards must not mount the full site runtime or expose restricted source media.
+- Marketplace releases preserve capability requirements and slot-intent identities, never creator approvals or resource payloads; provisioning remains buyer-owned. Why: copying requirements must not authorize live writes to the creator's services.
+- Published cart intents use the canonical client commerce adapter with site-scoped browser persistence and quantity badges; checkout stays server-priced and provider-gated. Why: a bag can persist without granting payment authority or trusting browser prices for charges.
