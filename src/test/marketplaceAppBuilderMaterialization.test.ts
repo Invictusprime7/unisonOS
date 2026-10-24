@@ -22,6 +22,8 @@ describe('marketplace App Builder convergence', () => {
     const request = mocks.generate.mock.calls[0][0];
     expect(request.contract.identity.projectId).toBe('buyer-project');
     expect(request.reuseAcceptedPages).toBe(false);
+    expect(request.pageCheck('/src/pages/home.tsx', material.files['/src/pages/home.tsx'], material.files)).toHaveLength(1);
+    expect(request.pageCheck('/src/pages/home.tsx', files['/src/pages/home.tsx'], files)).toEqual([]);
     expect(request.contract.business.intents).toContain('cart.add');
     expect(request.contract.business.capabilities).toContain('commerce');
     expect(request.runtimeContext).toContain('Sunday cup');
