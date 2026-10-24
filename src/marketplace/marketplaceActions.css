@@ -46,3 +46,24 @@
 [data-ut-marketplace-geometry] :has(> img.object-contain) {
   padding: 0 !important;
 }
+/* Template description reveals horizontally on the preview shell when toggled. */
+@keyframes marketplace-description-cascade {
+  from {
+    clip-path: inset(0 100% 0 0);
+    transform: translateX(calc(-1 * var(--ut-motion-distance)));
+    opacity: 0;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.marketplace-description-cascade {
+  animation: marketplace-description-cascade var(--ut-motion-duration) var(--ut-motion-ease) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .marketplace-description-cascade {
+    animation: none;
+  }
+}
