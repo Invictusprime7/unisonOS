@@ -217,7 +217,8 @@ export async function runProviderLoop(opts: {
   const budgetRemaining = () => totalBudgetMs - (Date.now() - startedAt);
   const activeAttempts = new Set<() => void>();
   const geminiExclusive = isGeminiExclusiveProviderMode();
-  const hasDirectOpenAI = !guestOnly && allowDirectFallbacks && !geminiExclusive && !directOnCooldown('openai') && Boolean(Deno.env.get('OPENAI_API_KEY'));
+  const geminiOnlyTurn = geminiExclusive || Boolean(providerPlan.geminiOnly);
+  const hasDirectOpenAI = !guestOnly && allowDirectFallbacks && !geminiOnlyTurn && !directOnCooldown('openai') && Boolean(Deno.env.get('OPENAI_API_KEY'));
   const hasDirectGemini = allowDirectFallbacks && !directOnCooldown('gemini') && Boolean(Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('UNISONGEMINI_API_KEY'));
   // Guest actions use only models with a configured, enforceable price schedule.
   const hasLastResortGateway = !guestOnly && allowDirectFallbacks && Boolean(Deno.env.get('LOVABLE_API_KEY'));
@@ -920,13 +921,13 @@ export async function runProviderLoop(opts: {
     model.id.startsWith('google/') || model.id.startsWith('gemini-') ? 'gemini' :
     'other'
   )));
-  if (!hasResponse() && allowDirectFallbacks && !geminiExclusive) {
+  if (!hasResponse() && allowDirectFallbacks && !geminiOnlyTurn) {
     if (hasDirectOpenAI && !plannedProviders.has('openai')) await runDirectOpenAI();
     if (!hasResponse() && hasDirectGemini && !plannedProviders.has('gemini')) await runDirectGemini();
   }
 
   // ── Phase 4: Direct Anthropic API ─────────────────────────────────────
-  if (!guestOnly && !hasResponse() && allowDirectFallbacks) {
+  if (!guestOnly && !geminiOnlyTurn && !hasResponse() && allowDirectFallbacks) {
     const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
     if (ANTHROPIC_API_KEY) {
       const remaining = budgetRemaining();
