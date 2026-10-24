@@ -14,7 +14,7 @@ export function MarketplacePreviewCart({ cart, open, onClose, onUpdate }: {
 }) {
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
-      <DialogContent>
+      <DialogContent aria-label="Shopping bag">
         <DialogHeader><DialogTitle>Shopping bag</DialogTitle></DialogHeader>
         {cart.items.length === 0 ? <p>Your bag is empty.</p> : (
           <ul style={{ display: 'grid', gap: 'var(--ut-density-gap)' }}>
