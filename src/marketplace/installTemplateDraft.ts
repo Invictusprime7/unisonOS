@@ -7,6 +7,7 @@ import type { CanonicalLaunchArtifacts } from '@/services/canonicalLaunchVfs';
 import type { AuthoredMarketplaceTemplate } from './marketplaceTemplatePrimitives';
 import { getSupabaseFunctionHeaders, getSupabaseFunctionUrl } from '@/integrations/supabase/supabaseFunctionRequest';
 import { importUnisonSiteZip } from '@/services/export/importUnisonSiteZip';
+import { buyerDraftSnapshot } from './buyerDraftSnapshot';
 
 export type MarketplaceDraftSelection = { kind: 'concept'; template: AuthoredMarketplaceTemplate } | { kind: 'release'; slug: string; title: string };
 
@@ -33,8 +34,8 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection)
       canonicalPlayground: imported.canonicalPlayground, preferredEntryPoint: imported.entryPoint,
       mergeWithCanonicalSnapshot: true, allowCanonicalPageFallback: false, strictPreflight: true, themePresetId: imported.themePresetId });
   }
-  const snapshot = artifacts.siteBundleSnapshot;
-  if (!snapshot) throw new Error('The template has no editable page registry.');
+  if (!artifacts.siteBundleSnapshot) throw new Error('The template has no editable page registry.');
+  const snapshot = buyerDraftSnapshot(artifacts.siteBundleSnapshot);
   const title = selection.kind === 'concept' ? selection.template.name : selection.title;
   const themePresetId = String(snapshot.meta.themePresetId ?? 'modern');
   const ids = await provisionConfirmedLaunchSite({ ids: createConfirmedLaunchIds(), businessName: title, siteName: title,
