@@ -38,7 +38,22 @@ export default function MarketplaceListing() {
     }).catch(() => {
       if (active) setPreviewState('unavailable');
     });
-    if (loading) return <p role="status">Loading listing…</p>;
+    return () => { active = false; };
+  }, [listing]);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(false);
+    setPreview(null);
+    void listPublicMarketplaceListings({ slug, limit: 1 }).then(results => {
+      if (active) setListing(results[0] ?? null);
+    }).catch(() => { if (active) setError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [slug]);
+
+  if (loading) return <p role="status">Loading listing…</p>;
   if (error) return <p role="alert">Listing details could not be loaded.</p>;
   if (!listing) return <main><h1>Listing not found</h1><Link to="/marketplace">Marketplace</Link></main>;
   return <MarketplacePreviewShell
