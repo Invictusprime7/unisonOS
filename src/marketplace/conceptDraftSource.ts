@@ -4,7 +4,6 @@ import additionalSource from './additionalMarketplacePreviews.tsx?raw';
 import { createBuilderPage, createEmptyPageRegistry } from '@/types/pageRegistry';
 import { generateCanonicalRouter } from '@/utils/topologyRouterGenerator';
 import { buildCanonicalLaunchPlan, projectCanonicalLaunchCandidateSnapshot } from '@/services/launch/canonicalLaunchPlan';
-import { buildCanonicalLaunchArtifacts } from '@/services/canonicalLaunchVfs';
 import { createWizardDesignSelection } from '@/services/wizardDesignSelection';
 import { ART_DIRECTION_PACKS, type ArtDirectionPackId } from '@/sections/variants';
 import { MARKETPLACE_TEMPLATE_VARIANT_PROFILES } from './MarketplaceRegisteredSection';
@@ -155,5 +154,6 @@ export default function Page() { return <main data-marketplace-preview-surface>$
   // Unverified stock references stay buyer supplied; never bundle their bytes or grant rights.
   for (const path of Object.keys(files).filter(p => p.startsWith('/src/marketplace/'))) files[path] = files[path].replace(/https:\/\/images\.unsplash\.com\/[^'"\s)]+/g, '/assets/marketplace-placeholder.svg');
   const snapshot = projectCanonicalLaunchCandidateSnapshot(plan, selections, files);
-  return buildCanonicalLaunchArtifacts({ generatedFiles: files, siteBundleSnapshot: snapshot, canonicalPlayground: plan.playground, preferredEntryPoint: '/src/App.tsx', mergeWithCanonicalSnapshot: true, allowCanonicalPageFallback: false, strictPreflight: true, themePresetId: family, businessName: template.name, industry: selections.industryOverlay });
+  // Material only: App Builder must converge this source before canonical acceptance.
+  return { files, siteBundleSnapshot: snapshot, canonicalPlayground: plan.playground, entryPoint: '/src/App.tsx', plan, selections };
 }
