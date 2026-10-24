@@ -55,6 +55,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { downloadMultiPageSite } from '@/utils/multiPageExporter';
+import { stageMarketplaceRelease } from '@/marketplace/stageReleaseClient';
 import {
   createProjectCompat,
   listProjectIdsByBusinessCompat,
@@ -1332,6 +1333,7 @@ export function CloudProjects({ userId, businessId: propBusinessId, onProjectSel
                   <div className="min-w-0">
                     <p className="truncate font-medium text-white">{project.name}</p>
                     <ProjectIdChip id={project.id} />
+                    <MarketplaceStageChip projectId={project.id} />
                     <p className="mt-1 text-xs text-white/40">
                       Updated {formatSavedAt(project.updated_at || project.created_at)}
                     </p>
