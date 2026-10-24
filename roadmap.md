@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Active: Marketplace preview draft installation
+- [ ] Route marketplace installation through App Builder materialization/convergence before canonical acceptance; reproduce and fix invalid generated router imports.
 - [x] Give published listings the same full-window preview shell and cascading description as concept previews; Zen Site renders full-width in browser.
 - [x] Expose draft installation in every template preview using canonical, buyer-owned draft acceptance; all 12 concept source packages pass local validation.
 - [x] Verify preview controls, signed-out handling, source packages and canonical save tests.
