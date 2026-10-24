@@ -28,6 +28,12 @@
 }
 .marketplace-action-label { font-family: var(--ut-font-mono); }
 .marketplace-action-heading { font-family: var(--ut-font-display); }
+.marketplace-preview-shell { display: flex; flex-direction: column; width: 100%; height: 100vh; overflow: hidden; }
+.marketplace-preview-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ut-density-gap); padding: var(--ut-density-padding); }
+.marketplace-preview-heading { flex: 1; min-width: 0; }
+.marketplace-preview-heading h1 { font-family: var(--ut-font-display); }
+.marketplace-preview-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ut-density-gap); }
+.marketplace-preview-body { flex: 1; min-height: 0; overflow: auto; }
 /* Marketplace templates: sealed-pack geometry governs every registered section,
    overriding hardcoded corner classes so inner pages match Home. */
 [data-ut-marketplace-geometry] :is([class*="rounded-"]:not(.rounded-full), .rounded) {
