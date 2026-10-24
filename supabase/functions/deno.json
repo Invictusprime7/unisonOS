@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
-    "lib": ["deno.window"],
+    "lib": [
+      "deno.window"
+    ],
     "strict": true
   },
   "nodeModulesDir": "auto",
@@ -13,6 +15,7 @@
     "xhr": "https://deno.land/x/xhr@0.1.0/mod.ts",
     "resend": "https://esm.sh/resend@2.0.0?target=deno",
     "bcrypt": "https://deno.land/x/bcrypt@v0.4.1/mod.ts",
-    "jose": "https://deno.land/x/jose@v5.2.0/index.ts"
+    "jose": "https://deno.land/x/jose@v5.2.0/index.ts",
+    "jszip": "npm:jszip@3.10.1"
   }
 }
