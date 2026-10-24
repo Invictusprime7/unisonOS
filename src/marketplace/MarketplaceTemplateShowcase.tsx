@@ -18,6 +18,7 @@ import { MarketplaceCartCountContext, MarketplacePreviewCart } from '@/marketpla
 import { BROWSER_CART_EVENT, buildBrowserCartStorageKey, createBrowserCartManager, readBrowserCart } from '@/runtime/browserCartManager';
 import type { Cart } from '@/runtime/intentExecutor';
 import { Button } from '@/components/ui/button';
+import { MarketplaceInstallButton } from './MarketplaceInstallButton';
 
 type PreviewDevice = 'desktop' | 'mobile';
 
@@ -304,7 +305,7 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
           <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Concept previews</p>
           <h2 id="marketplace-live-previews-title" className="text-xl font-semibold tracking-tight">Designed for a point of view</h2>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Individually authored website previews with distinct audiences, page structures, and visual systems. Concepts are not certified marketplace releases and cannot be purchased or installed.
+            Individually authored website previews with distinct audiences, page structures, and visual systems. Concepts can be installed as editable project drafts; photography remains buyer supplied.
           </p>
           <p className="max-w-2xl text-xs text-muted-foreground">
             Sample photography, names, and testimonials are illustrative placeholders, not real client endorsements.
@@ -383,6 +384,7 @@ export function MarketplaceTemplateShowcase({ children }: { children?: ReactNode
                 <p className="marketplace-description-cascade mt-1 max-w-3xl text-xs text-muted-foreground">{activeTemplate?.description}</p>
               )}
             </div>
+            {activeTemplate && <MarketplaceInstallButton key={activeTemplate.id} selection={{ kind: 'concept', template: activeTemplate }} />}
             <div aria-label="Preview size" className="flex shrink-0 border border-border">
               <button
                 type="button"

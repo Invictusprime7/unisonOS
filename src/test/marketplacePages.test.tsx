@@ -77,13 +77,13 @@ describe('marketplace public pages', () => {
     });
   });
 
-  it('loads listing details but keeps install unavailable before certified preview exists', async () => {
+  it('exposes draft installation independently of preview availability', async () => {
     listPublicMarketplaceListings.mockResolvedValue([listing]);
     renderDetail();
 
-    expect(await screen.findByRole('heading', { name: 'Editorial Salon' })).toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'Editorial Salon design preview' });
     expect(screen.getByText('Certified preview unavailable')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Install unavailable' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Install as draft' })).toBeEnabled();
     expect(listPublicMarketplaceListings).toHaveBeenCalledWith({ slug: 'editorial-salon', limit: 1 });
   });
 

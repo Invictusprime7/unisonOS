@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: Marketplace preview draft installation
+- [x] Give published listings the same full-window preview shell and cascading description as concept previews; Zen Site renders full-width in browser.
+- [x] Expose draft installation in every template preview using canonical, buyer-owned draft acceptance; all 12 concept source packages pass local validation.
+- [x] Verify preview controls, signed-out handling, source packages and canonical save tests.
+- [ ] Verify authenticated install → saved draft → reopen: requires authoritative UNISON session and GitHub deployment of marketplace-install-template. Paid releases still need an existing entitlement; checkout is not implemented.
+
 ## Active: Marketplace image placeholders
 - [x] Persist real sample images for image-bearing sections and repeated content across all concept pages without changing vendor layouts or redistribution rights.
 - [x] Run image assignment regressions and verify Terra House imagery survives page navigation and reload.
@@ -11,7 +17,7 @@
 ## Active: Marketplace cart and capability persistence
 - [x] Enable canonical add-to-cart with site-scoped browser persistence, quantity badges, restored saved capabilities and runtime-connected bag icons.
 - [x] Preserve declared capability requirements and portable slot bindings in staged manifests and buyer packages without copying creator approvals or record payloads.
-- [ ] Buyer-owned marketplace installation/provisioning: blocked by absent authorized installation endpoint and authoritative UNISON session; the current marketplace Install control remains unavailable. Requirements transfer is not working-installation proof.
+- [ ] Buyer-owned marketplace installation/provisioning acceptance: install control and authorized package endpoint are implemented; live acceptance awaits GitHub deployment and authoritative UNISON session. Requirements transfer is not working-installation proof.
 - [x] Run focused cart, published adapter, capability hydration and release requirements regressions.
 - [ ] Real installed-template add → bag → reload and booking/payment persistence: requires the buyer installation path, canonical GitHub deployment of changed release functions, and authoritative UNISON session.
 
