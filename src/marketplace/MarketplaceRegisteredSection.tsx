@@ -72,7 +72,7 @@ export const MARKETPLACE_TEMPLATE_VARIANT_PROFILES = {
   },
   'pollen-objects': {
     artDirectionPackId: 'commerce-editorial',
-    variants: { gallery: 'gallery:collection-tiles', services: 'services:product-cards', features: 'features:bento-grid', testimonials: 'testimonials:marquee', faq: 'faq:cards' },
+    variants: { gallery: 'gallery:collection-tiles', services: 'services:product-cards', features: 'features:bento-mosaic', testimonials: 'testimonials:marquee', faq: 'faq:cards' },
   },
   'common-ground-fund': {
     artDirectionPackId: 'print-serif',
