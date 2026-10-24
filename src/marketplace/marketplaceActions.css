@@ -42,3 +42,7 @@
   width: 100% !important;
   height: 100% !important;
 }
+/* The wrapper around a full-bleed card image carries no inset of its own. */
+[data-ut-marketplace-geometry] :has(> img.object-contain) {
+  padding: 0 !important;
+}
