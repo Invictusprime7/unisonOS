@@ -1,8 +1,8 @@
 # Roadmap
 
 ## Active: Marketplace image placeholders
-- [ ] Persist real sample images for image-bearing sections and repeated content across all concept pages without changing vendor layouts or redistribution rights.
-- [ ] Run image assignment regressions and verify Terra House imagery survives page navigation and reload.
+- [x] Persist real sample images for image-bearing sections and repeated content across all concept pages without changing vendor layouts or redistribution rights.
+- [x] Run image assignment regressions and verify Terra House imagery survives page navigation and reload.
 
 ## Active: Marketplace concept action repair
 - [x] Replace the shared informational cart action overlay with functional, template-scoped persistent cart actions and quantity badges; registered catalog products use the same cart. Business actions remain labelled samples, without creator-service authorization.

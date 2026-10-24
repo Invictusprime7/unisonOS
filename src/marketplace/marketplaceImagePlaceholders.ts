@@ -28,6 +28,7 @@ export function withMarketplaceImagePlaceholders(
     case 'about':
       return { ...section, props: { ...section.props, image: section.props.image || sample } };
     case 'services':
+      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, image: item.image || sample })) } };
     case 'features':
       return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, image: item.image || sample })) } };
     case 'gallery':
