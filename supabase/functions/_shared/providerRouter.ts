@@ -32,6 +32,8 @@ export interface ProviderPlan {
   raceGateway?: boolean;
   /** Hybrid page writing: the managed gateway writes first; direct keys take over only if it fails. */
   gatewayLeads?: boolean;
+  /** Only Gemini models may serve this turn (direct Gemini API first, Gemini on the managed gateway as backup). */
+  geminiOnly?: boolean;
 }
 
 export interface GatewayOverrides {
@@ -425,14 +427,14 @@ export function buildProviderPlan(
     && Boolean(readEnv('GEMINI_API_KEY') || readEnv('GOOGLE_API_KEY') || readEnv('UNISONGEMINI_API_KEY'));
   const isComposerTask = task.type === "site_page_author" || task.type === "site_page_repair" || task.type === "builder_source_edit";
   if (!hasExplicitModel && isComposerTask) {
-    plan.primaryProvider = (readEnv('GEMINI_API_KEY') || readEnv('GOOGLE_API_KEY') || readEnv('UNISONGEMINI_API_KEY'))
-      ? 'gemini' : selectPrimaryProvider(routingKey, readEnv);
-    plan.gatewayModels = prioritizeProviderModels(plan.gatewayModels, plan.primaryProvider);
-    // Hybrid: launch page writing/repair goes to the managed gateway first (the
-    // model that produced the Oct 1 baseline); funded Gemini is the backup.
-    if (isComposerTask && readEnv('LOVABLE_API_KEY') && readEnv('AI_PROVIDER_MODE') !== 'gemini-primary') {
-      plan.gatewayLeads = true;
-    }
+    // App Builder page writing, repair and Builder source edits run on the
+    // Gemini API only (owner decision 2026-10-24): no OpenAI or Anthropic
+    // attempts, so an unfunded OpenAI key can never fail or mask a page.
+    plan.gatewayModels = [m(composerGeminiModel(readEnv), 48_000)];
+    plan.primaryProvider = 'gemini';
+    plan.geminiOnly = true;
+    plan.gatewayLeads = undefined;
+    plan.raceGateway = false;
   } else if (!hasExplicitModel) {
     plan.primaryProvider = wizardGeminiConfigured
       ? 'gemini'
