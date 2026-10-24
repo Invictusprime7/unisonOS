@@ -430,7 +430,7 @@ export function buildProviderPlan(
     // App Builder page writing, repair and Builder source edits run on the
     // Gemini API only (owner decision 2026-10-24): no OpenAI or Anthropic
     // attempts, so an unfunded OpenAI key can never fail or mask a page.
-    plan.gatewayModels = [m(composerGeminiModel(readEnv), 48_000)];
+    plan.gatewayModels = [m(composerGeminiModel(readEnv), Math.min(48_000, overrides?.maxTokens ?? 48_000))];
     plan.primaryProvider = 'gemini';
     plan.geminiOnly = true;
     plan.gatewayLeads = undefined;

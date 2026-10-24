@@ -64,8 +64,8 @@ Deno.test("Composer has a dedicated 48k budget and honors explicit lower caps", 
   const authorTask = { ...task, type: 'site_page_author' as const };
   const readEnv = (name: string) => name === 'OPENAI_API_KEY' ? 'test-key' : undefined;
   const plan = buildProviderPlan(authorTask, true, undefined, 'simple', 'author', readEnv);
-  assertEquals(plan.gatewayModels[0].id, 'openai/gpt-4.1');
-  assertEquals(plan.gatewayModels[0].maxTokens, 16384);
+  assertEquals(plan.gatewayModels[0].id, 'google/gemini-3.8-flash');
+  assertEquals(plan.gatewayModels[0].maxTokens, 48_000);
   const capped = buildProviderPlan(authorTask, true, { maxTokens: 8000, timeoutMs: 20000 }, 'advanced', 'author', readEnv);
   assertEquals(capped.gatewayModels.every((model) => model.maxTokens <= 8000), true);
   assertEquals(capped.perModelTimeoutMs, 20000);
