@@ -1,7 +1,8 @@
 # Roadmap
 
 ## Active: Marketplace preview draft installation
-- [ ] Correct Lowtide House preview-dependency acceptance and verify standalone-page repair regressions.
+- [x] Correct Lowtide House preview-dependency acceptance: caller page checks trigger closure repair and remain enforced afterward; preserve terminal OpenAI credit failures rather than accepting untouched previews.
+- [ ] Retry Lowtide House install → saved draft → reopen: current generation is blocked by OpenAI's insufficient-credit response and unavailable authoritative UNISON session.
 - [x] Materialize standalone pages through App Builder (including preview-dependency repair checks) and seed buyer-owned editable data and capability bindings through canonical launch services; 68 focused checks pass.
 - [x] Route concept and published installation material through App Builder before canonical acceptance; generated routers use syntax-safe aliases and retain colliding page basenames.
 - [x] Give published listings the same full-window preview shell and cascading description as concept previews; Zen Site renders full-width in browser.

@@ -80,7 +80,7 @@ describe('UnisonAppBuilder facade', () => {
     expect(runComposer).not.toHaveBeenCalled();
   });
 
-  it('repairs preview-dependency checks even when the baseline passes syntax closure', async () => {
+  it.each([true, false])('rechecks preview dependencies after closure repair (standalone: %s)', async (standalone) => {
     const previewFiles = { ...baseFiles,
       '/src/pages/Home.tsx': 'import Preview from "../marketplace/selectedPreview"; export default function Home(){return <Preview/>}',
       '/src/marketplace/selectedPreview.tsx': 'export default function Preview(){return <main>Lowtide House</main>}',
@@ -88,7 +88,9 @@ describe('UnisonAppBuilder facade', () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
       files: input.files, outcomes: [{ page: input.pages[0], status: 'kept-baseline' as const, reason: 'gates_exhausted' as const, attempts: 1, errors: ['Still imports preview'] }],
     }));
-    const repairedFiles = { ...previewFiles, '/src/pages/Home.tsx': 'export default function Home(){return <main>Standalone Lowtide House</main>}' };
+    const repairedFiles = standalone
+      ? { ...previewFiles, '/src/pages/Home.tsx': 'export default function Home(){return <main>Standalone Lowtide House</main>}' }
+      : previewFiles;
     const runComposer = vi.fn(async (): Promise<ComposerLoopResult> => ({
       ok: true, reason: 'accepted', attempts: 1, errors: [],
       prepared: { ok: true, nextFiles: repairedFiles, errors: [],
@@ -106,8 +108,8 @@ describe('UnisonAppBuilder facade', () => {
     const repair = runComposer.mock.calls[0] as unknown as [{ request: { diagnostics: string[]; runtimeContext: string } }];
     expect(repair[0].request.diagnostics.some(message => message.includes('Remove preview-only selectedPreview dependency'))).toBe(true);
     expect(repair[0].request.runtimeContext).toContain('Marketplace material must become standalone buyer-owned pages.');
-    expect(result.candidate.status).toBe('ready-for-commit');
-    expect(result.candidateFiles['/src/pages/Home.tsx']).not.toContain('selectedPreview');
+    expect(result.candidate.status).toBe(standalone ? 'ready-for-commit' : 'rejected');
+    expect(result.candidateFiles['/src/pages/Home.tsx'].includes('selectedPreview')).toBe(!standalone);
   });
 
   it('stops before inference when the edited source exceeds its budget', async () => {
