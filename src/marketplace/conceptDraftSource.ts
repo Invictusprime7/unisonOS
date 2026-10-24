@@ -97,7 +97,7 @@ export function buildConceptDraftSource(template: AuthoredMarketplaceTemplate) {
   const vendorMap: string[] = [];
   for (const [path, source] of Object.entries({ ...vendorSources, ...vendorSupport, ...vendorHelpers })) {
     if (!path.includes('/components/') && !path.endsWith('/types.ts') && !path.endsWith('/themeUtils.ts')) continue;
-    if (/\/(registry|public|index)\.ts$/.test(path)) continue;
+    if (/\/components\/(registry|public|index|types)\.ts$/.test(path)) continue;
     files[path] = source;
     const id = source.match(/(?:data-ut-variant(?:-id)?|variantId)=["']([^"']+)["']/)?.[1];
     const name = source.match(/export (?:const|function) (\w+)/)?.[1];
