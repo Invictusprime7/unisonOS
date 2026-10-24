@@ -90,7 +90,7 @@ export function buildConceptDraftSource(template: AuthoredMarketplaceTemplate) {
   const tokens = buildMarketplaceRhythmTokens(packId, 'home');
   files['/src/index.css'] += `\n:root {${Object.entries(tokens).map(([k, v]) => `${k}:${v};`).join('')}}\n${actionsCss}`;
   files['/src/marketplace/selectedPreview.tsx'] = selectAuthoredSource(template.id);
-  files['/src/marketplace/template.json'] = JSON.stringify({ ...template, preview: undefined, themePresetId: family, packTokens: tokens });
+  files['/src/marketplace/template.ts'] = 'export default ' + JSON.stringify({ ...template, preview: undefined, themePresetId: family, packTokens: tokens }) + ';';
   // Ship unchanged managed source; the adapter maps canonical ids to these real exports.
   const vendorRoot = '/src/design-system/unison-x-loveable-design-d5be96/design-system/unison/';
   const vendorImports: string[] = [];
@@ -118,7 +118,7 @@ export function buildConceptDraftSource(template: AuthoredMarketplaceTemplate) {
   if (!Object.keys(files).some(p => p.startsWith(vendorRoot))) throw new Error('Unison layout source is unavailable.');
   files['/src/marketplace/MarketplaceRegisteredSection.tsx'] = `${vendorImports.join('\n')}
 import React from 'react';
-import template from './template.json';
+import template from './template';
 const variants: any = {${vendorMap.join(',')}};
 export const MARKETPLACE_TEMPLATE_VARIANT_PROFILES: any = ${JSON.stringify({ [template.id]: profile })};
 export function MarketplaceRegisteredSection({ section, variantId, theme }: any) {
@@ -131,7 +131,7 @@ export function MarketplaceRegisteredSection({ section, variantId, theme }: any)
   files['/src/marketplace/marketplaceImagePlaceholders.ts'] = `export const MARKETPLACE_SAMPLE_IMAGES = { objects: '/assets/marketplace-placeholder.svg' };`;
   files['/assets/marketplace-placeholder.svg'] = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><text x="400" y="300" text-anchor="middle">Add your own image</text></svg>';
   files['/src/marketplace/marketplaceTemplatePrimitives.tsx'] = `import React from 'react';
-import template from './template.json';
+import template from './template';
 export type AuthoredMarketplaceTemplate = any; export type MarketplacePreviewProps = any; export type MarketplaceTemplateBinding = any;
 export const getMarketplaceVariantTheme = () => template.theme;
 export const marketplaceBindingAttributes = (b: any) => ({'data-ut-intent': b.intent, 'data-ut-binding-id': b.id, 'data-ut-slot': b.sourceSlot, 'data-ut-params': b.product ? JSON.stringify(b.product) : undefined});
@@ -142,7 +142,7 @@ export const MarketplacePageNavigation = ({pages, currentPagePath, className}: a
   files['/src/sections/types.ts'] = `export type SectionEntry<T = string> = any;`;
   for (const page of destinations) files[pageFile(page.id)] = `import React from 'react';
 import Preview from '@/marketplace/selectedPreview';
-import template from '@/marketplace/template.json';
+import template from '@/marketplace/template';
 import { MarketplaceRegisteredSection } from '@/marketplace/MarketplaceRegisteredSection';
 export default function Page() { return <main data-marketplace-preview-surface>${page.id === 'home' ? `<Preview compact={false} templateId={template.id} templateName={template.name} pages={template.pages} currentPagePath="/" onNavigate={(path: string) => {location.hash = path;}} onIntent={() => {}} />` : `<header><h1>${page.title.replace(/</g, '&lt;')}</h1><nav><a href="#/">Home</a>{template.pages.map(p => <a key={p.id} href={'#'+p.path}>{p.label}</a>)}</nav></header>{template.pages.find(p => p.id === ${JSON.stringify(page.id)})?.sections.map(s => <MarketplaceRegisteredSection key={s.id} section={s} variantId={s.variantId} theme={template.theme} />)}<footer>{template.name}</footer>`}</main>; }`;
   // Unverified stock references stay buyer supplied; never bundle their bytes or grant rights.
