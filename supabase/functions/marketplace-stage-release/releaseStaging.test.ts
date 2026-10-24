@@ -71,3 +71,13 @@ Deno.test('manifest lists extracted assets', async () => {
   });
   assertEquals(m.assets, [{ path: '/assets/logo.svg', sha256: 'b'.repeat(64), licenseClass: 'reference-only' }]);
 });
+
+Deno.test('snapshot cover resolution picks an external raster image without executing source', async () => {
+  const { resolveSnapshotCoverImage } = await import('./releaseStaging.ts');
+  assertEquals(resolveSnapshotCoverImage({
+    '/src/pages/Home.tsx': 'throw new Error(); const hero = "https://images.unsplash.com/photo-123?w=1600";',
+    '/src/index.css': 'body { color: red; }',
+  }), 'https://images.unsplash.com/photo-123?w=1600');
+  assertEquals(resolveSnapshotCoverImage({ '/src/Home.tsx': '<img src="/assets/local.png" /><img src="javascript:alert(1)" />' }), undefined);
+  assertEquals(resolveSnapshotCoverImage({ '/assets/logo.svg': '<svg></svg>' }), undefined);
+});
