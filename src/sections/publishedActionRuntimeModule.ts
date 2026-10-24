@@ -29,6 +29,89 @@ type RuntimeController = {
 const CONTROLLERS = GENERATED_SITE_RUNTIME_MANIFEST.controllers as readonly RuntimeController[];
 const COMPONENTS = GENERATED_SITE_RUNTIME_MANIFEST.components;
 
+type CartItem = { productId: string; name: string; price: number; quantity: number };
+function cartKey() {
+  return 'unison:published-cart:' + PUBLISHED_RUNTIME_CONFIG.siteId;
+}
+function readCart(): CartItem[] {
+  try {
+    const items: unknown = JSON.parse(window.localStorage.getItem(cartKey()) || '[]');
+    return Array.isArray(items) ? items.filter((item): item is CartItem =>
+      typeof item?.productId === 'string' && typeof item?.name === 'string' &&
+      Number.isFinite(item?.price) && item.price >= 0 && Number.isInteger(item?.quantity) && item.quantity > 0,
+    ) : [];
+  } catch { return []; }
+}
+function refreshCartBadges() {
+  if (!GENERATED_SITE_RUNTIME_MANIFEST.enabledCapabilities.includes('commerce') || !PUBLISHED_RUNTIME_CONFIG.siteId) return;
+  const count = readCart().reduce((sum, item) => sum + item.quantity, 0);
+  for (const host of document.querySelectorAll('[data-ut-intent="cart.view"], [data-ut-slot="icon-cart"]')) {
+    let badge = host.querySelector('[data-ut-cart-count]');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.setAttribute('data-ut-cart-count', '');
+      badge.setAttribute('aria-live', 'polite');
+      badge.className = 'bg-primary text-primary-foreground';
+      host.appendChild(badge);
+    }
+    badge.textContent = String(count);
+    badge.setAttribute('aria-label', String(count) + ' items in bag');
+    (badge as HTMLElement).hidden = count === 0;
+  }
+  for (const badge of document.querySelectorAll('[data-ut-cart-count]')) {
+    badge.textContent = String(count);
+    (badge as HTMLElement).hidden = count === 0;
+  }
+}
+function persistCart(items: CartItem[]) {
+  window.localStorage.setItem(cartKey(), JSON.stringify(items));
+  refreshCartBadges();
+  window.dispatchEvent(new CustomEvent('unison:cart.updated', { detail: {
+    siteId: PUBLISHED_RUNTIME_CONFIG.siteId, items,
+    total: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+  } }));
+}
+function dispatchCartIntent(intent: string, element: HTMLElement) {
+  if (!PUBLISHED_RUNTIME_CONFIG.siteId || !GENERATED_SITE_RUNTIME_MANIFEST.enabledCapabilities.includes('commerce')) {
+    throw new Error('Cart is not connected for this site.');
+  }
+  const params = elementParams(element);
+  const items = readCart();
+  if (intent === 'cart.view') {
+    const target = document.querySelector('[data-ut-cart], [data-ut-section="cart"], #cart');
+    if (target) {
+      (target as HTMLElement).hidden = false;
+      target.scrollIntoView({ block: 'center' });
+    }
+    window.dispatchEvent(new CustomEvent('unison:cart.open', { detail: { siteId: PUBLISHED_RUNTIME_CONFIG.siteId, items } }));
+    showActionStatus(element, items.length ? items.map((item) => item.name + ' × ' + item.quantity).join(', ') : 'Your bag is empty.');
+    return;
+  }
+  const productId = String(params.productId || '');
+  if (!productId) throw new Error('A product is required for this cart action.');
+  const index = items.findIndex((item) => item.productId === productId);
+  if (intent === 'cart.remove') {
+    persistCart(items.filter((item) => item.productId !== productId));
+    showActionStatus(element, 'Item removed from bag.');
+    return;
+  }
+  const quantity = Number(params.quantity ?? 1);
+  if (!Number.isInteger(quantity) || quantity < 0 || (intent === 'cart.add' && quantity === 0)) {
+    throw new Error('A valid item quantity is required.');
+  }
+  if (intent === 'cart.update') {
+    if (index >= 0) items[index].quantity = quantity;
+    persistCart(items.filter((item) => item.quantity > 0));
+    return;
+  }
+  const price = Number(params.price);
+  if (!Number.isFinite(price) || price < 0) throw new Error('This product needs a valid price before it can be added.');
+  if (index >= 0) items[index].quantity += quantity;
+  else items.push({ productId, name: String(params.productName || params.name || 'Item'), price, quantity });
+  persistCart(items);
+  showActionStatus(element, 'Item added to bag.');
+}
+
 function controllerForIntent(intent: string): RuntimeController | undefined {
   return CONTROLLERS.find((controller) => controller.intents.includes(intent));
 }
@@ -311,6 +394,17 @@ export function usePublishedActionRuntime() {
   useEffect(() => {
     if (typeof window === 'undefined' || window.parent !== window) return;
 
+    refreshCartBadges();
+    const cartObserver = new MutationObserver(() => {
+      // Only observe inserted routes/icons; badge text updates cannot retrigger this observer.
+      cartObserver.disconnect();
+      refreshCartBadges();
+      cartObserver.observe(document.body, { childList: true, subtree: true });
+    });
+    cartObserver.observe(document.body, { childList: true, subtree: true });
+    const onCartStorage = (event: StorageEvent) => { if (event.key === cartKey()) refreshCartBadges(); };
+    window.addEventListener('storage', onCartStorage);
+
     for (const form of document.querySelectorAll('form[data-intent-form="booking.create"]')) {
       void hydrateBookingForm(form as HTMLFormElement).catch((error) => showActionStatus(
         form as HTMLElement,
@@ -326,6 +420,13 @@ export function usePublishedActionRuntime() {
       if (!intent || element.closest('form[data-demo-form="true"]')) return;
       // Form submit controls belong to submit, never a duplicate click dispatch.
       if (element.closest('form[data-intent-form^="auth."]')) return;
+
+      if (['cart.add', 'cart.view', 'cart.update', 'cart.remove'].includes(intent)) {
+        event.preventDefault();
+        try { dispatchCartIntent(intent, element); }
+        catch (error) { showActionStatus(element, error instanceof Error ? error.message : 'Cart action failed.'); }
+        return;
+      }
 
       if (intent === 'auth.login' || intent === 'auth.register') {
         event.preventDefault();
@@ -377,6 +478,8 @@ export function usePublishedActionRuntime() {
     document.addEventListener('click', onClick);
     document.addEventListener('submit', onSubmit);
     return () => {
+      cartObserver.disconnect();
+      window.removeEventListener('storage', onCartStorage);
       document.removeEventListener('click', onClick);
       document.removeEventListener('submit', onSubmit);
     };
