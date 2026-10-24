@@ -278,13 +278,13 @@ export async function assembleCanonicalAuthoringRequest(
     protocolVersion: '1.0',
     baseRevisionId: input.baseRevisionId ?? null,
     sourceContextHash: await hashText(stableJson(source.files)),
-    sourcePaths: Object.keys(source.files).sort(),
+    sourcePaths: Object.keys(source.files).sort().slice(0, 80),
     // Edit policy: only the files being edited must be complete; omitted
     // supporting context and unresolved imports are notes (new broken imports
     // are still caught by the candidate import gate).
     sourceContextComplete: source.completeTargets,
-    omittedSourcePaths: source.omitted.map((item) => item.path).sort(),
-    unresolvedImports: source.unresolvedImports.map((item) => `${item.path}:${item.specifier}`).sort(),
+    omittedSourcePaths: source.omitted.map((item) => item.path).sort().slice(0, 80),
+    unresolvedImports: source.unresolvedImports.map((item) => `${item.path}:${item.specifier}`).sort().slice(0, 80),
     registryContextHash: boundedRegistry ? await hashText(boundedRegistry) : null,
     knowledgeContextHash: `sha256:${knowledgeManifest.contextHash}`,
     knowledgePackageVersion: knowledgeManifest.packageVersion,
