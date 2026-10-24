@@ -2,7 +2,7 @@ import type { MarketplaceProductType, PublicMarketplaceListing } from '@/marketp
 import { supabase } from '@/integrations/supabase/client-compat';
 
 const PUBLIC_LISTING_COLUMNS =
-  'id, slug, product_type, title, industry_key, summary, price_cents, currency, current_release_id, created_at, updated_at';
+  'id, slug, product_type, title, industry_key, summary, price_cents, currency, cover_image_url, current_release_id, created_at, updated_at';
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 60;
 
@@ -77,6 +77,9 @@ function parsePublicListing(value: unknown): PublicMarketplaceListing {
     priceCents: value.price_cents,
     currency: value.currency,
     currentReleaseId: value.current_release_id,
+    coverImageUrl: typeof value.cover_image_url === 'string' && value.cover_image_url.length > 0
+      ? value.cover_image_url
+      : undefined,
     createdAt: value.created_at,
     updatedAt: value.updated_at,
   };

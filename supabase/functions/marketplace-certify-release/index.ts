@@ -21,6 +21,7 @@ import { authError, getServiceRoleClient, verifyAuth } from '../_shared/auth.ts'
 import { isValidUUID, safeParseBody } from '../_shared/validate.ts';
 import {
   buildReleasePackageFiles,
+  resolveSnapshotCoverImage,
   sha256Bytes,
   sha256StableJson,
 } from '../marketplace-stage-release/releaseStaging.ts';
@@ -55,6 +56,19 @@ async function loadRelease(releaseId: string) {
   if (error) return { error: 'Release could not be read.' as const };
   if (!data) return { error: 'Release not found.' as const };
   return { release: data };
+}
+
+async function loadRevisionVfsFiles(snapshotPath: unknown): Promise<Record<string, unknown> | null> {
+  const admin = getServiceRoleClient();
+  const revisionId = String(snapshotPath ?? '').replace(/^site_revisions\//, '');
+  if (!isValidUUID(revisionId)) return null;
+  const { data: revision } = await admin
+    .from('site_revisions')
+    .select('site_bundle_snapshot')
+    .eq('id', revisionId)
+    .maybeSingle();
+  const snapshot = revision?.site_bundle_snapshot as { vfsFiles?: Record<string, unknown> } | null;
+  return snapshot?.vfsFiles && typeof snapshot.vfsFiles === 'object' ? snapshot.vfsFiles : null;
 }
 
 async function recordAssetRights(body: Json, reviewerId: string) {
@@ -282,9 +296,16 @@ async function autoRelease(body: Json, reviewerId: string) {
     .eq('id', releaseId);
   if (publishError) return { status: 409, body: { success: false, error: `Release could not be published: ${publishError.message}` } };
 
+  // Seed the listing cover from the sealed snapshot so cards show the real
+  // design instead of "Cover image unavailable"; creator media is shown on the
+  // card but never bundled for resale.
+  const vfsFiles = await loadRevisionVfsFiles(loaded.release.snapshot_path);
+  const coverImage = vfsFiles ? resolveSnapshotCoverImage(vfsFiles) : undefined;
+  const listingUpdate: Record<string, unknown> = { current_release_id: releaseId, status: 'published' };
+  if (coverImage) listingUpdate.cover_image_url = coverImage;
   const { error: listingError } = await admin
     .from('marketplace_listings')
-    .update({ current_release_id: releaseId, status: 'published' })
+    .update(listingUpdate)
     .eq('id', listingId);
   if (listingError) return { status: 409, body: { success: false, error: `Listing could not be published: ${listingError.message}` } };
 

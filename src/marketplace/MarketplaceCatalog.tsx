@@ -136,7 +136,7 @@ export function MarketplaceCatalog({ embedded = false, enabled = true }: { embed
         <ul className="grid gap-x-6 md:grid-cols-2 xl:grid-cols-3">
           {visibleListings.map((listing) => (
             <li key={listing.id} className="border-b border-border py-6">
-              <MarketplaceReleaseThumbnail slug={listing.slug} releaseId={listing.currentReleaseId} category={listing.industryKey} />
+              <MarketplaceReleaseThumbnail slug={listing.slug} releaseId={listing.currentReleaseId} category={listing.industryKey} coverImageUrl={listing.coverImageUrl} />
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs text-muted-foreground">{listing.industryKey} · {PRODUCT_TYPES.find((type) => type.value === listing.productType)?.label}</p>

@@ -23,6 +23,8 @@ export interface PublicMarketplaceListing {
   priceCents: number;
   currency: string;
   currentReleaseId: string;
+  /** Creator-approved static snapshot cover; the card never mounts a preview runtime. */
+  coverImageUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

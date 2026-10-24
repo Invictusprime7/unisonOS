@@ -7,6 +7,7 @@ const listPublicMarketplaceListings = vi.hoisted(() => vi.fn());
 vi.mock('@/marketplace/listingService', () => ({ listPublicMarketplaceListings }));
 vi.mock('@/marketplace/stageReleaseClient', () => ({ loadMarketplaceReleasePreview: vi.fn().mockRejectedValue(new Error('none')) }));
 
+import { loadMarketplaceReleasePreview } from '@/marketplace/stageReleaseClient';
 import Marketplace from '@/pages/Marketplace';
 import MarketplaceListing from '@/pages/MarketplaceListing';
 
@@ -47,6 +48,7 @@ function renderDetail(path = '/marketplace/editorial-salon') {
 describe('marketplace public pages', () => {
   beforeEach(() => {
     listPublicMarketplaceListings.mockReset();
+    (loadMarketplaceReleasePreview as ReturnType<typeof vi.fn>).mockClear();
   });
   afterEach(cleanup);
 
@@ -97,5 +99,13 @@ describe('marketplace public pages', () => {
     renderBrowse();
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Marketplace listings could not be loaded.'));
+  });
+
+  it('shows the listing cover snapshot without loading any preview runtime', async () => {
+    listPublicMarketplaceListings.mockResolvedValue([{ ...listing, coverImageUrl: 'https://example.org/cover.png' }]);
+    renderBrowse();
+
+    await waitFor(() => expect(document.querySelector('img[src="https://example.org/cover.png"]')).not.toBeNull());
+    expect(loadMarketplaceReleasePreview).not.toHaveBeenCalled();
   });
 });

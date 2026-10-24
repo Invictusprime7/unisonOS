@@ -51,6 +51,22 @@ export function slugifyListing(name: string, projectId: string): string {
   return `${base}-${projectId.slice(0, 8)}`;
 }
 
+/**
+ * Resolve a static cover image URL from the sealed snapshot's source without
+ * compiling or executing it. Only external raster image references qualify —
+ * local packaged media is rewritten to placeholders for buyers, so it never
+ * works as a cover. Used to seed the listing cover automatically on publish.
+ */
+export function resolveSnapshotCoverImage(vfsFiles: Record<string, unknown>): string | undefined {
+  const source = Object.entries(vfsFiles)
+    .filter(([path, contents]) => typeof contents === 'string' && /\.(tsx?|jsx?|html|css)$/.test(path))
+    .map(([, text]) => text as string).join('\n');
+  const refs = source.match(
+    /https:\/\/images\.unsplash\.com\/photo-[^\s"'`<>\\)]+|https:\/\/[^\s"'`<>\\)]+\.(?:png|jpe?g|webp|avif)(?:\?[^\s"'`<>\\)]*)?/gi,
+  ) ?? [];
+  return refs.find((ref) => ref.startsWith('https://'));
+}
+
 // ---------------------------------------------------------------------------
 // Asset extraction
 //
