@@ -102,7 +102,7 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
       `BUYER STARTER CONTENT (saved after acceptance): ${starterSummary(plan.playground.creatorData)}`,
     ].join('\n').slice(0, 3500),
   });
-  if (options.signal?.aborted) throw new Error('Installation was cancelled. Nothing was saved.');
+  if (options.signal?.aborted) throw new Error(String(options.signal.reason ?? 'Installation was stopped before the draft was built.'));
   if (result.candidate.status !== 'ready-for-commit' || result.stopReason !== 'complete') {
     throw new Error(`App Builder could not prepare this template: ${result.candidate.diagnostics?.slice(0, 6).join(' ') || result.stopReason}`);
   }

@@ -14,7 +14,12 @@ import { persistLaunchFormDefinitions } from '@/services/launchFormDefinitionPer
 
 export type MarketplaceDraftSelection = { kind: 'concept'; template: AuthoredMarketplaceTemplate } | { kind: 'release'; slug: string; title: string };
 
-export async function installTemplateDraft(selection: MarketplaceDraftSelection) {
+export interface InstallProgress { label: string; done?: number; total?: number }
+export interface InstallOptions { signal?: AbortSignal; onStatus?: (status: InstallProgress) => void }
+
+export async function installTemplateDraft(selection: MarketplaceDraftSelection, options: InstallOptions = {}) {
+  const status = (next: InstallProgress) => options.onStatus?.(next);
+  status({ label: 'Checking your account' });
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) throw new Error('Sign in before installing a template draft.');
   let artifacts: MarketplaceTemplateMaterial;
