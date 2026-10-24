@@ -54,11 +54,11 @@ function selectAuthoredSource(templateId: string) {
       const statement = declarations.get(name);
       if (!statement || selected.has(statement)) return;
       selected.add(statement);
-      walk(statement, node => { if (node.type === 'Identifier' && typeof node.name === 'string') include(node.name); });
+      walk(statement, node => { if ((node.type === 'Identifier' || node.type === 'JSXIdentifier') && typeof node.name === 'string') include(node.name); });
     };
     include(previewName);
     const used = new Set<string>();
-    for (const statement of selected) walk(statement, node => { if (node.type === 'Identifier' && typeof node.name === 'string') used.add(node.name); });
+    for (const statement of selected) walk(statement, node => { if ((node.type === 'Identifier' || node.type === 'JSXIdentifier') && typeof node.name === 'string') used.add(node.name); });
     const imports = ast.program.body.flatMap(statement => {
       if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type') return [];
       const specifiers = statement.specifiers.filter(spec => used.has(spec.local.name) && !(spec.type === 'ImportSpecifier' && spec.importKind === 'type'));
