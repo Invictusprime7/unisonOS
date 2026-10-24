@@ -57,7 +57,10 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   // Retain public starter content but allocate forms/components from the buyer's plan.
   plan.playground.creatorData = { ...snapshot.creatorData,
     forms: plan.playground.creatorData.forms, overlays: plan.playground.creatorData.overlays,
-    componentInstances: plan.playground.creatorData.componentInstances,
+    // Buyers have not given an owner email, CRM or booking owner yet; these stay
+    // stubbed until they finish setup, exactly like an unconfigured fresh launch.
+    componentInstances: Object.fromEntries(Object.entries(plan.playground.creatorData.componentInstances)
+      .map(([id, instance]) => [id, { ...instance, status: 'stubbed' as const }])),
     businessInfo: { businessName: snapshot.businessName },
   };
   // The selected registry replaces the planner's routes; discard bindings to routes not installed.
@@ -77,8 +80,8 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
     uiFoundation: plan.uiFoundationContract, registryContext: snapshot.meta.registryContext ?? plan.registryContext,
     protectedPaths: WIZARD_LANE_B_PROTECTED_PATHS,
   });
-  const sourceFiles = await materializePreviewImages(material.files);
-  const initialFiles = { ...plan.infrastructureFiles, ...sourceFiles,
+  // Images are embedded after acceptance: data URLs exceed the per-file request limit.
+  const initialFiles = { ...plan.infrastructureFiles, ...material.files,
     '/src/App.tsx': generateCanonicalRouter(snapshot.pageRegistry, snapshot.businessName) };
   const result = await unisonAppBuilder.generate({
     operationId: `marketplace-install:${ids.draftId}:app-build`, contract, initialFiles, entryPoint: '/src/App.tsx', baseRevisionId: null, budgetMs: 280_000,
@@ -90,14 +93,13 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
     },
     runtimeContext: [
       'MARKETPLACE INSTALLATION: Author real standalone pages and shared site components, not wrappers around Preview, MarketplaceRegisteredSection, or selectedPreview. The /src/marketplace sources are reference-only; installed page import closures must not depend on them. Preserve their content, imagery and sealed design while adapting to the canonical design-source modules and buyer runtime. Use registered Resource Runtime reads and data-ut-resource marks for editable records, not static catalog arrays. Never use seller resource IDs or service authorizations. Do not edit canonical App.tsx or protected infrastructure.',
-      `BUYER STARTER CONTENT (canonical CreatorData, saved after acceptance): ${JSON.stringify(plan.playground.creatorData)}`,
-      `STARTER MEDIA: ${JSON.stringify(material.mediaAssets ?? [])}`,
-    ].join('\n'),
+      `BUYER STARTER CONTENT (saved after acceptance): ${starterSummary(plan.playground.creatorData)}`,
+    ].join('\n').slice(0, 3500),
   });
   if (result.candidate.status !== 'ready-for-commit' || result.stopReason !== 'complete') {
     throw new Error(`App Builder could not prepare this template: ${result.candidate.diagnostics.slice(0, 6).join(' ') || result.stopReason}`);
   }
-  const files = { ...result.candidateFiles };
+  const files = await materializePreviewImages(result.candidateFiles);
   for (const page of plan.sitePlan.pages) {
     const reference = collectLocalImportClosure(files, page.filePath).find(path => path.startsWith('/src/marketplace/'));
     if (reference) throw new Error(`App Builder did not materialize ${page.title}: it still depends on preview material (${reference}).`);
@@ -109,4 +111,10 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
     preferredEntryPoint: '/src/App.tsx', businessId: ids.businessId, projectId: ids.projectId, siteId: ids.siteId,
     mergeWithCanonicalSnapshot: true, allowCanonicalPageFallback: false, preservePageSources: true, strictPreflight: true,
     themePresetId: plan.themePresetId, businessName: snapshot.businessName, industry: snapshot.industry });
+}
+function starterSummary(data: SiteBundleSnapshot['creatorData']) {
+  const names = (rows: Record<string, { name?: string; question?: string; title?: string }> | undefined) =>
+    Object.values(rows ?? {}).map(row => row.name ?? row.question ?? row.title).filter(Boolean).slice(0, 12).join('; ');
+  return [`products: ${names(data?.products)}`, `services: ${names(data?.services)}`, `team: ${names(data?.team)}`,
+    `faqs: ${Object.keys(data?.faqs ?? {}).length}`, `gallery: ${Object.keys(data?.gallery ?? {}).length}`].join(' | ').slice(0, 1800);
 }
