@@ -16,6 +16,7 @@ import { MarketplaceThumbnailSurface } from '@/marketplace/MarketplaceThumbnailS
 import { MarketplaceCartCountContext, MarketplacePreviewCart } from '@/marketplace/MarketplacePreviewCart';
 import { BROWSER_CART_EVENT, buildBrowserCartStorageKey, createBrowserCartManager, readBrowserCart } from '@/runtime/browserCartManager';
 import type { Cart } from '@/runtime/intentExecutor';
+import { Button } from '@/components/ui/button';
 
 type PreviewDevice = 'desktop' | 'mobile';
 
@@ -61,11 +62,6 @@ function MarketplaceIntentRedirect({
   onClose: () => void;
 }) {
   const returnButtonRef = useRef<HTMLButtonElement>(null);
-  const theme = template.intentPreviewTheme ?? (template.id === 'relay-operations'
-    ? { surface: 'bg-[#111916] text-[#f2f4e9]', border: 'border-white/15', muted: 'text-white/65', button: 'bg-[#c8f169] text-[#111916]' }
-    : template.id === 'formworks-studio'
-      ? { surface: 'bg-[#f7f8f5] text-[#182c3a]', border: 'border-[#182c3a]/20', muted: 'text-[#5a6870]', button: 'bg-[#f05a3b] text-white' }
-      : { surface: 'bg-[#f3efe4] text-[#203b2c]', border: 'border-[#203b2c]/20', muted: 'text-[#536254]', button: 'bg-[#a34a32] text-white' });
   const flowLabel = 'Sample action';
   const flowDescription = binding.definition.surface === 'redirect'
     ? 'This sample does not take payments or start an external checkout.'
@@ -87,19 +83,18 @@ function MarketplaceIntentRedirect({
   }
 
   return (
-    <div className="absolute inset-0 z-30 grid place-items-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm" onKeyDown={handleKeyDown}>
-      <section role="dialog" aria-modal="true" aria-labelledby="marketplace-intent-title" aria-describedby="marketplace-intent-description" data-unison-preview-redirect={binding.definition.name} className={`my-auto w-full max-w-xl overflow-hidden border shadow-2xl ${theme.surface} ${theme.border}`}>
-        <img src={template.coverImage} alt="" className="h-36 w-full object-cover" />
-        <div className="p-5 sm:p-7">
-          <p className={`font-mono text-[10px] uppercase tracking-[0.16em] ${theme.muted}`}>{flowLabel}</p>
-          <h2 id="marketplace-intent-title" className="mt-3 text-2xl font-semibold">{binding.label}</h2>
-          <p id="marketplace-intent-description" className={`mt-3 text-sm leading-6 ${theme.muted}`}>
+    <div className="bg-background" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', overflowY: 'auto', padding: 'var(--ut-density-padding)' }} onKeyDown={handleKeyDown}>
+      <section role="dialog" aria-modal="true" aria-labelledby="marketplace-intent-title" aria-describedby="marketplace-intent-description" data-unison-preview-redirect={binding.definition.name} className="bg-card text-card-foreground" style={{ width: '100%', padding: 'var(--ut-density-padding)' }}>
+        <div style={{ display: 'grid', gap: 'var(--ut-density-gap)' }}>
+          <p className="text-muted-foreground" style={{ fontFamily: 'var(--ut-font-mono)' }}>{flowLabel}</p>
+          <h2 id="marketplace-intent-title" style={{ fontFamily: 'var(--ut-font-display)' }}>{binding.label}</h2>
+          <p id="marketplace-intent-description" className="text-muted-foreground">
             {flowDescription}
           </p>
-          <p className={`mt-4 text-xs ${theme.muted}`}>Sample only; no form details are sent or saved.</p>
-          <button ref={returnButtonRef} type="button" onClick={onClose} className={`mt-6 inline-flex min-h-11 items-center justify-center px-4 text-sm font-semibold ${theme.button}`}>
+          <p className="text-muted-foreground">Sample only; no form details are sent or saved.</p>
+          <Button ref={returnButtonRef} type="button" onClick={onClose}>
             Return to {template.name}
-          </button>
+          </Button>
         </div>
       </section>
     </div>
