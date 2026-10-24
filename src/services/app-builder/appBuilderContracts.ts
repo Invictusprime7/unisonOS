@@ -453,6 +453,8 @@ export interface AppBuildRequest {
   /** Extra runtime context appended to the derived generation context. */
   runtimeContext?: string;
   maxPages?: number;
+  /** Marketplace material is reference input, not an already accepted application. */
+  reuseAcceptedPages?: boolean;
   concurrency?: number;
   preflight?: (files: Record<string, string>) => Record<string, string>;
   onProgress?: (event: {

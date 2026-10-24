@@ -91,7 +91,7 @@ export async function orchestrateAppBuild(
     runtimeContext: [input.runtimeContext, generation.runtimeContext].filter(Boolean).join('\n'),
     runtimeContextForPage: (pageId) => [input.runtimeContext, generation.runtimeContextForPage(pageId)].filter(Boolean).join('\n'),
     pageCheck,
-    reuseAcceptedPages: true,
+    reuseAcceptedPages: input.reuseAcceptedPages ?? true,
     resolveDependencies: false,
   });
 
