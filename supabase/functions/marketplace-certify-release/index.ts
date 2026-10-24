@@ -15,9 +15,7 @@
  * admin review plus a matching private artifact before status 'published'.
  */
 import { serve } from 'serve';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore — npm specifier resolved by the edge runtime
-import JSZip from 'jszip';
+import JSZip from 'npm:jszip@3.10.1';
 import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
 import { authError, getServiceRoleClient, verifyAuth } from '../_shared/auth.ts';
 import { isValidUUID, safeParseBody } from '../_shared/validate.ts';
