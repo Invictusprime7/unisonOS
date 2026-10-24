@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Marketplace cart and capability persistence
+- [ ] Enable canonical add-to-cart with a persistent dynamic cart/bag badge.
+- [ ] Preserve declared template capabilities and functional bindings into buyer-owned installations.
+- [ ] Run focused regression tests and verify the cart/template flows where an authoritative session is available.
+
 ## Marketplace card covers
 - [x] Use the shared Concept Preview static cover surface for published cards; remove embedded Sandpack runtimes and verify safe image selection.
 
