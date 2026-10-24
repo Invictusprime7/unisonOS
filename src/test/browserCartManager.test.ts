@@ -39,4 +39,18 @@ describe('browserCartManager', () => {
     expect(stored.items[0].quantity).toBe(4);
     expect(stored.total).toBe(116);
   });
+  it('returns the quantity count used by the live bag badge', async () => {
+    const cart = createBrowserCartManager(context);
+    expect((await cart.add({ productId: 'prod_1', price: 29, quantity: 2 })).itemCount).toBe(2);
+    expect((await cart.add({ productId: 'prod_1', price: 29, quantity: 1 })).itemCount).toBe(3);
+    expect((await cart.update('prod_1', 4)).itemCount).toBe(4);
+    expect((await cart.remove('prod_1')).itemCount).toBe(0);
+  });
+  it('retains the guest cart after a new tab session and isolates sites', async () => {
+    const site = { businessId: 'biz_test', siteId: 'site_test' };
+    await createBrowserCartManager(site).add({ productId: 'prod_1', price: 29, quantity: 2 });
+    window.sessionStorage.clear();
+    expect((await createBrowserCartManager(site).get())?.items[0].quantity).toBe(2);
+    expect((await createBrowserCartManager({ ...site, siteId: 'other_site' }).get())?.items).toEqual([]);
+  });
 });
