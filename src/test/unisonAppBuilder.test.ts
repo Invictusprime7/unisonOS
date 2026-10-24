@@ -63,6 +63,53 @@ const createTestBuilder = (dependencies: Parameters<typeof createUnisonAppBuilde
   createUnisonAppBuilder({ loadContentTypes: async () => [], ...dependencies });
 
 describe('UnisonAppBuilder facade', () => {
+  it('reports exhausted provider credits instead of accepting unchanged preview material', async () => {
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: input.files,
+      outcomes: [{ page: input.pages[0], status: 'kept-baseline' as const, reason: 'credits' as const, attempts: 1,
+        errors: ['AI request failed (credits): Payment required. Please add credits to your OpenAI account.'] }],
+    }));
+    const runComposer = vi.fn();
+    const result = await createTestBuilder({ authorSite, runComposer }).generate({
+      operationId: 'lowtide-credit-failure', contract: contract(), initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null,
+    });
+    expect(result.candidate.status).toBe('rejected');
+    expect(result.stopReason).toBe('provider-error');
+    expect(result.candidate.diagnostics).toContain('AI request failed (credits): Payment required. Please add credits to your OpenAI account.');
+    expect(runComposer).not.toHaveBeenCalled();
+  });
+
+  it('repairs preview-dependency checks even when the baseline passes syntax closure', async () => {
+    const previewFiles = { ...baseFiles,
+      '/src/pages/Home.tsx': 'import Preview from "../marketplace/selectedPreview"; export default function Home(){return <Preview/>}',
+      '/src/marketplace/selectedPreview.tsx': 'export default function Preview(){return <main>Lowtide House</main>}',
+    };
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: input.files, outcomes: [{ page: input.pages[0], status: 'kept-baseline' as const, reason: 'gates_exhausted' as const, attempts: 1, errors: ['Still imports preview'] }],
+    }));
+    const repairedFiles = { ...previewFiles, '/src/pages/Home.tsx': 'export default function Home(){return <main>Standalone Lowtide House</main>}' };
+    const runComposer = vi.fn(async (): Promise<ComposerLoopResult> => ({
+      ok: true, reason: 'accepted', attempts: 1, errors: [],
+      prepared: { ok: true, nextFiles: repairedFiles, errors: [],
+        gates: { passed: true, failures: [], advisories: [] },
+        build: { changeSet: { id: 'repair', fileOps: [], routeOps: [], targetPages: ['home'], attempt: 1,
+          provenance: { origin: 'repair', knowledgeVersion: 'test' } }, candidateFiles: repairedFiles, refused: [] } },
+    }));
+    const result = await createTestBuilder({ authorSite, runComposer }).generate({
+      operationId: 'lowtide-preview-repair', contract: contract(), initialFiles: previewFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null,
+      runtimeContext: 'Marketplace material must become standalone buyer-owned pages.',
+      pageCheck: (_path, source) => source.includes('marketplace/selectedPreview') ? ['Remove preview-only selectedPreview dependency'] : [],
+    });
+    expect(runComposer).toHaveBeenCalledOnce();
+    const repair = runComposer.mock.calls[0] as unknown as [{ request: { diagnostics: string[]; runtimeContext: string } }];
+    expect(repair[0].request.diagnostics.some(message => message.includes('Remove preview-only selectedPreview dependency'))).toBe(true);
+    expect(repair[0].request.runtimeContext).toContain('Marketplace material must become standalone buyer-owned pages.');
+    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidateFiles['/src/pages/Home.tsx']).not.toContain('selectedPreview');
+  });
+
   it('stops before inference when the edited source exceeds its budget', async () => {
     const runComposer = vi.fn();
     const result = await createTestBuilder({ runComposer }).edit({
