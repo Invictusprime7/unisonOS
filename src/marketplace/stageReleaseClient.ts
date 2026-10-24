@@ -103,3 +103,32 @@ export async function autoReleaseMarketplaceRelease(releaseId: string): Promise<
   const payload = await callCertifyRelease('autoRelease', { releaseId });
   return { releaseId: String(payload.releaseId), status: String(payload.status) };
 }
+
+export interface MarketplaceReleasePreview {
+  success: true;
+  version: string;
+  files: Record<string, string>;
+  details: {
+    pageRoles: string[];
+    artDirectionPackId: string | null;
+    capabilityIds: string[];
+    assetCount: number;
+    placeholderAssetCount: number;
+    fileCount: number;
+  };
+}
+
+/** Public: loads the placeholder-safe preview of a published listing. */
+export async function loadMarketplaceReleasePreview(slug: string): Promise<MarketplaceReleasePreview> {
+  const headers = await getSupabaseFunctionHeaders();
+  const response = await fetch(getSupabaseFunctionUrl('marketplace-release-preview'), {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true) {
+    throw new Error(payload?.error ?? `Preview unavailable (${response.status}).`);
+  }
+  return payload as MarketplaceReleasePreview;
+}
