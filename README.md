@@ -51,7 +51,7 @@ Saving, loading the preview and verifying an interaction are separate outcomes. 
 
 Publishing has stricter readiness requirements than ordinary Builder saves or restoring an accepted revision. Missing business connections can block publishing without preventing continued editing.
 
-Marketplace previews expose editable-draft installation. Concepts package their authored source with buyer-supplied media; published templates require a free claim or existing license. Both use the canonical revision save path. The published installation function requires deployment to the authoritative backend; authenticated installation and reopening remain unverified.
+Marketplace previews expose editable-draft installation. Preview source and project-owned sample imagery pass through App Builder before one canonical revision save; rejected candidates never become drafts. Published templates require a free claim or existing license. The published installation function requires deployment to the authoritative backend; authenticated installation and reopening remain unverified.
 
 Dedicated-site publication verifies the required saved resource surfaces using a read-only database-structure check before contacting the hosting provider. Site-profile override saves use conditional writes to reject concurrent overwrites. Shared content commands and account-profile concurrency still need authoritative command updates; these safeguards are not a claim of complete database parity or live end-to-end verification.
 

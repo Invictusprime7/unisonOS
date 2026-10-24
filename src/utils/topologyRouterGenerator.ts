@@ -165,18 +165,18 @@ function buildRouterCode(
 ): string {
   if (routes.length === 0) return '';
 
-  // Deduplicate by componentName
-  const seen = new Set<string>();
-  const uniqueRoutes = routes.filter(r => {
-    if (seen.has(r.componentName)) return false;
-    seen.add(r.componentName);
-    return true;
+  // File names and page IDs are not JavaScript identifiers (e.g. shop-products).
+  // Alias by source path, retaining distinct routes even when basenames collide.
+  const aliases = new Map<string, string>();
+  const uniqueRoutes = routes.map(route => {
+    if (!aliases.has(route.importPath)) aliases.set(route.importPath, `UnisonPage${aliases.size}`);
+    return { ...route, componentName: aliases.get(route.importPath) ?? 'UnisonPage0' };
   });
 
   const homeRoute = uniqueRoutes.find(r => r.isHome) || uniqueRoutes[0];
 
-  const imports = uniqueRoutes.map(r =>
-    `import ${r.componentName} from '${r.importPath}';`
+  const imports = [...aliases].map(([path, alias]) =>
+    `import ${alias} from ${JSON.stringify(path)};`
   ).join('\n');
   const routeElements: string[] = [];
 

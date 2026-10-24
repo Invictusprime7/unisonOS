@@ -17,7 +17,7 @@ export function MarketplaceInstallButton({ selection }: { selection: Marketplace
         navigate(`/web-builder?id=${state.draftId}`, { state });
       } catch (failure) { setError(failure instanceof Error ? failure.message : 'Installation failed.'); }
       finally { setBusy(false); }
-    }}>{busy ? <Loader2 aria-hidden="true" /> : <Download aria-hidden="true" />}{busy ? 'Saving draft…' : 'Install as draft'}</Button>
+    }}>{busy ? <Loader2 aria-hidden="true" /> : <Download aria-hidden="true" />}{busy ? 'Building draft…' : 'Install as draft'}</Button>
     {error && <p role="alert" className="text-destructive">{error} {error.startsWith('Sign in') && <Button variant="link" size="sm" onClick={() => navigate('/auth')}>Sign in</Button>}</p>}
   </div>;
 }

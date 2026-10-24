@@ -4,13 +4,14 @@ import additionalSource from './additionalMarketplacePreviews.tsx?raw';
 import { createBuilderPage, createEmptyPageRegistry } from '@/types/pageRegistry';
 import { generateCanonicalRouter } from '@/utils/topologyRouterGenerator';
 import { buildCanonicalLaunchPlan, projectCanonicalLaunchCandidateSnapshot } from '@/services/launch/canonicalLaunchPlan';
-import { buildCanonicalLaunchArtifacts } from '@/services/canonicalLaunchVfs';
 import { createWizardDesignSelection } from '@/services/wizardDesignSelection';
 import { ART_DIRECTION_PACKS, type ArtDirectionPackId } from '@/sections/variants';
 import { MARKETPLACE_TEMPLATE_VARIANT_PROFILES } from './MarketplaceRegisteredSection';
 import { buildMarketplaceRhythmTokens } from './marketplaceGeometricRhythm';
 import { ART_DIRECTION_FAMILY_REGISTRY } from '@/sections/variants/themeFamily';
 import actionsCss from './marketplaceActions.css?raw';
+import imagePlaceholderSource from './marketplaceImagePlaceholders.ts?raw';
+import { MARKETPLACE_SAMPLE_IMAGES } from './marketplaceImagePlaceholders';
 import type { AuthoredMarketplaceTemplate } from './marketplaceTemplatePrimitives';
 import type { IndustryOverlay, WizardSelections } from '@/types/playground';
 
@@ -65,7 +66,8 @@ function selectAuthoredSource(templateId: string) {
       if (!specifiers.length) return [];
       const named = specifiers.filter(spec => spec.type === 'ImportSpecifier').map(spec => spec.type === 'ImportSpecifier' ? (spec.imported.type === 'Identifier' ? spec.imported.name : spec.imported.value) + (spec.local.name !== (spec.imported.type === 'Identifier' ? spec.imported.name : spec.imported.value) ? ` as ${spec.local.name}` : '') : '');
       const defaults = specifiers.filter(spec => spec.type === 'ImportDefaultSpecifier').map(spec => spec.local.name);
-      return [`import ${[...defaults, ...(named.length ? [`{ ${named.join(', ')} }`] : [])].join(', ')} from ${JSON.stringify(statement.source.value)};`];
+      const namespaces = specifiers.filter(spec => spec.type === 'ImportNamespaceSpecifier').map(spec => `* as ${spec.local.name}`);
+      return [`import ${[...defaults, ...namespaces, ...(named.length ? [`{ ${named.join(', ')} }`] : [])].join(', ')} from ${JSON.stringify(statement.source.value)};`];
     });
     return `${imports.join('\n')}\n${ast.program.body.filter(s => selected.has(s)).map(s => source.slice(s.start ?? 0, s.end ?? 0)).join('\n')}\nexport default ${previewName};`;
   }
@@ -126,6 +128,7 @@ export function buildConceptDraftSource(template: AuthoredMarketplaceTemplate) {
   files['/src/marketplace/MarketplaceRegisteredSection.tsx'] = `${vendorImports.join('\n')}
 import React from 'react';
 import template from './template';
+import { withMarketplaceImagePlaceholders } from './marketplaceImagePlaceholders';
 const variants: any = {${vendorMap.join(',')}};
 export const MARKETPLACE_TEMPLATE_VARIANT_PROFILES: any = ${JSON.stringify({ [template.id]: profile })};
 export function MarketplaceRegisteredSection({ section, variantId, theme }: any) {
@@ -133,9 +136,9 @@ export function MarketplaceRegisteredSection({ section, variantId, theme }: any)
  const id = MARKETPLACE_TEMPLATE_VARIANT_PROFILES[template.id].variants[slot] || variantId;
  const C = variants[id];
  if (!C) throw new Error('Template section unavailable: ' + id);
- return <div data-ut-marketplace-geometry style={{'--ut-marketplace-radius': template.packTokens['--ut-radius-base']} as any}><C section={section} theme={{...theme, radius: template.packTokens['--ut-radius-base'], sectionPadding: 'var(--ut-rhythm-space) var(--ut-inline-gutter)'}} /></div>;
+ return <div data-ut-marketplace-geometry style={{'--ut-marketplace-radius': template.packTokens['--ut-radius-base']} as any}><C section={withMarketplaceImagePlaceholders(template.id, section)} theme={{...theme, radius: template.packTokens['--ut-radius-base'], sectionPadding: 'var(--ut-rhythm-space) var(--ut-inline-gutter)'}} /></div>;
 }`;
-  files['/src/marketplace/marketplaceImagePlaceholders.ts'] = `export const MARKETPLACE_SAMPLE_IMAGES = { objects: '/assets/marketplace-placeholder.svg' };`;
+  files['/src/marketplace/marketplaceImagePlaceholders.ts'] = imagePlaceholderSource.replace(/^import (\w+) from ['"]@\/assets\/[^'"]+['"];$/gm, (_, name: keyof typeof MARKETPLACE_SAMPLE_IMAGES) => `const ${name} = ${JSON.stringify(MARKETPLACE_SAMPLE_IMAGES[name])};`);
   files['/assets/marketplace-placeholder.svg'] = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><text x="400" y="300" text-anchor="middle">Add your own image</text></svg>';
   files['/src/marketplace/marketplaceTemplatePrimitives.tsx'] = `import React from 'react';
 import template from './template';
@@ -155,5 +158,6 @@ export default function Page() { return <main data-marketplace-preview-surface>$
   // Unverified stock references stay buyer supplied; never bundle their bytes or grant rights.
   for (const path of Object.keys(files).filter(p => p.startsWith('/src/marketplace/'))) files[path] = files[path].replace(/https:\/\/images\.unsplash\.com\/[^'"\s)]+/g, '/assets/marketplace-placeholder.svg');
   const snapshot = projectCanonicalLaunchCandidateSnapshot(plan, selections, files);
-  return buildCanonicalLaunchArtifacts({ generatedFiles: files, siteBundleSnapshot: snapshot, canonicalPlayground: plan.playground, preferredEntryPoint: '/src/App.tsx', mergeWithCanonicalSnapshot: true, allowCanonicalPageFallback: false, strictPreflight: true, themePresetId: family, businessName: template.name, industry: selections.industryOverlay });
+  // Material only: App Builder must converge this source before canonical acceptance.
+  return { files, siteBundleSnapshot: snapshot, canonicalPlayground: plan.playground, entryPoint: '/src/App.tsx', plan, selections };
 }
