@@ -105,7 +105,7 @@ describe('trusted marketplace promotion (local database, not live RLS proof)', (
     for (const buyer of [reviewer, other]) {
       const grant = await pg.query<{ id: string }>(`INSERT INTO public.marketplace_entitlements
         (buyer_user_id, listing_id, release_id, license_tier, grant_source, grant_key)
-        VALUES ($1,$2,$3,'personal','staff_grant',$1::text) RETURNING id`, [buyer, listing, release]);
+        VALUES ($1,$2,$3,'personal','staff_grant',$4) RETURNING id`, [buyer, listing, release, buyer]);
       const entitlement = grant.rows[0]?.id;
       if (!entitlement) throw new Error('Entitlement was not created');
       await pg.query(`INSERT INTO public.marketplace_installations
