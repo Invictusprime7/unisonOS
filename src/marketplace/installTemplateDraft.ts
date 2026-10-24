@@ -7,6 +7,10 @@ import { getSupabaseFunctionHeaders, getSupabaseFunctionUrl } from '@/integratio
 import { readUnisonSiteMaterial } from '@/services/export/importUnisonSiteZip';
 import { buyerDraftSnapshot } from './buyerDraftSnapshot';
 import { materializeTemplateWithAppBuilder, type MarketplaceTemplateMaterial } from './materializeTemplateWithAppBuilder';
+import { seedLaunchAssets } from '@/services/resources/seedLaunchAssets';
+import { persistGeneratedBindings } from '@/services/persistGeneratedBindings';
+import { planLaunchFormDefinitions } from '@/services/launchFormDefinitions';
+import { persistLaunchFormDefinitions } from '@/services/launchFormDefinitionPersistence';
 
 export type MarketplaceDraftSelection = { kind: 'concept'; template: AuthoredMarketplaceTemplate } | { kind: 'release'; slug: string; title: string };
 
@@ -46,6 +50,19 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection)
       playground: buyerArtifacts.canonicalPlayground as never },
   } });
   if (commit.status !== 'committed' || !commit.persistedRevisionId) throw new Error('The template draft was not saved.');
+  // Match fresh-launch setup: records/actions belong to the confirmed buyer scope.
+  try {
+    await seedLaunchAssets({ businessId: ids.businessId, projectId: ids.projectId, industry: snapshot.industry,
+      creatorData: commit.playground?.creatorData ?? buyerArtifacts.siteBundleSnapshot.creatorData,
+      mediaAssets: artifacts.mediaAssets });
+    const bindings = await persistGeneratedBindings({ businessId: ids.businessId, projectId: ids.projectId, files: commit.vfsFiles });
+    if (bindings.failed) throw new Error('Some template actions could not be saved.');
+    const forms = await persistLaunchFormDefinitions({ businessId: ids.businessId, projectId: ids.projectId, siteId: ids.siteId,
+      definitions: planLaunchFormDefinitions({ vfsFiles: commit.vfsFiles }) });
+    if (forms.error) throw new Error(forms.error);
+  } catch (error) {
+    throw new Error(`Your draft was saved, but its editable data setup did not finish: ${error instanceof Error ? error.message : String(error)}`);
+  }
   if (receipt) {
     const response = await fetch(getSupabaseFunctionUrl('marketplace-install-template'), {
       method: 'POST', headers: { ...await getSupabaseFunctionHeaders(), 'Content-Type': 'application/json' },
