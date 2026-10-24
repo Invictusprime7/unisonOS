@@ -1,6 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 
-import type { ComponentType, FormEvent, MouseEvent, ReactNode } from 'react';
+import { useContext, type ComponentType, type FormEvent, type MouseEvent, type ReactNode } from 'react';
+import type { CartItem } from '@/runtime/intentExecutor';
+import { MarketplaceCartCountContext } from '@/marketplace/MarketplacePreviewCart';
 import { getCapability } from '@/platform/core/capabilityRegistry';
 import { getIntentDef, type IntentDef } from '@/platform/core/intentSurfaceRegistry';
 import { themePresetToThemeTokens } from '@/components/onboarding/themePresetToTokens';
@@ -52,6 +54,7 @@ export interface MarketplaceTemplateBinding {
   sourceSection: string;
   sourceSlot: string;
   targetSectionId?: string;
+  product?: CartItem;
 }
 
 export interface ResolvedMarketplaceTemplateBinding extends MarketplaceTemplateBinding {
@@ -150,7 +153,8 @@ export function RegistryBoundButton({
   type?: 'button' | 'submit';
   children: ReactNode;
 }) {
-  return <button type={type} className={className} onClick={() => onIntent(binding)} {...marketplaceBindingAttributes(binding)}>{children}</button>;
+  const cartCount = useContext(MarketplaceCartCountContext);
+  return <button type={type} className={className} onClick={() => onIntent(binding)} {...marketplaceBindingAttributes(binding)}>{children}{binding.intent === 'cart.view' && <output data-ut-cart-count aria-label="Bag item count">{cartCount}</output>}</button>;
 }
 
 export function MarketplacePageNavigation({

@@ -121,6 +121,7 @@ const POLLEN_BINDINGS = {
   addCup: {
     id: "pollen:add-cup",
     intent: "cart.add",
+    product: { productId: 'pollen:sunday-cup', name: 'The Sunday cup', price: 38, quantity: 1 },
     label: "Add the Sunday cup to bag",
     sourceSection: "featured-object",
     sourceSlot: "product-primary-action",
