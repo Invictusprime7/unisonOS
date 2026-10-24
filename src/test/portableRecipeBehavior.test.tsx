@@ -36,9 +36,41 @@ function components(ids: string[], family: string) {
   return load(compiled.files[`${DESIGN_SOURCE_ROOT}/${family}.tsx`], { react: React, [`./recipes/${family}`]: recipe, './theme': { THEME } });
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.sessionStorage.clear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.sessionStorage.clear(); window.localStorage.clear(); });
 
 describe('App Builder portable recipe behavior', () => {
+  it('persists published cart additions and restores the bag count on remount', async () => {
+    const { usePublishedActionRuntime } = load(PUBLISHED_ACTION_RUNTIME_MODULE, {
+      react: React,
+      '@/unison/publishedRuntime': { PUBLISHED_RUNTIME_CONFIG: { siteId: 'shop-a', controllerEndpoints: {} } },
+      '@/unison/generatedSiteRuntimeManifest': { GENERATED_SITE_RUNTIME_MANIFEST: { enabledCapabilities: ['commerce'], controllers: [], components: [] } },
+    });
+    function Shop() {
+      usePublishedActionRuntime();
+      return <><button data-ut-intent="cart.add" data-product-id="product-a" data-product-name="Record" data-price="29" data-quantity="2">Add record</button><button data-ut-intent="cart.view" aria-label="Bag" /></>;
+    }
+    const first = render(<Shop />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add record' }));
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem('unison:published-cart:shop-a') ?? '[]')[0].quantity).toBe(2));
+    expect(screen.getByRole('button', { name: 'Bag' }).querySelector('[data-ut-cart-count]')?.textContent).toBe('2');
+    fireEvent.click(screen.getByRole('button', { name: 'Add record' }));
+    expect(JSON.parse(window.localStorage.getItem('unison:published-cart:shop-a') ?? '[]')[0].quantity).toBe(4);
+    first.unmount();
+    render(<Shop />);
+    expect(screen.getByRole('button', { name: 'Bag' }).querySelector('[data-ut-cart-count]')?.textContent).toBe('4');
+  });
+  it('refuses cart writes without an enabled commerce capability', () => {
+    const { usePublishedActionRuntime } = load(PUBLISHED_ACTION_RUNTIME_MODULE, {
+      react: React,
+      '@/unison/publishedRuntime': { PUBLISHED_RUNTIME_CONFIG: { siteId: 'not-a-shop', controllerEndpoints: {} } },
+      '@/unison/generatedSiteRuntimeManifest': { GENERATED_SITE_RUNTIME_MANIFEST: { enabledCapabilities: [], controllers: [], components: [] } },
+    });
+    function Site() { usePublishedActionRuntime(); return <button data-ut-intent="cart.add" data-product-id="p" data-price="29">Add</button>; }
+    render(<Site />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(window.localStorage.getItem('unison:published-cart:not-a-shop')).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('not connected');
+  });
   it.each([['data-table:striped-rows', 'DataTable'], ['data-table:dashboard-overview', 'DashboardOverview']])('renders bound table values safely in %s', (id, exportName) => {
     const Table = components([id], 'DataTable')[exportName];
     const { container } = render(<Table sourceTable="services" columns={[{ key: 'name', label: 'Name' }, { key: 'price', label: 'Price' }, { key: 'details', label: 'Details' }]} rows={[{ id: 'service-7', name: { label: 'Consultation' }, price: 0, details: { nested: 'Not a React child' } }]} />);
