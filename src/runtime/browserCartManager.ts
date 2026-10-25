@@ -13,14 +13,25 @@ interface StoredBrowserCart extends Cart {
   updatedAt: string;
 }
 
+let memoryFallbackSessionId: string | null = null;
+
 function getFallbackSessionId(): string {
   if (typeof window === 'undefined') return 'server-session';
 
-  const existing = window.localStorage.getItem('unison:cart:session-id');
-  if (existing) return existing;
+  try {
+    const existing = window.localStorage.getItem('unison:cart:session-id');
+    if (existing) return existing;
+  } catch {
+    // Fall back to an in-memory session when browser storage is unavailable.
+  }
 
-  const next = generateUUID();
-  window.localStorage.setItem('unison:cart:session-id', next);
+  const next = memoryFallbackSessionId || generateUUID();
+  memoryFallbackSessionId = next;
+  try {
+    window.localStorage.setItem('unison:cart:session-id', next);
+  } catch {
+    // A stable in-memory id still lets the preview render without persistence.
+  }
   return next;
 }
 

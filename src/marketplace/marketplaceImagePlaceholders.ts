@@ -18,6 +18,10 @@ function sampleForTemplate(templateId: string): string {
   return workspace;
 }
 
+function useSampleImage(image: string | undefined, sample: string): string {
+  return !image || image === '/assets/marketplace-placeholder.svg' ? sample : image;
+}
+
 /** Pure, deterministic content hydration used on Home and every secondary page. */
 export function withMarketplaceImagePlaceholders(
   templateId: string,
@@ -26,23 +30,23 @@ export function withMarketplaceImagePlaceholders(
   const sample = sampleForTemplate(templateId);
   switch (section.type) {
     case 'about':
-      return { ...section, props: { ...section.props, image: section.props.image || sample } };
+      return { ...section, props: { ...section.props, image: useSampleImage(section.props.image, sample) } };
     case 'services':
-      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, image: item.image || sample })) } };
+      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, image: useSampleImage(item.image, sample) })) } };
     case 'features':
-      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, image: item.image || sample })) } };
+      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, image: useSampleImage(item.image, sample) })) } };
     case 'gallery':
-      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, src: item.src || sample })) } };
+      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, src: useSampleImage(item.src, sample) })) } };
     case 'team':
-      return { ...section, props: { ...section.props, members: section.props.members.map((member) => ({ ...member, image: member.image || portrait })) } };
+      return { ...section, props: { ...section.props, members: section.props.members.map((member) => ({ ...member, image: useSampleImage(member.image, portrait) })) } };
     case 'testimonials':
-      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, avatar: item.avatar || portrait })) } };
+      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, avatar: useSampleImage(item.avatar, portrait) })) } };
     case 'blog-preview':
-      return { ...section, props: { ...section.props, posts: section.props.posts.map((post) => ({ ...post, image: post.image || sample })) } };
+      return { ...section, props: { ...section.props, posts: section.props.posts.map((post) => ({ ...post, image: useSampleImage(post.image, sample) })) } };
     case 'before-after':
-      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, before: item.before || sample, after: item.after || sample })) } };
+      return { ...section, props: { ...section.props, items: section.props.items.map((item) => ({ ...item, before: useSampleImage(item.before, sample), after: useSampleImage(item.after, sample) })) } };
     case 'cta':
-      return { ...section, props: { ...section.props, backgroundImage: section.props.backgroundImage || sample } };
+      return { ...section, props: { ...section.props, backgroundImage: useSampleImage(section.props.backgroundImage, sample) } };
     default:
       return section;
   }

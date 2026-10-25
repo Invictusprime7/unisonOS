@@ -6,6 +6,10 @@ const migration = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20260929233935_persist_canonical_revision_provenance.sql'),
   'utf8',
 );
+const deltaMigration = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20261025014614_canonical_vfs_delta_parent_revision_base.sql'),
+  'utf8',
+);
 
 describe('canonical revision provenance migration', () => {
   it('stores candidate, operation and per-file provenance on the revision ledger', () => {
@@ -21,5 +25,15 @@ describe('canonical revision provenance migration', () => {
     expect(migration).toMatch(/ALTER FUNCTION public\.commit_canonical_site_revision\([\s\S]+\) SECURITY DEFINER/);
     expect(migration).toContain('Canonical revision operation identities must be a non-empty string array');
     expect(migration).toContain('Every canonical VFS file requires live provenance and a content hash');
+  });
+
+  it('reconstructs compact deltas from the canonical parent revision', () => {
+    expect(deltaMigration).toContain('FROM public.site_revisions AS revision');
+    expect(deltaMigration).toContain('revision.id = p_parent_revision_id');
+    expect(deltaMigration).toContain("revision.status = 'committed'");
+    expect(deltaMigration).toContain("v_base_vfs := '{}'::jsonb");
+    expect(deltaMigration).not.toContain('draft.vfs_files');
+    expect(deltaMigration).toContain('Canonical parent revision is unavailable for VFS delta reconstruction');
+    expect(deltaMigration).toContain('commit_canonical_site_revision_v2_full');
   });
 });

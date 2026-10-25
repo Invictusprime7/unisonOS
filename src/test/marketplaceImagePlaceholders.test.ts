@@ -51,4 +51,16 @@ describe('persistent marketplace sample image assignments', () => {
     const faq: MarketplacePreviewSection = { id: 'faq', type: 'faq', props: { items: [] } };
     expect(fill('terra-house', faq)).toBe(faq);
   });
+
+  it('replaces sanitized stock-image placeholders with section-specific owned assets', () => {
+    const gallery: MarketplacePreviewSection = { id: 'gallery', type: 'gallery', props: { items: [
+      { src: '/assets/marketplace-placeholder.svg', alt: 'House' },
+    ] } };
+    const team: MarketplacePreviewSection = { id: 'team', type: 'team', props: { members: [
+      { name: 'Host', image: '/assets/marketplace-placeholder.svg' },
+    ] } };
+
+    expect(fill('terra-house', gallery).props.items[0].src).toBe(images.house);
+    expect(fill('terra-house', team).props.members[0].image).toBe(images.portrait);
+  });
 });

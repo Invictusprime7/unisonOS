@@ -27,6 +27,8 @@ describe('marketplace App Builder convergence', () => {
     expect(request.contract.business.intents).toContain('cart.add');
     expect(request.contract.business.capabilities).toContain('commerce');
     expect(request.runtimeContext).toContain('Sunday cup');
+    expect(request.runtimeContext).toContain('MARKETPLACE TEMPLATE DESIGN LOCK');
+    expect(request.runtimeContext).toContain(template.pages[0].sections[0].id);
     expect(request.contract.topology.sitePlan.pages.map((p: { id: string }) => p.id)).toEqual(['home', ...template.pages.map(page => page.id)]);
     expect(request.initialFiles['/src/marketplace/selectedPreview.tsx']).toBe(material.files['/src/marketplace/selectedPreview.tsx']);
     expect(request.contract.design.artDirection.storagePackId).toBe(material.siteBundleSnapshot.meta.artDirectionPackId);

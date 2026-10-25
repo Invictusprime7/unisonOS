@@ -25,9 +25,13 @@ const industries: Record<string, IndustryOverlay> = {
   Hospitality: 'restaurant', Architecture: 'agency', Software: 'saas', 'Beauty & Wellness': 'wellness',
   'Real Estate': 'real_estate', 'Objects & Retail': 'ecommerce', 'Retail & Objects': 'ecommerce',
   'Nonprofit & Community': 'nonprofit', 'Local Services': 'local-service', 'Fitness & Movement': 'fitness',
-  Education: 'coaching', 'Boutique Lodging': 'restaurant', Photography: 'photographer',
+  Education: 'coaching', 'Boutique Lodging': 'agency', Photography: 'photographer',
   'Retail & E-commerce': 'ecommerce', Nonprofit: 'nonprofit', 'Contractor & Trades': 'contractor',
 };
+
+export function marketplaceDraftIndustry(category: string): IndustryOverlay {
+  return industries[category] ?? 'agency';
+}
 
 /** Select real authored declarations, not rendered HTML or a newly generated design. */
 function selectAuthoredSource(templateId: string) {
@@ -82,7 +86,7 @@ export function buildConceptDraftSource(template: AuthoredMarketplaceTemplate) {
   const packId = profile.artDirectionPackId as ArtDirectionPackId;
   const family = ART_DIRECTION_FAMILY_REGISTRY[packId].primaryFamily;
   const selections: WizardSelections = {
-    businessName: template.name, businessModel: 'general', industryOverlay: industries[template.category] ?? 'agency',
+    businessName: template.name, businessModel: 'general', industryOverlay: marketplaceDraftIndustry(template.category),
     systemType: 'agency', primaryGoal: 'lead_capture', secondaryGoals: [], requestedPages: ['home'],
     scaffoldMode: 'selected-pages', templateId: template.id, themePresetId: family, themeId: family,
     themeTokens: template.theme, designSelection: createWizardDesignSelection({ artDirectionPackId: packId }),

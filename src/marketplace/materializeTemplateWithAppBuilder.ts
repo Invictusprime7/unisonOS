@@ -22,6 +22,44 @@ function templatePageRole(role: string): PageRole {
   return PAGE_ROLES.has(role) ? role as PageRole : 'custom';
 }
 
+function authoredDesignLock(files: Readonly<Record<string, string>>): string {
+  const source = files['/src/marketplace/template.ts'];
+  const prefix = 'export default ';
+  if (!source?.startsWith(prefix)) return '';
+
+  try {
+    const template = JSON.parse(source.slice(prefix.length).replace(/;\s*$/, '')) as {
+      name?: string;
+      category?: string;
+      pages?: Array<{
+        id?: string;
+        path?: string;
+        title?: string;
+        sections?: Array<{ id?: string; type?: string; variantId?: string; props?: Record<string, unknown> }>;
+      }>;
+    };
+    const pages = (template.pages ?? []).map(page => ({
+      id: page.id,
+      path: page.path,
+      title: page.title,
+      sections: (page.sections ?? []).map(section => {
+        const props = section.props ?? {};
+        const copy = Object.fromEntries(Object.entries(props)
+          .filter(([key, value]) => /^(eyebrow|headline|title|description|subtitle|label|layout|alignment)$/.test(key)
+            && typeof value === 'string'));
+        const imageSlots = Object.keys(props).filter(key => /image|avatar|src|before|after/i.test(key));
+        return { id: section.id, type: section.type, variantId: section.variantId, copy, imageSlots };
+      }),
+    }));
+    return [
+      `MARKETPLACE TEMPLATE DESIGN LOCK: ${template.name ?? 'Selected template'} (${template.category ?? 'unclassified'}). Treat this authored blueprint as immutable, not inspiration. Preserve page order, section order, section variants, layout, copy, and each image slot. Do not replace this design with industry-default content or imagery; only adapt preview-only interactions to the buyer's canonical bindings.`,
+      JSON.stringify(pages),
+    ].join('\n');
+  } catch {
+    return '';
+  }
+}
+
 export interface MarketplaceTemplateMaterial {
   files: Record<string, string>;
   siteBundleSnapshot: SiteBundleSnapshot;
@@ -76,7 +114,7 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   const contract = buildAppBuildContract({
     identity: { projectId: ids.projectId, businessId: ids.businessId, siteId: ids.siteId, systemType: selections.systemType ?? 'agency' },
     sitePlan: plan.sitePlan, pageRegistry: snapshot.pageRegistry, industry: snapshot.industry, businessName: snapshot.businessName,
-    visionBrief: 'Install the selected marketplace template faithfully. Preserve all preview pages, text, imagery, section compositions, geometric rhythm and slot-intent identities. Converge the supplied React source with the canonical runtime; do not invent a different site or copy seller service authorizations.',
+    visionBrief: 'Install the selected marketplace template faithfully. The supplied authored source is the design authority, not inspiration. Preserve every page, section order, layout, variant, authored copy, image assignment, geometric rhythm and slot-intent identity. Do not substitute industry-default content or imagery. Converge preview-only interactions with the canonical runtime; do not invent a different site or copy seller service authorizations.',
     goals: [selections.primaryGoal], intents, capabilities, bindingGuide, seed, themePresetId: plan.themePresetId,
     canonicalBindings: Object.values(plan.playground.bindings), registeredComponentInstances: Object.values(plan.playground.creatorData.componentInstances),
     businessProfile: plan.playground.creatorData.businessInfo,
@@ -98,6 +136,7 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
       return reference ? [`Materialize this page as standalone source using canonical design-source modules; remove its dependency on preview-only ${reference}.`] : [];
     },
     runtimeContext: [
+      authoredDesignLock(initialFiles),
       'MARKETPLACE INSTALLATION: Author real standalone pages and shared site components, not wrappers around Preview, MarketplaceRegisteredSection, or selectedPreview. The /src/marketplace sources are reference-only; installed page import closures must not depend on them. Preserve their content, imagery and sealed design while adapting to the canonical design-source modules and buyer runtime. Use registered Resource Runtime reads and data-ut-resource marks for editable records, not static catalog arrays. Never use seller resource IDs or service authorizations. Do not edit canonical App.tsx or protected infrastructure.',
       `BUYER STARTER CONTENT (saved after acceptance): ${starterSummary(plan.playground.creatorData)}`,
     ].join('\n').slice(0, 3500),

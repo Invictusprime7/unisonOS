@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { createBrowserCartManager, readBrowserCart } from '@/runtime/browserCartManager';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildBrowserCartStorageKey, createBrowserCartManager, readBrowserCart } from '@/runtime/browserCartManager';
 
 describe('browserCartManager', () => {
   const context = {
@@ -52,5 +52,17 @@ describe('browserCartManager', () => {
     window.sessionStorage.clear();
     expect((await createBrowserCartManager(site).get())?.items[0].quantity).toBe(2);
     expect((await createBrowserCartManager({ ...site, siteId: 'other_site' }).get())?.items).toEqual([]);
+  });
+
+  it('uses a stable in-memory session id when local storage is full', () => {
+    const setItem = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage is full', 'QuotaExceededError');
+    });
+
+    try {
+      expect(buildBrowserCartStorageKey()).toBe(buildBrowserCartStorageKey());
+    } finally {
+      setItem.mockRestore();
+    }
   });
 });
