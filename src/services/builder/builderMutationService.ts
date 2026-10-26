@@ -1,3 +1,4 @@
+import { PROJECT_MEDIA_MANIFEST, syncProjectMedia } from '@/services/assets/projectMedia';
 import { checkEditAgainstIntent } from '@/services/editor/editIntentContract';
 /**
  * builderMutationService — P0.3 of the canonical closure plan.
@@ -114,7 +115,12 @@ export async function runBuilderAiMutation(
   try {
     // One pipeline run validates AND persists — the accepted bytes are, by
     // construction, the persisted bytes.
-    commit = await persistAiCommit(ctx);
+    // Project media: keep the saved photo list in step with uploads the edit uses.
+    const media = syncProjectMedia(ctx.nextFiles);
+    const commitCtx = media !== null && media !== ctx.nextFiles[PROJECT_MEDIA_MANIFEST]
+      ? { ...ctx, nextFiles: { ...ctx.nextFiles, [PROJECT_MEDIA_MANIFEST]: media } }
+      : ctx;
+    commit = await persistAiCommit(commitCtx);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const rejection = error && typeof error === 'object'
