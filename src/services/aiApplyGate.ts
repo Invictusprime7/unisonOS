@@ -54,6 +54,8 @@ export interface AiCommitContext {
   label?: string;
   /** Reserved guest-demo operation carried into the same canonical revision. */
   guestDemoOperationId?: string;
+  /** P3 scoped edit contract; when present the change must satisfy it before saving. */
+  editIntent?: import('@/services/editor/editIntentContract').EditIntentContract;
 }
 
 export function buildAiCandidatePatch(ctx: AiCommitContext): PatchPlan {
