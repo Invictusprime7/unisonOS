@@ -2,6 +2,7 @@
 
 ## Active: OS8 canonical creative freedom
 - [x] P1: loaded revisions report whether their design index is database-stamped for that exact version (durable) or provisional, and never claim full coverage when source is uncertain.
+- [x] P1: opening a committed revision with an unproven design index rebuilds it from saved files, kept provisional (unstamped) until a new stamped save.
 - [ ] P1: confirm the stamping migration is applied on UNISON (needs the deploy workflow).
 - [x] P0: refused saves record attempted operation, expected owner and reason per path (protected-file fixture asserts them).
 - [x] P0 fixtures: free-form hero and multi-file component accepted; broken import and broken required binding refused with their codes.
