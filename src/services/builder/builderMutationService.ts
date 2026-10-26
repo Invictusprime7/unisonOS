@@ -186,6 +186,11 @@ export async function runBuilderAiMutation(
     message: `${changedPaths.length} file${changedPaths.length === 1 ? '' : 's'} saved as a new checkpoint`,
     revisionId: commit.persistedRevisionId ?? null,
   });
+  // Business-connection problems never block a save; surface them explicitly.
+  const readinessWarning = (commit.diagnostics ?? []).find((d) => d.stage === 'readiness' && d.level === 'warn');
+  if (readinessWarning) {
+    emitAgentEvent({ kind: 'verification', status: 'failed', message: readinessWarning.message });
+  }
   return {
     state: 'applied',
     success: true,
