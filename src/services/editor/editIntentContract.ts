@@ -112,3 +112,34 @@ export function checkEditAgainstIntent(contract: EditIntentContract, proposal: {
   if (undeclared.length) violations.push({ code: 'undeclared-package', packages: undeclared });
   return violations;
 }
+
+const OTHER_PAGE_PATTERN = /\b(other pages?|(?:the |a |new )?(?:about|contact|services|menu|pricing|gallery|blog|team|faq|booking|shop) page|add (?:a )?(?:new )?page|nav(?:igation|bar)?|footer|header)\b/i;
+/** Files the platform rewrites itself after every save; never counted as an AI scope breach. */
+const PLATFORM_DERIVED = new Set(['/src/App.tsx', '/package.json', '/src/index.css']);
+
+/**
+ * Builds the contract for one Affinity request. Asking for something in the
+ * prompt is the consent: naming other pages/shared chrome grants cross-page,
+ * naming business data grants backend. Otherwise the edit stays on the
+ * current page and the files it already imports.
+ */
+export function editIntentForRequest(input: {
+  prompt: string;
+  activePagePath: string;
+  pageImports: readonly string[];
+  selectionOwnerPath?: string | null;
+  expectedRevisionId: string | null;
+  structural?: boolean;
+}): EditIntentContract {
+  const contract = normalizeEditIntent({
+    prompt: input.prompt,
+    pagePath: input.activePagePath,
+    sharedPaths: [...input.pageImports, ...(input.selectionOwnerPath ? [input.selectionOwnerPath] : []), ...PLATFORM_DERIVED],
+    expectedRevisionId: input.expectedRevisionId,
+    consent: {
+      crossPage: input.structural === true || OTHER_PAGE_PATTERN.test(input.prompt),
+      backend: promptTouchesBackend(input.prompt),
+    },
+  });
+  return contract;
+}

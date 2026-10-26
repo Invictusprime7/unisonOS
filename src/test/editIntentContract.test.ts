@@ -40,3 +40,19 @@ describe('edit intent contract', () => {
     expect(checkEditAgainstIntent(c, { baseRevisionId: null, previousFiles: prev, files: { '/src/pages/About.tsx': '<p/>' } })).toEqual([]);
   });
 });
+
+describe('editIntentForRequest', () => {
+  const base = { activePagePath: home, pageImports: ['/src/components/Nav.tsx'], expectedRevisionId: 'r1' };
+  it('keeps a plain request on the current page and its imports', () => {
+    const contract = __mk({ ...base, prompt: 'make the headline bigger' });
+    expect(contract.consent).toEqual({ crossPage: false, backend: false });
+    expect(contract.allowedPaths).toEqual(expect.arrayContaining([home, '/src/components/Nav.tsx', '/src/App.tsx']));
+    expect(checkEditAgainstIntent(contract, { baseRevisionId: 'r1', previousFiles: prev, files: { '/src/pages/About.tsx': '<p/>' } })[0]?.code).toBe('cross-page-consent');
+  });
+  it('treats naming another page, a new page, or business data as consent', () => {
+    expect(__mk({ ...base, prompt: 'also update the about page' }).consent.crossPage).toBe(true);
+    expect(__mk({ ...base, prompt: 'x', structural: true }).consent.crossPage).toBe(true);
+    expect(__mk({ ...base, prompt: 'connect the form to the booking system' }).consent.backend).toBe(true);
+  });
+});
+import { editIntentForRequest as __mk } from '@/services/editor/editIntentContract';
