@@ -326,6 +326,9 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
       stage: 'file-protection',
       affectedPaths: [path],
       expectedVfsHash: expect.any(String),
+      attemptedOperations: [{ path, type: expect.any(String) }],
+      expectedOwners: [{ path, owner: 'immutable-infrastructure' }],
+      reason: expect.stringContaining('compiler-owned'),
     });
   });
   it('records stale overlapping queued edits with their conflicting path', async () => {
