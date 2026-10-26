@@ -6,7 +6,9 @@
 - [ ] P1: confirm the stamping migration is applied on UNISON (needs the deploy workflow).
 - [x] P0: refused saves record attempted operation, expected owner and reason per path (protected-file fixture asserts them).
 - [x] P0 fixtures: free-form hero and multi-file component accepted; broken import and broken required binding refused with their codes.
-- [ ] P2–P5: preview node locators, scoped AI edit intents, project media assets, atomic publish parity.
+- [x] P2: resolver maps a preview click's source locator to its JSX node, owner file, repeated/shared/dynamic flags, and falls back to inspect-only when a rewrite is unsafe.
+- [ ] P2: route editor clicks through the resolver (toolbar/AI panel still read the raw locator).
+- [ ] P3–P5: scoped AI edit intents, project media assets, atomic publish parity.
 
 ## Active: Marketplace preview draft installation
 - [x] Correct missing required p_target_status in content create/update RPC requests; four handler execution regressions cover audited/idempotent signatures, 20 focused checks pass.
