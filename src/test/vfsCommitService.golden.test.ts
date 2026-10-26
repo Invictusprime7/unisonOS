@@ -2000,6 +2000,7 @@ describe('P0 rejection fixtures', () => {
     const err = await run({ '/src/App.tsx': app, '/src/pages/Home.tsx': 'export default function Home(){return <main/>}' }, {
       '/src/pages/Home.tsx': 'export default function Home(){return <main><button data-ut-intent="booking.create">Book</button></main>}',
     }, 1).catch(e => e);
+    console.log("DBG", (err as any)?.status ?? (err as any)?.message, JSON.stringify(((err as any)?.result ?? err)?.diagnostics?.map((d:any)=>[d.stage,d.level,d.message,d.code])));
     expect(codes(err)).toContain('LOCKED_INTENT_OR_DATA_FIELD');
     expect(revisionStore).toHaveLength(0);
   });
