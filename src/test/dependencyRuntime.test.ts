@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { extractDependencies, getDependenciesForSandpack, resolveSiteDependencyRuntime } from '@/utils/dependencyExtractor';
+import { extractDependencies, getDependenciesForSandpack, resolveSiteDependencyRuntime } from '../utils/dependencyExtractor';
 import {
   SANDPACK_DEPENDENCIES,
   WIZARD_PREVIEW_RUNTIME_DEPENDENCIES,
   WIZARD_RUNTIME_DEPENDENCY_GROUPS,
-} from '@/utils/sandpackDependencies';
+} from '../utils/sandpackDependencies';
 
 describe('Wizard preview dependency runtime', () => {
   it('produces a stable site dependency graph fingerprint that changes with resolved versions', () => {
@@ -137,7 +137,7 @@ describe('Wizard preview dependency runtime', () => {
   });
 
   it.each([['accordion', '1.2.12'], ['dialog', '1.1.15']])('keeps the real %s dependency in the Sandpack install graph', async (primitive, version) => {
-    const { prepareSandpackFiles } = await import('@/utils/sandpackFilePrep');
+    const { prepareSandpackFiles } = await import('../utils/sandpackFilePrep');
     const prepared = prepareSandpackFiles({
       '/src/App.tsx': `import * as Primitive from './unison/ui/radix/${primitive}'; export default function App(){ return <main>{Object.keys(Primitive).join(',')}</main>; }`,
       [`/src/unison/ui/radix/${primitive}.ts`]: `export * from '@radix-ui/react-${primitive}';`,
