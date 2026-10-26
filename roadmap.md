@@ -11,7 +11,7 @@
 - [x] P3: edit-intent contract (scope, operation, allowed files, required buttons, expected version, packages, consent) enforced before Builder AI saves when supplied.
 - [x] P3: Builder saves build the contract from each Affinity request; naming other pages/shared chrome, adding pages, or naming business data in the prompt counts as consent.
 - [x] P4: project media manifest saved with Affinity edits.
-- [ ] P5: atomic publish parity.
+- [x] P5: publish refuses when an older version would ship.
 
 ## Active: Marketplace preview draft installation
 - [x] Correct missing required p_target_status in content create/update RPC requests; four handler execution regressions cover audited/idempotent signatures, 20 focused checks pass.

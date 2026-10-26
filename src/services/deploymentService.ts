@@ -512,6 +512,8 @@ export interface ProviderDeployOptions {
   rowCounts?: Record<string, number>;
   /** Move D — enables ledger-backed publish enforcement. */
   projectId?: string | null;
+  /** Saved version being published; blocks if an older version would ship. */
+  expectedRevisionId?: string | null;
 }
 
 /**
@@ -533,6 +535,7 @@ export async function deployToVercel(
       systemId: options?.systemId ?? null,
       rowCounts: options?.rowCounts,
       projectId: options?.projectId ?? null,
+      expectedRevisionId: options?.expectedRevisionId ?? null,
     },
     onProgress
   );
@@ -557,6 +560,7 @@ export async function deployToNetlify(
       systemId: options?.systemId ?? null,
       rowCounts: options?.rowCounts,
       projectId: options?.projectId ?? null,
+      expectedRevisionId: options?.expectedRevisionId ?? null,
     },
     onProgress
   );
