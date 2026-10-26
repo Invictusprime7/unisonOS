@@ -241,7 +241,9 @@ export const LauncherWizard = ({
       return;
     }
     setDraftHydrated(false);
-    const draft = readLaunchInterviewDraft(draftScope);
+    // A new idea typed by the user always wins over an abandoned draft.
+    const draft = initialVisionPrompt ? null : readLaunchInterviewDraft(draftScope);
+    if (initialVisionPrompt) clearLaunchInterviewDraft(draftScope);
     if (draft) {
       setSelectedIndustry(draft.selections.industry);
       setSystemId(draft.selections.systemId);

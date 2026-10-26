@@ -137,8 +137,17 @@ export function resolveBusinessLaunchPlan(input: {
   const operationalCapabilities = profile
     ? resolveLaunchCapabilities(profile.defaultCapabilities, canonicalIndustryId, focusedIntent)
     : [];
-  const businessCapabilities = profile && blockedRequests.length === 0
-    ? resolveLaunchBusinessCapabilities(focusedIntent)
+  // Unsupported goal/need choices are dropped, not fatal.
+  const blockedSet = new Set(blockedRequests);
+  const supportedIntent = {
+    primaryGoal: goalCapability && blockedSet.has(goalCapability) ? null : primaryGoal,
+    customerNeeds: customerNeeds.filter((need) => {
+      const capability = NEED_CAPABILITIES[need];
+      return !capability || !blockedSet.has(capability);
+    }),
+  };
+  const businessCapabilities = profile
+    ? resolveLaunchBusinessCapabilities(supportedIntent)
     : ['business_profile' as const];
 
   return {

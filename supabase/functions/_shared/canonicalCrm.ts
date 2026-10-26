@@ -66,7 +66,8 @@ const CRM_RESOURCE_TABLES: Record<CrmResourceName, string> = {
 
 const CRM_RESOURCE_FIELDS: Record<CrmResourceName, readonly string[]> = {
   contacts: ['email', 'first_name', 'last_name', 'phone', 'company', 'tags', 'source', 'custom_fields', 'external_id'],
-  leads: ['title', 'status', 'stage', 'value', 'source', 'notes', 'intent', 'email', 'name', 'phone', 'company', 'contact_name', 'contact_id', 'pipeline_id', 'metadata', 'tags', 'custom_fields'],
+  // Only real crm_leads columns; extra details (phone, company) live in metadata.
+  leads: ['title', 'status', 'stage', 'value', 'source', 'notes', 'intent', 'email', 'name', 'contact_id', 'metadata'],
   deals: ['title', 'stage', 'value', 'expected_close_date', 'contact_id', 'lead_id', 'metadata'],
   workflows: ['name', 'description', 'trigger_type', 'trigger_config', 'steps', 'is_active', 'actions', 'active', 'industry'],
   automations: ['name', 'trigger_event', 'conditions', 'actions', 'is_active'],
@@ -298,12 +299,14 @@ export async function createCrmLead(
       stage: input.stage || 'new',
       email: input.email?.trim().toLowerCase() || null,
       name: input.name?.trim() || null,
-      phone: input.phone?.trim() || null,
       source: input.source || null,
       notes: input.notes || null,
       intent: input.intent || null,
       value: input.value ?? null,
-      metadata: input.metadata ?? {},
+      // crm_leads has no phone column; keep the number with the lead's details.
+      metadata: input.phone?.trim()
+        ? { ...(input.metadata ?? {}), phone: input.phone.trim() }
+        : input.metadata ?? {},
     })
     .select('id')
     .single();

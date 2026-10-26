@@ -282,10 +282,10 @@ async function runReservedLaunchPipeline(
       primaryGoal: input.primaryGoal,
       customerNeeds: input.customerNeeds,
     });
-    if (businessLaunchPlan.blockedRequests.length > 0) {
-      throw new LaunchFatalError(
-        `This launch requests unsupported capabilities: ${businessLaunchPlan.blockedRequests.join(', ')}.`,
-      );
+    // Only an unknown industry is fatal; choices the industry can't support
+    // (e.g. quotes for SaaS) are dropped from the plan instead of failing launch.
+    if (businessLaunchPlan.blockedRequests.includes('industry:not-registered')) {
+      throw new LaunchFatalError('This launch requests an industry Unison does not support yet.');
     }
     const launchCapabilities = businessLaunchPlan.operationalCapabilities;
     const canonicalIntents = uniqueValues<string>([
