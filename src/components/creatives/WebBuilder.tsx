@@ -134,6 +134,7 @@ import {
 } from '@/services/projectRuntimeEnvelope';
 import { runBuilderAiMutation } from "@/services/builder/builderMutationService";
 import { editIntentForRequest } from "@/services/editor/editIntentContract";
+import { resolveLocalImports } from "@/components/creatives/web-builder/previewRouteTabs";
 import { listCheckpoints, pickUndoTarget, restoreCheckpoint, type Checkpoint } from "@/services/builder/checkpointService";
 import CheckpointsPopover from "@/components/web-builder/CheckpointsPopover";
 import { prepareAICandidate } from "@/services/builder/aiCandidateGates";
@@ -8506,13 +8507,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                         candidate: candidate.build.changeSet,
                         guestDemoOperationId: applyMeta?.guestDemoOperationId,
                         label: applyMeta?.prompt ? applyMeta.prompt.slice(0, 120) : undefined,
-                      editIntent: applyMeta?.prompt ? editIntentForRequest({
-                        prompt: applyMeta.prompt,
-                        activePagePath,
-                        pageImports: resolveLocalImports(beforeFiles, activePagePath),
-                        expectedRevisionId: currentRevisionIdRef.current || null,
-                        structural: Boolean((applyMeta?.candidate?.routeOps ?? applyMeta?.routeOps)?.length),
-                      }) : undefined,
                         editIntent: applyMeta?.prompt ? editIntentForRequest({
                           prompt: applyMeta.prompt,
                           activePagePath,
