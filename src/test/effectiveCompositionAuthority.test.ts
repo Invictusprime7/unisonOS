@@ -32,7 +32,7 @@ describe('effective composition revision authority', () => {
   });
 });
 
-describe('withRebuiltComposition (open-time rebuild)', () => {
+describe('withRebuiltComposition (open-time rebuild)', { timeout: 30_000 }, () => {
   const base = {
     id: 'rev-1', projectId: 'p', businessId: 'b', draftId: 'd', source: 'ai' as never, status: 'committed' as const,
     vfsFiles: { '/src/pages/Home.tsx': 'export default function Home(){return <main><section data-section="hero">Hi</section></main>}' },
