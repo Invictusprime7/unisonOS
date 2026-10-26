@@ -8155,6 +8155,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               snapshot={effectiveRouteState?.siteBundleSnapshot ?? null}
               systemId={activeSystemType}
               projectId={projectId ?? null}
+              expectedRevisionId={currentRevisionId || null}
               variant="ghost"
               size="icon"
               onDeployComplete={(url) => {
@@ -9547,6 +9548,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               snapshot={effectiveRouteState?.siteBundleSnapshot ?? null}
               systemId={activeSystemType}
               projectId={projectId ?? null}
+              expectedRevisionId={currentRevisionId || null}
               variant="outline"
               onDeployComplete={(url) => {
                 setMobileActionsOpen(false);

@@ -37,6 +37,11 @@ export interface DeploymentRequest {
   customDomain?: string;
   files: Record<string, string>; // path -> content
   /**
+   * The saved version the user is publishing. When set, publish refuses if the
+   * newest publish-ready version differs, so an older version never ships silently.
+   */
+  expectedRevisionId?: string | null;
+  /**
    * Optional compiled contract. When supplied, the publish gate runs before
    * any network call — preventing a half-wired site from going live.
    */
@@ -242,6 +247,15 @@ export async function deployToProvider(
           message: 'Publish blocked — no publish-ready revision in the ledger.',
           result: errorResponse,
         });
+        return errorResponse;
+      }
+      if (request.expectedRevisionId && request.expectedRevisionId !== publishedRevision.id) {
+        const errorResponse: DeploymentResponse = {
+          status: 'error',
+          provider: request.provider,
+          error: 'Publish blocked: your latest saved version is not ready to publish yet, so an older version would go live. Fix the readiness blockers and try again.',
+        };
+        onProgress?.({ isDeploying: false, progress: 0, message: 'Publish blocked — latest saved version is not publish-ready.', result: errorResponse });
         return errorResponse;
       }
       // Use the durable ledger payload, not whatever the caller passed in.
@@ -498,6 +512,8 @@ export interface ProviderDeployOptions {
   rowCounts?: Record<string, number>;
   /** Move D — enables ledger-backed publish enforcement. */
   projectId?: string | null;
+  /** Saved version being published; blocks if an older version would ship. */
+  expectedRevisionId?: string | null;
 }
 
 /**
@@ -519,6 +535,7 @@ export async function deployToVercel(
       systemId: options?.systemId ?? null,
       rowCounts: options?.rowCounts,
       projectId: options?.projectId ?? null,
+      expectedRevisionId: options?.expectedRevisionId ?? null,
     },
     onProgress
   );
@@ -543,6 +560,7 @@ export async function deployToNetlify(
       systemId: options?.systemId ?? null,
       rowCounts: options?.rowCounts,
       projectId: options?.projectId ?? null,
+      expectedRevisionId: options?.expectedRevisionId ?? null,
     },
     onProgress
   );

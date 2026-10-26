@@ -37,6 +37,8 @@ import { isPublishReady } from '@/platform/core';
 import type { BusinessSystemType } from '@/data/templates/types';
 
 interface DeployButtonProps {
+  /** Saved version the user is publishing. */
+  expectedRevisionId?: string | null;
   /** File map to deploy (path -> content) */
   files?: Record<string, string>;
   /** Lazily resolves deploy files so expensive bundle/export work never runs during shell render. */
@@ -95,6 +97,7 @@ export function DeployButton({
   systemId = null,
   rowCounts,
   projectId = null,
+  expectedRevisionId = null,
 }: DeployButtonProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [siteName, setSiteName] = useState(defaultSiteName || '');
@@ -175,6 +178,7 @@ export function DeployButton({
       systemId: effectiveSystemId,
       rowCounts,
       projectId,
+      expectedRevisionId,
     });
   };
 

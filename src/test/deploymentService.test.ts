@@ -132,4 +132,16 @@ describe('deployToProvider publication projection', () => {
     expect(result.synchronizationWarning).toBe('project update blocked');
     expect(result.note).toContain('Site deployed, but project synchronization requires attention.');
   });
+  it('refuses to publish an older version than the one the user saved', async () => {
+    const result = await deployToProvider({ provider: 'vercel', projectId: 'project-1', expectedRevisionId: 'revision-2', files: {} });
+    expect(result.status).toBe('error');
+    expect(result.error).toMatch(/older version/);
+    expect(mocks.invoke).not.toHaveBeenCalledWith('publish-site', expect.anything());
+  });
+
+  it('publishes when the saved version is the publish-ready one', async () => {
+    mocks.loadLatestPublishReadyRevisionForProject.mockResolvedValue({ ...publishedRevision, runtimeManifest: { backendRequired: false } });
+    const result = await deployToProvider({ provider: 'vercel', projectId: 'project-1', expectedRevisionId: 'revision-1', files: {} });
+    expect(result.status).toBe('success');
+  });
 });
