@@ -1956,3 +1956,51 @@ describe('Move D — publish-ready ledger', () => {
     expect(revisionStore.filter((r) => r.status === 'committed')).toHaveLength(0);
   });
 });
+
+describe('P0 rejection fixtures', () => {
+  const app = 'export default function App(){return null}';
+  const run = (before: Record<string, string>, after: Record<string, string>, previewBlocked = 0, requireReadinessPass = false) => {
+    const next = { ...before, ...after };
+    mockPipeline(next); mockPreflight(next); mockIntents(previewBlocked);
+    return commitMutation({
+      source: 'ai-builder', identity: IDENTITY,
+      current: { vfsFiles: before },
+      patch: legacyFilesToPatchPlan(after),
+      options: { dryRun: true, requirePreviewPass: true, requireReadinessPass },
+    });
+  };
+  const codes = (err: unknown) => ((err as { result?: CommitMutationResult }).result?.diagnostics ?? []).map(d => d.code).filter(Boolean);
+
+  it('accepts a free-form AI hero that is not in the seed', async () => {
+    const page = '/src/pages/Home.tsx';
+    const hero = 'export default function Home(){return <main><section data-ut-section="hero-custom"><h1>Tide</h1></section></main>}';
+    const result = await run({ '/src/App.tsx': app, [page]: 'export default function Home(){return <main/>}' }, { [page]: hero });
+    expect(result.status).toBe('committed');
+    expect(result.vfsFiles[page]).toBe(hero);
+  });
+
+  it('accepts a new multi-file component with its importing page', async () => {
+    const result = await run({ '/src/App.tsx': app, '/src/pages/Home.tsx': 'export default function Home(){return <main/>}' }, {
+      '/src/components/TideCard.tsx': 'export default function TideCard(){return <article>Card</article>}',
+      '/src/pages/Home.tsx': "import TideCard from '../components/TideCard';\nexport default function Home(){return <main><TideCard/></main>}",
+    });
+    expect(result.status).toBe('committed');
+    expect(Object.keys(result.vfsFiles)).toContain('/src/components/TideCard.tsx');
+  });
+
+  it('rejects a broken local import as INVALID_JSX_OR_IMPORT', async () => {
+    const err = await run({ '/src/App.tsx': app, '/src/pages/Home.tsx': 'export default function Home(){return <main/>}' }, {
+      '/src/pages/Home.tsx': "import Missing from '../components/Missing';\nexport default function Home(){return <Missing/>}",
+    }).catch(e => e);
+    expect(codes(err)).toContain('INVALID_JSX_OR_IMPORT');
+    expect(revisionStore).toHaveLength(0);
+  });
+
+  it('rejects a broken required business binding as LOCKED_INTENT_OR_DATA_FIELD', async () => {
+    const err = await run({ '/src/App.tsx': app, '/src/pages/Home.tsx': 'export default function Home(){return <main/>}' }, {
+      '/src/pages/Home.tsx': 'export default function Home(){return <main><button data-ut-intent="booking.create">Book</button></main>}',
+    }, 1, true).catch(e => e);
+    expect(codes(err)).toContain('LOCKED_INTENT_OR_DATA_FIELD');
+    expect(revisionStore).toHaveLength(0);
+  });
+});
