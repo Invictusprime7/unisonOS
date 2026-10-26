@@ -2,6 +2,7 @@ import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import { CAPABILITY_REGISTRY } from '@/platform/core/capabilityRegistry';
 import type { RuntimeManifest } from '@/types/runtimeManifest';
 import { computeSiteBundleSnapshotSha256 } from '@/marketplace/snapshotFingerprint';
+import { readSealedArtDirection } from '@/sections/variants/resolvedArtDirection';
 
 function sha256Hex(value: string): Promise<string> {
   return globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)).then((digest) =>
@@ -76,13 +77,14 @@ export async function buildProjectExportMetadata(input: {
   const { projectName, entryPoint, files, snapshot, runtimeManifest } = input;
   const filePaths = Object.keys(files).map((path) => path.replace(/^\//, '')).sort();
   const snapshotSha256 = snapshot ? await computeSiteBundleSnapshotSha256(snapshot) : null;
+  const resolvedArtDirection = snapshot ? readSealedArtDirection(snapshot.meta) : null;
   const design = snapshot ? {
     snapshotId: snapshot.snapshotId,
     industry: snapshot.industry,
     systemId: snapshot.meta.systemId,
     templateId: snapshot.meta.templateId ?? null,
     themePresetId: snapshot.meta.themePresetId ?? null,
-    artDirectionPackId: snapshot.meta.artDirectionPackId ?? null,
+    artDirectionPackId: resolvedArtDirection?.storagePackId ?? null,
     generationSeed: snapshot.meta.generationSeed ?? null,
     designPlanSignature: snapshot.meta.designPlanSignature ?? null,
     renderHash: snapshot.meta.renderHash ?? null,

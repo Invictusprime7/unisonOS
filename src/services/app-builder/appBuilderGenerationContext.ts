@@ -160,7 +160,13 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     `Logo cloud is separate social proof: use ${business.branding.logoCloud.artifactId} only with owner-authored entries, at least ${business.branding.logoCloud.minimumItems}; generated entries are forbidden and the empty behavior is ${business.branding.logoCloud.emptyBehavior}.`,
   ].join('\n');
   const registeredComponentContext = `REGISTERED COMPONENT CONTRACT: ${business.registeredComponents.length ? business.registeredComponents.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; pages ${component.runtime.usedOnPages.join(', ') || 'not page-bound'}; target ${component.targetType}; status ${component.runtime.status}; write intent ${component.runtime.writeIntent ?? 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required native form fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this launch.'}`;
-  const registeredComponentBlueprints = 'REGISTERED COMPONENT PRESENTATION: the component contracts above define functional identity, intent, required fields, and bindings; they are not visual templates. Use the page-eligible certified design-source implementation for presentation when one is available, and use Unison form controls and semantic theme tokens. Preserve the registered component host, exact data-intent-form, required field names, and intent trigger; never copy a generic HTML layout in place of an eligible design source.';
+  const registeredComponentBlueprints = [
+    'REGISTERED COMPONENT BLUEPRINTS: preserve these canonical native hosts, field names, and intent markers exactly; they define behavior, while certified design-source modules define presentation.',
+    ...business.registeredComponents
+      .filter((component) => component.nativeComponentTemplate)
+      .map((component) => `${component.runtime.componentSlug}:\n${component.nativeComponentTemplate}`),
+    'Use Unison form controls and semantic theme tokens around registered hosts. Never replace canonical native markup with a generic form or alter its intent trigger.',
+  ].join('\n');
   const businessParameterContext = [
     `PUBLIC BUSINESS FACTS: use only these public contact and brand values ${JSON.stringify(business.parameters)} and public profile projection ${JSON.stringify(business.businessProfile)}. Private notification recipients, payment routing, and CRM destinations are intentionally excluded and are resolved by the tenant-scoped runtime.`,
     `CONFIGURATION READINESS: these business fields are configured: ${business.configuredBusinessFields.join(', ') || 'none'}. The field names are readiness metadata only; do not infer or emit their values.`,
@@ -187,7 +193,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     `Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.`,
     interactiveSurfaceContract,
     `Protected paths: ${runtime.protectedPaths.join(', ')}.`,
-    `Approved dependencies: ${runtime.approvedDependencies.join(', ')}.`,
+    `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.`,
     modules,
     'Portable recipe identity: pass stable sectionId from the page composition and componentInstanceId only from an existing canonical functional instance; never invent cmp_ IDs or substitute an implementation ID for an instance ID. Local toggles are component state, not data-ut-intent. Auth submit forms use data-intent-form="auth.login"/"auth.register"; auth.login/auth.register click bindings only open/focus auth.',
     `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.`,

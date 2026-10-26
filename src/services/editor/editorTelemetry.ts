@@ -4,7 +4,7 @@
  * it saved, and whether it succeeded. This is observability only — it holds
  * no editing state and never influences routing.
  */
-import type { EditorCommandResult, EditorCommandSource, EditorCommandType, EditorOwnerLane } from './editorCommandTypes';
+import type { EditorCommandRejectionCode, EditorCommandResult, EditorCommandSource, EditorCommandType, EditorOwnerLane } from './editorCommandTypes';
 
 export interface EditorCommandEvent {
   correlationId: string;
@@ -23,6 +23,7 @@ export interface EditorCommandEvent {
   savedTo: string | null;
   changedFields: string[];
   error?: string;
+  rejectionCode?: EditorCommandRejectionCode;
   durationMs: number;
 }
 
@@ -76,6 +77,17 @@ export interface MutationEvent {
   recordId?: string | null;
   ok: boolean;
   error?: string;
+  rejection?: {
+    code: string;
+    stage: string;
+    candidateId: string | null;
+    operationIds: string[];
+    pageIds: string[];
+    targetIds: string[];
+    expectedVfsHash: string | null;
+    affectedPaths: string[];
+    detail?: unknown;
+  };
   durationMs: number;
 }
 
@@ -123,6 +135,7 @@ export function toEditorCommandEvent(
     savedTo: result.savedTo,
     changedFields: result.changedFields,
     error: result.error,
+    rejectionCode: result.rejectionCode,
     durationMs,
   };
 }

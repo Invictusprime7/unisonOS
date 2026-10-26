@@ -17,6 +17,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getMutationEvents, resetMutationEvents } from '@/services/editor/editorTelemetry';
 
 const { runtimeReconcileInvoke } = vi.hoisted(() => ({
   runtimeReconcileInvoke: vi.fn(async () => ({ data: { success: true }, error: null })),
@@ -275,7 +276,14 @@ function mockPipeline(files: Record<string, string>) {
 function mockPreflight(files: Record<string, string>) {
   (runFullPreflight as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
     files,
-    stages: { earlyRepair: 'ok', finalRepair: 'ok' },
+    stages: {
+      earlyRepair: 'ok', finalRepair: 'ok',
+      runtimeCompatibility: {
+        runtimeProfile: 'test-runtime', dependencyGraphFingerprint: 'site-deps-v1-test',
+        dependenciesResolvable: true, importsApproved: true, reactRuntimeCompatible: true,
+        fallbackPresent: true, budgetValid: true, capabilitiesUsed: [], warnings: [], blockers: [], ok: true,
+      },
+    },
   });
 }
 
@@ -288,6 +296,7 @@ function mockIntents(previewBlocked = 0, publishBlocked = 0) {
 }
 
 beforeEach(() => {
+  resetMutationEvents();
   revisionStore.length = 0;
   draftProjectionUpdates.length = 0;
   canonicalCommitRpcError = null;
@@ -312,6 +321,48 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
       patch: legacyFilesToPatchPlan({ [path]: '{"activation":"changed"}' }),
     })).rejects.toThrow('compiler-owned');
     expect(revisionStore).toHaveLength(0);
+    expect(getMutationEvents().at(-1)?.rejection).toMatchObject({
+      code: 'PROTECTED_INFRASTRUCTURE',
+      stage: 'file-protection',
+      affectedPaths: [path],
+      expectedVfsHash: expect.any(String),
+    });
+  });
+  it('records stale overlapping queued edits with their conflicting path', async () => {
+    const files = {
+      '/src/App.tsx': 'x',
+      '/src/pages/Home.tsx': '<Home />',
+    };
+    const firstEditFiles = { ...files, '/src/pages/Home.tsx': '<Home title="first" />' };
+    const identity = {
+      ...IDENTITY,
+      projectId: '73333333-3333-4333-8333-333333333333',
+      draftId: '74444444-4444-4444-8444-444444444444',
+    };
+    mockPipeline(firstEditFiles);
+    mockPreflight(firstEditFiles);
+    mockIntents();
+
+    await commitMutation({
+      source: 'ai-builder',
+      identity,
+      current: { vfsFiles: files },
+      patch: legacyFilesToPatchPlan({ '/src/pages/Home.tsx': '<Home title="first" />' }, 'first home edit'),
+    });
+
+    await expect(commitMutation({
+      source: 'ai-builder',
+      identity,
+      current: { vfsFiles: files },
+      patch: legacyFilesToPatchPlan({ '/src/pages/Home.tsx': '<Home title="second" />' }, 'stale home edit'),
+    })).rejects.toThrow(/overlaps a newer saved revision/);
+
+    expect(getMutationEvents().at(-1)?.rejection).toMatchObject({
+      code: 'STALE_REVISION',
+      stage: 'queue-rebase',
+      affectedPaths: ['/src/pages/Home.tsx'],
+      expectedVfsHash: expect.any(String),
+    });
   });
   it('allows Builder-authored replacement of generated presentation recipes after handoff', async () => {
     const path = '/src/components/recipes/Features.ts';
@@ -357,6 +408,84 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     });
 
     expect(result.vfsFiles[path]).toContain('Authored');
+  });
+  it('keeps launch composition provenance while returning a revision-bound authored projection', async () => {
+    const baseRevisionId = '55555555-5555-4555-8555-555555555555';
+    const pagePath = '/src/pages/Home.tsx';
+    const descriptorPath = resolvedCompositionPathFor(pagePath);
+    const originalPage = 'export default function Home(){return <main>Launch</main>}';
+    const authoredPage = 'export default function Home(){return <main><section data-ut-section-id="authored-hero" data-ut-section-type="hero" data-ut-variant="hero:invented-editorial"><img src="/hero.jpg" alt="Hero" /></section></main>}';
+    const descriptor = JSON.stringify({
+      version: '1.0',
+      compiledBy: 'stage-4b',
+      pageFilePath: pagePath,
+      sections: [{ sectionId: 'launch-hero', semanticType: 'hero', primitiveId: 'Hero', variantId: 'hero:split' }],
+      compilerOwnership: { [pagePath]: compilerOwnershipHash(originalPage) },
+    });
+    const before = {
+      '/src/App.tsx': 'export default function App(){return null}',
+      [pagePath]: originalPage,
+      [descriptorPath]: descriptor,
+    };
+    const candidateFiles = { ...before, [pagePath]: authoredPage };
+    const snapshot = {
+      snapshotId: 'snapshot-home',
+      vfsFiles: before,
+      routerFile: { path: '/src/App.tsx', content: before['/src/App.tsx'] },
+      pageRegistry: { pages: { home: { pageId: 'home', path: '/', filePath: pagePath, title: 'Home' } } },
+      meta: { source: 'manual', systemId: null, industry: 'salon', verticalContractId: null },
+    } as never;
+    vi.mocked(commitToPipeline).mockReturnValue({
+      source: 'playground-edit',
+      committedAt: new Date().toISOString(),
+      siteBundleSnapshot: { ...snapshot, vfsFiles: candidateFiles },
+      runtimeManifest: { version: 1 },
+      playground: { pages: [], theme: {} } as never,
+      capabilities: [],
+      gate: { previewReady: true, publishReady: true, preview: { ok: true, reasons: [] }, publish: { ok: true, reasons: [] } },
+    } as never);
+    mockPreflight(candidateFiles);
+    mockIntents();
+
+    const result = await commitMutation({
+      source: 'ai-builder',
+      identity: { ...IDENTITY, revisionId: baseRevisionId },
+      current: { vfsFiles: before, siteBundleSnapshot: snapshot },
+      patch: legacyFilesToPatchPlan({ [pagePath]: authoredPage }, 'authored home redesign'),
+    });
+
+    expect(result.status).toBe('committed');
+    expect(result.publishBlockers).toEqual([]);
+    expect(result.readinessReport.runtimeCompatibility).toMatchObject({
+      dependencyGraphFingerprint: 'site-deps-v1-test',
+    });
+    expect(result.vfsFiles[descriptorPath]).toBe(descriptor);
+    expect(result.fileProvenance[pagePath]).toMatchObject({
+      lastEditorOrigin: 'ai-builder',
+      currentHash: expect.any(String),
+    });
+    expect(result.siteBundleSnapshot?.meta.effectiveComposition).toMatchObject({
+      revisionId: result.persistedRevisionId,
+      baseRevisionId,
+      vfsHash: result.vfsHash,
+      pages: {
+        home: {
+          pageId: 'home',
+          sourcePath: pagePath,
+          sections: [{ sectionId: 'authored-hero', semanticType: 'hero', variantId: 'hero:invented-editorial' }],
+          mediaUses: [{ src: '/hero.jpg', alt: 'Hero', sectionId: 'authored-hero' }],
+        },
+      },
+    });
+    expect(result.siteBundleSnapshot?.meta.effectiveComposition?.pages.home.registryEvidence)
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          registry: 'section-type', id: 'hero', status: 'registered', sourcePath: pagePath,
+        }),
+        expect.objectContaining({
+          registry: 'design-implementation', id: 'hero:invented-editorial', status: 'unregistered', sourcePath: pagePath,
+        }),
+      ]));
   });
   it('allows post-launch Builder authorship of presentation CSS sealed by the Wizard', async () => {
     const path = '/src/index.css';
@@ -598,16 +727,16 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     const pipelineCalls = vi.mocked(commitToPipeline).mock.calls.length;
     await expect(commitMutation({ source: 'playground-edit', identity: IDENTITY,
       current: { vfsFiles: after }, patch: emptyPatchPlan(), options: { reviewedComposition },
-    })).rejects.toThrow('stale');
+    })).rejects.toMatchObject({ code: 'COMPOSITION_PROVENANCE_MISMATCH' });
     await expect(commitMutation({ source: 'playground-edit', identity: { ...IDENTITY, projectId: 'another-project' },
       current: { vfsFiles: before }, patch: emptyPatchPlan(), options: { reviewedComposition },
-    })).rejects.toThrow();
+    })).rejects.toMatchObject({ code: 'IDENTITY_MISMATCH' });
     await expect(commitMutation({ source: 'playground-edit', identity: { ...IDENTITY, revisionId: '66666666-6666-4666-8666-666666666666' },
       current: { vfsFiles: before }, patch: emptyPatchPlan(), options: { reviewedComposition },
-    })).rejects.toThrow('stale');
+    })).rejects.toMatchObject({ code: 'COMPOSITION_PROVENANCE_MISMATCH' });
     await expect(commitMutation({ source: 'playground-edit', identity: IDENTITY,
       current: { vfsFiles: before }, patch: legacyFilesToPatchPlan(after), options: { reviewedComposition },
-    })).rejects.toThrow('stale');
+    })).rejects.toMatchObject({ code: 'SCOPE_ESCAPE' });
     const result = await commitMutation({ source: 'playground-edit', identity: IDENTITY,
       current: { vfsFiles: before }, patch: emptyPatchPlan(), options: { reviewedComposition },
     });
@@ -1281,7 +1410,14 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     it('rejects queue reuse across projects even for an identical no-op', () => {
       const { input, latest } = fixture({});
       latest.identity = { ...latest.identity, projectId: 'another-project' };
-      expect(() => rebaseQueuedCommit(input, latest)).toThrow('different project or account');
+      let rejection: unknown;
+      try {
+        rebaseQueuedCommit(input, latest);
+      } catch (error) {
+        rejection = error;
+      }
+      expect(rejection).toMatchObject({ code: 'IDENTITY_MISMATCH', stage: 'queue-rebase' });
+      expect(String(rejection)).toContain('different project or account');
     });
 
     it('keeps reviewed restores tied to their reviewed revision', () => {
@@ -1400,6 +1536,58 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     ).rejects.toThrow(/rejected/i);
 
     // Rejected revisions are still persisted for forensics.
+    expect(revisionStore[revisionStore.length - 1]?.status).toBe('rejected');
+    expect(revisionStore[revisionStore.length - 1]?.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'LOCKED_INTENT_OR_DATA_FIELD' }),
+    ]));
+  });
+
+  it('records an actionable rejection code and unresolved module for import failures', async () => {
+    const files = {
+      '/src/App.tsx': 'x',
+      '/src/pages/Home.tsx': "import Missing from './Missing';\nexport default function Home(){ return <Missing/>; }",
+    };
+    mockPipeline(files);
+    mockPreflight(files);
+    mockIntents();
+    const patch = legacyFilesToPatchPlan({ '/src/pages/Home.tsx': files['/src/pages/Home.tsx'] }, 'custom home layout');
+    patch.operationIds = ['op-home-import'];
+    patch.candidate = {
+      id: 'candidate-import',
+      origin: 'builder',
+      knowledgeVersion: 'golden-test',
+      targetPages: ['home'],
+      attempt: 1,
+    };
+
+    let rejection: CommitRejectedError | undefined;
+    try {
+      await commitMutation({
+        source: 'ai-builder',
+        identity: IDENTITY,
+        current: { vfsFiles: files, playground: { pages: [] } as never },
+        patch,
+      });
+    } catch (error) {
+      if (error instanceof CommitRejectedError) rejection = error;
+      else throw error;
+    }
+
+    expect(rejection).toBeDefined();
+    expect(rejection?.result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'gate', level: 'error', code: 'INVALID_JSX_OR_IMPORT' }),
+    ]));
+    expect(JSON.stringify(rejection?.result.diagnostics)).toContain('./Missing');
+    expect(rejection?.result.diagnostics.find((diagnostic) => diagnostic.code === 'INVALID_JSX_OR_IMPORT')?.correlation)
+      .toMatchObject({
+        mutationId: expect.any(String),
+        candidateId: 'candidate-import',
+        operationIds: ['op-home-import'],
+        pageIds: ['home'],
+        baseRevisionId: null,
+        expectedVfsHash: expect.any(String),
+        affectedPaths: ['/src/pages/Home.tsx'],
+      });
     expect(revisionStore[revisionStore.length - 1]?.status).toBe('rejected');
   });
 

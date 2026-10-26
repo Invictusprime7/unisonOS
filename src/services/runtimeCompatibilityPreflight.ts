@@ -5,7 +5,9 @@
  * runtime", and deliberately stays OUT of PreviewGate/PublishGate business
  * readiness: a visitor's device lacking WebGL is a degradation, never a
  * publish blocker, while an unknown package or a React/R3F renderer mismatch
- * is a hard technical blocker.
+ * is a hard technical blocker. Any npm package may be used when it is present
+ * in the resolved per-site dependency graph; package allowlist novelty alone
+ * is not a blocker.
  */
 import {
   EXPERIENCE_CAPABILITY_ID,
@@ -17,12 +19,12 @@ import {
   EXPERIENCE_IMPORT_ROOT,
   EXPERIENCE_RUNTIME_PACKAGES,
 } from '@/platform/core/experiencePrimitives';
-import { isSandpackAllowedImport } from '@/utils/sandpackDependencies';
 import { runExperiencePreflight } from '@/services/experiencePreflightGate';
 import { collectReachableFiles, runtimeEntryPoints } from '@/utils/dependencyExtractor';
 
 export interface RuntimeCompatibilityReport {
   runtimeProfile: string;
+  dependencyGraphFingerprint?: string;
   dependenciesResolvable: boolean;
   importsApproved: boolean;
   reactRuntimeCompatible: boolean;
@@ -48,10 +50,22 @@ function majorOf(range: string | undefined): number | null {
   return match ? Number(match[1]) : null;
 }
 
+function packageRoot(specifier: string): string | null {
+  if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('@/') || specifier.startsWith('~/')) {
+    return null;
+  }
+  if (specifier.startsWith('@')) return specifier.split('/').slice(0, 2).join('/');
+  return specifier.split('/')[0] || null;
+}
+
 export interface RuntimeCompatibilityInput {
   files: Record<string, string>;
+  /** Entry points used to resolve the installed dependency graph. */
+  entryPoints?: readonly string[];
   /** Dependencies the preview will actually install. */
   dependencies: Record<string, string>;
+  /** Deterministic identity of the resolved site import/dependency graph. */
+  dependencyGraphFingerprint?: string;
   /** Capability ids the launch envelope approved. */
   approvedCapabilities?: readonly string[];
 }
@@ -72,7 +86,7 @@ export function runRuntimeCompatibilityPreflight(
 
   const localModules = new Set(Object.keys(files).map((path) => (path.startsWith('/') ? path : `/${path}`)));
 
-  const roots = runtimeEntryPoints(files);
+  const roots = input.entryPoints?.length ? [...input.entryPoints] : runtimeEntryPoints(files);
   const reachable = roots.length ? collectReachableFiles(files, roots) : files;
   for (const [path, source] of Object.entries(reachable)) {
     if (typeof source !== 'string' || !/\.(tsx|jsx|ts|js)$/i.test(path)) continue;
@@ -122,9 +136,17 @@ export function runRuntimeCompatibilityPreflight(
       }
       if (specifier.startsWith('@/')) continue;
 
-      if (!isSandpackAllowedImport(specifier)) {
+      if (/^(?:node:|[A-Za-z][\w+.-]*:)/.test(specifier)) {
         importsApproved = false;
-        blockers.push(`${path} imports unknown package "${specifier}"; the preview runtime cannot install it.`);
+        blockers.push(`${path} imports non-package module "${specifier}"; browser previews require npm dependencies or VFS modules.`);
+        continue;
+      }
+
+      const root = packageRoot(specifier);
+      if (!root || !dependencies[root]?.trim()) {
+        importsApproved = false;
+        dependenciesResolvable = false;
+        blockers.push(`${path} imports package "${specifier}", but "${root ?? specifier}" is absent from the resolved site dependency graph.`);
       }
     }
   }
@@ -180,6 +202,7 @@ export function runRuntimeCompatibilityPreflight(
   const uniqueBlockers = [...new Set(blockers)];
   return {
     runtimeProfile: GENERATED_RUNTIME_PROFILE.id,
+    dependencyGraphFingerprint: input.dependencyGraphFingerprint,
     dependenciesResolvable,
     importsApproved,
     reactRuntimeCompatible,

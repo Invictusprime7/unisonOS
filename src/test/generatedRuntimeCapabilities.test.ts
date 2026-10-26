@@ -180,12 +180,13 @@ describe('runtime compatibility preflight', () => {
     expect(report.ok).toBe(true);
   });
 
-  it('blocks an unknown package import', () => {
+  it('accepts an unknown package after it is added to the resolved site dependency graph', () => {
     const files = buildFiles("import x from 'totally-unknown-pkg';\nexport default function Home() { return null; }");
     const { dependencies } = getDependenciesForSandpack(files, SANDPACK_DEPENDENCIES);
     const report = runRuntimeCompatibilityPreflight({ files, dependencies });
-    expect(report.importsApproved).toBe(false);
-    expect(report.ok).toBe(false);
+    expect(dependencies['totally-unknown-pkg']).toBe('latest');
+    expect(report.importsApproved).toBe(true);
+    expect(report.ok).toBe(true);
   });
 
   it.each([{ approved: [] }, { approved: ['commerce.catalog'] }])('reports no experience capability for an ordinary DOM page with approvals $approved', ({ approved }) => {

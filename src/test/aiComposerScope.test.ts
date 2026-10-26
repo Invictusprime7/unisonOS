@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { composerScopeViolations } from '@/contracts/aiComposerContract';
+import {
+  aiComposerRequestSchema,
+  aiComposerResponseSchema,
+  composerProposalViolations,
+  composerScopeViolations,
+} from '@/contracts/aiComposerContract';
 import { stampAuthoredPage } from '@/services/launch/siteAuthoringOrchestrator';
 
 describe('AI Composer canonical compatibility scope', () => {
@@ -40,6 +45,35 @@ describe('AI Composer canonical compatibility scope', () => {
       { type: 'replace', path: '/src/main.tsx' },
       { type: 'replace', path: '/.unison/runtime-manifest.json' },
     ]).join()).toMatch(/canonical runtime file/);
+  });
+  it('allows explicitly requested npm packages without a second approval list', () => {
+    const req = aiComposerRequestSchema.parse({
+      task: 'builder_source_edit',
+      page: { role: 'home', title: 'Home', route: '/', filePath: page },
+      brief: 'Add a chart',
+      instruction: 'Add a chart to the home page',
+      files: { [page]: 'export default function Home(){return <main/>}' },
+      sourceTargets: [page],
+      routes: [],
+      approvedDependencies: ['new-chart-package'],
+    });
+    const response = aiComposerResponseSchema.parse({
+      summary: 'Add chart',
+      fileOps: [{
+        type: 'replace',
+        path: page,
+        content: "import { Chart } from 'new-chart-package'; export default function Home(){return <Chart/>}",
+      }],
+      requestedDependencies: ['new-chart-package'],
+    });
+
+    expect('approvedDependencies' in req).toBe(false);
+    expect(composerProposalViolations(req, response)).toEqual([]);
+    expect(aiComposerResponseSchema.parse({
+      summary: 'Several dependencies',
+      fileOps: [{ type: 'replace', path: page, content: 'export default function Home(){return <main/>}' }],
+      requestedDependencies: Array.from({ length: 12 }, (_, index) => `package-${index}`),
+    }).requestedDependencies).toHaveLength(12);
   });
   it('stamps an idempotent provenance header', () => {
     const once = stampAuthoredPage({ [page]: 'export default 1;\n' }, { filePath: page, role: 'home' }, 'abc');

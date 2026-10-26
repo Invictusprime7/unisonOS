@@ -242,5 +242,19 @@ describe('M0 ownership fixture matrix', () => {
     );
     expect(result.ok).toBe(false);
     expect(result.error).toContain('another site');
+    expect(result.rejectionCode).toBe('ASSET_IDENTITY_INVALID');
+    expect(getEditorCommandEvents().at(-1)?.rejectionCode).toBe('ASSET_IDENTITY_INVALID');
+
+    const ownerlessAsset = await executeEditorCommand(
+      {
+        type: 'replace-asset',
+        target: { resourceMark: mark('products', 'p1', 'image') },
+        url: 'https://cdn.example.com/x.png',
+        assetRef: { ...assetRef('p1'), projectId: null },
+      },
+      ctx,
+    );
+    expect(ownerlessAsset.ok).toBe(false);
+    expect(ownerlessAsset.rejectionCode).toBe('ASSET_IDENTITY_INVALID');
   });
 });

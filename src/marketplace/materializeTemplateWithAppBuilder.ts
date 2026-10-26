@@ -14,6 +14,7 @@ import { materializePreviewImages } from './materializePreviewImages';
 import { getIntentDef } from '@/platform/core/intentSurfaceRegistry';
 import { buildWizardBindingGuide } from '@/services/wizardBindingBridge';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
+import { readSealedArtDirection } from '@/sections/variants/resolvedArtDirection';
 
 const PAGE_ROLES = new Set<string>(['home', 'about', 'services', 'contact', 'pricing', 'gallery', 'faq', 'booking', 'checkout', 'thank_you', 'blog', 'shop', 'immersive', 'custom']);
 function templatePageRole(role: string): PageRole {
@@ -76,7 +77,7 @@ export interface MaterializeOptions {
 /** Candidate-only bridge. The installer remains responsible for one durable acceptance. */
 export async function materializeTemplateWithAppBuilder(material: MarketplaceTemplateMaterial, ids: ConfirmedLaunchIds, options: MaterializeOptions = {}) {
   const snapshot = material.siteBundleSnapshot;
-  const packId = snapshot.meta.artDirectionPackId;
+  const packId = readSealedArtDirection(snapshot.meta)?.storagePackId;
   if (!snapshot.themeTokens || !packId) throw new Error('This template is missing its saved design contract.');
   const intents = [...new Set([...(material.templateIntents ?? []), ...Object.values(snapshot.bindings ?? {}).flatMap(binding => binding.coreIntent ? [binding.coreIntent] : [])])];
   const capabilities = [...new Set(intents.flatMap(intent => getIntentDef(intent)?.requiredCapabilities ?? []))];

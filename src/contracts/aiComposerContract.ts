@@ -87,10 +87,6 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
       }
     }
   }
-  const approvedDependencies = new Set(req.approvedDependencies ?? []);
-  for (const dependency of response.requestedDependencies ?? []) {
-    if (!approvedDependencies.has(dependency)) violations.push(`${dependency}: dependency is not approved for this request`);
-  }
   for (const op of response.fileOps) {
     if (op.type === 'delete' || !/\.[jt]sx?$/.test(op.path)) continue;
     let imports: Map<string, number>;
@@ -103,8 +99,8 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
     for (const [specifier, count] of imports) {
       if (count <= (prior.get(specifier) ?? 0)) continue;
       const root = importedPackageRoot(specifier);
-      if (root !== null && !approvedDependencies.has(root)) {
-        violations.push(`${op.path}: ${specifier}: imported dependency is not approved for this request`);
+      if (root === '<computed-module>' || specifier.startsWith('//') || /^[A-Za-z][\w+.-]*:/.test(specifier)) {
+        violations.push(`${op.path}: ${specifier}: computed or protocol imports are not approved because they cannot be resolved as site npm dependencies`);
       }
     }
   }
@@ -254,7 +250,7 @@ export const aiComposerResponseSchema = z.object({
   summary: z.string().max(2000),
   fileOps: z.array(aiComposerFileOpSchema).min(1).max(48),
   routeOps: z.array(aiComposerRouteOpSchema).max(12).optional(),
-  requestedDependencies: z.array(z.string().max(80)).max(8).optional(),
+  requestedDependencies: z.array(z.string().min(1).max(214)).max(300).optional(),
   componentDecisions: z.array(z.object({
     family: z.string().max(60).optional(),
     implementationId: z.string().max(120).optional(),
@@ -277,9 +273,9 @@ export const aiComposerRequestSchema = z.object({
   brief: z.string().max(12000),
   instruction: z.string().max(4000).optional(),
   files: z.record(z.string(), z.string().max(60000)),
+  availableRuntimeDependencies: z.array(z.string().min(1).max(214)).max(300).optional(),
   sourceTargets: z.array(pathSchema).min(1).max(80).optional(),
   approvedRouteOps: z.array(aiComposerRouteOpSchema).max(12).optional(),
-  approvedDependencies: z.array(z.string().min(1).max(120)).max(300).optional(),
   approvedIntents: z.array(z.string().min(1).max(80)).max(300).optional(),
   routes: z.array(z.object({ title: z.string().max(120), route: z.string().max(200) })).max(40),
   priorPages: z.array(z.object({ role: z.string().max(60), summary: z.string().max(2000) })).max(20).optional(),

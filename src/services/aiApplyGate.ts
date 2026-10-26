@@ -99,6 +99,7 @@ export function buildAiCandidatePatch(ctx: AiCommitContext): PatchPlan {
       evidence: candidate.provenance.evidence,
       targetPages: candidate.targetPages,
       requestedDependencies: candidate.requestedDependencies,
+      dependencyGraphFingerprint: candidate.dependencyGraphFingerprint,
       attempt: candidate.attempt,
     },
   };

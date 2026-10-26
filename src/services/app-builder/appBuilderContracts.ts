@@ -412,7 +412,7 @@ export interface AppBuildContract {
     language: 'typescript';
     styling: 'tailwind';
     protectedPaths: readonly string[];
-    approvedDependencies: readonly string[];
+    availableRuntimeDependencies: readonly string[];
     approvedExperienceCapabilities: readonly string[];
   };
 }
@@ -735,7 +735,7 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
       language: 'typescript',
       styling: 'tailwind',
       protectedPaths: [...new Set(input.protectedPaths)].sort(),
-      approvedDependencies: Object.keys(input.registryContext.runtimeDependencies ?? {}).sort(),
+      availableRuntimeDependencies: Object.keys(input.registryContext.runtimeDependencies ?? {}).sort(),
       approvedExperienceCapabilities: [
         ...(input.uiFoundation.approvedExperienceCapabilities ?? input.uiFoundation.experienceCapabilities),
       ].sort(),

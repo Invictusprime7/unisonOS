@@ -41,7 +41,7 @@ import {
 } from './visualQualityEvaluation';
 import { runFullPreflight } from './runFullPreflight';
 import { runRuntimeCompatibilityPreflight, type RuntimeCompatibilityReport } from './runtimeCompatibilityPreflight';
-import { getDependenciesForSandpack } from '@/utils/dependencyExtractor';
+import { resolveSiteDependencyRuntime } from '@/utils/dependencyExtractor';
 import { SANDPACK_PREVIEW_CORE_DEPENDENCIES } from '@/utils/sandpackDependencies';
 
 
@@ -1155,12 +1155,12 @@ function* buildCanonicalLaunchArtifactSteps(
     extraDependencies: runtimeManifest.dependencies,
     themePresetId: appContext.themePresetId || (input.aesthetic as string | undefined) || null,
   });
+  const dependencyRuntime = resolveSiteDependencyRuntime(viteReadyFiles, SANDPACK_PREVIEW_CORE_DEPENDENCIES);
   const finalRuntimeCompatibility = runRuntimeCompatibilityPreflight({
     files: viteReadyFiles,
-    dependencies: getDependenciesForSandpack(
-      viteReadyFiles,
-      SANDPACK_PREVIEW_CORE_DEPENDENCIES,
-    ).dependencies,
+    entryPoints: dependencyRuntime.entryPoints,
+    dependencies: dependencyRuntime.dependencies,
+    dependencyGraphFingerprint: dependencyRuntime.graphFingerprint,
     approvedCapabilities: approvedExperienceCapabilities,
   });
   if (!finalRuntimeCompatibility.ok) {

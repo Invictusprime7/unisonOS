@@ -55,6 +55,7 @@ export function toAssetRef(input: { url: string; alt?: string | null; assetId?: 
 
 /** An asset record may only be used on the site that owns it. */
 export function assetBelongsTo(ref: AssetRef, projectId: string | null | undefined): boolean {
+  if (ref.assetId && (!ref.projectId || !projectId)) return false;
   if (!ref.projectId || !projectId) return true;
   return ref.projectId === projectId;
 }

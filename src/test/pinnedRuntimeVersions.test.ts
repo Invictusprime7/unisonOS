@@ -9,6 +9,11 @@ import { emitCompositionEnhancements } from '@/sections/compositionEnhancements'
 import type { CompositionActivation } from '@/sections/compositionEnhancements';
 
 const EXPERIENCE_PINS = ['three', '@react-three/fiber', '@react-three/drei'] as const;
+const LOCKFILE_RESOLVED_RUNTIME_PINS = {
+  zustand: '5.0.16',
+  '@tanstack/react-table': '9.3.1',
+  'react-scroll': '1.9.3',
+} as const;
 
 describe('pinned runtime package versions', () => {
   it('pins the three.js experience capability against the React 19 profile', () => {
@@ -18,6 +23,12 @@ describe('pinned runtime package versions', () => {
       expect(pinned, pkg).not.toBe('latest');
     }
     expect(PINNED_RUNTIME_PACKAGE_VERSIONS['@react-three/fiber']).toMatch(/^\^?9\./);
+  });
+
+  it('pins additional runtime packages to exact resolved versions', () => {
+    for (const [pkg, version] of Object.entries(LOCKFILE_RESOLVED_RUNTIME_PINS)) {
+      expect(resolvePinnedRuntimeVersion(pkg), pkg).toBe(version);
+    }
   });
 
   it('extractDependencies heals a stale package.json that recorded latest', () => {

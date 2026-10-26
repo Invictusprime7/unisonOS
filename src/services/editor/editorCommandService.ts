@@ -10,7 +10,7 @@ import { resolvePropertyOwner } from './propertyOwnerResolver';
 import { executeResourceCommand } from './executors/resourceExecutor';
 import { assetBelongsTo, toAssetRef } from '@/services/assets/assetRef';
 import { newEditorCorrelationId, recordEditorCommandEvent, toEditorCommandEvent } from './editorTelemetry';
-import type { EditorCommand, EditorCommandResult, EditorCommandSource, EditorOwnerLane } from './editorCommandTypes';
+import type { EditorCommand, EditorCommandRejectionCode, EditorCommandResult, EditorCommandSource, EditorOwnerLane } from './editorCommandTypes';
 
 /** Host-supplied executor for lanes owned by page source / topology / bindings. */
 export type LaneExecutor = (command: EditorCommand) => Promise<EditorCommandResult>;
@@ -36,7 +36,9 @@ export async function executeEditorCommand(command: EditorCommand, ctx: EditorCo
     recordEditorCommandEvent(toEditorCommandEvent(correlationId, ctx.source, command.type, lane, target, result, Date.now() - startedAt));
     return result;
   };
-  const fail = (error: string): EditorCommandResult => finish({ ok: false, command: command.type, lane, savedTo: null, changedFields: [], error });
+  const fail = (error: string, rejectionCode?: EditorCommandRejectionCode): EditorCommandResult => finish({
+    ok: false, command: command.type, lane, savedTo: null, changedFields: [], error, rejectionCode,
+  });
   if (command.target.ownerKind === 'unbound' && !command.target.slotId) {
     return fail('This element has no stable source or resource identity and is read-only. Choose a binding before editing.');
   }
@@ -46,7 +48,9 @@ export async function executeEditorCommand(command: EditorCommand, ctx: EditorCo
     if (cmd.type === 'replace-asset') {
       // §18: every image swap is validated as an AssetRef owned by this site.
       const ref = toAssetRef({ url: cmd.url, alt: cmd.alt, projectId: cmd.assetRef?.projectId ?? null, assetId: cmd.assetRef?.assetId ?? null });
-      if (!assetBelongsTo(ref, ctx.resource.projectId)) return fail('That image belongs to another site.');
+      if (!assetBelongsTo(ref, ctx.resource.projectId)) {
+        return fail('That image belongs to another site or has no verified project owner.', 'ASSET_IDENTITY_INVALID');
+      }
       cmd = { ...cmd, url: ref.url, alt: ref.alt, assetRef: ref };
     }
     if (lane === 'resource') return finish(await executeResourceCommand(cmd, ctx.resource));

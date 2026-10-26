@@ -29,10 +29,16 @@ vi.mock('@/integrations/supabase/client', () => ({
         : payload.p_vfs_files as Record<string, string>;
       const runtimeFiles = Object.fromEntries(Object.entries(vfsFiles).filter(([path]) => !path.startsWith('/.unison/')));
       const snapshot = { ...(payload.p_site_bundle_snapshot as Record<string, unknown>), vfsFiles: runtimeFiles };
+      const revisionId = `00000000-0000-4000-8000-${String(revisions.length + 1).padStart(12, '0')}`;
+      const meta = snapshot.meta as Record<string, unknown> | undefined;
+      const effectiveComposition = meta?.effectiveComposition as Record<string, unknown> | undefined;
+      if (meta && effectiveComposition) {
+        snapshot.meta = { ...meta, effectiveComposition: { ...effectiveComposition, revisionId } };
+      }
       const row = Object.fromEntries(Object.entries(payload).map(([key, value]) => [key.replace(/^p_/, ''), value]));
       row.vfs_files = vfsFiles;
       row.site_bundle_snapshot = snapshot;
-      row.id = `00000000-0000-4000-8000-${String(revisions.length + 1).padStart(12, '0')}`;
+      row.id = revisionId;
       revisions.push(JSON.parse(JSON.stringify(row)));
       return { data: row.id, error: null };
     },

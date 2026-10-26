@@ -26,7 +26,7 @@ import {
   VISUAL_QUALITY_VERSION,
   type VisualQualityReport,
 } from './visualQualityEvaluation';
-import { getDependenciesForSandpack } from '@/utils/dependencyExtractor';
+import { resolveSiteDependencyRuntime } from '@/utils/dependencyExtractor';
 import { SANDPACK_PREVIEW_CORE_DEPENDENCIES } from '@/utils/sandpackDependencies';
 
 export interface RunFullPreflightOptions {
@@ -158,9 +158,12 @@ export function runFullPreflight(
   // technical gate only — it never mixes into business provisioning readiness.
   let runtimeCompatibility: RuntimeCompatibilityReport;
   try {
-    const { dependencies } = getDependenciesForSandpack(files, SANDPACK_PREVIEW_CORE_DEPENDENCIES);
+    const dependencyRuntime = resolveSiteDependencyRuntime(files, SANDPACK_PREVIEW_CORE_DEPENDENCIES);
     runtimeCompatibility = runRuntimeCompatibilityPreflight({
-      files, dependencies,
+      files,
+      entryPoints: dependencyRuntime.entryPoints,
+      dependencies: dependencyRuntime.dependencies,
+      dependencyGraphFingerprint: dependencyRuntime.graphFingerprint,
       approvedCapabilities: siteBundleSnapshot?.meta.uiFoundation?.approvedExperienceCapabilities,
     });
   } catch (e) {

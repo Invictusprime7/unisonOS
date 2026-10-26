@@ -104,8 +104,14 @@ describe('rich composition activation', () => {
     const activation = collectResolvedCompositions(files)[pagePath].activation!;
     expect(activation.canvasRoots).toBeLessThanOrEqual(2);
     expect(runExperiencePreflight(files).violations).toEqual([]);
-    const { dependencies } = getDependenciesForSandpack(files, {}, { entryPoints: [pagePath] });
-    const compatibility = runRuntimeCompatibilityPreflight({ files, dependencies, approvedCapabilities: [EXPERIENCE_CAPABILITY_ID] });
+    const { dependencies, graphFingerprint } = getDependenciesForSandpack(files, {}, { entryPoints: [pagePath] });
+    const compatibility = runRuntimeCompatibilityPreflight({
+      files,
+      entryPoints: [pagePath],
+      dependencies,
+      dependencyGraphFingerprint: graphFingerprint,
+      approvedCapabilities: [EXPERIENCE_CAPABILITY_ID],
+    });
     expect(compatibility.blockers).toEqual([]);
     const coverage = buildCompositionCoverage(files);
     expect(coverage.pages[0].browserVerification).toBe('not-run');

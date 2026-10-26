@@ -47,6 +47,24 @@ describe('AICandidateChangeSet', () => {
     expect(r.changeSet.fileOps).toHaveLength(0);
   });
 
+  it('adds newly imported npm packages to the site manifest and requested dependencies', () => {
+    const r = buildAICandidateChangeSet({
+      aiFiles: {
+        '/src/pages/Home.tsx': "import Chart from '@new-scope/chart/feature'; export default function Home(){return <Chart/>}",
+      },
+      baseFiles: {
+        ...base,
+        '/package.json': JSON.stringify({ dependencies: { react: '^18.3.1', 'react-dom': '^18.3.1' } }),
+      },
+    });
+    const packageJson = JSON.parse(r.candidateFiles['/package.json']);
+
+    expect(packageJson.dependencies['@new-scope/chart']).toBeTruthy();
+    expect(r.changeSet.requestedDependencies).toContain('@new-scope/chart');
+    expect(r.changeSet.dependencyGraphFingerprint).toMatch(/^site-deps-v1-/);
+    expect(r.changeSet.fileOps).toContainEqual(expect.objectContaining({ path: '/package.json', type: 'replace' }));
+  });
+
   it('includes typed route operations in candidate identity', () => {
     const common = {
       aiFiles: { '/src/pages/Pricing.tsx': 'export default function Pricing(){return <main>Pricing</main>}' },

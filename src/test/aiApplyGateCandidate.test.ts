@@ -47,6 +47,7 @@ describe('AI candidate commit protocol', () => {
     expect(patch.fileOps[0]).toMatchObject({ contents: expect.stringContaining('Repaired') });
     expect(patch.operationIds).toEqual([`ai-candidate:${prepared.build.changeSet.id}`]);
     expect(patch.candidate?.id).toBe(prepared.build.changeSet.id);
+    expect(patch.candidate?.dependencyGraphFingerprint).toBe(prepared.build.changeSet.dependencyGraphFingerprint);
     operations.backendOps[0].payload.mode = 'mutated';
     const candidateOp = prepared.build.changeSet.backendOps?.[0];
     const patchOp = patch.backendOps[0];

@@ -30,29 +30,26 @@ describe('Builder route and dependency request policy', () => {
   it('rejects duplicate route operations', () => {
     expect(composerProposalViolations({ ...req, approvedRouteOps: [route] }, { ...response, routeOps: [route, route] }).join()).toContain('duplicate route');
   });
-  it('rejects new dependency requests by default', () => {
-    expect(composerProposalViolations(req, { ...response, requestedDependencies: ['unknown-package'] }).join()).toContain('not approved');
+  it('does not require a separate approval for a requested browser package root', () => {
+    expect(composerProposalViolations(req, { ...response, requestedDependencies: ['unknown-package'] })).toEqual([]);
   });
-  it('accepts only the supplied accepted dependency inventory', () => {
-    expect(composerProposalViolations({ ...req, approvedDependencies: ['react'] }, { ...response, requestedDependencies: ['react'] })).toEqual([]);
-  });
-  it('assembles the canonical route handoff and compact accepted dependency inventory', async () => {
+  it('assembles the canonical route handoff and available dependency inventory', async () => {
     const assembled = await assembleCanonicalAuthoringRequest({
       task: req.task, page: req.page, brief: req.brief, knowledgeQuery: 'heading', routes: [],
       baseFiles: { ...req.files, '/package.json': JSON.stringify({ dependencies: { react: '^18', invalid: false }, devDependencies: { vitest: '^4' } }) },
       approvedRouteOps: [{ ...route, createdBy: 'ai' }],
     });
     expect(assembled.request.approvedRouteOps).toEqual([route]);
-    expect(assembled.request.approvedDependencies).toEqual(expect.arrayContaining(['react']));
-    expect(assembled.request.approvedDependencies).not.toContain('@babel/standalone');
+    expect(assembled.request.availableRuntimeDependencies).toContain('react');
+    expect(assembled.request).not.toHaveProperty('approvedDependencies');
     expect(assembled.request.files['/package.json']).toBeUndefined();
   });
-  it('edge repairs an unauthorized dependency before returning a candidate', async () => {
-    const generate = vi.fn().mockResolvedValueOnce({ content: `${hunk}\nDEPENDENCIES: unknown-package` }).mockResolvedValueOnce({ content: hunk });
+  it('passes browser dependency requests to the canonical VFS resolver', async () => {
+    const generate = vi.fn().mockResolvedValueOnce({ content: `${hunk}\nDEPENDENCIES: unknown-package` });
     const result = await runComposerLane(JSON.stringify(req), {}, generate);
     expect(result.status).toBe(200);
-    expect(JSON.parse((await result.json()).content).requestedDependencies).toBeUndefined();
-    expect(generate).toHaveBeenCalledTimes(2);
+    expect(JSON.parse((await result.json()).content).requestedDependencies).toEqual(['unknown-package']);
+    expect(generate).toHaveBeenCalledOnce();
   });
   it('client rejects route changes before candidate preparation', async () => {
     const invoke = vi.fn().mockResolvedValue({ data: { content: JSON.stringify({ ...response, routeOps: [route] }) }, error: null });

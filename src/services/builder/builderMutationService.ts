@@ -98,10 +98,19 @@ export async function runBuilderAiMutation(
     // construction, the persisted bytes.
     commit = await persistAiCommit(ctx);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const rejection = error && typeof error === 'object'
+      ? error as { code?: unknown; stage?: unknown }
+      : null;
+    const code = typeof rejection?.code === 'string' ? rejection.code : null;
+    const stage = typeof rejection?.stage === 'string' ? rejection.stage : null;
+    const diagnostic = code
+      ? `[${code}${stage ? ` at ${stage}` : ''}] ${message}`
+      : message;
     emitAgentEvent({
       kind: 'error',
       status: 'failed',
-      message: error instanceof Error ? error.message : String(error),
+      message: diagnostic,
     });
     if (error instanceof CommitRejectedError) {
       const blockers = error.result.publishBlockers ?? [];
@@ -116,13 +125,12 @@ export async function runBuilderAiMutation(
         changedPaths: [],
       };
     }
-    const message = error instanceof Error ? error.message : String(error);
     return {
-      state: 'failed',
+      state: code ? 'rejected' : 'failed',
       success: false,
-      errors: [message],
+      errors: [diagnostic],
       blockers: [],
-      reason: message,
+      reason: diagnostic,
       changedPaths: [],
     };
   }

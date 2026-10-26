@@ -203,8 +203,12 @@ describe('AppBuildContract', () => {
     expect(contract.design.registryContext).toBe(input.registryContext);
     expect(contract.design.compositionPlan.pages.map((page) => page.pageId)).toEqual(['page-home', 'page-contact']);
     expect(contract.runtime.protectedPaths).toEqual(['/src/App.tsx', '/src/main.tsx']);
-    expect(contract.runtime.approvedDependencies).toEqual(['react', 'react-dom']);
+    expect(contract.runtime.availableRuntimeDependencies).toEqual(['react', 'react-dom']);
     expect(contract.runtime.approvedExperienceCapabilities).toEqual(['motion.core']);
+    const generationContext = buildAppBuilderGenerationContext(contract);
+    expect(generationContext.runtimeContext).toContain('Available runtime dependencies');
+    expect(generationContext.runtimeContext).toContain('any valid browser npm package');
+    expect(generationContext.runtimeContext).not.toContain('Work only within approved dependencies');
   });
 
   it('serializes deterministically and round-trips the versioned contract', () => {

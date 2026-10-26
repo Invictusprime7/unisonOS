@@ -101,6 +101,7 @@ import {
   type FileProvenanceMap,
 } from '@/services/fileProvenance';
 import { generateUUID } from '@/utils/uuid';
+import { projectEffectiveComposition } from '@/services/effectiveCompositionProjector';
 import { applyTopologyChange, syncTopologyAndRouter } from '@/services/pageTopologyOrchestrator';
 import { deriveFilePath } from '@/services/routeNavigationService';
 import {
@@ -167,11 +168,49 @@ export interface CommitMutationInput {
   };
 }
 
+export type CommitRejectionCode =
+  | 'PROTECTED_INFRASTRUCTURE'
+  | 'CREATIVE_AUTHORITY_NOT_HANDED_OFF'
+  | 'STALE_REVISION'
+  | 'STALE_NODE_TARGET'
+  | 'SCOPE_ESCAPE'
+  | 'LOCKED_INTENT_OR_DATA_FIELD'
+  | 'COMPOSITION_PROVENANCE_MISMATCH'
+  | 'SOURCE_PROJECTION_REWRITE'
+  | 'INVALID_JSX_OR_IMPORT'
+  | 'RUNTIME_PREVIEW_ERROR'
+  | 'MISSING_CAPABILITY_OR_PERMISSION'
+  | 'ASSET_IDENTITY_INVALID'
+  | 'IDENTITY_MISMATCH';
+
+class CommitGuardError extends Error {
+  constructor(
+    public readonly code: CommitRejectionCode,
+    public readonly stage: string,
+    message: string,
+    public readonly detail?: unknown,
+  ) {
+    super(message);
+    this.name = 'CommitGuardError';
+  }
+}
+
 export interface CommitDiagnostic {
   stage: string;
   level: 'info' | 'warn' | 'error';
   message: string;
   detail?: unknown;
+  code?: CommitRejectionCode;
+  correlation?: {
+    mutationId: string;
+    candidateId: string | null;
+    operationIds: string[];
+    pageIds: string[];
+    targetIds: string[];
+    baseRevisionId: string | null;
+    expectedVfsHash: string;
+    affectedPaths: string[];
+  };
 }
 
 export interface CommitMutationResult {
@@ -236,13 +275,23 @@ export function rebaseQueuedCommit(
   // Candidate metadata is provenance, not a structured side effect. File-only
   // AI patches use the same exact-byte overlap check as direct editor saves.
   if (patch.candidate && (patch.candidate.baseRevisionId ?? '') !== (input.identity.revisionId || '')) {
-    throw new Error('[VFSCommitService] AI candidate does not match its captured base revision. Reapply it to the latest version.');
+    throw new CommitGuardError(
+      'STALE_REVISION',
+      'queue-rebase',
+      '[VFSCommitService] AI candidate does not match its captured base revision. Reapply it to the latest version.',
+      { candidateBaseRevisionId: patch.candidate.baseRevisionId ?? null },
+    );
   }
   if (latest.identity.projectId !== input.identity.projectId
     || latest.identity.businessId !== input.identity.businessId
     || latest.identity.draftId !== input.identity.draftId
     || latest.identity.userId !== input.identity.userId) {
-    throw new Error('[VFSCommitService] The queued save belongs to a different project or account. Nothing was overwritten.');
+    throw new CommitGuardError(
+      'IDENTITY_MISMATCH',
+      'queue-rebase',
+      '[VFSCommitService] The queued save belongs to a different project or account. Nothing was overwritten.',
+      { queuedProjectId: latest.identity.projectId, inputProjectId: input.identity.projectId },
+    );
   }
   const baseFiles = input.current.vfsFiles;
   const latestFiles = latest.vfsFiles;
@@ -306,7 +355,12 @@ export function rebaseQueuedCommit(
     domainConflicts.push('reviewed launch or restore');
   }
   if (domainConflicts.length) {
-    throw new Error(`[VFSCommitService] This edit overlaps a newer saved revision in ${[...new Set(domainConflicts)].join(', ')}. Nothing was overwritten. Reapply on the latest version.`);
+    throw new CommitGuardError(
+      'STALE_REVISION',
+      'queue-rebase',
+      `[VFSCommitService] This edit overlaps a newer saved revision in ${[...new Set(domainConflicts)].join(', ')}. Nothing was overwritten. Reapply on the latest version.`,
+      { conflicts: [...new Set(domainConflicts)] },
+    );
   }
   const hasStructuredOperations = Boolean(patch.themeEdit || patch.routeOps?.length
     || patch.playgroundOps.length || patch.bindingOps.length || patch.dataOps.length
@@ -334,7 +388,12 @@ export function rebaseQueuedCommit(
   }
 
   if (conflicts.length > 0) {
-    throw new Error(`[VFSCommitService] This edit overlaps a newer saved revision at ${[...new Set(conflicts)].join(', ')}. Reload and reapply the change.`);
+    throw new CommitGuardError(
+      'STALE_REVISION',
+      'queue-rebase',
+      `[VFSCommitService] This edit overlaps a newer saved revision at ${[...new Set(conflicts)].join(', ')}. Reload and reapply the change.`,
+      { conflicts: [...new Set(conflicts)] },
+    );
   }
   if (!hasStructuredOperations && fileOps.length === 0 && (!patch.candidate || (
     latest.candidateId === patch.candidate.id
@@ -470,8 +529,11 @@ function assertCandidateSourcePreserved(
     compilerOwnedPaths: compilerOwned, stage,
   });
   if (violations.length) {
-    throw new Error(
+    throw new CommitGuardError(
+      'SOURCE_PROJECTION_REWRITE',
+      stage,
       `[VFSCommitService] ${stage} changed source outside the explicit candidate: ${violations.map((item) => `${item.path} (${item.kind})`).join(', ')}. Generate an explicit follow-up candidate.`,
+      violations,
     );
   }
 }
@@ -558,7 +620,12 @@ async function assertNoStaleOverwriteOfAiRevision(input: CommitMutationInput): P
     return; // lookup failure never blocks a save
   }
   if (latest && latest.source === 'ai-builder' && latest.id !== (input.identity.revisionId || null)) {
-    throw new Error('[VFSCommitService] An automatic update was based on an older version and would overwrite a saved AI change. It was skipped; reload to use the latest version.');
+    throw new CommitGuardError(
+      'STALE_REVISION',
+      'revision-base',
+      '[VFSCommitService] An automatic update was based on an older version and would overwrite a saved AI change. It was skipped; reload to use the latest version.',
+      { latestRevisionId: latest.id, latestSource: latest.source },
+    );
   }
 }
 
@@ -570,11 +637,20 @@ export async function commitMutation(
   const startedAt = Date.now();
   try {
     // Coalescing must never bypass the same identity/shape checks as a write.
-    assertBuilderIdentity(input.identity, 'commitMutation');
+    try {
+      assertBuilderIdentity(input.identity, 'commitMutation');
+    } catch (error) {
+      throw new CommitGuardError(
+        'IDENTITY_MISMATCH',
+        'identity',
+        error instanceof Error ? error.message : String(error),
+        error,
+      );
+    }
     assertPatchPlan(input.patch, 'commitMutation');
     let result: CommitMutationResult;
     if (input.options?.dryRun) {
-      result = await commitMutationInner(input);
+      result = await commitMutationInner(input, correlationId);
     } else {
       const queueKey = input.identity.draftId || input.identity.projectId || 'anonymous';
       const previousTail = DRAFT_COMMIT_TAILS.get(queueKey) ?? Promise.resolve();
@@ -591,7 +667,7 @@ export async function commitMutation(
           : { input };
         result = 'coalesced' in preparation
           ? preparation.coalesced
-          : await commitMutationInner(preparation.input);
+          : await commitMutationInner(preparation.input, correlationId);
         if (result.status === 'committed' && result.persistedRevisionId) {
           LATEST_QUEUED_COMMITS.set(queueKey, result);
         }
@@ -613,6 +689,35 @@ export async function commitMutation(
     });
     return result;
   } catch (err) {
+    const rejection = err instanceof CommitGuardError ? err : null;
+    let rejectionTelemetry: NonNullable<Parameters<typeof recordMutationEvent>[0]['rejection']> | undefined;
+    if (rejection) {
+      let expectedVfsHash: string | null = null;
+      try {
+        expectedVfsHash = await hashVfsFiles(input.current.vfsFiles);
+      } catch {
+        // The refusal remains observable even if hashing the captured base fails.
+      }
+      rejectionTelemetry = {
+        code: rejection.code,
+        stage: rejection.stage,
+        candidateId: input.patch.candidate?.id ?? null,
+        operationIds: input.patch.operationIds ?? [],
+        pageIds: [...new Set([
+          ...(input.patch.candidate?.targetPages ?? []),
+          ...input.patch.playgroundOps.flatMap((operation) => operation.pageId ? [operation.pageId] : []),
+          ...(input.patch.routeOps ?? []).flatMap((operation) => 'pageId' in operation ? [operation.pageId] : []),
+        ])],
+        targetIds: [...new Set([
+          ...input.patch.bindingOps.map((operation) => operation.elementId),
+          ...input.patch.playgroundOps.flatMap((operation) => operation.sectionId ? [operation.sectionId] : []),
+          ...input.patch.presentationOps.flatMap((operation) => 'sectionId' in operation ? [operation.sectionId] : []),
+        ])],
+        expectedVfsHash,
+        affectedPaths: [...new Set(input.patch.fileOps.map((operation) => normalizeAuthoredPath(operation.path)))],
+        detail: rejection.detail,
+      };
+    }
     recordMutationEvent({
       correlationId,
       at: Date.now(),
@@ -623,6 +728,7 @@ export async function commitMutation(
       ok: false,
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - startedAt,
+      ...(rejectionTelemetry ? { rejection: rejectionTelemetry } : {}),
     });
     throw err;
   }
@@ -630,14 +736,36 @@ export async function commitMutation(
 
 async function commitMutationInner(
   input: CommitMutationInput,
+  mutationId: string,
 ): Promise<CommitMutationResult> {
   const diagnostics: CommitDiagnostic[] = [];
+  const expectedVfsHash = await hashVfsFiles(input.current.vfsFiles);
+  const candidateId = input.patch.candidate?.id ?? null;
+  const correlation = {
+    mutationId,
+    candidateId,
+    operationIds: input.patch.operationIds ?? [],
+    pageIds: [...new Set([
+      ...(input.patch.candidate?.targetPages ?? []),
+      ...input.patch.playgroundOps.flatMap((operation) => operation.pageId ? [operation.pageId] : []),
+      ...(input.patch.routeOps ?? []).flatMap((operation) => 'pageId' in operation ? [operation.pageId] : []),
+    ])],
+    targetIds: [...new Set([
+      ...input.patch.bindingOps.map((operation) => operation.elementId),
+      ...input.patch.playgroundOps.flatMap((operation) => operation.sectionId ? [operation.sectionId] : []),
+      ...input.patch.presentationOps.flatMap((operation) => 'sectionId' in operation ? [operation.sectionId] : []),
+    ])],
+    baseRevisionId: input.identity.revisionId || null,
+    expectedVfsHash,
+    affectedPaths: [...new Set(input.patch.fileOps.map((operation) => normalizeAuthoredPath(operation.path)))],
+  };
   const log = (
     stage: string,
     level: CommitDiagnostic['level'],
     message: string,
     detail?: unknown,
-  ) => diagnostics.push({ stage, level, message, detail });
+    code?: CommitRejectionCode,
+  ) => diagnostics.push({ stage, level, message, detail, correlation, ...(code ? { code } : {}) });
 
   // 1. Identity assertion ----------------------------------------------------
   assertBuilderIdentity(input.identity, 'commitMutation');
@@ -650,23 +778,36 @@ async function commitMutationInner(
   await assertNoStaleOverwriteOfAiRevision(input);
   const reviewedComposition = input.options?.reviewedComposition;
   if ([input.options?.reviewedArtifact, reviewedComposition, input.options?.compositionUpgrade, input.options?.restoreRevisionId].filter(Boolean).length > 1) {
-    throw new Error('[VFSCommitService] Reviewed artifacts, upgrades and restores must be isolated operations.');
+    throw new CommitGuardError('SCOPE_ESCAPE', 'reviewed-operation-scope', '[VFSCommitService] Reviewed artifacts, upgrades and restores must be isolated operations.');
   }
   if (reviewedComposition) {
     const candidate = reviewedComposition.candidate;
-    if (input.source !== 'playground-edit' || candidate.status !== 'committed' || candidate.persistedRevisionId
-      || !candidate.siteBundleSnapshot || !candidate.runtimeManifest
-      || candidate.identity.projectId !== input.identity.projectId
+    if (candidate.identity.projectId !== input.identity.projectId
       || candidate.identity.businessId !== input.identity.businessId
       || candidate.identity.userId !== input.identity.userId
-      || candidate.identity.draftId !== input.identity.draftId
-      || candidate.parentRevisionId !== (input.identity.revisionId || null)
-      || reviewedComposition.baseVfsHash !== await hashVfsFiles(input.current.vfsFiles)
-      || candidate.vfsHash !== await hashVfsFiles(candidate.vfsFiles)
-      || input.patch.backendOps.length > 0 || input.patch.fileOps.length > 0
+      || candidate.identity.draftId !== input.identity.draftId) {
+      throw new CommitGuardError('IDENTITY_MISMATCH', 'composition-review', '[VFSCommitService] Composition review does not belong to this project or account.', {
+        candidateIdentity: candidate.identity,
+      });
+    }
+    if (input.source !== 'playground-edit' || input.patch.backendOps.length > 0 || input.patch.fileOps.length > 0
       || input.patch.presentationOps.length > 0 || input.patch.playgroundOps.length > 0
       || input.patch.bindingOps.length > 0 || input.patch.routeOps?.length || input.patch.businessSystem) {
-      throw new Error('[VFSCommitService] Composition review is stale or does not belong to this project. Generate a fresh preview.');
+      throw new CommitGuardError('SCOPE_ESCAPE', 'composition-review', '[VFSCommitService] Composition review must be committed without additional operations. Generate a fresh preview.', {
+        source: input.source,
+      });
+    }
+    if (candidate.status !== 'committed' || candidate.persistedRevisionId
+      || !candidate.siteBundleSnapshot || !candidate.runtimeManifest
+      || candidate.parentRevisionId !== (input.identity.revisionId || null)
+      || reviewedComposition.baseVfsHash !== await hashVfsFiles(input.current.vfsFiles)
+      || candidate.vfsHash !== await hashVfsFiles(candidate.vfsFiles)) {
+      throw new CommitGuardError('COMPOSITION_PROVENANCE_MISMATCH', 'composition-review', '[VFSCommitService] Composition review is stale. Generate a fresh preview.', {
+        candidateRevisionId: candidate.parentRevisionId,
+        baseRevisionId: input.identity.revisionId || null,
+        baseVfsHash: reviewedComposition.baseVfsHash,
+        candidateVfsHash: candidate.vfsHash,
+      });
     }
   }
 
@@ -676,7 +817,10 @@ async function commitMutationInner(
     || !Object.values((input.current.siteBundleSnapshot as SiteBundleSnapshot | undefined)?.pageRegistry.pages ?? {}).some(page => page.filePath === customizerPagePath)
     || !input.patch.fileOps.some(op => op.type !== 'delete' && op.path === customizerPagePath && isCustomizerPageEdit(input.current.vfsFiles[op.path] ?? '', op.contents, op.path))
     || input.patch.fileOps.some(op => op.type === 'delete' || ![customizerPagePath, customizerPagePath.replace(/\.[^.]+$/, '.customizer.css')].includes(op.path)))) {
-    throw new Error('Invalid customizer page edit.');
+    throw new CommitGuardError('SCOPE_ESCAPE', 'customizer-scope', 'Invalid customizer page edit.', {
+      customizerPagePath,
+      filePaths: input.patch.fileOps.map((operation) => operation.path),
+    });
   }
 
   // 2. Patch normalisation ---------------------------------------------------
@@ -686,11 +830,20 @@ async function commitMutationInner(
     snapshot: input.current.siteBundleSnapshot as SiteBundleSnapshot | null | undefined,
     acceptedRevisionId: input.identity.revisionId,
   });
-  assertCreativeAuthority({
-    source: input.source,
-    authority: currentAuthority,
-    explicitReset: input.options?.explicitAuthorityReset,
-  });
+  try {
+    assertCreativeAuthority({
+      source: input.source,
+      authority: currentAuthority,
+      explicitReset: input.options?.explicitAuthorityReset,
+    });
+  } catch (error) {
+    throw new CommitGuardError(
+      'CREATIVE_AUTHORITY_NOT_HANDED_OFF',
+      'authority',
+      error instanceof Error ? error.message : String(error),
+      error,
+    );
+  }
   if (input.source !== 'wizard-launch' && input.source !== 'system-restore') {
     const sealedPaths = input.source === 'theme-change'
       ? new Set<string>()
@@ -715,28 +868,31 @@ async function commitMutationInner(
       if (path === '/src/App.tsx'
         && Object.keys((input.current.siteBundleSnapshot as SiteBundleSnapshot | undefined)?.pageRegistry?.pages ?? {}).length > 0
         && (op.type === 'delete' || op.contents !== input.current.vfsFiles[op.path])) {
-        throw new Error('[VFSCommitService] Canonical App.tsx is compiler-owned. Use a typed route operation.');
+        throw new CommitGuardError('PROTECTED_INFRASTRUCTURE', 'file-protection', '[VFSCommitService] Canonical App.tsx is compiler-owned. Use a typed route operation.', { path });
       }
       if (op.path.startsWith(`${RESOLVED_COMPOSITION_ROOT}/`)
         && (op.type === 'delete' || op.contents !== input.current.vfsFiles[op.path])) {
-        throw new Error('[VFSCommitService] Resolved composition metadata is compiler-owned. Use a presentation operation or reviewed upgrade.');
+        throw new CommitGuardError('PROTECTED_INFRASTRUCTURE', 'file-protection', '[VFSCommitService] Resolved composition metadata is compiler-owned. Use a presentation operation or reviewed upgrade.', { path });
       }
       if (protection.directMutation === 'denied'
         && (op.type === 'delete' || op.contents !== input.current.vfsFiles[op.path])) {
-        throw new Error(
+        throw new CommitGuardError(
+          'PROTECTED_INFRASTRUCTURE',
+          'file-protection',
           `[VFSCommitService] ${protection.classification} path cannot be edited directly. ${protection.rationale}`,
+          { path, classification: protection.classification, rationale: protection.rationale },
         );
       }
       if (path !== customizerPagePath
         && compilerOwnedPaths.has(path)
         && !builderAuthorable
         && (op.type === 'delete' || op.contents !== input.current.vfsFiles[op.path])) {
-        throw new Error('[VFSCommitService] Generated section and recipe modules are compiler-owned. Use a presentation operation or a canonical composition upgrade.');
+        throw new CommitGuardError('PROTECTED_INFRASTRUCTURE', 'file-protection', '[VFSCommitService] Generated section and recipe modules are compiler-owned. Use a presentation operation or a canonical composition upgrade.', { path });
       }
       if (path !== customizerPagePath && isProtectedPath(path, sealedPaths)
         && !builderAuthorable
         && (op.type === 'delete' || op.contents !== input.current.vfsFiles[op.path])) {
-        throw new Error('[VFSCommitService] Canonical router and metadata files are compiler-owned. Edit page or section source instead.');
+        throw new CommitGuardError('PROTECTED_INFRASTRUCTURE', 'file-protection', '[VFSCommitService] Canonical router and metadata files are compiler-owned. Edit page or section source instead.', { path });
       }
     }
   }
@@ -845,12 +1001,16 @@ async function commitMutationInner(
     const planned = planCompositionUpgrade(workingFiles, input.current.siteBundleSnapshot as SiteBundleSnapshot);
     Object.assign(workingFiles, planned.files);
   }
-  if (input.source === 'ai-builder' || customizerPagePath) refreshEditedCompositionOwnership(input.current.vfsFiles, workingFiles);
+  if (customizerPagePath) refreshEditedCompositionOwnership(input.current.vfsFiles, workingFiles);
   log('fileOps', 'info', `applied ${patch.fileOps.length} file op(s)`);
 
   // 4. Apply snapshot-owned presentation operations -------------------------
   if (patch.themeEdit && (input.source !== 'theme-change' || patch.fileOps.length || patch.playgroundOps.length || patch.presentationOps.length || patch.bindingOps.length || patch.routeOps?.length || patch.backendOps.length || patch.businessSystem || input.options?.restoreRevisionId || input.options?.reviewedArtifact || reviewedComposition)) {
-    throw new Error('Theme edits must be isolated from content, composition and backend changes.');
+    throw new CommitGuardError('SCOPE_ESCAPE', 'theme-scope', 'Theme edits must be isolated from content, composition and backend changes.', {
+      filePaths: patch.fileOps.map((operation) => operation.path),
+      routeOperationCount: patch.routeOps?.length ?? 0,
+      backendOperationCount: patch.backendOps.length,
+    });
   }
   let themeSnapshot = workingSnapshot;
   if (themeSnapshot && !patch.themeEdit?.presetId && !restoredRevision && !reviewedComposition && !input.options?.reviewedArtifact && input.source !== 'wizard-launch') {
@@ -913,7 +1073,7 @@ async function commitMutationInner(
     playground: reviewedComposition.candidate.playground ?? undefined,
   } : undefined);
   if (input.options?.reviewedArtifact && input.source !== 'wizard-launch') {
-    throw new Error('[VFSCommitService] reviewedArtifact is only valid for wizard-launch commits.');
+    throw new CommitGuardError('SCOPE_ESCAPE', 'reviewed-artifact', '[VFSCommitService] reviewedArtifact is only valid for wizard-launch commits.');
   }
   let canonicalResult: CanonicalCommitResult | null = null;
   let finalizedArtifact: CanonicalLaunchArtifacts | null = null;
@@ -1338,16 +1498,30 @@ async function commitMutationInner(
       elementPreviewBlocked === 0;
     if ((requirePreview && !previewOk2) || (requireReadiness && !readinessOk2)) {
       status = 'rejected';
-      log('gate', 'error', 'hard reject after auto-repair', {
-        previewOk: previewOk2,
-        readinessOk: readinessOk2,
-        publishBlockers: publishVerdict?.reasons ?? [],
-        intentPreviewBlocked,
-        intentPublishBlocked,
-        elementPreviewBlocked,
-        elementPublishBlocked,
-        backendOpsFailed: backendOpsReport?.failedCount ?? 0,
-      });
+      const rejectionCode: CommitRejectionCode = !previewOk2
+        ? 'RUNTIME_PREVIEW_ERROR'
+        : gate && !gate.previewReady || previewVerdict && !previewVerdict.ok || elementPreviewBlocked > 0
+          ? 'MISSING_CAPABILITY_OR_PERMISSION'
+          : intentPreviewBlocked > 0
+            ? 'LOCKED_INTENT_OR_DATA_FIELD'
+            : 'RUNTIME_PREVIEW_ERROR';
+      log(
+        'gate',
+        'error',
+        'hard reject after auto-repair',
+        {
+          previewOk: previewOk2,
+          readinessOk: readinessOk2,
+          previewViolations: preflight.violations,
+          publishBlockers: publishVerdict?.reasons ?? [],
+          intentPreviewBlocked,
+          intentPublishBlocked,
+          elementPreviewBlocked,
+          elementPublishBlocked,
+          backendOpsFailed: backendOpsReport?.failedCount ?? 0,
+        },
+        rejectionCode,
+      );
     } else {
       preExecutionReady = previewOk2 && (readinessOk2 || !requireReadiness);
       log('repair', 'info', 'auto-repair recovered the commit');
@@ -1386,10 +1560,16 @@ async function commitMutationInner(
     if (moduleClosureBlockers.length > 0 && requirePreview) {
       status = 'rejected';
       preExecutionReady = false;
-      log('gate', 'error', 'module closure gate rejected the candidate', {
-        unresolved: unresolvedModules.length,
-        missingExports: exportViolations.length,
-      });
+      log(
+        'gate',
+        'error',
+        `module closure gate rejected the candidate: ${[
+          unresolvedModules.length > 0 ? describeUnresolvedImports(unresolvedModules) : '',
+          ...exportViolations.slice(0, 5).map((violation) => `${violation.filePath} -> ${violation.importPath} (${violation.symbol})`),
+        ].filter(Boolean).join('; ')}`,
+        { unresolved: unresolvedModules, missingExports: exportViolations },
+        'INVALID_JSX_OR_IMPORT',
+      );
     } else if (moduleClosureBlockers.length > 0) {
       log('gate', 'warn', 'module closure defects retained as publish blockers', {
         unresolved: unresolvedModules.length,
@@ -1600,7 +1780,10 @@ async function commitMutationInner(
   }
   const vfsHash = await hashVfsFiles(files);
   if (reviewedComposition && vfsHash !== reviewedComposition.candidate.vfsHash) {
-    throw new Error('[VFSCommitService] Validation changed the reviewed composition. Generate a fresh preview.');
+    throw new CommitGuardError('COMPOSITION_PROVENANCE_MISMATCH', 'composition-validation', '[VFSCommitService] Validation changed the reviewed composition. Generate a fresh preview.', {
+      expectedVfsHash: reviewedComposition.candidate.vfsHash,
+      actualVfsHash: vfsHash,
+    });
   }
   if (restoredRevision && vfsHash !== await hashVfsFiles(restoredRevision.vfsFiles)) {
     throw new Error('[VFSCommitService] Validation changed the historical revision; restore was not applied.');
@@ -1615,6 +1798,7 @@ async function commitMutationInner(
     runtimeManifest: finalizedArtifact?.runtimeManifest ?? reviewedArtifact?.runtimeManifest ?? canonicalResult?.runtimeManifest ?? null,
     playground: reviewedArtifact?.playground ?? canonicalResult?.playground ?? input.current.playground ?? null,
     readinessReport: {
+      runtimeCompatibility: preflight.stages.runtimeCompatibility,
       ...(gate ? { gate } : {}),
       ...(previewVerdict ? { previewVerdict } : {}),
       ...(publishVerdict ? { publishVerdict } : {}),
@@ -1680,7 +1864,7 @@ function applyPresentationOps(
 ): SiteBundleSnapshot | null | undefined {
   if (!ops?.length) return snapshot;
   if (!snapshot?.meta.designIntervention) {
-    throw new Error('[VFSCommitService] presentation mutation requires a snapshot-owned design intervention.');
+    throw new CommitGuardError('COMPOSITION_PROVENANCE_MISMATCH', 'presentation-projection', '[VFSCommitService] presentation mutation requires a snapshot-owned design intervention.');
   }
 
   const intervention = applySemanticPresentationOps(
@@ -2060,6 +2244,7 @@ async function finalize(args: {
     parentRevisionId,
     rejectMessage,
   } = args;
+  let snapshotForRevision = siteBundleSnapshot;
 
   let persistedRevisionId: string | null = null;
   const dryRun = input.options?.dryRun === true;
@@ -2092,6 +2277,22 @@ async function finalize(args: {
     ],
   });
 
+  if (status === 'committed' && snapshotForRevision && !dryRun) {
+    const effectiveComposition = await projectEffectiveComposition({
+      pages: snapshotForRevision.pageRegistry?.pages ?? {},
+      files: vfsFiles,
+      fileProvenance,
+      bindings: snapshotForRevision.bindings,
+      baseRevisionId: parentRevisionId,
+      vfsHash,
+      hashSource: (path, source) => hashVfsFiles({ [path]: source }),
+    });
+    snapshotForRevision = {
+      ...snapshotForRevision,
+      meta: { ...snapshotForRevision.meta, effectiveComposition },
+    };
+  }
+
   if (!dryRun) {
     // Durability floor: never persist a revision that blanks a project whose
     // parent had real source (the Oct 6 blank-draft failure mode).
@@ -2120,8 +2321,8 @@ async function finalize(args: {
     PERSIST_IN_FLIGHT.add(breakerKey);
     let rpcResult: { data: unknown; error: { message?: string } | null };
     try {
-      const siteBundleSnapshotPayload = siteBundleSnapshot
-        ? Object.fromEntries(Object.entries(siteBundleSnapshot).filter(([key]) => key !== 'vfsFiles'))
+      const siteBundleSnapshotPayload = snapshotForRevision
+        ? Object.fromEntries(Object.entries(snapshotForRevision).filter(([key]) => key !== 'vfsFiles'))
         : {};
       const compactRpcPayload = {
         p_project_id: input.identity.projectId,
@@ -2296,16 +2497,28 @@ async function finalize(args: {
     dryRun,
   });
 
-  const acceptedAuthority = siteBundleSnapshot && status === 'committed'
+  const revisionBoundSnapshot = snapshotForRevision && persistedRevisionId && snapshotForRevision.meta.effectiveComposition
+    ? {
+        ...snapshotForRevision,
+        meta: {
+          ...snapshotForRevision.meta,
+          effectiveComposition: {
+            ...snapshotForRevision.meta.effectiveComposition,
+            revisionId: persistedRevisionId,
+          },
+        },
+      }
+    : snapshotForRevision;
+  const acceptedAuthority = revisionBoundSnapshot && status === 'committed'
     ? authorityAfterAcceptedCommit(
-        deriveAuthorshipAuthority({ snapshot: siteBundleSnapshot, acceptedRevisionId: parentRevisionId }),
+        deriveAuthorshipAuthority({ snapshot: revisionBoundSnapshot, acceptedRevisionId: parentRevisionId }),
         input.source,
         input.source === 'wizard-launch' ? persistedRevisionId : undefined,
       )
     : null;
-  const returnedSnapshot = siteBundleSnapshot && acceptedAuthority
-    ? stampSnapshotAuthority(siteBundleSnapshot, acceptedAuthority)
-    : siteBundleSnapshot;
+  const returnedSnapshot = revisionBoundSnapshot && acceptedAuthority
+    ? stampSnapshotAuthority(revisionBoundSnapshot, acceptedAuthority)
+    : revisionBoundSnapshot;
   const result: CommitMutationResult = {
 
     status,

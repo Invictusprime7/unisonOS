@@ -17,8 +17,8 @@ describe('Builder actual import enforcement', () => {
     "export * as UI from 'unapproved';", "const x = require('unapproved');",
     "const x = import('unapproved');", 'const x = import(`unapproved`);',
     "import X = require('unapproved');", "type X = import('unapproved').X;",
-  ])('rejects undeclared module use: %s', source => {
-    expect(violations(source).join()).toContain('imported dependency is not approved');
+  ])('leaves browser npm module resolution to the canonical dependency graph: %s', source => {
+    expect(violations(source)).toEqual([]);
   });
   it('accepts approved package roots and scoped subpaths', () => {
     expect(violations("import React from 'react'; export * from '@radix-ui/react-dialog/dist/index';")).toEqual([]);
@@ -36,30 +36,30 @@ describe('Builder actual import enforcement', () => {
     expect(violations('const x = import(moduleName);').join()).toContain('<computed-module>');
     expect(violations('const x = require(`module-${name}`);').join()).toContain('<computed-module>');
   });
-  it('preserves existing imports during unrelated edits but refuses additional occurrences', () => {
+  it('preserves existing imports and lets the canonical resolver add new package roots', () => {
     const source = "import X from 'legacy-package';";
     const existing = { ...req, files: { [path]: source } };
     expect(composerProposalViolations(existing, response(`${source}\nconst changed = true;`))).toEqual([]);
-    expect(composerProposalViolations(existing, response(`${source}\nexport * from 'legacy-package';`)).join()).toContain('not approved');
+    expect(composerProposalViolations(existing, response(`${source}\nexport * from 'legacy-package';`))).toEqual([]);
     expect(composerProposalViolations(existing, response('const removed = true;'))).toEqual([]);
   });
   it('refuses unparseable candidate imports', () => {
     expect(violations("import X from 'unknown").join()).toContain('not parseable');
   });
-  it('edge repairs an undeclared package import before returning source', async () => {
+  it('leaves browser package imports for canonical candidate dependency resolution', async () => {
     const hunk = (source: string) => `<<<EDIT ${path}\n<<<<<<< SEARCH\nOld\n=======\n${source}\n>>>>>>> REPLACE\n>>>END`;
-    const generate = vi.fn().mockResolvedValueOnce({ content: hunk("import X from 'unapproved';") }).mockResolvedValueOnce({ content: hunk("import React from 'react';") });
+    const generate = vi.fn().mockResolvedValueOnce({ content: hunk("import X from 'unapproved';") });
     const result = await runComposerLane(JSON.stringify(req), {}, generate);
     expect(result.status).toBe(200);
-    expect(generate).toHaveBeenCalledTimes(2);
-    expect(JSON.parse((await result.json()).content).fileOps[0].content).toContain("from 'react'");
+    expect(generate).toHaveBeenCalledOnce();
+    expect(JSON.parse((await result.json()).content).fileOps[0].content).toContain("from 'unapproved'");
   });
-  it('client refuses undeclared imports before candidate preparation', async () => {
+  it('prepares a new browser package import for canonical dependency resolution', async () => {
     const invoke = vi.fn().mockResolvedValue({ data: { content: JSON.stringify(response("import X from 'unapproved';")) }, error: null });
     const result = await runComposerRepairLoop({ request: req, baseFiles: req.files, invoke: invoke as never, maxAttempts: 1 });
-    expect(result.ok).toBe(false);
-    expect(result.prepared).toBeUndefined();
-    expect(result.errors.join()).toContain('imported dependency');
+    expect(result.ok).toBe(true);
+    expect(result.prepared).toBeDefined();
+    expect(JSON.parse(result.prepared!.build.candidateFiles['/package.json']).dependencies.unapproved).toBe('latest');
   });
   it('keeps launch on its existing dependency intake path', () => {
     expect(composerProposalViolations({ ...req, task: 'site_page_author' }, response("import X from 'unapproved';"))).toEqual([]);

@@ -109,6 +109,7 @@ export interface PatchPlan {
     evidence?: import('@/services/builder/canonicalAuthoringRequest').CanonicalAuthorshipEvidence;
     targetPages: string[];
     requestedDependencies?: string[];
+    dependencyGraphFingerprint?: string;
     attempt: number;
   };
   /** Approved capability state to stamp into the resulting SiteBundleSnapshot. */

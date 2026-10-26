@@ -20,88 +20,88 @@ export const SANDPACK_DEPENDENCIES: Record<string, string> = {
   'react-dom': GENERATED_RUNTIME_PROFILE.reactDom,
   'react-router-dom': '^6.20.0',
   '@swc/helpers': '0.5.23',
-  '@babel/standalone': '^7.28.4',
+  '@babel/standalone': '7.28.5',
 
   // Styling utilities
-  'clsx': 'latest',
-  'tailwind-merge': 'latest',
-  'class-variance-authority': 'latest',
-  'tailwindcss': '^3.4.18',
-  'postcss': '^8.4.49',
-  'autoprefixer': '^10.4.20',
-  'tailwindcss-animate': '^1.0.7',
-  '@tailwindcss/typography': '^0.5.19',
-  '@stylexjs/stylex': '^0.8.0',
+  'clsx': '2.1.1',
+  'tailwind-merge': '3.4.0',
+  'class-variance-authority': '0.7.1',
+  'tailwindcss': '3.4.19',
+  'postcss': '8.5.24',
+  'autoprefixer': '10.5.4',
+  'tailwindcss-animate': '1.0.7',
+  '@tailwindcss/typography': '0.5.20',
+  '@stylexjs/stylex': '0.19.0',
   'bootstrap': '^5.3.3',
   'bulma': '^1.0.2',
 
   // Radix UI primitives
-  '@radix-ui/react-slot': 'latest',
-  '@radix-ui/react-dialog': 'latest',
-  '@radix-ui/react-dropdown-menu': 'latest',
-  '@radix-ui/react-tabs': 'latest',
-  '@radix-ui/react-toast': 'latest',
-  '@radix-ui/react-tooltip': 'latest',
-  '@radix-ui/react-select': 'latest',
-  '@radix-ui/react-checkbox': 'latest',
-  '@radix-ui/react-switch': 'latest',
-  '@radix-ui/react-label': 'latest',
-  '@radix-ui/react-avatar': 'latest',
-  '@radix-ui/react-popover': 'latest',
-  '@radix-ui/react-separator': 'latest',
-  '@radix-ui/react-scroll-area': 'latest',
-  '@radix-ui/react-accordion': 'latest',
-  '@radix-ui/react-collapsible': 'latest',
-  '@radix-ui/react-progress': 'latest',
-  '@radix-ui/react-radio-group': 'latest',
-  '@radix-ui/react-slider': 'latest',
-  '@radix-ui/react-toggle': 'latest',
-  '@radix-ui/react-toggle-group': 'latest',
-  '@radix-ui/react-alert-dialog': 'latest',
-  '@radix-ui/react-aspect-ratio': 'latest',
-  '@radix-ui/react-context-menu': 'latest',
-  '@radix-ui/react-hover-card': 'latest',
-  '@radix-ui/react-menubar': 'latest',
-  '@radix-ui/react-navigation-menu': 'latest',
+  '@radix-ui/react-slot': '1.2.4',
+  '@radix-ui/react-dialog': '1.1.15',
+  '@radix-ui/react-dropdown-menu': '2.1.16',
+  '@radix-ui/react-tabs': '1.1.13',
+  '@radix-ui/react-toast': '1.2.15',
+  '@radix-ui/react-tooltip': '1.2.8',
+  '@radix-ui/react-select': '2.2.6',
+  '@radix-ui/react-checkbox': '1.3.3',
+  '@radix-ui/react-switch': '1.2.6',
+  '@radix-ui/react-label': '2.1.8',
+  '@radix-ui/react-avatar': '1.1.11',
+  '@radix-ui/react-popover': '1.1.15',
+  '@radix-ui/react-separator': '1.1.8',
+  '@radix-ui/react-scroll-area': '1.2.10',
+  '@radix-ui/react-accordion': '1.2.12',
+  '@radix-ui/react-collapsible': '1.1.12',
+  '@radix-ui/react-progress': '1.1.8',
+  '@radix-ui/react-radio-group': '1.3.8',
+  '@radix-ui/react-slider': '1.3.6',
+  '@radix-ui/react-toggle': '1.1.10',
+  '@radix-ui/react-toggle-group': '1.1.11',
+  '@radix-ui/react-alert-dialog': '1.1.15',
+  '@radix-ui/react-aspect-ratio': '1.1.8',
+  '@radix-ui/react-context-menu': '2.2.16',
+  '@radix-ui/react-hover-card': '1.1.15',
+  '@radix-ui/react-menubar': '1.1.16',
+  '@radix-ui/react-navigation-menu': '1.2.14',
 
   // Icons
-  'lucide-react': 'latest',
+  'lucide-react': '0.545.0',
 
   // Animation
-  'framer-motion': 'latest',
+  'framer-motion': '12.29.2',
 
   // Experience layer (3D / WebGL) — reachable only through @/unison/ui/experience
   ...GENERATED_RUNTIME_CAPABILITY_DEPENDENCIES,
 
   // Data & utilities
-  'date-fns': 'latest',
-  'recharts': 'latest',
-  'zod': 'latest',
-  'zustand': 'latest',
+  'date-fns': '4.1.0',
+  'recharts': '3.5.1',
+  'zod': '4.6.5',
+  'zustand': '5.0.16',
 
   // Form handling
-  'react-hook-form': 'latest',
-  '@hookform/resolvers': 'latest',
+  'react-hook-form': '7.68.0',
+  '@hookform/resolvers': '5.2.2',
 
   // Data fetching
-  '@tanstack/react-query': 'latest',
-  '@tanstack/react-table': 'latest',
+  '@tanstack/react-query': '5.90.12',
+  '@tanstack/react-table': '9.3.1',
 
   // UI components
-  'sonner': 'latest',
-  'cmdk': 'latest',
-  'embla-carousel-react': 'latest',
-  'react-day-picker': 'latest',
-  'input-otp': 'latest',
-  'react-resizable-panels': 'latest',
-  'vaul': 'latest',
-  'next-themes': 'latest',
+  'sonner': '2.0.7',
+  'cmdk': '1.1.1',
+  'embla-carousel-react': '8.6.0',
+  'react-day-picker': '9.12.0',
+  'input-otp': '1.4.2',
+  'react-resizable-panels': '3.0.6',
+  'vaul': '1.1.2',
+  'next-themes': '0.4.6',
 
   // Scroll & navigation
-  'react-scroll': 'latest',
+  'react-scroll': '1.9.3',
 
   // Backend/workflow
-  'inngest': 'latest',
+  'inngest': '3.54.2',
 };
 
 /**
@@ -139,7 +139,6 @@ export const SANDPACK_RUNTIME_PACKAGE_VERSIONS: Record<string, string> = {
   '@radix-ui/react-radio-group': '1.3.8',
   '@radix-ui/react-scroll-area': '1.2.10',
   '@radix-ui/react-select': '2.2.6',
-  '@radix-ui/react-separator': '1.1.8',
   '@radix-ui/react-slider': '1.3.6',
   '@radix-ui/react-slot': '1.2.4',
   '@radix-ui/react-switch': '1.2.6',
@@ -224,6 +223,9 @@ export const SANDPACK_EXPERIENCE_RUNTIME_DEPENDENCIES: Record<string, string> = 
  */
 export const PINNED_RUNTIME_PACKAGE_VERSIONS: Readonly<Record<string, string>> = {
   ...SANDPACK_RUNTIME_PACKAGE_VERSIONS,
+  zustand: SANDPACK_DEPENDENCIES.zustand,
+  '@tanstack/react-table': SANDPACK_DEPENDENCIES['@tanstack/react-table'],
+  'react-scroll': SANDPACK_DEPENDENCIES['react-scroll'],
   ...GENERATED_RUNTIME_CAPABILITY_DEPENDENCIES,
 };
 

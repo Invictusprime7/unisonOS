@@ -6,7 +6,6 @@ import {
   buildArtDirectionTokens,
   familyForSection,
   getGenerationVariantsForSection,
-  getVariantById,
   type ArtDirectionPackId,
   type VariantId,
 } from '@/sections/variants';
@@ -246,7 +245,7 @@ export function MarketplaceRegisteredSection({
     radius: packTokens['--ut-radius-base'],
     sectionPadding: `var(--ut-rhythm-space, ${packTokens['--ut-rhythm-space']}) var(--ut-inline-gutter, ${packTokens['--ut-inline-gutter']})`,
   };
-  const VariantComponent = getVariantById(variantId)?.component;
+  const VariantComponent = eligibleVariants.find((variant) => variant.id === variantId)?.component;
   if (!VariantComponent) throw new Error(`Marketplace variant ${variantId} has no registered renderer.`);
 
   return (

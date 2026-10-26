@@ -128,7 +128,7 @@ export async function orchestrateAppBuild(
       // Enhanced repair instruction for protected-path violations
       const hasProtectedPathViolation = diagnostics.some(d => d.includes('protected-source-changed'));
       const repairInstruction = hasProtectedPathViolation
-        ? 'Resolve every supplied closure diagnostic across the candidate application. IMPORTANT: Do not modify package.json, tsconfig.json, or .unison/* files — these are canonical infrastructure. Work only within approved dependencies and available component imports. If imports are missing, use only components and utilities already available in the approved dependencies.'
+        ? 'Resolve every supplied closure diagnostic across the candidate application. IMPORTANT: Do not modify package.json, tsconfig.json, or .unison/* files — these are canonical infrastructure. Reuse available runtime dependencies where they fit; you may import another valid browser npm package and the shared resolver will add and verify it. If that install or build fails, report the precise technical error. Never import Node builtins, server-only packages, or bypass capability facades.'
         : 'Resolve every supplied closure diagnostic across the candidate application.';
 
       const assembled = await assembleCanonicalAuthoringRequest({

@@ -164,7 +164,7 @@ export function WorkflowListPanel({
     }
     
     setDeleteConfirmId(null);
-  }, [deleteConfirmId]);
+  }, [businessId, deleteConfirmId, projectId]);
 
   // Loading state
   if (isLoading) {

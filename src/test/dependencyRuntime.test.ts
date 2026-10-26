@@ -1,11 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { extractDependencies, getDependenciesForSandpack } from '@/utils/dependencyExtractor';
+import { extractDependencies, getDependenciesForSandpack, resolveSiteDependencyRuntime } from '@/utils/dependencyExtractor';
 import {
+  SANDPACK_DEPENDENCIES,
   WIZARD_PREVIEW_RUNTIME_DEPENDENCIES,
   WIZARD_RUNTIME_DEPENDENCY_GROUPS,
 } from '@/utils/sandpackDependencies';
 
 describe('Wizard preview dependency runtime', () => {
+  it('produces a stable site dependency graph fingerprint that changes with resolved versions', () => {
+    const files = {
+      '/src/App.tsx': "import Chart from '@scope/chart'; export default Chart;",
+      '/package.json': JSON.stringify({ dependencies: { '@scope/chart': '1.2.3' } }),
+    };
+    const first = resolveSiteDependencyRuntime(files);
+    const reordered = resolveSiteDependencyRuntime({
+      '/package.json': files['/package.json'],
+      '/src/App.tsx': files['/src/App.tsx'],
+    });
+    const upgraded = resolveSiteDependencyRuntime({
+      ...files,
+      '/package.json': JSON.stringify({ dependencies: { '@scope/chart': '1.2.4' } }),
+    });
+
+    expect(first.dependencies['@scope/chart']).toBe('1.2.3');
+    expect(first.graphFingerprint).toMatch(/^site-deps-v1-/);
+    expect(reordered.graphFingerprint).toBe(first.graphFingerprint);
+    expect(upgraded.graphFingerprint).not.toBe(first.graphFingerprint);
+  });
+
   it('uses VFS package versions only for packages imported by the active preview', () => {
     const result = extractDependencies({
       '/package.json': JSON.stringify({
@@ -18,6 +40,25 @@ describe('Wizard preview dependency runtime', () => {
     expect(result.dependencies.bootstrap).toBe('^5.3.3');
     expect(result.dependencies['@stylexjs/stylex']).toBeUndefined();
     expect(result.dependencies.vite).toBeUndefined();
+  });
+
+  it('resolves curated imports to the shared Sandpack catalog versions', () => {
+    const curatedPackages = [
+      '@babel/standalone',
+      '@radix-ui/react-dialog',
+      '@tanstack/react-query',
+      '@tanstack/react-table',
+      'clsx',
+      'react-scroll',
+      'zustand',
+    ];
+    const source = curatedPackages.map((name) => `import '${name}';`).join('\n');
+    const result = extractDependencies({ '/src/App.tsx': source });
+
+    for (const name of curatedPackages) {
+      expect(result.dependencies[name]).toBe(SANDPACK_DEPENDENCIES[name]);
+    }
+    expect(result.unresolved).toEqual([]);
   });
 
   it('excludes generated aliases and build tools from Sandpack dependencies', () => {

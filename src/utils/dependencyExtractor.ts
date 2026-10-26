@@ -13,11 +13,12 @@
 import {
   expandSandpackRuntimeDependencies,
   resolvePinnedRuntimeVersion,
+  SANDPACK_DEPENDENCIES,
 } from '@/utils/sandpackDependencies';
 import {
-  GENERATED_RUNTIME_CAPABILITY_DEPENDENCIES,
   GENERATED_RUNTIME_PROFILE,
 } from '@/platform/core/generatedRuntimeCapabilities';
+import { hashSeed } from '@/platform/core/generationSeed';
 
 // Built-in Node.js modules that shouldn't be treated as dependencies
 const BUILTIN_MODULES = new Set([
@@ -28,74 +29,12 @@ const BUILTIN_MODULES = new Set([
   'module', 'process', 'console', 'timers', 'string_decoder'
 ]);
 
-// Common dependencies with known stable versions
+// Runtime packages resolve from the same catalog used to prepare Sandpack.
 const KNOWN_VERSIONS: Record<string, string> = {
-  'react': GENERATED_RUNTIME_PROFILE.react,
-  'react-dom': GENERATED_RUNTIME_PROFILE.reactDom,
-  ...GENERATED_RUNTIME_CAPABILITY_DEPENDENCIES,
-  'react-router-dom': '^6.20.0',
-  '@swc/helpers': '0.5.23',
-  '@babel/standalone': '^7.28.4',
-  'lucide-react': 'latest',
-  'framer-motion': 'latest',
-  'clsx': 'latest',
-  'tailwind-merge': 'latest',
-  'class-variance-authority': 'latest',
-  'tailwindcss': '^3.4.18',
-  'postcss': '^8.4.49',
-  'autoprefixer': '^10.4.20',
-  'tailwindcss-animate': '^1.0.7',
-  '@tailwindcss/typography': '^0.5.19',
-  '@stylexjs/stylex': '^0.8.0',
-  'bootstrap': '^5.3.3',
-  'bulma': '^1.0.2',
-  '@radix-ui/react-slot': 'latest',
-  '@radix-ui/react-dialog': 'latest',
-  '@radix-ui/react-dropdown-menu': 'latest',
-  '@radix-ui/react-tabs': 'latest',
-  '@radix-ui/react-tooltip': 'latest',
-  '@radix-ui/react-select': 'latest',
-  '@radix-ui/react-switch': 'latest',
-  '@radix-ui/react-checkbox': 'latest',
-  '@radix-ui/react-label': 'latest',
-  '@radix-ui/react-popover': 'latest',
-  '@radix-ui/react-accordion': 'latest',
-  '@radix-ui/react-avatar': 'latest',
-  '@radix-ui/react-scroll-area': 'latest',
-  '@radix-ui/react-separator': 'latest',
-  '@radix-ui/react-slider': 'latest',
-  '@radix-ui/react-toggle': 'latest',
-  '@radix-ui/react-toggle-group': 'latest',
-  '@radix-ui/react-toast': 'latest',
-  '@radix-ui/react-alert-dialog': 'latest',
-  '@radix-ui/react-aspect-ratio': 'latest',
-  '@radix-ui/react-collapsible': 'latest',
-  '@radix-ui/react-context-menu': 'latest',
-  '@radix-ui/react-hover-card': 'latest',
-  '@radix-ui/react-menubar': 'latest',
-  '@radix-ui/react-navigation-menu': 'latest',
-  '@radix-ui/react-progress': 'latest',
-  '@radix-ui/react-radio-group': 'latest',
-  '@tanstack/react-query': 'latest',
-  '@tanstack/react-table': 'latest',
-  'recharts': 'latest',
-  'date-fns': 'latest',
-  'zod': 'latest',
+  ...SANDPACK_DEPENDENCIES,
   'axios': 'latest',
-  'zustand': 'latest',
   'jotai': 'latest',
   'swr': 'latest',
-  'react-hook-form': 'latest',
-  '@hookform/resolvers': 'latest',
-  'sonner': 'latest',
-  'cmdk': 'latest',
-  'vaul': 'latest',
-  'embla-carousel-react': 'latest',
-  'react-day-picker': 'latest',
-  'react-resizable-panels': 'latest',
-  'input-otp': 'latest',
-  'next-themes': 'latest',
-  'inngest': 'latest',
 };
 
 // Regex patterns for extracting imports
@@ -126,6 +65,16 @@ export interface ExtractedDependencies {
 export interface DependencyExtractionOptions {
   /** Restrict extraction to modules reachable from these VFS entry points. */
   entryPoints?: string[];
+}
+
+export interface ResolvedSiteDependencyRuntime {
+  version: '1.0';
+  runtimeProfile: string;
+  entryPoints: string[];
+  dependencies: Record<string, string>;
+  packageNames: string[];
+  graphFingerprint: string;
+  extractionInfo: ExtractedDependencies;
 }
 
 /**
@@ -394,8 +343,40 @@ export function getDependenciesForSandpack(
 ): {
   dependencies: Record<string, string>;
   extractionInfo: ExtractedDependencies;
+  graphFingerprint: string;
 } {
-  const extractionInfo = extractDependencies(files, { ...options, entryPoints: options.entryPoints ?? runtimeEntryPoints(files) });
+  const resolution = resolveSiteDependencyRuntime(files, baseDependencies, options);
+  const { extractionInfo, dependencies } = resolution;
+  
+  // Log for debugging
+  if (extractionInfo.unresolved.length > 0) {
+    console.warn('[DependencyExtractor] Unresolved packages (using latest):', extractionInfo.unresolved);
+  }
+  
+  console.log('[DependencyExtractor] Resolved site runtime:', {
+    total: Object.keys(dependencies).length,
+    detected: extractionInfo.detected.length,
+    fromPackageJson: extractionInfo.fromPackageJson.length,
+    unresolved: extractionInfo.unresolved.length,
+    graphFingerprint: resolution.graphFingerprint,
+    time: `${extractionInfo.extractionTime.toFixed(2)}ms`,
+  });
+  
+  return { dependencies, extractionInfo, graphFingerprint: resolution.graphFingerprint };
+}
+
+/**
+ * Resolve one site's reachable import graph into the exact dependency map used
+ * by preview, candidate validation, and runtime compatibility checks.
+ */
+export function resolveSiteDependencyRuntime(
+  files: Record<string, string>,
+  baseDependencies: Record<string, string> = {},
+  options: DependencyExtractionOptions = {},
+): ResolvedSiteDependencyRuntime {
+  const entryPoints = [...new Set((options.entryPoints?.length ? options.entryPoints : runtimeEntryPoints(files))
+    .map(normalizeVfsPath))].sort();
+  const extractionInfo = extractDependencies(files, { ...options, entryPoints });
   // The curated baseline is part of the generated-site runtime contract, not
   // an optimization hint. It keeps Radix primitives and Tailwind plugin paths
   // available for rich components even before a particular variant imports
@@ -404,26 +385,34 @@ export function getDependenciesForSandpack(
   const dependencies = expandSandpackRuntimeDependencies(
     mergeDependencies(extractionInfo.dependencies, baseDependencies),
   );
-  
-  // Log for debugging
-  if (extractionInfo.unresolved.length > 0) {
-    console.warn('[DependencyExtractor] Unresolved packages (using latest):', extractionInfo.unresolved);
-  }
-  
-  console.log('[DependencyExtractor] Extracted dependencies:', {
-    total: Object.keys(dependencies).length,
-    detected: extractionInfo.detected.length,
-    fromPackageJson: extractionInfo.fromPackageJson.length,
-    unresolved: extractionInfo.unresolved.length,
-    time: `${extractionInfo.extractionTime.toFixed(2)}ms`,
-  });
-  
-  return { dependencies, extractionInfo };
+
+  const reachableFiles = entryPoints.length ? collectReachableFiles(files, entryPoints) : files;
+  const sourceHashes = Object.entries(reachableFiles)
+    .map(([path, source]) => [normalizeVfsPath(path), hashSeed(source)] as const)
+    .sort(([left], [right]) => left.localeCompare(right));
+  const sortedDependencies = Object.entries(dependencies).sort(([left], [right]) => left.localeCompare(right));
+  const graphFingerprint = `site-deps-v1-${hashSeed(JSON.stringify({
+    runtimeProfile: GENERATED_RUNTIME_PROFILE.id,
+    entryPoints,
+    sourceHashes,
+    dependencies: sortedDependencies,
+  })).toString(16).padStart(8, '0')}`;
+
+  return {
+    version: '1.0',
+    runtimeProfile: GENERATED_RUNTIME_PROFILE.id,
+    entryPoints,
+    dependencies,
+    packageNames: sortedDependencies.map(([name]) => name),
+    graphFingerprint,
+    extractionInfo,
+  };
 }
 
 export default {
   extractDependencies,
   mergeDependencies,
+  resolveSiteDependencyRuntime,
   getDependenciesForSandpack,
   KNOWN_VERSIONS,
 };

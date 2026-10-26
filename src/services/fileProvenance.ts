@@ -51,6 +51,14 @@ async function hashFile(contents: string): Promise<string> {
   return `fnv1a:${hash.toString(16).padStart(8, '0')}`;
 }
 
+export async function fileProvenanceMatchesContent(
+  contents: string,
+  provenance: FileProvenanceRecord | undefined,
+): Promise<boolean> {
+  if (!provenance || provenance.deleted || !provenance.currentHash) return false;
+  return provenance.currentHash === await hashFile(contents);
+}
+
 /**
  * Produce ledger metadata only. This never changes source, chooses layouts,
  * or grants ownership from a filename convention. Supabase stamps the actual

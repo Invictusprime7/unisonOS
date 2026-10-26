@@ -27,4 +27,4 @@
     Cross-Origin-Resource-Policy = "same-origin"
 
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "24"

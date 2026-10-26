@@ -17,7 +17,7 @@ import {
   repairAiJsxTypos,
   validateAIFileEdits,
 } from '@/services/aiVFSOrchestrator';
-import { getDependenciesForSandpack } from '@/utils/dependencyExtractor';
+import { resolveSiteDependencyRuntime } from '@/utils/dependencyExtractor';
 import { isSandpackAllowedImport } from '@/utils/sandpackDependencies';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import type { CanonicalAuthorshipEvidence } from './canonicalAuthoringRequest';
@@ -50,6 +50,7 @@ export interface AICandidateChangeSet extends CandidateOperationInput {
   fileOps: CandidateFileOp[];
   routeOps: TopologyChange[];
   requestedDependencies?: string[];
+  dependencyGraphFingerprint?: string;
   targetPages: string[];
   attempt: number;
   /** Content fingerprint (fnv1a, null = absent) of each touched path in the base; lets the coordinator rebase safely. */
@@ -137,8 +138,10 @@ export function buildAICandidateChangeSet(input: BuildCandidateInput): Candidate
 
   const candidateFiles = applyCandidateFileOps(base, fileOps);
   let requestedDependencies: string[] | undefined;
+  let dependencyGraphFingerprint: string | undefined;
   if (input.resolveDependencies !== false && fileOps.length) {
-    const { dependencies } = getDependenciesForSandpack(candidateFiles);
+    const resolvedRuntime = resolveSiteDependencyRuntime(candidateFiles);
+    const { dependencies } = resolvedRuntime;
     const pkg = generatePackageJson(dependencies, candidateFiles);
     const prev = JSON.parse(base['/package.json'] || '{"dependencies":{}}').dependencies ?? {};
     requestedDependencies = Object.keys(JSON.parse(pkg).dependencies).filter((d) => !(d in prev)).sort();
@@ -146,6 +149,7 @@ export function buildAICandidateChangeSet(input: BuildCandidateInput): Candidate
       fileOps.push({ type: base['/package.json'] ? 'replace' : 'create', path: '/package.json', content: pkg });
       candidateFiles['/package.json'] = pkg;
     }
+    dependencyGraphFingerprint = resolveSiteDependencyRuntime(candidateFiles).graphFingerprint;
   }
 
   const attempt = input.attempt ?? 1;
@@ -175,6 +179,7 @@ export function buildAICandidateChangeSet(input: BuildCandidateInput): Candidate
       routeOps,
       ...operations,
       requestedDependencies,
+      dependencyGraphFingerprint,
       targetPages: [...(input.targetPages ?? [])].sort(),
       attempt,
       baseFingerprints: Object.fromEntries(fileOps.map((op) => [

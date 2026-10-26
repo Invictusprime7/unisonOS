@@ -168,7 +168,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     `Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.`,
     business.bindingGuide ? `Binding guide: ${business.bindingGuide}` : '',
     `Protected paths: ${runtime.protectedPaths.join(', ')}.`,
-    `Approved dependencies: ${runtime.approvedDependencies.join(', ')}.`,
+    `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.`,
     modules,
     'Portable recipe identity: pass stable sectionId from the page composition and componentInstanceId only from an existing canonical functional instance; never invent cmp_ IDs or substitute an implementation ID for an instance ID. Local toggles are component state, not data-ut-intent. Auth submit forms use data-intent-form="auth.login"/"auth.register"; auth.login/auth.register click bindings only open/focus auth.',
     `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.`,

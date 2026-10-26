@@ -93,6 +93,19 @@ describe('builder AI mutation transaction', () => {
     expect(outcome.success).toBe(false);
   });
 
+  it('surfaces typed early refusals as actionable rejected outcomes', async () => {
+    persistAiCommit.mockImplementation(async () => {
+      throw Object.assign(new Error('The edit overlaps a newer revision.'), {
+        code: 'STALE_REVISION',
+        stage: 'queue-rebase',
+      });
+    });
+    const outcome = await runBuilderAiMutation(ctx, { mirror: () => ({ success: true }) });
+    expect(outcome.state).toBe('rejected');
+    expect(outcome.errors[0]).toBe('[STALE_REVISION at queue-rebase] The edit overlaps a newer revision.');
+    expect(outcome.reason).toBe(outcome.errors[0]);
+  });
+
   it('mirrors the complete committed map and reports deleted paths', async () => {
     const deletionCtx = {
       ...ctx,

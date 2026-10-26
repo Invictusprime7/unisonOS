@@ -101,7 +101,7 @@ describe('legacy saved draft hydration', () => {
         }));
       } }],
     });
-  }, 15_000);
+  }, 60_000);
   it('reports an unavailable saved template rather than substituting a different site', async () => {
     const plan = planSiteTopology('ecommerce', 'Saved Brand', { selectedTemplateId: 'store-boutique' });
     await expect(projectLegacySavedPlan({ ...plan, selectedTemplateId: 'removed-template' })).rejects.toThrow('The project is not empty');

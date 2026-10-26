@@ -25,7 +25,6 @@ import { resolveMutableNode } from '@/services/agent-runtime/nodeAddress';
 import { runPreviewProbe, parseProbeArgs, formatProbeReport } from '@/services/agent-runtime/previewProbe';
 import { removeSection, restyleSection, moveSection, swapVariant } from '@/services/agent-runtime/sectionActions';
 import { matchNaturalLanguage, looksLikeNaturalLanguage } from '@/services/terminal/naturalLanguage';
-import { SANDPACK_DEPENDENCIES, isSandpackAllowedImport } from '@/utils/sandpackDependencies';
 
 // ============================================================================
 // Types
@@ -493,8 +492,7 @@ function cmdUninstall(args: string[], ctx: CommandContext): CommandResult {
 }
 
 function cmdDeps(ctx: CommandContext): CommandResult {
-  const deps = { ...SANDPACK_DEPENDENCIES, ...ctx.currentDeps };
-  const sorted = Object.entries(deps).sort(([a], [b]) => a.localeCompare(b));
+  const sorted = Object.entries(ctx.currentDeps).sort(([a], [b]) => a.localeCompare(b));
 
   if (sorted.length === 0) {
     return { lines: [mkLine('output', 'No dependencies installed')] };
@@ -505,8 +503,7 @@ function cmdDeps(ctx: CommandContext): CommandResult {
   ];
 
   for (const [pkg, ver] of sorted) {
-    const isCustom = ctx.currentDeps[pkg] && !SANDPACK_DEPENDENCIES[pkg];
-    lines.push(mkLine('output', `  ${pkg} ${ver}${isCustom ? ' (custom)' : ''}`));
+    lines.push(mkLine('output', `  ${pkg} ${ver}`));
   }
 
   return { lines };
@@ -532,7 +529,7 @@ function cmdPreset(args: string[], ctx: CommandContext): CommandResult {
   let count = 0;
 
   for (const [pkg, ver] of Object.entries(preset)) {
-    if (!ctx.currentDeps[pkg] && !SANDPACK_DEPENDENCIES[pkg]) {
+    if (!ctx.currentDeps[pkg]) {
       ctx.onAddDep(pkg, ver);
       lines.push(mkLine('success', `  ✓ ${pkg}@${ver}`));
       count++;
@@ -896,8 +893,10 @@ export function getDiagnosticsForAI(ctx: CommandContext): Record<string, unknown
     importMatches.forEach(importStr => {
       const moduleName = importStr.match(/from ['"]([^'"]+)['"]/)?.[1];
       if (moduleName && !moduleName.startsWith('.') && !moduleName.startsWith('/')) {
-        // Check if it's in dependencies
-        if (!ctx.currentDeps[moduleName] && !isSandpackAllowedImport(moduleName)) {
+        const packageRoot = moduleName.startsWith('@')
+          ? moduleName.split('/').slice(0, 2).join('/')
+          : moduleName.split('/')[0];
+        if (!ctx.currentDeps[packageRoot]) {
           importIssues.push(`${file}: Missing dependency "${moduleName}"`);
         }
       }

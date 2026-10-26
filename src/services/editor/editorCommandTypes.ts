@@ -76,6 +76,8 @@ export type EditorOwnerLane = 'resource' | 'source' | 'presentation' | 'route' |
 
 export type EditorCommandSource = 'inline' | 'toolbar' | 'inspector' | 'ai' | 'command-palette';
 
+export type EditorCommandRejectionCode = 'ASSET_IDENTITY_INVALID';
+
 /** One result shape for every surface (§44). */
 export interface EditorCommandResult {
   ok: boolean;
@@ -87,5 +89,6 @@ export interface EditorCommandResult {
   revisionId?: string | null;
   undo?: () => Promise<void>;
   error?: string;
+  rejectionCode?: EditorCommandRejectionCode;
   record?: import('@/services/resources/resourceTypes').ResourceRecord | null;
 }

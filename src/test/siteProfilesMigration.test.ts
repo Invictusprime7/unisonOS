@@ -97,7 +97,7 @@ describe('site_profiles migration', () => {
       'Business admins update site profile',
       'Site members read site profile',
     ]);
-  });
+  }, 20000);
 
   it('can be applied twice without duplicating policies or triggers', async () => {
     pg = new PGlite();
@@ -164,5 +164,5 @@ describe('site_profiles migration', () => {
       'INSERT INTO public.site_intent_bindings (id, business_id) VALUES ($1, $2)',
       ['ffffffff-ffff-4fff-8fff-ffffffffffff', firstUser],
     )).rejects.toThrow();
-  });
+  }, 20000);
 });

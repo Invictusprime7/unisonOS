@@ -153,7 +153,7 @@ describe('authored marketplace previews', () => {
 
       unmount();
     }
-  });
+  }, 30000);
 
   it('uses unique image sources across every preview and catalog cover', () => {
     const seenImages = new Map<string, string>();

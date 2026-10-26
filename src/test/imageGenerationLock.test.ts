@@ -45,23 +45,32 @@ describe('image generation lock', () => {
   });
 
   it('carries the wait the service asked for, so the message can state it', async () => {
-    invoke.mockResolvedValue({
-      data: null,
-      error: {
-        message: 'Edge Function returned a non-2xx status code',
-        context: {
-          status: 429,
-          clone: () => ({
-            json: async () => ({ success: false, error: 'The picture maker is busy — try again in 12 seconds.', retryAfterSeconds: 12 }),
-          }),
+    vi.useFakeTimers();
+    try {
+      invoke.mockResolvedValue({
+        data: null,
+        error: {
+          message: 'Edge Function returned a non-2xx status code',
+          context: {
+            status: 429,
+            clone: () => ({
+              json: async () => ({ success: false, error: 'The picture maker is busy — try again in 12 seconds.', retryAfterSeconds: 12 }),
+            }),
+          },
         },
-      },
-    });
-    await expect(generateSiteImage('a picture', target)).rejects.toMatchObject({
-      name: 'SiteImageRequestError',
-      status: 429,
-      retryAfterSeconds: 12,
-    });
+      });
+      await expect(generateSiteImage('a picture', target)).rejects.toMatchObject({
+        name: 'SiteImageRequestError',
+        status: 429,
+        retryAfterSeconds: 12,
+      });
+      expect(isImageBusy()).toBe(true);
+      await vi.advanceTimersByTimeAsync(12_000);
+      expect(isImageBusy()).toBe(false);
+    } finally {
+      await vi.runOnlyPendingTimersAsync();
+      vi.useRealTimers();
+    }
   });
 
   it('tells subscribers when a picture starts and finishes', async () => {

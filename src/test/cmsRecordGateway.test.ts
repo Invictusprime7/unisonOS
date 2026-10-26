@@ -59,7 +59,9 @@ describe('CMS record gateway contract', () => {
     expect(endpoint).toContain('"content-type-create"');
     expect(endpoint).toContain('"content-entry-transition"');
     expect(endpoint).toContain('"content-entry-revisions"');
-    expect(endpoint).toContain('admin.rpc("cms_apply_content_entry_command"');
+    expect(endpoint).toContain('"cms_apply_content_entry_command_audited"');
+    expect(endpoint).toContain('"cms_apply_content_entry_command_idempotent"');
+    expect(endpoint).toContain('admin.rpc(command, args)');
     expect(endpoint).toContain('parseContentFields(contentType.field_schema)');
     expect(endpoint).toContain('validateContentEntryValues(body.values, parsedSchema.fields)');
   });
