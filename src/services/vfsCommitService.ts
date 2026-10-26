@@ -1295,7 +1295,10 @@ async function commitMutationInner(
   }
 
   const requirePreview = input.options?.requirePreviewPass !== false;
-  const requireReadiness = input.options?.requireReadinessPass !== false;
+  // Readiness is advisory for saves: a broken business connection is saved
+  // with an explicit warning (see below) instead of rejecting the save.
+  const requireReadinessRequested = input.options?.requireReadinessPass !== false;
+  const requireReadiness = false;
 
   // User-driven Builder edits are validated, never grown: required industry
   // surfaces are closed at launch, not injected into a later style/copy edit.
@@ -1454,6 +1457,24 @@ async function commitMutationInner(
     (!previewVerdict || previewVerdict.ok) &&
     intentPreviewBlocked === 0 &&
     elementPreviewBlocked === 0;
+  // Business-connection / capability readiness never blocks a save; it is
+  // reported as an explicit warning so the user sees exactly what is missing.
+  if (!readinessOk) {
+    log('readiness', 'warn', 'Saved with business connection warnings: ' + [
+      gate && !gate.previewReady ? 'a required business capability is not connected' : null,
+      previewVerdict && !previewVerdict.ok ? 'business connection check failed' : null,
+      intentPreviewBlocked > 0 ? `${intentPreviewBlocked} button action(s) are not connected yet` : null,
+      elementPreviewBlocked > 0 ? `${elementPreviewBlocked} element(s) need a business service that is not set up` : null,
+    ].filter(Boolean).join('; '), {
+      requestedReadinessPass: requireReadinessRequested,
+      gateReasons: (gate as { reasons?: unknown } | null)?.reasons ?? [],
+      previewVerdictReasons: (previewVerdict as { reasons?: unknown } | null)?.reasons ?? [],
+      intentPreviewBlocked,
+      elementPreviewBlocked,
+      elementFixes: elementReadiness?.summary ?? null,
+    });
+  }
+
 
   let backendOpsReport: BackendOpExecutionReport | null = null;
   let runtimeReconciliationError: string | null = null;
