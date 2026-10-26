@@ -29,6 +29,8 @@ export interface EffectiveCompositionAuthority {
   uncertainPages: string[];
   /** False whenever any page is uncertain: projection never claims full coverage. */
   complete: boolean;
+  /** True when the index was rebuilt from saved files on open (still provisional). */
+  rebuilt?: boolean;
 }
 
 export function assessEffectiveCompositionAuthority(row: {
