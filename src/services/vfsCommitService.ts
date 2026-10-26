@@ -102,6 +102,7 @@ import {
 } from '@/services/fileProvenance';
 import { generateUUID } from '@/utils/uuid';
 import { projectEffectiveComposition } from '@/services/effectiveCompositionProjector';
+import { assessEffectiveCompositionAuthority, type EffectiveCompositionAuthority } from '@/services/effectiveCompositionAuthority';
 import { applyTopologyChange, syncTopologyAndRouter } from '@/services/pageTopologyOrchestrator';
 import { deriveFilePath } from '@/services/routeNavigationService';
 import {
@@ -2579,6 +2580,8 @@ export interface LoadedRevision {
   parentRevisionId?: string | null;
   /** Human-readable checkpoint label (patch summary), when recorded. */
   label?: string | null;
+  /** Whether the stored effective composition is database-stamped for this exact row. */
+  compositionAuthority?: EffectiveCompositionAuthority;
 }
 
 /**
