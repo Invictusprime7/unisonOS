@@ -3,7 +3,8 @@
 ## Active: OS8 canonical creative freedom
 - [x] P1: loaded revisions report whether their design index is database-stamped for that exact version (durable) or provisional, and never claim full coverage when source is uncertain.
 - [ ] P1: confirm the stamping migration is applied on UNISON (needs the deploy workflow).
-- [ ] P0 rejection fixtures (free-form hero, multi-file, protected file, broken import, broken binding).
+- [x] P0: refused saves record attempted operation, expected owner and reason per path (protected-file fixture asserts them).
+- [ ] P0 remaining fixtures: free-form hero, multi-file component, broken import, broken binding.
 - [ ] P2–P5: preview node locators, scoped AI edit intents, project media assets, atomic publish parity.
 
 ## Active: Marketplace preview draft installation
