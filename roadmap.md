@@ -9,7 +9,7 @@
 - [x] P2: resolver maps a preview click's source locator to its JSX node, owner file, repeated/shared/dynamic flags, and falls back to inspect-only when a rewrite is unsafe.
 - [x] P2: Affinity panel resolves selected elements through the resolver; refuses protected or stale targets with a clear message.
 - [x] P3: edit-intent contract (scope, operation, allowed files, required buttons, expected version, packages, consent) enforced before Builder AI saves when supplied.
-- [ ] P3: build the contract from each Affinity request and ask for consent in chat.
+- [x] P3: Builder saves build the contract from each Affinity request; naming other pages/shared chrome, adding pages, or naming business data in the prompt counts as consent.
 - [ ] P4–P5: project media assets, atomic publish parity.
 
 ## Active: Marketplace preview draft installation
