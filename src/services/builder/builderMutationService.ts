@@ -95,7 +95,7 @@ export async function runBuilderAiMutation(
     const changed = Object.fromEntries(proposed.map((p) => [p, ctx.nextFiles[p] ?? null]));
     const violations = checkEditAgainstIntent(ctx.editIntent, {
       baseRevisionId: ctx.revisionId ?? null, files: changed, previousFiles: ctx.beforeFiles,
-      installedPackages: Object.keys((JSON.parse(ctx.nextFiles['/package.json'] ?? '{}').dependencies ?? {}) as Record<string, string>),
+      installedPackages: (() => { try { return Object.keys(JSON.parse(ctx.nextFiles['/package.json'] ?? '{}').dependencies ?? {}); } catch { return []; } })(),
     });
     if (violations.length > 0) {
       const v = violations[0];
