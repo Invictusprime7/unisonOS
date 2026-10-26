@@ -1,3 +1,4 @@
+import { checkEditAgainstIntent } from '@/services/editor/editIntentContract';
 /**
  * builderMutationService — P0.3 of the canonical closure plan.
  *
@@ -89,6 +90,23 @@ export async function runBuilderAiMutation(
     const reason = `This edit would change where ${retargets.map((v) => `"${v.intent}"`).join(', ')} leads (was ${retargets[0].before.join(', ')}). Button destinations stay fixed during design edits.`;
     emitAgentEvent({ kind: 'error', message: reason, status: 'failed' });
     return { state: 'rejected', success: false, errors: [reason], blockers: [], reason, changedPaths: [] };
+  }
+  if (ctx.editIntent) {
+    const changed = Object.fromEntries(proposed.map((p) => [p, ctx.nextFiles[p] ?? null]));
+    const violations = checkEditAgainstIntent(ctx.editIntent, {
+      baseRevisionId: ctx.revisionId ?? null, files: changed, previousFiles: ctx.beforeFiles,
+      installedPackages: (() => { try { return Object.keys(JSON.parse(ctx.nextFiles['/package.json'] ?? '{}').dependencies ?? {}); } catch { return []; } })(),
+    });
+    if (violations.length > 0) {
+      const v = violations[0];
+      const reason = v.code === 'stale-revision' ? 'The project changed since this edit started. Try the request again.'
+        : v.code === 'cross-page-consent' ? `This edit would also change ${v.paths.join(', ')}. Confirm you want other pages changed.`
+          : v.code === 'backend-consent' ? 'This edit would change business data or backend setup. Confirm before it is saved.'
+            : v.code === 'binding-removed' ? `This edit would remove a working button (${v.bindings.join(', ')}).`
+              : `This edit uses packages that were not added: ${v.packages.join(', ')}.`;
+      emitAgentEvent({ kind: 'error', message: reason, status: 'failed' });
+      return { state: 'rejected', success: false, errors: [reason], blockers: [], reason, changedPaths: [] };
+    }
   }
   emitAgentEvent({ kind: 'verification', message: 'Checking code and preview, then saving', status: 'running' });
 

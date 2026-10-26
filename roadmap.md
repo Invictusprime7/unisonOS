@@ -8,7 +8,9 @@
 - [x] P0 fixtures: free-form hero and multi-file component accepted; broken import and broken required binding refused with their codes.
 - [x] P2: resolver maps a preview click's source locator to its JSX node, owner file, repeated/shared/dynamic flags, and falls back to inspect-only when a rewrite is unsafe.
 - [x] P2: Affinity panel resolves selected elements through the resolver; refuses protected or stale targets with a clear message.
-- [ ] P3–P5: scoped AI edit intents, project media assets, atomic publish parity.
+- [x] P3: edit-intent contract (scope, operation, allowed files, required buttons, expected version, packages, consent) enforced before Builder AI saves when supplied.
+- [ ] P3: build the contract from each Affinity request and ask for consent in chat.
+- [ ] P4–P5: project media assets, atomic publish parity.
 
 ## Active: Marketplace preview draft installation
 - [x] Correct missing required p_target_status in content create/update RPC requests; four handler execution regressions cover audited/idempotent signatures, 20 focused checks pass.
