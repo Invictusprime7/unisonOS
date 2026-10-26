@@ -9242,7 +9242,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               systemsBuildContext={systemsBuildContextFromState}
               businessId={businessId ?? null}
               projectId={projectId ?? null}
-              expectedRevisionId={currentRevisionId || null}
               industry={
                 (effectiveRouteState?.siteBundleSnapshot as { industry?: string } | undefined)?.industry ||
                 (typeof activeSystemType === 'string' ? activeSystemType : null)
