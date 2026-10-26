@@ -551,8 +551,10 @@ export function recompileFromPlayground(
     snapshotDesignIntervention &&
     JSON.stringify(mirroredDesignIntervention) !== JSON.stringify(snapshotDesignIntervention)
   ) {
-    throw new Error(
-      '[canonicalPipeline] Recompile presentation contract mismatch between SiteBundleSnapshot metadata and VFS mirror.',
+    // The SiteBundleSnapshot is authoritative; a drifted mirror must not block
+    // saves. Recompile re-projects the mirror from the snapshot below.
+    warnings.push(
+      'Design record mirror drifted from the SiteBundleSnapshot; the snapshot was used and the mirror is re-synced.',
     );
   }
   const resolvedDesignIntervention = snapshotDesignIntervention || mirroredDesignIntervention || buildWizardDesignIntervention({
