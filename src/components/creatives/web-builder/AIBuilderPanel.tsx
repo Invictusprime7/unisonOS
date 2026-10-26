@@ -1,3 +1,4 @@
+import { resolvePreviewSource } from '@/services/editor/previewSourceResolver';
 import { clarifyBuilderRequest } from '@/services/builder/conversationalClarifier';
 import { isThemeOnlyRequest } from '@/services/theme/themeEdit';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
@@ -1394,7 +1395,12 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           const pageFile = resolveRouteSourceFile(vfsFiles, pageRoute);
           if (pageFile) {
             const locator = selectedTarget.descriptor?.sourceLocator ?? selectedTarget.scopeAncestors?.sourceLocator;
-            const owner = locator?.match(/^(\/[^:]+\.(?:tsx|jsx))(?::|$)/)?.[1];
+            // P2: resolve the click to its exact source node and owner; refuse
+            // protected or stale targets instead of guessing another file.
+            const resolution = locator ? resolvePreviewSource({ locator, files: vfsFiles, pagePath: pageFile }) : null;
+            if (resolution?.reason === 'protected-owner') throw new Error('This part is managed by Unison and cannot be edited directly. Select the page content instead.');
+            if (resolution?.reason === 'node-missing') throw new Error('The selected element changed since the preview loaded. Refresh the preview and reselect it.');
+            const owner = resolution?.ownerPath ?? locator?.match(/^(\/[^:]+\.(?:tsx|jsx))(?::|$)/)?.[1];
             const needle = (selectedTarget.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
             const contains = (file: string) => Boolean(needle) && (vfsFiles[file] ?? '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').includes(needle);
             const matches = [pageFile, ...resolveLocalImports(vfsFiles, pageFile)].filter(contains);
