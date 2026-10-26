@@ -15,6 +15,9 @@ export interface PlacedUpload {
   kind: UploadKind;
   mimeType: string;
   url: string;
+  /** Stable storage location; the link may be re-issued, the path never changes. */
+  bucket?: string;
+  storagePath?: string;
   /** Plain text extracted client-side (text/markdown/code, PDF and Word files). */
   text?: string;
 }
@@ -76,7 +79,7 @@ export async function uploadForPlacement(file: File, projectId: string | null | 
   const { data, error: signErr } = await supabase.storage.from(UPLOAD_BUCKET).createSignedUrl(path, TEN_YEARS);
   if (signErr || !data?.signedUrl) throw new Error(`Couldn't create a link for ${file.name}.`);
   const text = await extractUploadText(file);
-  return { name: file.name, kind: classifyUpload(file.type, file.name), mimeType: file.type || 'application/octet-stream', url: data.signedUrl, text };
+  return { name: file.name, kind: classifyUpload(file.type, file.name), mimeType: file.type || 'application/octet-stream', url: data.signedUrl, bucket: UPLOAD_BUCKET, storagePath: path, text };
 }
 
 /**
