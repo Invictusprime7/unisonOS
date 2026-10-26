@@ -7,7 +7,7 @@
 - [x] P0: refused saves record attempted operation, expected owner and reason per path (protected-file fixture asserts them).
 - [x] P0 fixtures: free-form hero and multi-file component accepted; broken import and broken required binding refused with their codes.
 - [x] P2: resolver maps a preview click's source locator to its JSX node, owner file, repeated/shared/dynamic flags, and falls back to inspect-only when a rewrite is unsafe.
-- [ ] P2: route editor clicks through the resolver (toolbar/AI panel still read the raw locator).
+- [x] P2: Affinity panel resolves selected elements through the resolver; refuses protected or stale targets with a clear message.
 - [ ] P3–P5: scoped AI edit intents, project media assets, atomic publish parity.
 
 ## Active: Marketplace preview draft installation
