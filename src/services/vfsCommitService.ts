@@ -2647,7 +2647,7 @@ export async function loadRevision(revisionId: string): Promise<LoadedRevision |
       const merged = { ...cached, ...(summary as Record<string, unknown>) };
       REVISION_ROW_CACHE.delete(revisionId);
       REVISION_ROW_CACHE.set(revisionId, merged);
-      return mapRevisionRow(merged);
+      return withRebuiltComposition(mapRevisionRow(merged));
     } else {
       REVISION_ROW_CACHE.delete(revisionId);
     }
@@ -2664,7 +2664,7 @@ export async function loadRevision(revisionId: string): Promise<LoadedRevision |
     const oldest = REVISION_ROW_CACHE.keys().next().value;
     if (oldest) REVISION_ROW_CACHE.delete(oldest);
   }
-  return mapRevisionRow(row);
+  return withRebuiltComposition(mapRevisionRow(row));
 }
 
 export async function loadLatestRevisionForProject(
@@ -2679,7 +2679,7 @@ export async function loadLatestRevisionForProject(
     .limit(1)
     .maybeSingle();
   if (error || !data) return null;
-  return mapRevisionRow(data as Record<string, unknown>);
+  return withRebuiltComposition(mapRevisionRow(data as Record<string, unknown>));
 }
 
 async function loadNewestCommittedRevisionForDraft(
@@ -2765,7 +2765,7 @@ export async function loadLatestPublishReadyRevisionForProject(
     .limit(1)
     .maybeSingle();
   if (error || !data) return null;
-  return mapRevisionRow(data as Record<string, unknown>);
+  return withRebuiltComposition(mapRevisionRow(data as Record<string, unknown>));
 }
 
 /**
@@ -2785,6 +2785,40 @@ export async function listRecentRevisionsForProject(
     .limit(limit);
   if (error || !data) return [];
   return (data as Record<string, unknown>[]).map(mapRevisionRow);
+}
+
+/**
+ * P1 — on open, a committed revision whose design index is not proven gets an
+ * in-memory index rebuilt from its saved files. It stays `provisional` (no
+ * revisionId stamp) until a new save is stamped by the database.
+ */
+export async function withRebuiltComposition(revision: LoadedRevision): Promise<LoadedRevision> {
+  const authority = revision.compositionAuthority;
+  if (!authority || authority.status === 'durable' || revision.status !== 'committed') return revision;
+  const snapshot = revision.siteBundleSnapshot as { meta?: Record<string, unknown>; pageRegistry?: { pages?: Record<string, { filePath?: string | null }> }; bindings?: Record<string, never> } | null;
+  if (!snapshot || !snapshot.pageRegistry?.pages) return revision;
+  try {
+    const projection = await projectEffectiveComposition({
+      pages: snapshot.pageRegistry.pages,
+      files: revision.vfsFiles,
+      fileProvenance: revision.fileProvenance as never,
+      bindings: snapshot.bindings,
+      baseRevisionId: revision.parentRevisionId,
+      vfsHash: revision.vfsHash ?? await hashVfsFiles(revision.vfsFiles),
+      hashSource: (path, source) => hashVfsFiles({ [path]: source }),
+    });
+    const { revisionId: _unstamped, ...provisional } = projection;
+    const uncertainPages = Object.entries(provisional.pages)
+      .filter(([, page]) => Array.isArray(page?.uncertain) && page.uncertain.length > 0)
+      .map(([id]) => id).sort();
+    return {
+      ...revision,
+      siteBundleSnapshot: { ...snapshot, meta: { ...(snapshot.meta ?? {}), effectiveComposition: provisional } },
+      compositionAuthority: { ...authority, status: 'provisional', revisionId: null, uncertainPages, complete: false, rebuilt: true },
+    };
+  } catch {
+    return revision;
+  }
 }
 
 function mapRevisionRow(row: Record<string, unknown>): LoadedRevision {

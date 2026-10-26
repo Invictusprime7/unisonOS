@@ -31,3 +31,30 @@ describe('effective composition revision authority', () => {
     expect(result.uncertainPages).toEqual(['home']);
   });
 });
+
+describe('withRebuiltComposition (open-time rebuild)', { timeout: 30_000 }, () => {
+  const base = {
+    id: 'rev-1', projectId: 'p', businessId: 'b', draftId: 'd', source: 'ai' as never, status: 'committed' as const,
+    vfsFiles: { '/src/pages/Home.tsx': 'export default function Home(){return <main><section data-section="hero">Hi</section></main>}' },
+    runtimeManifest: null, playground: null, readinessReport: {}, diagnostics: [], publishReady: false, publishBlockers: [],
+    vfsHash: 'h1', candidateId: null, operationIds: [], fileProvenance: {}, createdAt: '', parentRevisionId: null, label: null,
+  };
+  it('rebuilds a provisional index from saved files and keeps it unstamped', async () => {
+    const { withRebuiltComposition } = await import('@/services/vfsCommitService');
+    const out = await withRebuiltComposition({
+      ...base,
+      siteBundleSnapshot: { meta: {}, pageRegistry: { pages: { home: { filePath: '/src/pages/Home.tsx' } } } },
+      compositionAuthority: { status: 'provisional', reason: 'absent', revisionId: null, uncertainPages: [], complete: false },
+    } as never);
+    const ec = (out.siteBundleSnapshot as { meta: { effectiveComposition: { revisionId?: string; pages: object } } }).meta.effectiveComposition;
+    expect(Object.keys(ec.pages)).toEqual(['home']);
+    expect(ec.revisionId).toBeUndefined();
+    expect(out.compositionAuthority?.status).toBe('provisional');
+    expect(out.compositionAuthority?.rebuilt).toBe(true);
+  });
+  it('leaves a durable revision untouched', async () => {
+    const { withRebuiltComposition } = await import('@/services/vfsCommitService');
+    const rev = { ...base, siteBundleSnapshot: { meta: {} }, compositionAuthority: { status: 'durable', reason: 'revision-stamped', revisionId: 'rev-1', uncertainPages: [], complete: true } } as never;
+    expect(await withRebuiltComposition(rev)).toBe(rev);
+  });
+});
