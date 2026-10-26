@@ -1959,14 +1959,14 @@ describe('Move D — publish-ready ledger', () => {
 
 describe('P0 rejection fixtures', () => {
   const app = 'export default function App(){return null}';
-  const run = (before: Record<string, string>, after: Record<string, string>, previewBlocked = 0) => {
+  const run = (before: Record<string, string>, after: Record<string, string>, previewBlocked = 0, requireReadinessPass = false) => {
     const next = { ...before, ...after };
     mockPipeline(next); mockPreflight(next); mockIntents(previewBlocked);
     return commitMutation({
       source: 'ai-builder', identity: IDENTITY,
       current: { vfsFiles: before },
       patch: legacyFilesToPatchPlan(after),
-      options: { dryRun: true, requirePreviewPass: true, requireReadinessPass: false },
+      options: { dryRun: true, requirePreviewPass: true, requireReadinessPass },
     });
   };
   const codes = (err: unknown) => ((err as { result?: CommitMutationResult }).result?.diagnostics ?? []).map(d => d.code).filter(Boolean);
@@ -1999,8 +1999,7 @@ describe('P0 rejection fixtures', () => {
   it('rejects a broken required business binding as LOCKED_INTENT_OR_DATA_FIELD', async () => {
     const err = await run({ '/src/App.tsx': app, '/src/pages/Home.tsx': 'export default function Home(){return <main/>}' }, {
       '/src/pages/Home.tsx': 'export default function Home(){return <main><button data-ut-intent="booking.create">Book</button></main>}',
-    }, 1).catch(e => e);
-    console.log("DBG", (err as any)?.status ?? (err as any)?.message, JSON.stringify(((err as any)?.result ?? err)?.diagnostics?.map((d:any)=>[d.stage,d.level,d.message,d.code])));
+    }, 1, true).catch(e => e);
     expect(codes(err)).toContain('LOCKED_INTENT_OR_DATA_FIELD');
     expect(revisionStore).toHaveLength(0);
   });
