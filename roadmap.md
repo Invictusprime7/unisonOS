@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: OS8 canonical creative freedom
+- [x] P1: loaded revisions report whether their design index is database-stamped for that exact version (durable) or provisional, and never claim full coverage when source is uncertain.
+- [ ] P1: confirm the stamping migration is applied on UNISON (needs the deploy workflow).
+- [ ] P0 rejection fixtures (free-form hero, multi-file, protected file, broken import, broken binding).
+- [ ] P2–P5: preview node locators, scoped AI edit intents, project media assets, atomic publish parity.
+
 ## Active: Marketplace preview draft installation
 - [x] Correct missing required p_target_status in content create/update RPC requests; four handler execution regressions cover audited/idempotent signatures, 20 focused checks pass.
 - [ ] Verify corrected content setup on a signed-in Lowtide House install: requires canonical GitHub deployment of cms-records and an authoritative UNISON session; supplied managed session belongs to the other backend.

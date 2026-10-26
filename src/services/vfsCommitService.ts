@@ -102,6 +102,7 @@ import {
 } from '@/services/fileProvenance';
 import { generateUUID } from '@/utils/uuid';
 import { projectEffectiveComposition } from '@/services/effectiveCompositionProjector';
+import { assessEffectiveCompositionAuthority, type EffectiveCompositionAuthority } from '@/services/effectiveCompositionAuthority';
 import { applyTopologyChange, syncTopologyAndRouter } from '@/services/pageTopologyOrchestrator';
 import { deriveFilePath } from '@/services/routeNavigationService';
 import {
@@ -2579,6 +2580,8 @@ export interface LoadedRevision {
   parentRevisionId?: string | null;
   /** Human-readable checkpoint label (patch summary), when recorded. */
   label?: string | null;
+  /** Whether the stored effective composition is database-stamped for this exact row. */
+  compositionAuthority?: EffectiveCompositionAuthority;
 }
 
 /**
@@ -2809,6 +2812,16 @@ function mapRevisionRow(row: Record<string, unknown>): LoadedRevision {
       : typeof (row.patch_json as { summary?: unknown } | null)?.summary === 'string'
         ? String((row.patch_json as { summary: string }).summary)
         : null,
+    // Summary rows carry no snapshot; only full rows can prove durable authority.
+    ...('site_bundle_snapshot' in row ? {
+      compositionAuthority: assessEffectiveCompositionAuthority({
+        id: String(row.id),
+        status: row.status as string,
+        vfsHash: (row.vfs_hash as string | null) ?? null,
+        parentRevisionId: (row.parent_revision_id as string | null) ?? null,
+        siteBundleSnapshot: row.site_bundle_snapshot ?? null,
+      }),
+    } : {}),
   };
 }
 
