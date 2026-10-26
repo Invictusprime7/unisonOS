@@ -716,6 +716,10 @@ export async function commitMutation(
         ])],
         expectedVfsHash,
         affectedPaths: [...new Set(input.patch.fileOps.map((operation) => normalizeAuthoredPath(operation.path)))],
+        attemptedOperations: input.patch.fileOps.map((operation) => ({ path: normalizeAuthoredPath(operation.path), type: operation.type })),
+        expectedOwners: [...new Set(input.patch.fileOps.map((operation) => normalizeAuthoredPath(operation.path)))]
+          .map((path) => ({ path, owner: classifyVfsProtection({ path }).classification })),
+        reason: rejection.message,
         detail: rejection.detail,
       };
     }

@@ -86,6 +86,11 @@ export interface MutationEvent {
     targetIds: string[];
     expectedVfsHash: string | null;
     affectedPaths: string[];
+    /** Per-path attempted file operation (create/replace/delete). */
+    attemptedOperations?: Array<{ path: string; type: string }>;
+    /** Per-path owner the edit should have gone through (VFS protection class). */
+    expectedOwners?: Array<{ path: string; owner: string }>;
+    reason?: string;
     detail?: unknown;
   };
   durationMs: number;
