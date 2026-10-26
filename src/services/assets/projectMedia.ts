@@ -52,3 +52,32 @@ export function recordProjectMedia(
 export function unusedProjectMedia(files: Record<string, string>): ProjectMediaAsset[] {
   return readProjectMedia(files).assets.filter((a) => usage(files, a.storagePath).length === 0);
 }
+
+const UPLOAD_URL = /https?:\/\/[^"'`\s)]+\/storage\/v1\/object\/(?:sign|public)\/(user-files)\/([^"'`\s)?]+)(?:\?[^"'`\s)]*)?/g;
+
+function kindFor(name: string): { kind: string; mimeType: string } {
+  const ext = (/\.([a-z0-9]+)$/i.exec(name)?.[1] ?? '').toLowerCase();
+  const image: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', svg: 'image/svg+xml' };
+  if (image[ext]) return { kind: 'image', mimeType: image[ext] };
+  if (ext === 'pdf') return { kind: 'document', mimeType: 'application/pdf' };
+  return { kind: 'other', mimeType: 'application/octet-stream' };
+}
+
+/**
+ * Rebuilds the manifest from the upload links present in saved source.
+ * Returns null when the project has no uploads and no manifest to keep.
+ */
+export function syncProjectMedia(files: Record<string, string>): string | null {
+  const found = new Map<string, { name: string; kind: string; mimeType: string; url: string; bucket: string; storagePath: string }>();
+  for (const [p, content] of Object.entries(files)) {
+    if (p === PROJECT_MEDIA_MANIFEST || typeof content !== 'string') continue;
+    for (const m of content.matchAll(UPLOAD_URL)) {
+      const storagePath = decodeURIComponent(m[2]);
+      if (found.has(storagePath)) continue;
+      const name = storagePath.split('/').pop()!.replace(/^[0-9a-f-]{36}-/i, '');
+      found.set(storagePath, { name, ...kindFor(name), url: m[0], bucket: m[1], storagePath });
+    }
+  }
+  if (found.size === 0 && !(PROJECT_MEDIA_MANIFEST in files)) return null;
+  return recordProjectMedia(files, [...found.values()]);
+}
