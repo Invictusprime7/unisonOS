@@ -1,5 +1,9 @@
 # Roadmap
 
+## Active: WYSIWYG selection recognition
+- [ ] Repair preview section/node identity and direct edit source targeting for saved sites; preserve ambiguity and protected-owner safety.
+- [ ] Run selection/toolbar regressions and verify live recognition where the available session permits.
+
 ## Active: OS8 canonical creative freedom
 - [x] P1: loaded revisions report whether their design index is database-stamped for that exact version (durable) or provisional, and never claim full coverage when source is uncertain.
 - [x] P1: opening a committed revision with an unproven design index rebuilds it from saved files, kept provisional (unstamped) until a new stamped save.
