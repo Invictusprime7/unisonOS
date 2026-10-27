@@ -32,6 +32,18 @@ function heroSelection(overrides: Partial<InspectorSelection> = {}): InspectorSe
 }
 
 describe('property inspector model (M9)', () => {
+  it('recovers the family from the clicked variant when a saved section lacks ancestor type markers', () => {
+    const model = resolveInspectorModel({
+      attributes: { 'data-ut-variant': 'hero:editorial-banner' },
+      canonicalSections: [
+        { sectionId: 'home-hero', sectionType: 'hero', variantId: 'hero:editorial-banner' },
+        { sectionId: 'home-newsletter', sectionType: 'contact' },
+      ],
+    });
+    expect(model.sectionId).toBe('home-hero');
+    expect(model.sectionType).toBe('hero');
+    expect(buildInspectorPatchPlan(model, { kind: 'variant', variantId: 'hero:full-bleed' as never })).toMatchObject({ ok: true, op: { sectionId: 'home-hero' } });
+  });
   it('recovers section family from a canonical slot when DOM ancestors omit it', () => {
     expect(resolveSlotSectionType(null, 'hero.headline')).toBe('hero');
     expect(resolveSlotSectionType('services', 'hero.headline')).toBe('services');

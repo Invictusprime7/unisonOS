@@ -150,7 +150,7 @@ describe('preview selection provenance bridge', () => {
 
   it('uses unique-source resolution for the toolbar VFS fallback', () => {
     const builder = read('src/components/creatives/WebBuilder.tsx');
-    expect(builder).toContain('findUniqueSourceMutation(allFiles, activePath, mutate,');
+    expect(builder).toContain('findUniqueSourceMutation(ownerFiles, activePath, mutate,');
     expect(builder).toContain("match.kind === 'ambiguous'");
     expect(builder).not.toContain('for (const [path, code] of Object.entries(allFiles))');
   });

@@ -1,5 +1,6 @@
 import { describeSelection, type EditableObjectDescriptor } from '@/services/editor/editableObjectDescriptor';
 import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
+import { selectedSourceFinder, mutateSelectedStructure } from "./web-builder/selectedSourceMutation";
 import { insertImageIntoElement, coverBackgroundStyles, anchoredFinder, textRunsFromHtml } from '@/components/creatives/web-builder/pictureInsertion';
 /* cache-bust: 20260309 */
 import { shouldPauseAutosave, runExclusive, recordCommit, getLastCommit, isAiEditActive, holdEditUntilAiIdle, onAiIdleWithHeldEdits, takeHeldEdits } from '@/services/builder/builderMutationCoordinator';
@@ -284,7 +285,6 @@ import {
   findElementBoundsInJSX,
   withSourceManipulation,
   safeFindElement,
-  findJSXClosingTag,
   findUniqueSourceMutation,
   countImageLiteral,
   replaceImageLiteral,
@@ -900,8 +900,13 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     snapshotLabel: string,
     extraHints?: SourceMatchHints,
   ): { ok: boolean; reason?: 'no-match' | 'no-change' | 'ambiguous' } => {
-    // 1. Active page first
-    const next = mutate(previewCode);
+    // A known owner must never fall through to a different page's similar markup.
+    const selected = selectedElementRef.current;
+    const sameSelection = selected?.selector === selector || selected?.imageTarget?.selector === selector;
+    const selectedOwner = sameSelection ? selected?.descriptor?.sourceLocator?.split(':')[0] : null;
+    const ownerPath = extraHints?.ownerPath ?? selectedOwner;
+    const activeOwner = snapshotCtxRef.current.activePagePath;
+    const next = !ownerPath || ownerPath === activeOwner ? mutate(previewCode) : null;
     if (next && next !== previewCode) {
       recordManualPageEdit(snapshotLabel, previewCode, next);
       toolbarPreEditRef.current = virtualFS.getSandpackFiles();
@@ -944,7 +949,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           ...(same ? selectionEvidence(sel) : []),
         ],
       };
-      const match = findUniqueSourceMutation(allFiles, activePath, mutate, hints);
+      const ownerFiles = ownerPath ? { [ownerPath]: allFiles[ownerPath] ?? '' } : allFiles;
+      const match = findUniqueSourceMutation(ownerFiles, activePath, mutate, hints);
       if (match.kind === 'ambiguous') {
         toast.error('Could not safely edit this element because its source matches multiple files.', {
           description: match.paths.slice(0, 3).join(', '),
@@ -1014,11 +1020,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     return sel.imageTarget?.src || attrs.src || String(sel.styles?.backgroundImage ?? '').match(/url\(["']?([^"')]+)["']?\)/)?.[1];
   };
 
-  // The clicked element's tag + own text, so edits land on it rather than on whatever shares its position.
-  const selectionAnchor = (selector: string) => {
+  const selectionFinder = (selector: string) => {
     const sel = selectedElementRef.current;
-    if (!sel || sel.selector !== selector) return null;
-    return { tag: String(sel.tagName ?? '').toLowerCase(), runs: textRunsFromHtml(sel.html) };
+    return selectedSourceFinder(sel?.selector === selector ? sel : null);
   };
 
   const handleFloatingStyleUpdate = useCallback((selector: string, styles: Record<string, string>, hints?: SourceMatchHints) => {
@@ -1027,7 +1031,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     if (nextBg && tryReplaceImageLiteral(currentImageSrcFor(selector, hints), nextBg, 'Manual · replace background image')) return;
     const res = applyMutatorAcrossVFS(
       selector,
-      (code) => mutateJSXStyles(code, selector, styles, anchoredFinder(findElementBoundsInJSX, hints?.anchor ?? selectionAnchor(selector))),
+      (code) => mutateJSXStyles(code, selector, styles, hints?.anchor ? anchoredFinder(findElementBoundsInJSX, hints.anchor) : selectionFinder(selector)),
       (next) => {
         setPreviewCode(next);
         setEditorCode(next);
@@ -1053,7 +1057,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     console.log('[WebBuilder] handleFloatingTextUpdate called:', selector, text);
     const res = applyMutatorAcrossVFS(
       selector,
-      (code) => mutateJSXText(code, selector, text, anchoredFinder(findElementBoundsInJSX, selectionAnchor(selector))),
+      (code) => mutateJSXText(code, selector, text, selectionFinder(selector)),
       (next) => {
         setPreviewCode(next);
         setEditorCode(next);
@@ -1082,7 +1086,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     }
     const res = applyMutatorAcrossVFS(
       selector,
-      (code) => mutateJSXImageSrc(code, selector, src, findElementBoundsInJSX),
+      (code) => mutateJSXImageSrc(code, selector, src, selectionFinder(selector)),
       (next) => {
         setPreviewCode(next);
         setEditorCode(next);
@@ -1107,7 +1111,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     console.log('[WebBuilder] handleFloatingAttributeUpdate called:', selector, attributes);
     const res = applyMutatorAcrossVFS(
       selector,
-      (code) => mutateJSXAttributes(code, selector, attributes, findElementBoundsInJSX),
+      (code) => mutateJSXAttributes(code, selector, attributes, selectionFinder(selector)),
       (next) => {
         setPreviewCode(next);
         setEditorCode(next);
@@ -1151,130 +1155,34 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     });
   }, []);
 
-  // Delete an element from TSX source by selector
-  const applyElementDelete = useCallback((code: string, selector: string) => {
-    return withSourceManipulation(code, (jsx) => {
-      const bounds = findElementBoundsInJSX(jsx, selector);
-      if (!bounds) {
-        console.warn('[applyElementDelete] No match for selector:', selector);
-        return null;
-      }
-      // Remove the element and any trailing whitespace/newline
-      const after = jsx.substring(bounds.end).replace(/^\s*\n?/, '');
-      return jsx.substring(0, bounds.start).replace(/\n\s*$/, '\n') + after;
-    });
-  }, []);
-
-  // Duplicate an element in TSX source by selector
-  const applyElementDuplicate = useCallback((code: string, selector: string) => {
-    return withSourceManipulation(code, (jsx) => {
-      const bounds = findElementBoundsInJSX(jsx, selector);
-      if (!bounds) {
-        console.warn('[applyElementDuplicate] No match for selector:', selector);
-        return null;
-      }
-      const element = jsx.substring(bounds.start, bounds.end);
-      // Insert a copy right after the original, preserving indentation
-      return jsx.substring(0, bounds.end) + '\n' + element + jsx.substring(bounds.end);
-    });
-  }, []);
-
-  // Handle delete from floating toolbar - updates source code
-  const handleFloatingDelete = useCallback((selector: string) => {
-    const res = applyElementDelete(previewCode, selector);
+  // All structural actions share source ownership and the canonical toolbar save path.
+  const handleStructuralEdit = useCallback((selector: string, operation: 'delete' | 'duplicate' | 'up' | 'down') => {
+    const label = { delete: 'delete element', duplicate: 'duplicate element', up: 'move element up', down: 'move element down' }[operation];
+    const finder = selectionFinder(selector);
+    const res = applyMutatorAcrossVFS(
+      selector,
+      (code) => mutateSelectedStructure(code, selector, operation, finder),
+      (next) => {
+        setEditorCode(next);
+        setPreviewCode(next);
+        commitToolbarMutationRef.current?.(next, label);
+      },
+      `Manual · ${label}`,
+    );
     if (!res.ok) {
-      toast.error('Could not delete element. Try selecting a different element.');
+      if (res.reason !== 'ambiguous') toast.error('Could not safely locate this element in saved source.', {
+        description: 'Reselect it in the preview. Runtime-only content and root containers cannot be changed with this action.',
+      });
       return;
     }
-    toolbarPreEditRef.current = virtualFS.getSandpackFiles();
-    recordManualPageEdit('Manual · delete element', previewCode, res.code);
-    setEditorCode(res.code);
-    setPreviewCode(res.code);
-    commitToolbarMutationRef.current?.(res.code, 'delete element');
     setSelectedHTMLElement(null);
     clearLivePreviewSelection();
-    toast.success('Element deleted');
-  }, [previewCode, applyElementDelete, clearLivePreviewSelection, setSelectedHTMLElement, recordManualPageEdit]);
+  }, [applyMutatorAcrossVFS, clearLivePreviewSelection, setSelectedHTMLElement]);
 
-  // Handle duplicate from floating toolbar - updates source code
-  const handleFloatingDuplicate = useCallback((selector: string) => {
-    const res = applyElementDuplicate(previewCode, selector);
-    if (!res.ok) {
-      toast.error('Could not duplicate element. Try selecting a different element.');
-      return;
-    }
-    toolbarPreEditRef.current = virtualFS.getSandpackFiles();
-    recordManualPageEdit('Manual · duplicate element', previewCode, res.code);
-    setEditorCode(res.code);
-    setPreviewCode(res.code);
-    commitToolbarMutationRef.current?.(res.code, 'duplicate element');
-    clearLivePreviewSelection();
-    toast.success('Element duplicated');
-  }, [previewCode, applyElementDuplicate, clearLivePreviewSelection, recordManualPageEdit]);
-
-  // Handle move up - swap element with its previous sibling in TSX source
-  const handleFloatingMoveUp = useCallback((selector: string) => {
-    const res = withSourceManipulation(previewCode, (jsx) => {
-      const bounds = findElementBoundsInJSX(jsx, selector);
-      if (!bounds) return null;
-      // Find the previous sibling element (scan backwards from bounds.start)
-      const before = jsx.substring(0, bounds.start);
-      // Find the last element ending before our start
-      const prevMatch = before.match(/.*(<(\w+)\b[^>]*>[\s\S]*<\/\2\s*>)\s*$/);
-      const prevSelfClose = before.match(/.*(<(\w+)\b[^>]*\/>)\s*$/);
-      const prevEl = prevMatch || prevSelfClose;
-      if (!prevEl) return null;
-      const prevStart = before.lastIndexOf(prevEl[1]);
-      if (prevStart === -1) return null;
-      const current = jsx.substring(bounds.start, bounds.end);
-      const prevElement = jsx.substring(prevStart, bounds.start);
-      // Swap: current before previous
-      return jsx.substring(0, prevStart) + current + prevElement + jsx.substring(bounds.end);
-    });
-    if (!res.ok) {
-      toast.info('Already at the top');
-      return;
-    }
-    toolbarPreEditRef.current = virtualFS.getSandpackFiles();
-    recordManualPageEdit('Manual · move element up', previewCode, res.code);
-    setEditorCode(res.code);
-    setPreviewCode(res.code);
-    commitToolbarMutationRef.current?.(res.code, 'move element up');
-    clearLivePreviewSelection();
-    toast.success('Moved up');
-  }, [previewCode, clearLivePreviewSelection, recordManualPageEdit]);
-
-  // Handle move down - swap element with its next sibling in TSX source
-  const handleFloatingMoveDown = useCallback((selector: string) => {
-    const res = withSourceManipulation(previewCode, (jsx) => {
-      const bounds = findElementBoundsInJSX(jsx, selector);
-      if (!bounds) return null;
-      // Find the next sibling element (scan forward from bounds.end)
-      const after = jsx.substring(bounds.end);
-      const nextMatch = after.match(/^\s*<(\w+)\b/);
-      if (!nextMatch) return null;
-      const nextTagName = nextMatch[1];
-      const nextStart = bounds.end + (after.length - after.trimStart().length);
-      const nextEnd = findJSXClosingTag(jsx, nextStart, nextTagName);
-      if (nextEnd === -1) return null;
-      const current = jsx.substring(bounds.start, bounds.end);
-      const whitespace = jsx.substring(bounds.end, nextStart);
-      const nextElement = jsx.substring(nextStart, nextEnd);
-      // Swap: next before current
-      return jsx.substring(0, bounds.start) + nextElement + whitespace + current + jsx.substring(nextEnd);
-    });
-    if (!res.ok) {
-      toast.info('Already at the bottom');
-      return;
-    }
-    toolbarPreEditRef.current = virtualFS.getSandpackFiles();
-    recordManualPageEdit('Manual · move element down', previewCode, res.code);
-    setEditorCode(res.code);
-    setPreviewCode(res.code);
-    commitToolbarMutationRef.current?.(res.code, 'move element down');
-    clearLivePreviewSelection();
-    toast.success('Moved down');
-  }, [previewCode, clearLivePreviewSelection, recordManualPageEdit]);
+  const handleFloatingDelete = useCallback((selector: string) => handleStructuralEdit(selector, 'delete'), [handleStructuralEdit]);
+  const handleFloatingDuplicate = useCallback((selector: string) => handleStructuralEdit(selector, 'duplicate'), [handleStructuralEdit]);
+  const handleFloatingMoveUp = useCallback((selector: string) => handleStructuralEdit(selector, 'up'), [handleStructuralEdit]);
+  const handleFloatingMoveDown = useCallback((selector: string) => handleStructuralEdit(selector, 'down'), [handleStructuralEdit]);
 
   // Toolbar / terminal requests must reach the AI Builder even when its panel is closed:
   // hold the request, open the panel, and replay it once the panel is listening.
@@ -1303,7 +1211,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const handleFloatingInsertImage = useCallback((selector: string, src: string, alt: string, hints?: SourceMatchHints) => {
     const res = applyMutatorAcrossVFS(
       selector,
-      (code) => insertImageIntoElement(code, selector, src, alt, anchoredFinder(findElementBoundsInJSX, hints?.anchor ?? selectionAnchor(selector))),
+      (code) => insertImageIntoElement(code, selector, src, alt, hints?.anchor ? anchoredFinder(findElementBoundsInJSX, hints.anchor) : selectionFinder(selector)),
       (next) => {
         setPreviewCode(next);
         setEditorCode(next);
@@ -2704,7 +2612,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const currentResolvedSections = useMemo(() => {
     const liveFiles = getSandpackFiles();
     const pageComposition = activePagePath && currentSiteSnapshot
-      ? collectResolvedCompositions(currentSiteSnapshot.vfsFiles)[activePagePath]
+      ? collectResolvedCompositions(liveFiles)[activePagePath]
       : undefined;
     const pageSections = pageComposition?.sections.map((section) => ({
       sectionId: section.sectionId,
@@ -2715,7 +2623,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       ?? readWizardDesignIntervention(liveFiles)?.activeVariants
       ?? readWizardDesignIntervention(currentSiteSnapshot?.vfsFiles)?.activeVariants;
     return resolveInspectorCanonicalSections(
-      pageComposition ? pageSections : undefined,
+      pageSections?.length ? pageSections : undefined,
       activeVariants,
     );
   }, [activePagePath, currentSiteSnapshot, getSandpackFiles]);
