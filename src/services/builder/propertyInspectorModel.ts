@@ -158,7 +158,10 @@ export function resolveInspectorModel(selection: InspectorSelection | null | und
   const warnings: string[] = [];
   const ancestors = selection?.scopeAncestors ?? {};
   const variantId = readVariantId(selection ?? {});
-  const sectionType = (ancestors.sectionType as SectionType | undefined) ?? null;
+  const sectionType = resolveSlotSectionType(
+    ancestors.sectionType ?? (variantId ? getVariantById(variantId)?.sectionType : null),
+    ancestors.slotId ?? selection?.attributes?.['data-ut-slot'],
+  );
   const familyMatches = (selection?.canonicalSections ?? []).filter((section) =>
     !sectionType || section.sectionType === sectionType,
   );
