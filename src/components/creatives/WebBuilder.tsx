@@ -285,7 +285,6 @@ import {
   findElementBoundsInJSX,
   withSourceManipulation,
   safeFindElement,
-  findJSXClosingTag,
   findUniqueSourceMutation,
   countImageLiteral,
   replaceImageLiteral,
@@ -1019,13 +1018,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     if (!sel || (sel.selector !== selector && sel.imageTarget?.selector !== selector)) return undefined;
     const attrs = (sel.attributes ?? {}) as Record<string, string>;
     return sel.imageTarget?.src || attrs.src || String(sel.styles?.backgroundImage ?? '').match(/url\(["']?([^"')]+)["']?\)/)?.[1];
-  };
-
-  // The clicked element's tag + own text, so edits land on it rather than on whatever shares its position.
-  const selectionAnchor = (selector: string) => {
-    const sel = selectedElementRef.current;
-    if (!sel || sel.selector !== selector) return null;
-    return { tag: String(sel.tagName ?? '').toLowerCase(), runs: textRunsFromHtml(sel.html) };
   };
 
   const selectionFinder = (selector: string) => {
