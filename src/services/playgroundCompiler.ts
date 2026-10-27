@@ -169,7 +169,20 @@ export function compilePlayground(
     themePresetId?: string | null;
     industry?: string | null;
   }>(existingVfsFiles, '/.unison/app-context.json');
-  const resolvedTemplateId = firstText(
+  // Saved projects (e.g. marketplace installs) may carry a template id that is
+  // not a registered composition. On recompile their saved pages are the
+  // authority, so the unknown id is dropped with a warning instead of failing.
+  const hasSavedPages = Object.keys(existingVfsFiles ?? {}).some((p) => p.startsWith('/src/pages/'));
+  const registeredOrNull = (id: string | null | undefined) => {
+    if (!id) return id;
+    if (getCompositionById(id)) return id;
+    if (hasSavedPages) {
+      console.warn(`[playgroundCompiler] template "${id}" is not a registered composition; keeping saved pages.`);
+      return null;
+    }
+    return id;
+  };
+  const resolvedTemplateId = registeredOrNull(firstText(
     options?.selectedTemplateId,
     snapshotMeta?.meta?.templateId,
     snapshotMeta?.appContext?.templateId,
@@ -178,7 +191,7 @@ export function compilePlayground(
     wizardSeed?.templateId,
     wizardSeed?.template?.id,
     wizardSeed?.selections?.templateId,
-  );
+  ));
   const resolvedThemePresetId = firstText(
     options?.themePresetId,
     options?.selectedThemeId,
@@ -207,7 +220,7 @@ export function compilePlayground(
     wizardSeed?.selections?.industryOverlay,
   );
 
-  if (options?.selectedTemplateId && !getCompositionById(options.selectedTemplateId)) {
+  if (options?.selectedTemplateId && !getCompositionById(options.selectedTemplateId) && !hasSavedPages) {
     throw new PreviewPipelineError(
       'vfs',
       `Wizard selected template "${options.selectedTemplateId}" is not registered; refusing to substitute an unrelated industry composition.`,
