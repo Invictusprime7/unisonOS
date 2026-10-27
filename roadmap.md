@@ -1,5 +1,9 @@
 # Roadmap
 
+## Active: Floating toolbar actions
+- [ ] Repair command routing for move, hide, duplicate and other direct actions without bypassing source ownership or canonical saves.
+- [ ] Run command-routing and source-mutation regressions; verify saved-site actions in the browser if an authoritative session is available.
+
 ## Active: WYSIWYG selection recognition
 - [x] Repair preview section/node identity and direct edit source targeting for saved sites; exact source locators own toolbar edits, structural actions include imported files, inspector derives missing family from registered variants/slots and reads live composition.
 - [x] Run selection/toolbar source regressions (40 checks passed using Node environment; default browser environment lacks native canvas).
