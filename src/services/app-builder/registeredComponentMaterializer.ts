@@ -1,4 +1,7 @@
 import type { AppBuildContract } from './appBuilderContracts';
+import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
+
+const APP_BUILDER_SOURCE_PATH = /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/;
 
 export interface RegisteredComponentMaterializationResult {
   files: Record<string, string>;
@@ -131,13 +134,22 @@ export function materializeRegisteredComponents(
     for (const pageId of componentPageIds(contract, instanceId, component.runtime.usedOnPages)) {
       const page = contract.topology.sitePlan.pages.find((candidate) => candidate.id === pageId);
       const pagePath = page?.filePath;
-      const source = pagePath ? files[pagePath] : undefined;
-      if (!pagePath || !source) continue;
-      const hasInstance = source.includes(`data-ut-component-instance-id="${instanceId}"`)
-        || source.includes(`data-ut-component-instance-id='${instanceId}'`);
-      const hasSlug = new RegExp(`data-ut-component-slug\\s*=\\s*["']${component.runtime.componentSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`).test(source);
-      if (hasInstance || hasSlug) {
-        const hostWithIdentity = hasSlug
+      if (!pagePath || !files[pagePath]) continue;
+      const surfacePaths = collectLocalImportClosure(files, pagePath, (path) => APP_BUILDER_SOURCE_PATH.test(path));
+      const escapedSlug = component.runtime.componentSlug.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+      const hasSlug = (path: string) => new RegExp(`data-ut-component-slug\\s*=\\s*["']${escapedSlug}["']`).test(files[path] ?? '');
+      const hasInstance = (path: string) => {
+        const source = files[path] ?? '';
+        return source.includes(`data-ut-component-instance-id="${instanceId}"`)
+          || source.includes(`data-ut-component-instance-id='${instanceId}'`)
+      };
+      const hostPath = surfacePaths.find(hasSlug) ?? surfacePaths.find(hasInstance) ?? pagePath;
+      const source = files[hostPath];
+      if (!source) continue;
+      const hostHasInstance = hasInstance(hostPath);
+      const hostHasSlug = hasSlug(hostPath);
+      if (hostHasInstance || hostHasSlug) {
+        const hostWithIdentity = hostHasSlug
           ? attachInstanceIdToRegisteredHost(source, component.runtime.componentSlug, instanceId) ?? source
           : source;
         const repaired = component.targetType === 'form' || component.targetType === 'calendar'
@@ -145,7 +157,7 @@ export function materializeRegisteredComponents(
           : hostWithIdentity;
         const finalSource = repaired ?? hostWithIdentity;
         if (component.targetType !== 'form' && component.targetType !== 'calendar') {
-          files[pagePath] = finalSource;
+          files[hostPath] = finalSource;
           materializedInstanceIds.push(instanceId);
           continue;
         }
@@ -155,20 +167,20 @@ export function materializeRegisteredComponents(
           ? new RegExp(`<form\\b(?=[^>]*data-intent-form\\s*=\\s*["']${escapedIntent}["'])[^>]*>[\\s\\S]*?<\\/form>`, 'i').exec(finalSource)?.[0]
           : undefined;
         if (completedForm && nativeFormSatisfiesContract(completedForm, component)) {
-          files[pagePath] = finalSource;
+          files[hostPath] = finalSource;
           materializedInstanceIds.push(instanceId);
           continue;
         }
       }
 
-      if (hasInstance && !hasSlug) {
+      if (hostHasInstance && !hostHasSlug) {
         materializedInstanceIds.push(instanceId);
         continue;
       }
 
       const updatedHost = attachInstanceIdToRegisteredHost(source, component.runtime.componentSlug, instanceId);
       if (updatedHost) {
-        files[pagePath] = updatedHost;
+        files[hostPath] = updatedHost;
         materializedInstanceIds.push(instanceId);
         continue;
       }
@@ -189,7 +201,7 @@ export function materializeRegisteredComponents(
         contract.business.intentBindings,
       );
       const componentHost = `${registeredTemplate}\n`;
-      files[pagePath] = `${source.slice(0, rootClose.index)}${componentHost}${source.slice(rootClose.index)}`;
+      files[hostPath] = `${source.slice(0, rootClose.index)}${componentHost}${source.slice(rootClose.index)}`;
       materializedInstanceIds.push(instanceId);
     }
   }

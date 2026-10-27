@@ -1996,8 +1996,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               timeoutMs: BUILDER_TURN_TIMEOUT_MS,
             });
             if (editResult.candidate.status !== 'ready-for-commit' || !editResult.changeSet) {
-              emitAgentEvent({ kind: 'plan', message: 'Could not finish writing the change', status: 'failed' });
-              throw new Error(editResult.candidate.diagnostics[0] ?? `Affinity stopped: ${editResult.stopReason}`);
+              const diagnostic = editResult.candidate.diagnostics[0] ?? `Affinity stopped: ${editResult.stopReason}`;
+              emitAgentEvent({ kind: 'plan', message: `Could not finish writing the change: ${diagnostic}`, status: 'failed' });
+              throw new Error(diagnostic);
             }
             const candidate = editResult.changeSet;
             emitAgentEvent({ kind: 'plan', message: `Wrote changes to ${candidate.fileOps.length} file${candidate.fileOps.length === 1 ? '' : 's'}`, status: 'ok' });

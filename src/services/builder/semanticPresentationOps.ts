@@ -76,7 +76,7 @@ export function applySemanticPresentationOps(
         const currentVariantId = next.activeVariants[op.sectionId];
         const currentVariant = currentVariantId ? getVariantById(currentVariantId) : undefined;
         const nextVariant = getVariantById(op.variantId as VariantId);
-        if (!currentVariant || !nextVariant || currentVariant.sectionType !== nextVariant.sectionType) {
+        if (!nextVariant || (currentVariant && currentVariant.sectionType !== nextVariant.sectionType)) {
           throw new Error(`[presentation] invalid variant ${op.variantId} for section ${op.sectionId}.`);
         }
         // §8.4 — a new edit asks the resolved catalog; legacy ids are not legal here.

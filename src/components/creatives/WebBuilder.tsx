@@ -845,33 +845,14 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   // our just-baked edit with the un-mutated original template. The customizer
   // remains authoritative for global theme/typography/image-replacement state.
 
-  // Record a manual edit snapshot for the active page so the History menu can
-  // revert/reapply granular toolbar changes alongside AI edits.
-  // Refs avoid TDZ on projectId/activePagePath which are declared later in the component.
-  const snapshotCtxRef = useRef<{ projectId?: string; activePagePath?: string }>({});
-  const recordManualPageEdit = useCallback((label: string, beforeCode: string, afterCode: string) => {
-    if (!afterCode || beforeCode === afterCode) return;
-    const ctx = snapshotCtxRef.current;
-    const path = ctx.activePagePath || '/src/App.tsx';
-    try {
-      pushAISnapshot(ctx.projectId ?? null, {
-        label,
-        source: 'manual',
-        before: { [path]: beforeCode },
-        after: { [path]: afterCode },
-        changedPaths: [path],
-        meta: { origin: 'floating-toolbar' },
-      });
-    } catch (err) {
-      console.warn('[recordManualPageEdit] snapshot failed:', err);
-    }
-  }, []);
+  // Draft-scoped history shared with the VFS code editor's Changes pane.
+  const snapshotCtxRef = useRef<{ draftId?: string | null; activePagePath?: string }>({});
 
   const recordManualVFSEdit = useCallback((label: string, beforeFiles: Record<string, string>, afterFiles: Record<string, string>, origin = 'floating-toolbar') => {
     const changed = diffChangedPaths(beforeFiles, afterFiles);
     if (!changed.length) return;
     try {
-      pushAISnapshot(snapshotCtxRef.current.projectId ?? null, {
+      pushAISnapshot(snapshotCtxRef.current.draftId ?? null, {
         label,
         source: 'manual',
         before: beforeFiles,
@@ -908,7 +889,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const activeOwner = snapshotCtxRef.current.activePagePath;
     const next = !ownerPath || ownerPath === activeOwner ? mutate(previewCode) : null;
     if (next && next !== previewCode) {
-      recordManualPageEdit(snapshotLabel, previewCode, next);
       toolbarPreEditRef.current = virtualFS.getSandpackFiles();
       // Write directly to VFS so the Sandpack preview HMRs in real time
       // instead of waiting for Effect A (previewCode → VFS) to flush.
@@ -959,16 +939,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       }
       if (match.kind === 'match') {
         toolbarPreEditRef.current = allFiles;
-        try {
-          pushAISnapshot(ctx.projectId ?? null, {
-            label: `${snapshotLabel} (${match.path.split('/').pop()})`,
-            source: 'manual',
-            before: { [match.path]: match.before },
-            after: { [match.path]: match.after },
-            changedPaths: [match.path],
-            meta: { origin: 'floating-toolbar' },
-          });
-        } catch (err) { console.warn('[applyMutatorAcrossVFS] snapshot failed:', err); }
         // canonical-vfs-exempt: optimistic HMR projection; the same mutation is chained through commitMutation below
         virtualFS.importFiles({ [match.path]: match.after });
         commitToolbarMutationRef.current?.(match.after, snapshotLabel.replace(/^Manual · /, ''), match.path);
@@ -978,7 +948,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       console.warn('[applyMutatorAcrossVFS] VFS scan failed:', err);
     }
     return { ok: false, reason: next === previewCode ? 'no-change' : 'no-match' };
-  }, [previewCode, recordManualPageEdit]);
+  }, [previewCode]);
 
 
 
@@ -1256,7 +1226,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     getPreviewCode: () => previewCode,
     applyLayoutCode: (nextCode: string, summary: string) => {
       if (!nextCode || nextCode === previewCode) return false;
-      recordManualPageEdit(`Layout · ${summary}`, previewCode, nextCode);
+      toolbarPreEditRef.current = virtualFS.getSandpackFiles();
       setPreviewCode(nextCode);
       setEditorCode(nextCode);
       toast.success(summary);
@@ -1986,8 +1956,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   
   // Multi-page navigation state — split into three concerns
   const [activePagePath, setActivePagePath] = useState<string>(launchEntryPoint);
-  // Keep snapshot ref synced so manual-edit history captures correct project + page
-  snapshotCtxRef.current = { projectId, activePagePath };
+  // Keep snapshot ref synced so manual-edit history uses the active draft + page.
+  snapshotCtxRef.current = { draftId: currentDraftId, activePagePath };
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [activePreviewRoute, setActivePreviewRoute] = useState<string>('/');
   
@@ -2550,7 +2520,28 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const [previewCartSubmitting, setPreviewCartSubmitting] = useState(false);
   
   // Track file modifications for UI indicators
-  const trackFileModification = useCallback((fileId: string, content: string) => {
+  const captureCodeEditorBaseline = useCallback((beforeFiles: Record<string, string>) => {
+    const draftId = currentDraftIdRef.current;
+    const existingBaseline = codeEditorEditBaselineRef.current;
+    if (!existingBaseline || existingBaseline.draftId !== draftId) {
+      codeEditorEditBaselineRef.current = { draftId, beforeFiles: { ...beforeFiles } };
+    }
+  }, []);
+
+  const trackFileModification = useCallback((fileId: string, content: string, previousContent?: string) => {
+    if (previousContent !== undefined && previousContent !== content) {
+      const draftId = currentDraftIdRef.current;
+      const existingBaseline = codeEditorEditBaselineRef.current;
+      if (!existingBaseline || existingBaseline.draftId !== draftId) {
+        const persistedFiles = lastPersistedVfsFilesRef.current;
+        const beforeFiles = Object.keys(persistedFiles).length > 0
+          ? { ...persistedFiles }
+          : virtualFSRef.current.getSandpackFiles();
+        const filePath = virtualFSRef.current.nodes.find((node) => node.id === fileId && node.type === 'file')?.path;
+        if (filePath) beforeFiles[filePath] = previousContent;
+        codeEditorEditBaselineRef.current = { draftId, beforeFiles };
+      }
+    }
     const original = originalFileContents.current.get(fileId);
     const newModified = new Set(modifiedFiles);
     
@@ -3187,7 +3178,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       if (!businessId || !currentDraftId) return;
       const targetPath = activePagePath?.endsWith('.tsx') ? activePagePath : launchEntryPoint;
       if (!targetPath || !nextCode) return;
-      const beforeFiles = virtualFSRef.current.getSandpackFiles();
+      const beforeFiles = toolbarPreEditRef.current ?? virtualFSRef.current.getSandpackFiles();
       const snapshot = effectiveRouteState?.siteBundleSnapshot ?? null;
       void (async () => {
         try {
@@ -3198,7 +3189,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             businessId,
             projectId: resolvedProjectId,
             draftId: currentDraftId,
-            revisionId: currentRevisionId,
+            revisionId: currentRevisionIdRef.current,
           });
           if (!identity) return;
           const patch = legacyFilesToPatchPlan(
@@ -3216,9 +3207,12 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             throw new CommitRejectedError('layout edit was rejected by the canonical pipeline', commit);
           }
           if (commit.persistedRevisionId) {
+            currentRevisionIdRef.current = commit.persistedRevisionId;
             setCurrentRevisionId(commit.persistedRevisionId);
             console.log('[WebBuilder] layout-fast-path commit persisted:', commit.persistedRevisionId);
           }
+          recordManualVFSEdit(`Layout · ${summary}`, beforeFiles, commit.vfsFiles, 'layout-fast-path');
+          toolbarPreEditRef.current = null;
         } catch (err) {
           // Rejected canonical mutations must not survive in working VFS.
           // canonical-vfs-exempt: rollback restore of the pre-mutation working set
@@ -3228,6 +3222,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             entryPoint: launchEntryPoint,
             adoption: { source: 'rollback', exemptReason: 'restore-pre-mutation-state' },
           });
+          toolbarPreEditRef.current = null;
           if (err instanceof CommitRejectedError) {
             console.warn('[WebBuilder] layout-fast-path commit rejected:', err.message);
           } else {
@@ -3388,7 +3383,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       toast.error('Could not save the selected behavior');
       return false;
     }
-  }, [businessId, currentDraftId, resolvedProjectId, activePagePath, launchEntryPoint, effectiveRouteState, buildCanonicalCommitCurrent, importBuilderFiles]);
+  }, [businessId, currentDraftId, resolvedProjectId, activePagePath, launchEntryPoint, effectiveRouteState, buildCanonicalCommitCurrent, importBuilderFiles, recordManualVFSEdit]);
 
   /**
    * Canonical entry for every file-authoring surface in the builder chrome
@@ -3994,7 +3989,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       if (Date.now() - lastAttempt < 2500) return;
       toolbarMutationGuardRef.current.set(guardKey, Date.now());
       void runExclusive('toolbar', async () => {
-        const before = virtualFSRef.current.getSandpackFiles();
+        const before = toolbarPreEditRef.current ?? virtualFSRef.current.getSandpackFiles();
         const baseline = await captureIntentBaseline(before, [targetPath]);
         const after = await commitBuilderFiles({ [targetPath]: nextCode }, {
           source: 'preview-toolbar',
@@ -4016,8 +4011,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             replace: true, preferredPath: activePagePath, entryPoint: launchEntryPoint,
             adoption: { source: 'rollback', exemptReason: 'restore-pre-mutation-state' },
           });
+          toolbarPreEditRef.current = null;
           return;
         }
+        recordManualVFSEdit(`Manual · ${summary}`, before, after, 'floating-toolbar');
         toolbarPreEditRef.current = null;
         recordCommit('toolbar', currentRevisionIdRef.current);
         // Preview verification waits on the live preview; run it after the save
@@ -4027,7 +4024,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           .catch((err) => console.warn('[WebBuilder] toolbar verification failed:', err));
       });
     };
-  }, [activePagePath, launchEntryPoint, currentUserId, businessId, currentDraftId, commitBuilderFiles, importBuilderFiles]);
+  }, [activePagePath, launchEntryPoint, currentUserId, businessId, currentDraftId, commitBuilderFiles, importBuilderFiles, recordManualVFSEdit]);
 
   // Replay edits held during an AI save on top of the AI's result.
   useEffect(() => onAiIdleWithHeldEdits(() => {
@@ -4124,7 +4121,27 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   // Exact accepted VFS baseline for edits that originate outside the AI panel
   // (code editor, history actions, import helpers, and direct tools).
   const lastPersistedVfsFilesRef = useRef<Record<string, string>>({});
+  const codeEditorEditBaselineRef = useRef<{ draftId: string | null; beforeFiles: Record<string, string> } | null>(null);
   const lastRecordedPendingVfsSignatureRef = useRef<string>('');
+  const recordCodeEditorSnapshot = useCallback((draftId: string, afterFiles: Record<string, string>) => {
+    const baseline = codeEditorEditBaselineRef.current;
+    if (!baseline || (baseline.draftId && baseline.draftId !== draftId)) return false;
+    const changedPaths = diffChangedPaths(baseline.beforeFiles, afterFiles);
+    if (changedPaths.length === 0) {
+      codeEditorEditBaselineRef.current = null;
+      return false;
+    }
+    pushAISnapshot(draftId, {
+      label: `Code editor · ${changedPaths.length} file${changedPaths.length === 1 ? '' : 's'}`,
+      source: 'manual',
+      before: baseline.beforeFiles,
+      after: { ...afterFiles },
+      changedPaths,
+      meta: { origin: 'code-editor' },
+    });
+    codeEditorEditBaselineRef.current = null;
+    return true;
+  }, []);
   const computeVfsSignature = useCallback(computeBuilderVfsSignature, []);
   // Keep the current template id in a ref so callbacks always read the
   // latest value without stale-closure issues (avoids re-creating intervals).
@@ -5213,6 +5230,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         }
         absorbPendingVfsOperations(pendingProjectionScope, { throughSequence: absorbedThroughSequence });
         markBuilderRecoveryPersisted(snapshot, existingDraftId, undefined, commit.persistedRevisionId);
+        recordCodeEditorSnapshot(existingDraftId, currentVfsFiles);
         if (!isActiveBuilderCommitScope(activeCommitScopeRef.current, capturedCommitScope)) {
           // The old project's durable commit succeeded, but its completion must
           // not overwrite the revision/baseline state of the newly active project.
@@ -5267,6 +5285,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     playgroundPopups,
     currentTemplateName,
     pendingProjectionScope,
+    recordCodeEditorSnapshot,
   ]);
 
   // Keep latest saveDraft in a ref so unload/visibility handlers always call the freshest version.
@@ -8979,8 +8998,29 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   recentlyChangedFiles={recentlyChangedFiles}
                   isAIProcessing={templateState.isRendering}
                   onFileModified={trackFileModification}
-                  onSave={(fileId, val) => {
-                    toast.success('File saved');
+                  onBeforeVfsMutation={(label, beforeFiles) => {
+                    captureCodeEditorBaseline(beforeFiles);
+                    console.debug('[VFSCodeView] queued VFS mutation for canonical autosave:', label);
+                  }}
+                  onSave={async (fileId, content) => {
+                    const filePath = virtualFS.nodes.find((node) => node.id === fileId && node.type === 'file')?.path;
+                    const currentFiles = virtualFSRef.current.getSandpackFiles();
+                    const filesToSave = filePath ? { ...currentFiles, [filePath]: content } : currentFiles;
+                    const saved = await saveDraft({ reason: 'manual_save', vfsFiles: filesToSave });
+                    if (!saved) {
+                      toast.error('File could not be saved', { description: 'The VFS change is still in the editor; retry Save after the workspace reconnects.' });
+                      return;
+                    }
+                    const draftId = currentDraftIdRef.current;
+                    if (draftId) recordCodeEditorSnapshot(draftId, lastPersistedVfsFilesRef.current);
+                    originalFileContents.current.set(fileId, content);
+                    setModifiedFiles((current) => {
+                      if (!current.has(fileId)) return current;
+                      const next = new Set(current);
+                      next.delete(fileId);
+                      return next;
+                    });
+                    toast.success('File saved to revision');
                   }}
                   onSwitchToCanvas={() => setViewMode('canvas')}
                   onUndo={() => {

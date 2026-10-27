@@ -12,6 +12,7 @@
  */
 import { upsertIntentBinding } from '@/services/intentBindingService';
 import { getIntentDef, resolveIntentName } from '@/platform/core';
+import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 
 export interface GeneratedBindingRow {
   pagePath: string;
@@ -22,11 +23,18 @@ export interface GeneratedBindingRow {
   payload: Record<string, unknown>;
 }
 
+export interface GeneratedBindingPageSurface {
+  route: string;
+  filePath: string;
+  bindings: readonly { sourceSlot: string; intent: string }[];
+}
+
 const SLOT_ATTR_RE = /data-ut-(?:slot|binding-key)=["']([^"']+)["']/i;
 const INTENT_ATTR_RE = /data-ut-intent=["']([^"']+)["']/i;
 const TARGET_ATTR_RE = /data-ut-target-page-id=["']([^"']+)["']/i;
 const LABEL_ATTR_RE = /data-ut-label=["']([^"']+)["']/i;
 const PATH_ATTR_RE = /data-ut-path=["']([^"']+)["']/i;
+const SLOT_ID_ATTR_RE = /data-ut-slot-id=["']([^"']+)["']/i;
 
 const TAG_OPEN_RE = /<[A-Za-z][^>]*?\bdata-ut-(?:slot|binding-key|intent)=[^>]*?>/g;
 
@@ -41,7 +49,13 @@ function pagePathFromFile(filePath: string): string {
 /** Pure: extract candidate binding rows from a VFS map. */
 export function extractGeneratedBindings(
   files: Record<string, string>,
+  pageRoutesById: Readonly<Record<string, string>> = {},
+  pageSurfaces: readonly GeneratedBindingPageSurface[] = [],
 ): GeneratedBindingRow[] {
+  const resolvedPageSurfaces = pageSurfaces.map((surface) => ({
+    ...surface,
+    sourcePaths: new Set(collectLocalImportClosure(files, surface.filePath)),
+  }));
   const rows: GeneratedBindingRow[] = [];
   for (const [filePath, content] of Object.entries(files)) {
     if (!filePath.endsWith('.tsx') && !filePath.endsWith('.jsx')) continue;
@@ -61,7 +75,7 @@ export function extractGeneratedBindings(
       if (!def) continue;
 
       const row: GeneratedBindingRow = {
-        pagePath,
+        pagePath: routeFromSlotId(tag.match(SLOT_ID_ATTR_RE)?.[1], pageRoutesById) || pagePath,
         slot,
         intent: canonical,
         label: tag.match(LABEL_ATTR_RE)?.[1],
@@ -70,10 +84,26 @@ export function extractGeneratedBindings(
       };
       const pathAttr = tag.match(PATH_ATTR_RE)?.[1];
       if (pathAttr) row.payload.path = pathAttr;
-      rows.push(row);
+      const sharedSurfaceRows = resolvedPageSurfaces
+        .filter((surface) => surface.sourcePaths.has(filePath)
+          && surface.bindings.some((binding) => binding.sourceSlot === slot
+            && resolveIntentName(binding.intent) === canonical))
+        .map((surface) => ({ ...row, pagePath: surface.route }));
+      rows.push(...(sharedSurfaceRows.length > 0 ? sharedSurfaceRows : [row]));
     }
   }
   return rows;
+}
+
+function routeFromSlotId(
+  slotId: string | undefined,
+  pageRoutesById: Readonly<Record<string, string>>,
+): string | undefined {
+  if (!slotId) return undefined;
+  const separator = slotId.indexOf(':');
+  if (separator <= 0) return undefined;
+  const pageId = slotId.slice(0, separator);
+  return pageRoutesById[pageId];
 }
 
 export interface PersistGeneratedBindingsResult {
@@ -99,15 +129,17 @@ export async function persistGeneratedBindings(args: {
   businessId: string;
   projectId: string;
   files: Record<string, string>;
+  pageRoutesById?: Readonly<Record<string, string>>;
+  pageSurfaces?: readonly GeneratedBindingPageSurface[];
 }): Promise<PersistGeneratedBindingsResult> {
-  const { businessId, projectId, files } = args;
+  const { businessId, projectId, files, pageRoutesById, pageSurfaces } = args;
   if (!businessId || !projectId) {
     return { attempted: 0, persisted: 0, failed: 0 };
   }
 
   // De-duplicate by (pagePath, slot) — last write wins, mirrors DB constraint.
   const seen = new Map<string, GeneratedBindingRow>();
-  for (const row of extractGeneratedBindings(files)) {
+  for (const row of extractGeneratedBindings(files, pageRoutesById, pageSurfaces)) {
     seen.set(`${row.pagePath}::${row.slot}`, row);
   }
 

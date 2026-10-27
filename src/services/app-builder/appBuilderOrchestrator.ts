@@ -11,6 +11,8 @@ import { applyDesignSources } from './design/designSourceMaterializer';
 import { buildAppBuilderGenerationContext, reportDesignSourceUsage } from './appBuilderGenerationContext';
 import { findPageStructureIssues, pageStructureRequirement, verifiedPhotosFor } from './design/pageStructureGate';
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
+import { normalizeWizardBindingMarkers } from '@/services/wizardBindingBridge';
+import { inspectAppBuilderPageSectionClosure, materializeAppBuilderSectionModels } from './appBuilderSectionModel';
 
 export interface AppBuilderOrchestratorDependencies {
   authorSite: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
@@ -58,9 +60,13 @@ export async function orchestrateAppBuild(
   const manifestSource = baseFiles['/.unison/design-source-manifest.json'];
   const contractPages = input.contract.design.resolvedSiteDesignContext.contract.pages;
   const roleByPath = new Map(pages.map((page) => [page.filePath, page.role]));
+  const sectionImplementations = generation.materialization.manifest.implementations;
   const photoUrls = verifiedPhotosFor(input.contract.design.resolvedSiteDesignContext?.contract.industry ?? input.contract.business.industry);
   const pageCheck = (path: string, source: string, files?: Readonly<Record<string, string>>) => {
     const messages = findDesignSourceUsageIssues(manifestSource, source).map((issue) => issue.message);
+    if (Object.keys(sectionImplementations).length > 0) {
+      messages.push(...inspectAppBuilderPageSectionClosure(path, files ?? { [path]: source }, sectionImplementations).issues);
+    }
     messages.push(...(input.pageCheck?.(path, source, files) ?? []));
     const role = roleByPath.get(path);
     if (role) {
@@ -109,9 +115,30 @@ export async function orchestrateAppBuild(
       })));
     return { ...report, ok: report.ok && pageIssues.length === 0, issues: [...report.issues, ...pageIssues] };
   };
+  const markerRequirements = input.contract.business.intentBindings
+    .filter((binding) => binding.missingCapabilities.length === 0 && binding.ctaMarkers.length > 0)
+    .map((binding) => ({
+      bindingId: binding.bindingId,
+      pageId: binding.pageId,
+      sourceLabel: binding.sourceLabel,
+      sourceSlot: binding.sourceSlot,
+      markers: binding.ctaMarkers,
+    }));
+  const normalizeCandidateFiles = (files: Record<string, string>) => {
+    const materialized = materializeRegisteredComponents(input.contract, files).files;
+    const normalized = normalizeWizardBindingMarkers(
+      materialized,
+      input.contract.topology.pageRegistry,
+      markerRequirements,
+    ).files;
+    return materializeAppBuilderSectionModels(normalized, pages.map((page) => ({
+      id: page.pageId,
+      filePath: page.filePath,
+    })), sectionImplementations);
+  };
   let candidateFiles = { ...authored.files };
   if (!compatibilityMode && input.preflight) candidateFiles = input.preflight(candidateFiles);
-  candidateFiles = materializeRegisteredComponents(input.contract, candidateFiles).files;
+  candidateFiles = normalizeCandidateFiles(candidateFiles);
   let closure = await validateClosure(candidateFiles);
   let closureRepairAttempts = 0;
 
@@ -167,7 +194,7 @@ export async function orchestrateAppBuild(
       if (repaired.ok && repaired.prepared) {
         candidateFiles = repaired.prepared.nextFiles;
         if (input.preflight) candidateFiles = input.preflight(candidateFiles);
-        candidateFiles = materializeRegisteredComponents(input.contract, candidateFiles).files;
+        candidateFiles = normalizeCandidateFiles(candidateFiles);
         closure = await validateClosure(candidateFiles);
       }
     }

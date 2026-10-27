@@ -1040,7 +1040,13 @@ async function commitMutationInner(
   if (customizerPagePath && patch.presentationOps.length) {
     const previous = collectResolvedCompositions(workingFiles)[customizerPagePath];
     if (!previous) throw new Error('This page has no editable section composition.');
-    const updated = updateResolvedCompositionVariants(workingFiles[customizerPagePath], previous, presentationSnapshot!.meta.designIntervention!.activeVariants ?? {});
+    const updated = updateResolvedCompositionVariants(
+      workingFiles[customizerPagePath],
+      previous,
+      presentationSnapshot!.meta.designIntervention!.activeVariants ?? {},
+      workingFiles,
+    );
+    Object.assign(workingFiles, updated.updatedSources);
     workingFiles[customizerPagePath] = updated.source;
     workingFiles[resolvedCompositionPathFor(customizerPagePath)] = serializeResolvedComposition(updated.composition);
     refreshEditedCompositionOwnership(input.current.vfsFiles, workingFiles);

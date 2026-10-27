@@ -162,6 +162,7 @@ describe('AppBuildContract', () => {
       expect(modelContext).toContain('name="serviceId"');
       expect(modelContext).toContain('contact-form');
       expect(modelContext).toContain('newsletter-signup');
+      expect(modelContext).toContain('PERSISTABLE SECTION CONTRACT');
   });
 
   it('fails closed instead of dropping an unknown registered component slug', () => {
@@ -172,6 +173,24 @@ describe('AppBuildContract', () => {
     }];
 
     expect(() => buildAppBuildContract(input)).toThrow('component future-widget is not registered');
+  });
+
+  it('keeps payment setup readiness from blocking checkout authoring', () => {
+    const input = makeInput();
+    const checkout = createCanonicalComponentInstance('checkout-cta', {
+      usedOnPages: ['page-home'],
+      bindings: { productId: 'product-1' },
+    });
+    expect(checkout).not.toBeNull();
+    input.registeredComponentInstances = [checkout!];
+
+    const context = buildAppBuilderGenerationContext(buildAppBuildContract(input)).runtimeContext;
+
+    expect(context).toContain('checkout-cta');
+    expect(context).toContain('data-intent-trigger="pay.checkout"');
+    expect(context).toContain('PAYMENT SETUP IS A PUBLISH READINESS ITEM, NOT A SITE-AUTHORING FAILURE.');
+    expect(context).toContain('preserve the registered checkout CTA and pay.checkout intent');
+    expect(context).not.toContain('checkout-cta requires business fields:');
   });
 
   it('derives topology, design, runtime and registry context without a second schema', () => {
@@ -269,7 +288,7 @@ describe('AppBuildContract', () => {
     }
     expect(modelContext).toContain('hello@example.test');
     expect(contract.business.configuredBusinessFields).toEqual(expect.arrayContaining([
-      'notificationEmail', 'notificationPhone', 'crmDestination', 'bookingOwner',
+      'notificationEmail', 'notificationPhone', 'crmDestination', 'bookingOwner', 'paymentProvider',
     ]));
   });
 

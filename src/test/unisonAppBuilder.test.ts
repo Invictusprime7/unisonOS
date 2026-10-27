@@ -162,6 +162,37 @@ describe('UnisonAppBuilder facade', () => {
     expect(orchestrator).not.toContain('persistAiCommit');
   });
 
+  it('normalizes a semantic wizard binding before candidate closure validation', async () => {
+    const appContract = contract();
+    appContract.topology.pageRegistry.pages = {
+      home: {
+        pageId: 'home', title: 'Home', path: '/', filePath: '/src/pages/Home.tsx',
+        pageType: 'home', pageRole: 'home', isHome: true,
+      } as never,
+    };
+    appContract.business.bindingGuide = '- Page Home (/), slot navbar.icon-search: label "Search", marker data-ut-cta="icon.search", intent nav.goto, target /search';
+    appContract.business.intentBindings = [{
+      bindingId: 'bind-search', pageId: 'home', route: '/', elementKey: 'home.navbar.icon-search',
+      sourceSection: 'navbar', sourceSlot: 'icon-search', sourceLabel: 'Search',
+      coreIntent: 'search.open', domIntent: 'nav.goto', ctaMarkers: ['icon.search'], intentHandler: 'client',
+      targetType: 'url', targetId: '/search', requiredCapabilities: [], missingCapabilities: [],
+    }];
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: { ...input.files, '/src/pages/Home.tsx': 'export default function Home(){return <main><button type="button" aria-label="Search">Search</button></main>}' },
+      revisionId: input.revisionId,
+      outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
+    }));
+
+    const result = await createTestBuilder({ authorSite }).generate({
+      operationId: 'semantic-binding-closure', contract: appContract, initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null,
+    });
+
+    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidateFiles['/src/pages/Home.tsx']).toContain('data-ut-cta="icon.search"');
+    expect(result.candidate.closure?.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
+  });
+
   it('adapts site authoring behind generate and preserves the candidate result', async () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
       files: { ...input.files, '/src/pages/Home.tsx': 'export default function Home(){return <main>After</main>}' },

@@ -268,7 +268,8 @@ export interface VFSCodeViewProps {
   onCreateSnapshot?: (label: string) => string;
 
   // Callbacks
-  onFileModified?: (fileId: string, content: string) => void;
+  onFileModified?: (fileId: string, content: string, previousContent?: string) => void;
+  onBeforeVfsMutation?: (label: string, beforeFiles: Record<string, string>) => void;
   onSave?: (fileId: string, content: string) => void;
   onSwitchToCanvas?: () => void;
   /** Terminal file commands commit through the host's canonical writer. */
@@ -315,6 +316,7 @@ export function VFSCodeView({
   redoCount = 0,
   onCreateSnapshot,
   onFileModified,
+  onBeforeVfsMutation,
   onSave,
   onSwitchToCanvas,
   onTerminalPatch,
@@ -464,8 +466,9 @@ export function VFSCodeView({
   const handleFileChange = useCallback(
     (value: string) => {
       if (!activeFile) return;
+      const previousContent = activeFile.content;
       updateFileContent(activeFile.id, value);
-      onFileModified?.(activeFile.id, value);
+      onFileModified?.(activeFile.id, value, previousContent);
 
       // Emit file update event
       vfsEventBus.emit('file:updated', {
@@ -512,6 +515,11 @@ export function VFSCodeView({
       onCreateSnapshot(`Manual snapshot — ${new Date().toLocaleTimeString()}`);
     }
   }, [onCreateSnapshot]);
+
+  const captureBeforeVfsMutation = useCallback((label: string, mutation: () => void) => {
+    onBeforeVfsMutation?.(label, getSandpackFiles());
+    mutation();
+  }, [getSandpackFiles, onBeforeVfsMutation]);
 
   // Keyboard shortcuts for undo/redo
   useEffect(() => {
@@ -698,11 +706,11 @@ export function VFSCodeView({
                       nodes={nodes}
                       activeFileId={activeFileId}
                       onFileSelect={openFile}
-                      onCreateFile={createFile}
-                      onCreateFolder={createFolder}
-                      onDelete={deleteNode}
-                      onRename={renameNode}
-                      onDuplicate={duplicateNode}
+                      onCreateFile={(name, parentId) => captureBeforeVfsMutation(`Create ${name}`, () => createFile(name, parentId))}
+                      onCreateFolder={(name, parentId) => captureBeforeVfsMutation(`Create folder ${name}`, () => createFolder(name, parentId))}
+                      onDelete={(id) => captureBeforeVfsMutation('Delete VFS node', () => deleteNode(id))}
+                      onRename={(id, name) => captureBeforeVfsMutation(`Rename VFS node to ${name}`, () => renameNode(id, name))}
+                      onDuplicate={(id) => captureBeforeVfsMutation('Duplicate VFS node', () => duplicateNode(id))}
                       onToggleFolder={toggleFolder}
                       onExpandAll={expandAll}
                       onCollapseAll={collapseAll}

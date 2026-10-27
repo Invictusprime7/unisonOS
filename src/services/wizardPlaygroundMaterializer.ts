@@ -764,7 +764,8 @@ export function materializePlayground(
   }
 
   const firstProduct = Object.values(creatorData.products).sort((a, b) => a.sortOrder - b.sortOrder)[0];
-  if (firstProduct) {
+  const purchaseRequested = selections.sellsProducts === true || selections.businessModel === 'ecommerce';
+  if (purchaseRequested && firstProduct) {
     const checkoutComponent = createCanonicalComponentInstance('checkout-cta', {
       label: `${firstProduct.name} Checkout`,
       usedOnPages: [shopPageId || homePageId].filter(Boolean),

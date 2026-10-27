@@ -111,7 +111,8 @@ export function sourceTargetsForCartWiring(files: Record<string, string>, active
   const discovery = discoverGeneratedSiteArtifacts(files);
   return Array.from(new Set([
     activePagePath,
-    ...discovery.relevantFiles,
-    ...Object.keys(files).filter((path) => /\/(?:src\/)?pages\/[^/]+\.[jt]sx$/i.test(path)),
+    ...discovery.cartRuntimeFiles,
+    ...discovery.authoredCatalogItems.map((item) => item.sourcePath),
+    ...discovery.controls.map((control) => control.sourcePath),
   ])).slice(0, 32);
 }

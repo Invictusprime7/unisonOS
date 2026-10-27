@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compositionToReactFileSet } from '@/sections/compositionToFileSet';
+import { compositionToReactFileSet, updateResolvedCompositionVariants } from '@/sections/compositionToFileSet';
 import { ALL_COMPOSITIONS, getCompositionById } from '@/sections/templates';
 import { buildWizardDesignIntervention } from '@/services/wizardDesignIntervention';
 import { generateTopologyPlaceholderFiles } from '@/utils/topologyVFSScaffolder';
@@ -35,6 +35,172 @@ function compileHome(templateId: string) {
 }
 
 describe('composition VFS variants', () => {
+  it('swaps an App Builder section renderer without changing its data or bindings', () => {
+    const source = `import Services from "@/unison/design-sources/Services";
+import Testimonials from "@/unison/design-sources/Testimonials";
+export default function About() {
+  return <main>
+    <section data-ut-section-id="about:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows">
+      <Services sectionId="about:services:0" variantId="services:editorial-rows" props={{ headline: "Treatments", items: [{ title: "Cut", description: "A tailored cut" }] }} />
+      <a data-ut-intent="booking.create" href="/booking">Book</a>
+    </section>
+    <section data-ut-section-id="about:testimonials:0" data-ut-section-type="testimonials" data-ut-variant="testimonials:columns"><Testimonials variantId="testimonials:columns" props={{ items: [{ quote: "Proof", author: "Client" }] }} /></section>
+  </main>;
+}`;
+    const previous = {
+      version: '1.0',
+      compiledBy: 'app-builder',
+      pageFilePath: '/src/pages/About.tsx',
+      sections: [
+        {
+          sectionId: 'about:services:0',
+          semanticType: 'services',
+          primitiveId: 'Services',
+          variantId: 'services:editorial-rows',
+          data: { headline: 'Treatments', items: [{ title: 'Cut', description: 'A tailored cut' }] },
+        },
+        { sectionId: 'about:testimonials:0', semanticType: 'testimonials', primitiveId: 'Testimonials', variantId: 'testimonials:columns' },
+      ],
+      variantOverrides: { 'about:services:0': 'services:editorial-rows', 'about:testimonials:0': 'testimonials:columns' },
+    } as const;
+
+    const result = updateResolvedCompositionVariants(source, previous, {
+      ...previous.variantOverrides,
+      'about:services:0': 'services:expandable',
+    });
+
+    expect(result.source).toContain('data-ut-section-id="about:services:0"');
+    expect(result.source).toContain('data-ut-variant="services:expandable"');
+    expect(result.source).toContain('variantId="services:expandable"');
+    expect(result.source).toContain('data-ut-intent="booking.create"');
+    expect(result.source).toContain('variantId="testimonials:columns"');
+    expect(result.source).toContain('items: [{ title: "Cut", description: "A tailored cut" }]');
+    expect(result.composition.sections[0]).toMatchObject({
+      variantId: 'services:expandable',
+      data: { headline: 'Treatments', items: [{ title: 'Cut', description: 'A tailored cut' }] },
+    });
+  });
+
+  it('swaps a shared navbar through the same App Builder section identity path', () => {
+    const source = `import Navbar from "@/unison/design-sources/Navbar";
+import Footer from "@/unison/design-sources/Footer";
+export default function About(){return <>
+  <header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{ links: [{ label: "Home", href: "/" }] }} /></header>
+  <footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer sectionId="site:footer" variantId="footer:columns" props={{ links: [] }} /></footer>
+</>}`;
+    const previous = {
+      version: '1.0',
+      compiledBy: 'app-builder',
+      pageFilePath: '/src/pages/About.tsx',
+      sections: [
+        { sectionId: 'site:navbar', semanticType: 'navbar', primitiveId: 'Navbar', variantId: 'navbar:standard', data: { links: [{ label: 'Home', href: '/' }] } },
+        { sectionId: 'site:footer', semanticType: 'footer', primitiveId: 'Footer', variantId: 'footer:columns', data: { links: [] } },
+      ],
+      variantOverrides: { 'site:navbar': 'navbar:standard', 'site:footer': 'footer:columns' },
+    } as const;
+
+    const result = updateResolvedCompositionVariants(source, previous, {
+      ...previous.variantOverrides,
+      'site:navbar': 'navbar:centered-logo',
+    });
+
+    expect(result.source).toContain('data-ut-section-id="site:navbar"');
+    expect(result.source).toContain('data-ut-variant="navbar:centered-logo"');
+    expect(result.source).toContain('variantId="navbar:centered-logo"');
+    expect(result.source).toContain('variantId="footer:columns"');
+    expect(result.composition.sections.find(section => section.sectionId === 'site:navbar')?.data).toEqual({
+      links: [{ label: 'Home', href: '/' }],
+    });
+  });
+
+  it('migrates a stable legacy sidecar when swapping an authored JSX section', () => {
+    const source = `import { ServicesEditorialRows } from "@/unison/design-sources/Services";
+  export default function About(){return <section data-ut-section-id="treatment-menu" data-ut-section-type="services" data-ut-variant="services:editorial-rows"><ServicesEditorialRows headline="Owner data" items={[{ title: "Cut", description: "Tailored" }]} /><a data-ut-intent="booking.create">Book</a></section>}`;
+    const previous = {
+      version: '1.0',
+      compiledBy: 'stage-4b',
+      pageFilePath: '/src/pages/About.tsx',
+      sections: [{
+        sectionId: 'treatment-menu', semanticType: 'services', primitiveId: 'Services',
+        legacyRendererName: 'ServicesEditorialRows', sourceModulePath: '/src/unison/design-sources/Services.tsx',
+        variantId: 'services:editorial-rows', data: { headline: 'Owner data', items: [{ title: 'Cut', description: 'Tailored' }] },
+      }],
+      variantOverrides: { 'treatment-menu': 'services:editorial-rows' },
+    } as const;
+
+    const result = updateResolvedCompositionVariants(source, previous, { 'treatment-menu': 'services:expandable' });
+
+    expect(result.composition.compiledBy).toBe('app-builder');
+    expect(result.source).toContain('import Services from "@/unison/design-sources/Services"');
+    expect(result.source).toContain('<Services sectionId="treatment-menu" variantId="services:expandable" props={');
+    expect(result.source).toContain('"headline":"Owner data"');
+    expect(result.source).toContain('data-ut-intent="booking.create"');
+    expect(result.composition.sections[0]).not.toHaveProperty('legacyRendererName');
+  });
+
+  it('resolves a repeated nested section ID to one outer layout target', () => {
+    const sectionId = '7fdb7cd1-ba2d-4e5c-9f2f-d58e9fedb52d-hero-0';
+    const source = `import Hero from "@/unison/design-sources/Hero";
+export default function Services(){return <section data-ut-section-id="${sectionId}" data-ut-section-type="hero" data-ut-variant="hero:split-image">
+  <Hero data-ut-section-id="${sectionId}" sectionId="${sectionId}" variantId="hero:split-image" props={{ headline: "Owner headline" }} />
+</section>}`;
+    const previous = {
+      version: '1.0',
+      compiledBy: 'app-builder',
+      pageFilePath: '/src/pages/Services.tsx',
+      sections: [{
+        sectionId,
+        semanticType: 'hero',
+        primitiveId: 'Hero',
+        variantId: 'hero:split-image',
+        data: { headline: 'Owner headline' },
+      }],
+      variantOverrides: { [sectionId]: 'hero:split-image' },
+    } as const;
+
+    const result = updateResolvedCompositionVariants(source, previous, { [sectionId]: 'hero:prisma-cinematic' });
+
+    expect(result.source).toContain(`data-ut-section-id="${sectionId}" data-ut-section-type="hero" data-ut-variant="hero:prisma-cinematic"`);
+    expect(result.source).toContain('variantId="hero:prisma-cinematic"');
+    expect(result.source).toContain('headline: "Owner headline"');
+    expect(result.composition.sections[0].variantId).toBe('hero:prisma-cinematic');
+  });
+
+  it('updates an identified section in its imported project component file', () => {
+    const sectionId = '7fdb7cd1-ba2d-4e5c-9f2f-d58e9fedb52d-hero-0';
+    const pagePath = '/src/pages/Services.tsx';
+    const componentPath = '/src/project-components/Hero.tsx';
+    const pageSource = `import HeroSection from "../project-components/Hero";
+export default function Services(){return <main><HeroSection /></main>}`;
+    const componentSource = `import Hero from "@/unison/design-sources/Hero";
+export default function HeroSection(){return <section data-ut-section-id="${sectionId}" data-ut-section-type="hero" data-ut-variant="hero:split-image"><Hero data-ut-section-id="${sectionId}" sectionId="${sectionId}" variantId="hero:split-image" props={{ headline: "Owner headline" }} /></section>}`;
+    const previous = {
+      version: '1.0',
+      compiledBy: 'app-builder',
+      pageFilePath: pagePath,
+      sections: [{
+        sectionId,
+        semanticType: 'hero',
+        primitiveId: 'Hero',
+        sourcePath: componentPath,
+        variantId: 'hero:split-image',
+        data: { headline: 'Owner headline' },
+      }],
+      variantOverrides: { [sectionId]: 'hero:split-image' },
+    } as const;
+
+    const result = updateResolvedCompositionVariants(pageSource, previous, { [sectionId]: 'hero:prisma-cinematic' }, {
+      [pagePath]: pageSource,
+      [componentPath]: componentSource,
+    });
+
+    expect(result.source).toBe(pageSource);
+    expect(result.updatedSources[componentPath]).toContain(`data-ut-variant="hero:prisma-cinematic"`);
+    expect(result.updatedSources[componentPath]).toContain('variantId="hero:prisma-cinematic"');
+    expect(result.updatedSources[componentPath]).toContain('headline: "Owner headline"');
+    expect(result.composition.sections[0].sourcePath).toBe(componentPath);
+  });
+
   it('emits distinct registered page-role heroes despite an inherited Home override', () => {
     const template = getCompositionById('salon-premium')!;
     const hero = template.sections.find((section): section is SectionEntry<'hero'> => section.type === 'hero')!;
@@ -48,6 +214,7 @@ describe('composition VFS variants', () => {
         filePath: `/src/pages/${role}.tsx`, visibleInNav: true, isHome: false, generatedBy: 'wizard',
       };
       const files = generateTopologyPlaceholderFiles(page, routePlan(template.id, template.industry, page), template, {
+
         designIntervention: { motionRecipes: [], sectionVariants: [], activeVariants: { [hero.id]: 'hero:centered' } },
       });
       const routeHero = readSections(files[page.filePath]).find((section): section is SectionEntry<'hero'> => section.type === 'hero')!;

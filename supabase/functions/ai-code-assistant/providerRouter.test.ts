@@ -76,15 +76,16 @@ Deno.test("parses explicit Gemini/OpenAI traffic weights", () => {
   assertEquals(parseProviderDistribution("invalid"), { gemini: 100, openai: 0 });
 });
 
-Deno.test('App Builder page writing, repair and Builder edits use only Gemini', () => {
+Deno.test('App Builder keeps Gemini first and retains configured direct fallbacks', () => {
   const env = (name: string) => name === 'LOVABLE_API_KEY' ? 'lovable-test-key'
     : name === 'AI_PROVIDER_DISTRIBUTION' ? 'gemini=0,openai=100' : bothProviders(name);
   for (const type of ['site_page_author', 'site_page_repair', 'builder_source_edit'] as const) {
     const plan = buildProviderPlan({ ...task, type }, true, undefined, 'complex', 'composer', env);
     assertEquals(plan.primaryProvider, 'gemini');
-    assertEquals(plan.geminiOnly, true);
-    assertEquals(plan.gatewayLeads, undefined);
-    assertEquals(plan.gatewayModels.map(model => model.id), ['google/gemini-3.8-flash']);
+    assertEquals(plan.geminiOnly, undefined);
+    assertEquals(plan.gatewayModels.map(model => model.id), ['google/gemini-3.8-flash', 'openai/gpt-4.1']);
+    assertEquals(plan.balancedProviderAttempts, true);
+    assertEquals(plan.preferLongLeadAttempt, false);
   }
 });
 
@@ -121,11 +122,11 @@ Deno.test("moves the selected provider models to the front of the plan", () => {
 
   assertEquals(geminiPlan.primaryProvider, "gemini");
   assertEquals(geminiPlan.gatewayModels[0]?.id.startsWith("google/"), true);
-  assertEquals(openAIPlan.primaryProvider, "openai");
-  assertEquals(openAIPlan.gatewayModels[0]?.id.startsWith("openai/"), true);
+  assertEquals(openAIPlan.primaryProvider, "gemini");
+  assertEquals(openAIPlan.gatewayModels[0]?.id.startsWith("google/"), true);
 });
 
-Deno.test("migrates a stale GPT-5 selection to GPT-4.1 ahead of weighted routing", () => {
+Deno.test("keeps Gemini first when a stale GPT-5 selection is present", () => {
   const plan = buildProviderPlan(
     task,
     true,
@@ -135,8 +136,9 @@ Deno.test("migrates a stale GPT-5 selection to GPT-4.1 ahead of weighted routing
     (name) => name === "AI_PROVIDER_DISTRIBUTION" ? "gemini=100,openai=0" : bothProviders(name),
   );
 
-  assertEquals(plan.primaryProvider, undefined);
-  assertEquals(plan.gatewayModels[0]?.id, "openai/gpt-4.1");
+  assertEquals(plan.primaryProvider, "gemini");
+  assertEquals(plan.gatewayModels[0]?.id, "google/gemini-3.8-flash");
+  assertEquals(plan.gatewayModels.some((model) => model.id === "openai/gpt-4.1"), true);
   assertEquals(plan.gatewayModels.some((model) => model.id.includes('gpt-5')), false);
 });
 
@@ -261,10 +263,16 @@ Deno.test("keeps Wizard content enrichment bounded to small structured-output mo
   assertEquals(plan.perModelTimeoutMs, 35_000);
 });
 
-Deno.test("Gemini-primary mode keeps App Builder page writing on Gemini only", () => {
+Deno.test("Gemini-primary mode keeps Gemini first with OpenAI fallback", () => {
   const plan = buildProviderPlan({ ...task, type: "site_page_author" }, true, undefined, "complex", "composer",
     name => name === "AI_PROVIDER_MODE" ? "gemini-primary" : name === "LOVABLE_API_KEY" ? "test-key" : bothProviders(name));
   assertEquals(plan.primaryProvider, "gemini");
-  assertEquals(plan.gatewayLeads, undefined);
-  assertEquals(plan.gatewayModels.some(model => model.id.startsWith("openai/")), false);
+  assertEquals(plan.gatewayModels.map((model) => model.id), ["google/gemini-3.8-flash", "openai/gpt-4.1"]);
+});
+
+Deno.test("explicit gemini-only mode removes App Builder direct fallbacks", () => {
+  const plan = buildProviderPlan({ ...task, type: "site_page_author" }, true, undefined, "complex", "composer", geminiOnlyMode);
+  assertEquals(plan.primaryProvider, "gemini");
+  assertEquals(plan.geminiOnly, true);
+  assertEquals(plan.gatewayModels.map((model) => model.id), ["google/gemini-3.8-flash"]);
 });

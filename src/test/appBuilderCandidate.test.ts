@@ -4,6 +4,7 @@ import { validateAppBuildCandidate } from '@/services/app-builder/appBuilderCand
 import { materializeRegisteredComponents } from '@/services/app-builder/registeredComponentMaterializer';
 import { APP_BUILDER_PROTOCOL_VERSION, type AppBuildContract } from '@/services/app-builder/appBuilderContracts';
 import { getCanonicalComponentDefinition } from '@/services/canonicalComponentRegistry';
+import { materializeAppBuilderSectionModels } from '@/services/app-builder/appBuilderSectionModel';
 
 function contract(): AppBuildContract {
   const resolvedSiteDesignContext = compileResolvedSiteDesignContext({
@@ -203,6 +204,26 @@ describe('App Builder candidate closure', () => {
     expect(bookingPage).toContain('name="customerEmail"');
   });
 
+  it('repairs a registered booking form in an imported project component', async () => {
+    const booking = bookingContract();
+    const files = {
+      ...initialFiles,
+      '/src/pages/Booking.tsx': 'import BookingPanel from "../project-components/BookingPanel"; export default function Booking(){return <main><div data-ut-component-instance-id="cmp-booking"><BookingPanel /></div></main>}',
+      '/src/project-components/BookingPanel.tsx': 'export default function BookingPanel(){return <section data-ut-component-slug="booking-scheduler"><form data-intent-form="booking.create" onSubmit={()=>true}><button>Confirm</button></form></section>}',
+    };
+
+    const result = materializeRegisteredComponents(booking, files);
+    const panel = result.files['/src/project-components/BookingPanel.tsx'];
+    const report = await validateAppBuildCandidate({ contract: booking, files: result.files, initialFiles });
+
+    expect(panel).not.toContain('onSubmit=');
+    expect(panel).toContain('name="serviceId"');
+    expect(panel).toContain('name="slotId"');
+    expect(panel).toContain('name="customerName"');
+    expect(panel).toContain('name="customerEmail"');
+    expect(report.issues.some((issue) => issue.code === 'registered-component-native-form-incomplete')).toBe(false);
+  });
+
   it('closes a booking/contact/newsletter candidate with several registered instances', async () => {
     const launchContract = bookingContract();
     launchContract.business.capabilities = ['booking', 'contact', 'newsletter'];
@@ -257,6 +278,27 @@ describe('App Builder candidate closure', () => {
     const report = await validateAppBuildCandidate({ contract: bookingContract(), files, initialFiles });
 
     expect(report.issues.some((issue) => issue.code === 'registered-component-native-form-incomplete')).toBe(false);
+  });
+
+  it('keeps payment setup pending from blocking a selected checkout page', async () => {
+    const checkout = contract();
+    checkout.business.capabilities = ['commerce'];
+    checkout.business.registeredComponents = [registeredComponentFixture(
+      'checkout-cta', 'cmp-checkout', 'home', { productId: 'product-1' },
+    )];
+    const files = {
+      ...initialFiles,
+      '/src/pages/Home.tsx': 'export default function Home(){return <main><section data-ut-component-slug="checkout-cta"><button data-intent-trigger="pay.checkout">Checkout</button></section></main>}',
+      '/src/pages/Contact.tsx': 'export default function Contact(){return <main>Contact</main>}',
+    };
+
+    const report = await validateAppBuildCandidate({ contract: checkout, files, initialFiles });
+
+    expect(report.ok).toBe(true);
+    expect(report.issues).toContainEqual(expect.objectContaining({
+      severity: 'advisory',
+      code: 'registered-component-business-fields-missing',
+    }));
   });
 
   it('accepts a complete multi-page candidate with project-local companion modules', async () => {
@@ -561,5 +603,41 @@ describe('App Builder candidate closure', () => {
       initialFiles,
     });
     expect(passedAsProps.issues.some((issue) => issue.code === 'jsx-child-not-renderable')).toBe(false);
+  });
+
+  it('requires stable registered section identities and matching serialized page models', async () => {
+    const app = contract();
+    app.topology.sitePlan.pages.splice(1);
+    const manifestPath = '/.unison/design-source-manifest.json';
+    const implementations = {
+      'navbar:standard': { modulePath: '/src/unison/design-sources/Navbar.tsx', sectionType: 'navbar', exportName: 'NavbarStandard' },
+      'services:editorial-rows': { modulePath: '/src/unison/design-sources/Services.tsx', sectionType: 'services', exportName: 'ServicesEditorialRows' },
+      'footer:columns': { modulePath: '/src/unison/design-sources/Footer.tsx', sectionType: 'footer', exportName: 'FooterColumns' },
+    };
+    const files = {
+      ...initialFiles,
+      [manifestPath]: JSON.stringify({ implementations }),
+      '/src/unison/design-sources/Navbar.tsx': 'export default function Navbar(){return null}',
+      '/src/unison/design-sources/Services.tsx': 'export default function Services(){return null}',
+      '/src/unison/design-sources/Footer.tsx': 'export default function Footer(){return null}',
+      '/src/pages/Home.tsx': `import Navbar from "@/unison/design-sources/Navbar";
+import Services from "@/unison/design-sources/Services";
+import Footer from "@/unison/design-sources/Footer";
+    export default function Home(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{ links: [] }} /></header><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows"><Services sectionId="home:services:0" variantId="services:editorial-rows" props={{ headline: "Care", items: [{ title: "Cut", description: "Tailored" }] }} /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer sectionId="site:footer" variantId="footer:columns" props={{ links: [] }} /></footer></>}`,
+    };
+    const sourceImplementations = Object.fromEntries(Object.entries(implementations).map(([id, entry]) => [id, {
+      modulePath: entry.modulePath,
+      sectionType: entry.sectionType,
+    }]));
+    const validFiles = materializeAppBuilderSectionModels(files, [{ id: 'home', filePath: '/src/pages/Home.tsx' }], sourceImplementations);
+    const valid = await validateAppBuildCandidate({ contract: app, files: validFiles, initialFiles: files });
+    expect(valid.issues.filter((issue) => issue.code.startsWith('section-model-'))).toEqual([]);
+
+    const invalidFiles = {
+      ...validFiles,
+      '/src/pages/Home.tsx': files['/src/pages/Home.tsx'].replace('data-ut-section-id="home:services:0" ', ''),
+    };
+    const invalid = await validateAppBuildCandidate({ contract: app, files: invalidFiles, initialFiles: files });
+    expect(invalid.issues).toContainEqual(expect.objectContaining({ code: 'section-model-invalid' }));
   });
 });

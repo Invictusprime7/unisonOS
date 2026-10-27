@@ -192,6 +192,17 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function getProfilePaymentProvider(profile: BusinessProfileDTO | null): string | undefined {
+  const commerceSettings = profile?.settings.commerce;
+  const nestedPaymentProvider = commerceSettings && typeof commerceSettings === 'object' && !Array.isArray(commerceSettings)
+    ? (commerceSettings as Record<string, unknown>).paymentProvider
+    : undefined;
+  const value = profile?.settings.paymentProvider
+    ?? profile?.settings['commerce.paymentProvider']
+    ?? nestedPaymentProvider;
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
 function resolveGenerationCategory(
   system: (typeof businessSystems)[number],
   template: TemplateCardData,
@@ -492,6 +503,13 @@ async function runReservedLaunchPipeline(
     designSeed: plan.seed,
     businessModel: (SYSTEM_TO_BUSINESS_MODEL[input.systemId] || 'general') as never,
   });
+  const loadedBusinessProfile = input.existingBusinessId
+    ? await loadBusinessProfile(input.existingBusinessId)
+    : null;
+  if (input.existingBusinessId && !loadedBusinessProfile) {
+    throw new Error("Unable to load the selected Business Profile for this launch.");
+  }
+  const businessProfilePaymentProvider = getProfilePaymentProvider(loadedBusinessProfile);
   const appBuildContract = buildAppBuildContract({
     identity: {
       projectId: plan.ids.projectId,
@@ -504,6 +522,8 @@ async function runReservedLaunchPipeline(
     industry: plan.industryOverlay,
     businessName: brand,
     businessProfile: canonicalPlan.playground.creatorData.businessInfo,
+    canonicalBindings: Object.values(canonicalPlan.playground.bindings),
+    registeredComponentInstances: Object.values(canonicalPlan.playground.creatorData.componentInstances),
     businessParameters: {
       ...plan.selections.businessParameters,
       ownerEmail: plan.ownerEmail || undefined,
@@ -513,11 +533,11 @@ async function runReservedLaunchPipeline(
       phone: canonicalPlan.playground.creatorData.businessInfo.phone,
       crmDestination: canonicalPlan.playground.creatorData.businessInfo.crmDestination,
       bookingOwner: canonicalPlan.playground.creatorData.businessInfo.bookingOwner,
-      paymentProvider: canonicalPlan.playground.creatorData.businessInfo.paymentProvider,
+      paymentProvider: plan.selections.businessParameters?.paymentProvider?.trim()
+        || businessProfilePaymentProvider
+        || canonicalPlan.playground.creatorData.businessInfo.paymentProvider,
       followUpChannel: canonicalPlan.playground.creatorData.businessInfo.followUpChannel,
     },
-    canonicalBindings: Object.values(canonicalPlan.playground.bindings),
-    registeredComponentInstances: Object.values(canonicalPlan.playground.creatorData.componentInstances),
     visionBrief: plan.selections.visionPrompt,
     goals: [plan.selections.primaryGoal, ...plan.selections.secondaryGoals],
     intents: plan.canonicalIntents,
@@ -563,12 +583,6 @@ async function runReservedLaunchPipeline(
     candidateFiles,
   );
 
-  const loadedBusinessProfile = input.existingBusinessId
-    ? await loadBusinessProfile(input.existingBusinessId)
-    : null;
-  if (input.existingBusinessId && !loadedBusinessProfile) {
-    throw new Error("Unable to load the selected Business Profile for this launch.");
-  }
   const baseBusinessProfile: BusinessProfileDTO = loadedBusinessProfile || {
     businessId: plan.confirmed.businessId,
     ownerId: plan.user.id,
@@ -919,10 +933,21 @@ async function runReservedLaunchPipeline(
   }
 
   const requiredIntentBindingCount = countExpectedGeneratedBindingReceipts(appBuildContract.business.intentBindings);
+  const committedPageRoutes = Object.values(commit.result.siteBundleSnapshot.pageRegistry.pages);
+  const pageSurfaces = committedPageRoutes.flatMap((page) => page.filePath ? [{
+    route: page.path || '/',
+    filePath: page.filePath,
+    bindings: appBuildContract.business.intentBindings
+      .filter((binding) => binding.route === (page.path || '/') && binding.missingCapabilities.length === 0)
+      .map((binding) => ({ sourceSlot: binding.sourceSlot, intent: binding.domIntent })),
+  }] : []);
   const intentBindingPersistenceReceipt = await persistGeneratedBindings({
     businessId: commit.confirmed.businessId,
     projectId: commit.confirmed.projectId,
     files: commit.result.vfsFiles,
+    pageRoutesById: Object.fromEntries(Object.values(commit.result.siteBundleSnapshot.pageRegistry.pages)
+      .map((page) => [page.pageId, page.path || '/'])),
+    pageSurfaces,
   });
   const intentBindingsReady = intentBindingPersistenceReceipt.failed === 0
     && intentBindingPersistenceReceipt.persisted === intentBindingPersistenceReceipt.attempted

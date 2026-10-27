@@ -147,13 +147,13 @@ Deno.test("defaults to Gemini when multiple text providers are configured", () =
   assertEquals(providers, ["gemini", "openai", "anthropic"]);
 });
 
-Deno.test("routes explicit OpenAI models to OpenAI first", () => {
+Deno.test("keeps Gemini first for explicit OpenAI model requests", () => {
   const providers = resolveConfiguredProviders("openai/gpt-5", env({
     GEMINI_API_KEY: "gemini-test-key",
     OPENAI_API_KEY: "openai-test-key",
   }));
 
-  assertEquals(providers, ["openai", "gemini"]);
+  assertEquals(providers, ["gemini", "openai"]);
 });
 
 Deno.test("routes explicit Gemini models to Gemini first", () => {
@@ -243,7 +243,7 @@ Deno.test("never places the Lovable gateway ahead of direct provider keys", () =
     OPENAI_API_KEY: "openai-test-key",
   }));
 
-  assertEquals(providers, ["openai", "gemini", "lovable"]);
+  assertEquals(providers, ["gemini", "openai", "lovable"]);
 });
 
 Deno.test("current Gemini wire models survive deployment defaults and blank key aliases", async () => {

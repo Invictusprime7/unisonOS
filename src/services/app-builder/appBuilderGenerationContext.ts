@@ -180,8 +180,19 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     'Only emit form actions and data-ut-intent values covered by the registered intents and exact Wizard CTA markers in this contract. A design component does not authorize a new action or intent.',
     'A contact, quote, newsletter, or lead-capture form does not imply a floating chat widget. Add chat only when the owner explicitly requests it, and only wire it to an intent registered in this contract.',
   ].join('\n');
+  const checkoutRequiresPaymentSetup = business.registeredComponents.some((component) =>
+    component.runtime.componentSlug === 'checkout-cta'
+    && !business.configuredBusinessFields.includes('paymentProvider'),
+  );
+  const commerceSetupContext = checkoutRequiresPaymentSetup
+    ? [
+        'PAYMENT SETUP IS A PUBLISH READINESS ITEM, NOT A SITE-AUTHORING FAILURE.',
+        'Complete every selected commerce page and preserve the registered checkout CTA and pay.checkout intent. Do not invent provider credentials or claim transactions are enabled until payment setup is complete.',
+      ].join('\n')
+    : '';
   const compose = (modules: string) => [
     business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '',
+    'PERSISTABLE SECTION CONTRACT: every page-level body <section>, shared <header> navbar, and shared <footer> must carry literal stable data-ut-section-id, data-ut-section-type, and data-ut-variant values. Use site:navbar and site:footer as the shared chrome IDs across pages. Import the default family dispatcher from its certified @/unison/design-sources/<Family> module and render exactly one per root with sectionId equal to the root data-ut-section-id, variantId equal to the root data-ut-variant, and a JSON-serializable props={{...}} object. Keep existing data-ut-intent, data-ut-cta, data-ut-resource, slot, and registered component markers inside the root; never replace or regenerate those bindings when changing visual layout.',
     registeredComponentContext,
     registeredComponentBlueprints,
     `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}.`,
@@ -191,6 +202,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     logoContext,
     businessParameterContext,
     `Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.`,
+    commerceSetupContext,
     interactiveSurfaceContract,
     `Protected paths: ${runtime.protectedPaths.join(', ')}.`,
     `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.`,
@@ -220,7 +232,7 @@ function renderDesignSourceModules(materialization: DesignSourceMaterialization,
   const lines = [...byModule].sort(([a], [b]) => a.localeCompare(b)).map(([modulePath, ids]) =>
     `- ${modulePath.replace(/^\/src\//, '@/').replace(/\.tsx$/, '')} (props, variantId): ${ids.sort().slice(0, only ? ids.length : MAX_IDS_PER_MODULE).map((id) => (exports.has(id) ? `${id}={ ${exports.get(id)} }` : id)).join(', ')}`);
   return lines.length
-    ? `Certified design-source modules (read-only; import the named export and pass the listed props directly, e.g. import { Name } from '@/unison/design-sources/<Family>'; <Name headline=".." items={[..]} />; props marked [] are required, non-empty arrays (name?[] is optional and may be omitted) and {a|b|c?} lists the fields every item needs (? = optional; fill each non-? field with real business copy, never leave items empty); headline/subheadline are plain strings, never nested <h1>/<h2>; never import from recipes/ or REGISTERED_VARIANTS):\n${lines.join('\n')}`
+    ? `Certified design-source modules (read-only; import the default family dispatcher, e.g. import Services from '@/unison/design-sources/Services'; <Services variantId="services:editorial-rows" props={{ headline: "..", items: [...] }} />. The listed registry exports and prop hints identify available variants, but do not render named variant exports directly. Props marked [] are required, non-empty arrays (name?[] is optional and may be omitted) and {a|b|c?} lists the fields every item needs (? = optional; fill every non-? field with real business copy); headline/subheadline are plain strings, never nested <h1>/<h2>. Never import from recipes/ or REGISTERED_VARIANTS):\n${lines.join('\n')}`
     : '';
 }
 

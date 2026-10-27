@@ -92,14 +92,14 @@ export function resolveConfiguredProviders(
   model?: string,
   readEnv: EnvReader = (name) => Deno.env.get(name),
 ): Provider[] {
-  // Gemini is the default text provider. Explicit model namespaces override
-  // the default while preserving the other configured providers as fallbacks.
+  // Gemini is always primary when configured; explicit models only affect
+  // fallback order when Gemini is unavailable.
   const providers: Provider[] = [];
   if (readGeminiApiKey(readEnv)) providers.push("gemini");
   if (readEnv("OPENAI_API_KEY")) providers.push("openai");
   if (readEnv("ANTHROPIC_API_KEY")) providers.push("anthropic");
 
-  const preferred = requestedProvider(model);
+  const preferred = providers.includes("gemini") ? "gemini" : requestedProvider(model);
   const ordered = preferred && providers.includes(preferred)
     ? [preferred, ...providers.filter((provider) => provider !== preferred)]
     : providers;

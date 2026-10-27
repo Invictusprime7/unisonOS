@@ -1,7 +1,7 @@
 import * as ts from 'typescript';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import { resolvePlaygroundBindingDomIntent, type PlaygroundBinding, type PlaygroundBindingSpecV2, type PlaygroundPageRole } from '@/types/playground';
-import type { BuilderPage } from '@/types/pageRegistry';
+import type { BuilderPage, PageRegistry } from '@/types/pageRegistry';
 import {
   buildUIIntentContract,
   getUIIntentProfile,
@@ -23,6 +23,19 @@ export interface WizardBindingApplicationResult {
     elementKey?: string;
     reason: string;
   }>;
+}
+
+export interface WizardBindingMarkerRequirement {
+  bindingId: string;
+  pageId: string;
+  sourceLabel?: string;
+  sourceSlot: string;
+  markers: readonly string[];
+}
+
+export interface WizardBindingMarkerNormalizationResult {
+  files: Record<string, string>;
+  unresolvedBindingIds: string[];
 }
 
 const INTERACTIVE_TAGS = ['button', 'a', 'Link', 'Button', 'NavLink', 'motion.button', 'motion.a'] as const;
@@ -139,7 +152,12 @@ function normalizeText(value: string): string {
     .toLowerCase();
 }
 
-function getIconKeywords(binding: PlaygroundBinding): string[] {
+interface BindingMatchTarget {
+  sourceSlot?: string;
+  sourceLabel?: string;
+}
+
+function getIconKeywords(binding: BindingMatchTarget): string[] {
   const slot = binding.sourceSlot || '';
   const label = binding.sourceLabel || '';
   const target = `${slot} ${label}`.toLowerCase();
@@ -155,7 +173,7 @@ function getIconKeywords(binding: PlaygroundBinding): string[] {
   return [];
 }
 
-function getFallbackMatchLimit(binding: PlaygroundBinding): number {
+function getFallbackMatchLimit(binding: BindingMatchTarget): number {
   switch (binding.sourceSlot) {
     case 'card-cta':
     case 'nav-link':
@@ -391,7 +409,7 @@ function applyBindingToContent(
 
 function applyBindingByLabel(
   content: string,
-  binding: PlaygroundBinding,
+  binding: BindingMatchTarget,
   attrs: Record<string, string>,
 ): { content: string; applied: boolean } {
   const label = normalizeText(binding.sourceLabel || '');
@@ -435,7 +453,7 @@ function applyBindingByLabel(
 function applyBindingByJsxAst(
   content: string,
   filePath: string,
-  binding: PlaygroundBinding,
+  binding: BindingMatchTarget,
   attrs: Record<string, string>,
 ): { content: string; applied: boolean } {
   const label = normalizeText(binding.sourceLabel || '');
@@ -488,7 +506,7 @@ function applyBindingByJsxAst(
 
 function applyBindingByIconAffinity(
   content: string,
-  binding: PlaygroundBinding,
+  binding: BindingMatchTarget,
   attrs: Record<string, string>,
 ): { content: string; applied: boolean } {
   const keywords = getIconKeywords(binding);
@@ -517,6 +535,59 @@ function applyBindingByIconAffinity(
   });
 
   return { content: next, applied: appliedCount > 0 };
+}
+
+function containsCtaMarker(source: string, marker: string): boolean {
+  const escaped = escapeRegex(marker);
+  return new RegExp(`data-ut-cta\\s*=\\s*(?:["']${escaped}["']|\\{\\s*["']${escaped}["']\\s*\\})`).test(source);
+}
+
+/** Restore deterministic CTA markers before App Builder closure validation. */
+export function normalizeWizardBindingMarkers(
+  files: Record<string, string>,
+  pageRegistry: PageRegistry,
+  requirements: readonly WizardBindingMarkerRequirement[],
+): WizardBindingMarkerNormalizationResult {
+  const nextFiles = { ...files };
+  const unresolvedBindingIds: string[] = [];
+
+  for (const requirement of requirements) {
+    const page = pageRegistry.pages[requirement.pageId];
+    const filePath = resolveBindingFilePath(nextFiles, page);
+    if (!page || !filePath) {
+      unresolvedBindingIds.push(requirement.bindingId);
+      continue;
+    }
+
+    const surface = collectLocalImportClosure(nextFiles, filePath, (path) => SHARED_SURFACE_PATH.test(path));
+    if (surface.some((path) => requirement.markers.some((marker) => containsCtaMarker(nextFiles[path] ?? '', marker)))) {
+      continue;
+    }
+
+    const target: BindingMatchTarget = {
+      sourceSlot: requirement.sourceSlot,
+      sourceLabel: requirement.sourceLabel ?? '',
+    };
+    const attrs = { 'data-ut-cta': requirement.markers[0] };
+    let applied = false;
+    for (const candidatePath of surface) {
+      const source = nextFiles[candidatePath] ?? '';
+      const jsxResult = applyBindingByJsxAst(source, candidatePath, target, attrs);
+      const labelResult = jsxResult.applied
+        ? jsxResult
+        : applyBindingByLabel(source, target, attrs);
+      const result = labelResult.applied
+        ? labelResult
+        : applyBindingByIconAffinity(source, target, attrs);
+      if (!result.applied) continue;
+      nextFiles[candidatePath] = result.content;
+      applied = true;
+      break;
+    }
+    if (!applied) unresolvedBindingIds.push(requirement.bindingId);
+  }
+
+  return { files: nextFiles, unresolvedBindingIds };
 }
 
 type WizardBindingGuideSource = Pick<SiteBundleSnapshot, 'pageRegistry' | 'bindings'>;
@@ -640,7 +711,7 @@ export function applyWizardBindingsToVfs(
       continue;
     }
 
-    const attrs = getBindingAttrs(binding, snapshot);
+    const attrs = { ...getBindingAttrs(binding, snapshot), 'data-ut-cta': markers[0] };
     let result = applyBindingToContent(nextFiles[filePath], markers, attrs);
 
     if (!result.applied) {

@@ -69,9 +69,10 @@ describe('launch orchestrator canonical handoff', () => {
     expect(catalogSeed).toBeLessThan(livePreview);
   });
 
-  it('builds post-App Builder business and intent runtime contracts before sealing', () => {
+  it('loads the selected profile and preserves its payment provider before App Builder', () => {
     const stage4bResult = position('const appBuild = await run.stage("app-build"');
     const profileLoad = position('await loadBusinessProfile(input.existingBusinessId)');
+    const appBuilderContract = position('const appBuildContract = buildAppBuildContract({');
     const dataBindings = position('planSectionDataBindings(siteBundleSnapshot)');
     const businessRuntime = position('buildBusinessRuntimeContract({');
     const nativeSetup = position('buildNativePublishSetupSnapshot({');
@@ -82,6 +83,8 @@ describe('launch orchestrator canonical handoff', () => {
     const canonicalBuild = position('await buildCanonicalLaunchArtifactsAsync(');
 
     expect(source).toContain('const baseBusinessProfile: BusinessProfileDTO = loadedBusinessProfile || {');
+    expect(source).toContain('const businessProfilePaymentProvider = getProfilePaymentProvider(loadedBusinessProfile);');
+    expect(source).toContain('paymentProvider: plan.selections.businessParameters?.paymentProvider?.trim()');
     expect(source).toContain('const ownerParameters = plan.selections.businessParameters ?? {};');
     expect(source).toContain("launchCapabilities.includes('booking') ||");
     expect(source).toContain('notificationEmail: ownerParameters.notificationEmail?.trim()');
@@ -98,7 +101,8 @@ describe('launch orchestrator canonical handoff', () => {
     expect(source).toContain('bindingsReady: persistedDataBindingsReady && intentBindingsReady');
     expect(source).toContain('businessRuntime: finalBusinessRuntime');
     expect(source).not.toContain('bindingsReady: true');
-    expect(stage4bResult).toBeLessThan(profileLoad);
+    expect(profileLoad).toBeLessThan(appBuilderContract);
+    expect(appBuilderContract).toBeLessThan(stage4bResult);
     expect(profileLoad).toBeLessThan(dataBindings);
     expect(dataBindings).toBeLessThan(businessRuntime);
     expect(businessRuntime).toBeLessThan(nativeSetup);

@@ -30,8 +30,6 @@ export interface ProviderPlan {
   fallbackReserveMs?: number;
   /** Run the lead model and the managed gateway simultaneously; first valid answer wins. */
   raceGateway?: boolean;
-  /** Hybrid page writing: the managed gateway writes first; direct keys take over only if it fails. */
-  gatewayLeads?: boolean;
   /** Only Gemini models may serve this turn (direct Gemini API first, Gemini on the managed gateway as backup). */
   geminiOnly?: boolean;
 }
@@ -427,13 +425,20 @@ export function buildProviderPlan(
     && Boolean(readEnv('GEMINI_API_KEY') || readEnv('GOOGLE_API_KEY') || readEnv('UNISONGEMINI_API_KEY'));
   const isComposerTask = task.type === "site_page_author" || task.type === "site_page_repair" || task.type === "builder_source_edit";
   if (!hasExplicitModel && isComposerTask) {
-    // App Builder page writing, repair and Builder source edits run on the
-    // Gemini API only (owner decision 2026-10-24): no OpenAI or Anthropic
-    // attempts, so an unfunded OpenAI key can never fail or mask a page.
-    plan.gatewayModels = [m(composerGeminiModel(readEnv), Math.min(48_000, overrides?.maxTokens ?? 48_000))];
+    // Gemini owns the first attempt; configured direct providers remain behind
+    // it so a slow Gemini response does not strand a template install.
+    const geminiModel = m(composerGeminiModel(readEnv), Math.min(48_000, overrides?.maxTokens ?? 48_000));
+    const openAiFallbackAvailable = !isGeminiExclusiveProviderMode(readEnv) && Boolean(readEnv('OPENAI_API_KEY'));
+    plan.gatewayModels = [
+      geminiModel,
+      ...(openAiFallbackAvailable ? [m(MODELS.gpt41, Math.min(16_384, overrides?.maxTokens ?? 16_384))] : []),
+    ];
     plan.primaryProvider = 'gemini';
-    plan.geminiOnly = true;
-    plan.gatewayLeads = undefined;
+    if (openAiFallbackAvailable) {
+      plan.balancedProviderAttempts = true;
+      plan.preferLongLeadAttempt = false;
+    }
+    if (isGeminiExclusiveProviderMode(readEnv)) plan.geminiOnly = true;
     plan.raceGateway = false;
   } else if (!hasExplicitModel) {
     plan.primaryProvider = wizardGeminiConfigured
@@ -462,6 +467,15 @@ export function buildProviderPlan(
   if (isGeminiExclusiveProviderMode(readEnv)) {
     plan.gatewayModels = plan.gatewayModels.filter((model) => providerForModel(model.id) === 'gemini');
     plan.primaryProvider = plan.gatewayModels.length > 0 ? 'gemini' : undefined;
+  }
+
+  const geminiConfigured = Boolean(readEnv('GEMINI_API_KEY') || readEnv('GOOGLE_API_KEY') || readEnv('UNISONGEMINI_API_KEY'));
+  if (geminiConfigured && !plan.geminiOnly) {
+    const geminiModels = plan.gatewayModels.filter((model) => providerForModel(model.id) === 'gemini');
+    if (geminiModels.length > 0) {
+      plan.gatewayModels = [...geminiModels, ...plan.gatewayModels.filter((model) => providerForModel(model.id) !== 'gemini')];
+      plan.primaryProvider = 'gemini';
+    }
   }
 
   plan.gatewayModels = plan.gatewayModels.filter((model, index, models) =>

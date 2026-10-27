@@ -51,7 +51,11 @@ import { GENERATED_RUNTIME_PROFILE } from './generatedRuntimeCapabilities';
 import { resolveApprovedExperienceCapabilities } from '@/services/experienceCapabilityResolver';
 import { runExperiencePreflight } from '@/services/experiencePreflightGate';
 import { assertStage4bCompositionPreserved } from './stage4bCompositionGuard';
-import { refreshCompositionOwnership } from './resolvedComposition';
+import {
+  collectResolvedCompositions,
+  refreshCompositionOwnership,
+  resolvedCompositionPathFor,
+} from './resolvedComposition';
 
 
 import {
@@ -595,9 +599,43 @@ export function recompileFromPlayground(
   if (options.preservePageSources) {
     // Recompilation may rebuild the compiler projection, but an accepted VFS
     // is the source baseline for every non-launch mutation. Restore every
-    // existing byte here; the explicit Stage 4b/system-owned writes below are
-    // the only paths allowed to replace it.
+    // existing byte here, except page modules and sidecars whose registered
+    // variants were explicitly changed by this presentation commit.
+    const beforeCompositions = collectResolvedCompositions(existingVfsFiles);
+    const afterCompositions = collectResolvedCompositions(compileResult.vfsFiles);
+    const variantProjectionPaths = new Set<string>();
+    for (const [pagePath, next] of Object.entries(afterCompositions)) {
+      const previous = beforeCompositions[pagePath];
+      const changedSectionSources = next.compiledBy === 'app-builder'
+        ? next.sections.filter(section => section.sourcePath
+          && compileResult.vfsFiles[section.sourcePath] !== existingVfsFiles[section.sourcePath])
+        : [];
+      const appBuilderVariantProjection = next.compiledBy === 'app-builder'
+        && (compileResult.vfsFiles[pagePath] !== existingVfsFiles[pagePath] || changedSectionSources.length > 0);
+      if (appBuilderVariantProjection) {
+        variantProjectionPaths.add(pagePath);
+        variantProjectionPaths.add(resolvedCompositionPathFor(pagePath));
+        changedSectionSources.forEach(section => {
+          if (section.sourcePath) variantProjectionPaths.add(section.sourcePath);
+        });
+        variantProjectionPaths.add('/.unison/design-intervention.json');
+        continue;
+      }
+      if (!previous || !(previous.activation || previous.compiledBy === 'app-builder')) continue;
+      const previousVariants = new Map(previous.sections.map((section) => [section.sectionId, section.variantId]));
+      const changedSections = next.sections.filter((section) => previousVariants.get(section.sectionId) !== section.variantId);
+      const changed = changedSections.length > 0;
+      if (!changed) continue;
+      variantProjectionPaths.add(pagePath);
+      variantProjectionPaths.add(resolvedCompositionPathFor(pagePath));
+      for (const section of changedSections) {
+        const previousSection = previous.sections.find(candidate => candidate.sectionId === section.sectionId);
+        if (section.sourcePath) variantProjectionPaths.add(section.sourcePath);
+        if (previousSection?.sourcePath) variantProjectionPaths.add(previousSection.sourcePath);
+      }
+    }
     for (const [path, content] of Object.entries(existingVfsFiles)) {
+      if (variantProjectionPaths.has(path)) continue;
       compileResult.vfsFiles[path] = content;
     }
   }

@@ -8,6 +8,7 @@
 
 export type BuilderSaveReason =
   | 'interval_autosave'
+  | 'manual_save'
   | 'ai_edit'
   | 'ai_recovery'
   | 'navigation_flush';

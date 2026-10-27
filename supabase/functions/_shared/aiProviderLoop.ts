@@ -105,13 +105,6 @@ const markDirectQuotaExhausted = (provider: 'gemini' | 'openai') => {
 /** Test hook: forget remembered out-of-credit keys. */
 export const resetDirectQuotaCooldown = () => { directQuotaCooldownUntil.gemini = 0; directQuotaCooldownUntil.openai = 0; };
 const directOnCooldown = (provider: 'gemini' | 'openai') => Date.now() < directQuotaCooldownUntil[provider];
-// A timed-out direct Gemini makes the gateway lead (full window) for a while.
-const DIRECT_GEMINI_SLOW_MS = 10 * 60_000;
-let directGeminiSlowUntil = 0;
-const markDirectGeminiSlow = () => { directGeminiSlowUntil = Date.now() + DIRECT_GEMINI_SLOW_MS; };
-const directGeminiSlow = () => Date.now() < directGeminiSlowUntil;
-/** Test hook: forget a remembered Gemini timeout. */
-export const resetDirectGeminiSlow = () => { directGeminiSlowUntil = 0; };
 
 /** The gateway's own 402 message names the remedy (top-up, temporary hold); never replace it with generic text. */
 export function gatewayErrorMessage(errText: string): string {
@@ -193,7 +186,6 @@ export async function runProviderLoop(opts: {
         maxTokens: guestOutputTokens!,
       }],
       fallbackMaxTokens: guestOutputTokens!,
-      gatewayLeads: false,
       raceGateway: false,
     }
     : requestedProviderPlan;
@@ -220,6 +212,7 @@ export async function runProviderLoop(opts: {
   const geminiOnlyTurn = geminiExclusive || Boolean(providerPlan.geminiOnly);
   const hasDirectOpenAI = !guestOnly && allowDirectFallbacks && !geminiOnlyTurn && !directOnCooldown('openai') && Boolean(Deno.env.get('OPENAI_API_KEY'));
   const hasDirectGemini = allowDirectFallbacks && !directOnCooldown('gemini') && Boolean(Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('UNISONGEMINI_API_KEY'));
+  const hasDirectAnthropic = !guestOnly && !geminiOnlyTurn && allowDirectFallbacks && Boolean(Deno.env.get('ANTHROPIC_API_KEY'));
   // Guest actions use only models with a configured, enforceable price schedule.
   const hasLastResortGateway = !guestOnly && allowDirectFallbacks && Boolean(Deno.env.get('LOVABLE_API_KEY'));
   // The managed gateway is the final safety net; a 20 s slice is not enough for
@@ -548,7 +541,8 @@ export async function runProviderLoop(opts: {
   };
 
   // Managed gateway (Lovable AI) hybrid fallback.
-  // Funded Gemini leads. Lovable is a bounded hybrid fallback.
+  // Lovable only leads when no direct provider is configured; otherwise it is
+  // reserved for the final fallback after direct provider attempts.
   let gatewayTriedFirst = false;
   // Preserve the gateway's safe status/message if it refuses a fallback.
   let gatewayFailure: ProviderEarlyError | undefined;
@@ -637,28 +631,19 @@ export async function runProviderLoop(opts: {
   };
 
   // A direct Gemini that just timed out would burn the whole window again and
-  // leave the gateway only the tail; let the gateway lead until it recovers.
-  const geminiRecentlySlow = hasDirectGemini && directGeminiSlow();
-  if (geminiRecentlySlow) console.warn('[AI-Hybrid] Direct Gemini timed out recently; managed gateway leads this turn.');
-  if (hasLastResortGateway && (!hasDirectGemini || providerPlan.gatewayLeads || geminiRecentlySlow)) {
+  // leave the gateway only the tail; keep it behind all available direct keys.
+  if (hasLastResortGateway && !hasDirectGemini && !hasDirectOpenAI && !hasDirectAnthropic) {
     gatewayTriedFirst = true;
-    // Hybrid page writing keeps a real window for the Gemini backup.
-    // A full page needs ~90 s; a backup squeezed into the last 30-45 s can
-    // never finish one, and starving the lead caused every page to time out.
-    // The lead gets the whole window; backups still run if it fails fast.
-    const fallbackReserveMs = providerPlan.gatewayLeads || geminiRecentlySlow
-      ? 3_000
-      : (hasDirectOpenAI || hasDirectGemini) && budgetRemaining() >= 90_000 ? 30_000 : 5_000;
     await runManagedGatewayAttempt(
-      providerPlan.gatewayLeads || geminiRecentlySlow ? 'Lovable AI (hybrid lead)' : 'Lovable AI fallback (Gemini unavailable)',
-      Math.min(providerPlan.perModelTimeoutMs, budgetRemaining() - fallbackReserveMs));
+      'Lovable AI fallback (no direct provider configured)',
+      Math.min(providerPlan.perModelTimeoutMs, budgetRemaining() - 5_000));
   }
 
   // ── Phase 0: Hybrid race (lead OpenAI model vs managed gateway) ────────
   // Composer tasks start both at once; the first usable answer wins and the
   // other request is aborted. A quick failure on one side leaves the other
   // running, so a dead key never costs a sequential fallback round.
-  if (!hasResponse() && !hasDirectGemini && !gatewayTriedFirst && providerPlan.raceGateway && allowDirectFallbacks && hasLastResortGateway && providerPlan.gatewayModels.length > 0) {
+  if (!hasResponse() && !hasDirectGemini && !hasDirectOpenAI && !hasDirectAnthropic && !gatewayTriedFirst && providerPlan.raceGateway && allowDirectFallbacks && hasLastResortGateway && providerPlan.gatewayModels.length > 0) {
     const lead = providerPlan.gatewayModels[0];
     const gatewayModel: ModelSpec = {
       id: DEFAULT_GEMINI_GATEWAY_MODEL,
@@ -899,7 +884,6 @@ export async function runProviderLoop(opts: {
         if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
           console.warn(`[AI-Hybrid] ${model.label} timed out, trying next...`);
           recordProviderError(model.label, 'timeout');
-          if (isGeminiModelId(model.id)) markDirectGeminiSlow();
           continue;
         }
         console.warn(`[AI-Hybrid] ${model.label} failed:`, err);

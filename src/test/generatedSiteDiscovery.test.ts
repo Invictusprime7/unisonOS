@@ -4,6 +4,7 @@ import {
   renderGeneratedSiteDiscoveryForPrompt,
   sourceTargetsForCartWiring,
 } from '@/services/builder/generatedSiteDiscovery';
+import { selectSourceKnowledgeWithReport } from '@/services/builder/sourceKnowledgeContext';
 
 describe('generated site source discovery', () => {
   const files = {
@@ -47,5 +48,23 @@ describe('generated site source discovery', () => {
       '/src/pages/Shop.tsx',
       '/src/context/CartContext.tsx',
     ]));
+  });
+
+  it('does not make unrelated large pages mandatory context for a cart edit', () => {
+    const expandedFiles = {
+      ...files,
+      '/src/pages/CartEditorial.tsx': `// editorial note: cart is mentioned but has no commerce controls or data\n${'Long editorial copy. '.repeat(3500)}`,
+      ...Object.fromEntries(Array.from({ length: 5 }, (_, index) => [
+        `/src/pages/Editorial${index}.tsx`,
+        `export default function Editorial${index}(){return <main>${'Editorial content '.repeat(3500)}</main>}`,
+      ])),
+    };
+    const targets = sourceTargetsForCartWiring(expandedFiles, '/src/pages/Home.tsx');
+    const report = selectSourceKnowledgeWithReport(expandedFiles, targets, 240_000, { scoped: true });
+
+    expect(targets).not.toContain('/src/pages/Editorial0.tsx');
+    expect(targets).not.toContain('/src/pages/CartEditorial.tsx');
+    expect(report.completeTargets).toBe(true);
+    expect(report.omitted.some((item) => item.path.startsWith('/src/pages/Editorial'))).toBe(false);
   });
 });

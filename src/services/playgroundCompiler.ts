@@ -24,6 +24,7 @@ import type { WizardDesignIntervention } from '@/services/wizardDesignInterventi
 import { collectResolvedCompositions, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import { collectReachableFiles } from '@/utils/dependencyExtractor';
 import { updateResolvedCompositionVariants } from '@/sections/compositionToFileSet';
+import { materializeAppBuilderSectionModels } from '@/services/app-builder/appBuilderSectionModel';
 
 export interface CompilePlaygroundOptions {
   /** Selected template used to generate real role-filtered page scaffolds. */
@@ -261,7 +262,20 @@ export function compilePlayground(
   // source of the hardcoded minimal preview regressions. The SiteBundleSnapshot
   // + WizardSeed pipeline is authoritative for every registered hash route.
   const vfsFiles: Record<string, string> = {};
-  const activated = collectResolvedCompositions(existingVfsFiles);
+  let sectionImplementations: Record<string, { modulePath: string; sectionType: string; exportName?: string }> = {};
+  try {
+    sectionImplementations = JSON.parse(existingVfsFiles['/.unison/design-source-manifest.json'] ?? 'null')?.implementations ?? {};
+  } catch {
+    sectionImplementations = {};
+  }
+  const existingPageFiles = materializeAppBuilderSectionModels(
+    existingVfsFiles,
+    pages.flatMap((page) => page.filePath && existingVfsFiles[page.filePath]
+      ? [{ id: page.pageId, filePath: page.filePath }]
+      : []),
+    sectionImplementations,
+  );
+  const activated = collectResolvedCompositions(existingPageFiles);
   const preserved: Record<string, string> = {};
   const blockedWizardPages: string[] = [];
 
@@ -280,14 +294,15 @@ export function compilePlayground(
       const nextOverrides = options?.designIntervention?.activeVariants ?? {};
       const overridesUnchanged = [...new Set([...Object.keys(previousOverrides), ...Object.keys(nextOverrides)])]
         .every(id => previousOverrides[id] === nextOverrides[id]);
-      if (previous?.activation && existingVfsFiles[fp]) {
-        // An accepted composition is durable authoring state. Ordinary recompiles
-        // must not replace its content or custom components with template samples.
-        Object.assign(preserved, collectReachableFiles(existingVfsFiles, [fp]));
+      if ((previous?.activation || previous?.compiledBy === 'app-builder') && existingPageFiles[fp]) {
+        // Accepted Stage 4b and App Builder pages are durable authoring state.
+        // Recompiles update resolved variants but never replace their page source.
+        Object.assign(preserved, collectReachableFiles(existingPageFiles, [fp]));
         const descriptor = resolvedCompositionPathFor(fp);
-        preserved[descriptor] = existingVfsFiles[descriptor];
+        preserved[descriptor] = existingPageFiles[descriptor];
         if (!overridesUnchanged) {
-          const updated = updateResolvedCompositionVariants(existingVfsFiles[fp], previous, nextOverrides);
+          const updated = updateResolvedCompositionVariants(existingPageFiles[fp], previous, nextOverrides, existingPageFiles);
+          Object.assign(preserved, updated.updatedSources);
           preserved[fp] = updated.source;
           preserved[descriptor] = JSON.stringify(updated.composition, null, 2) + '\n';
         }
@@ -301,7 +316,7 @@ export function compilePlayground(
       // /src/components/*. Shared component files are idempotent across
       // pages and safe to merge by Object.assign.
       const fileSet = generateTopologyPlaceholderFiles(node, scaffoldPlan, undefined, {
-        designIntervention: previous?.activation && options?.designIntervention
+        designIntervention: (previous?.activation || previous?.compiledBy === 'app-builder') && options?.designIntervention
           ? { ...options.designIntervention, compositionPolicy: 'maximum-compatible' }
           : options?.designIntervention,
       });

@@ -49,6 +49,7 @@ import heroPageIntroSource from '@/sections/variants/hero/HeroPageIntro.tsx?raw'
 import stylexRecipes from './recipes/stylexRecipes.generated.json';
 import { clampVariantToPack, resolveArtDirectionPack, resolveHeroPresentation } from '@/sections/variants';
 import type { HeroLayoutId } from '@/sections/variants';
+import * as ts from 'typescript';
 
 /**
  * The pack's hero signature is richer than the section schema's three layouts,
@@ -561,10 +562,217 @@ function applyVocabularyRecipes(
 
 
 /** Apply an explicit presentation operation to authored data without recomposing the page. */
-export function updateResolvedCompositionVariants(source: string, previous: ResolvedPageComposition, nextOverrides: WizardDesignIntervention['activeVariants']) {
-  const data = source.match(/const SECTIONS = ([\s\S]*?);\r?\nconst HYDRATABLE/);
-  if (!data) throw new Error(`Cannot apply a variant to custom page data: ${previous.pageFilePath}`);
+export function updateResolvedCompositionVariants(
+  source: string,
+  previous: ResolvedPageComposition,
+  nextOverrides: WizardDesignIntervention['activeVariants'],
+  sourceFiles: Readonly<Record<string, string>> = { [previous.pageFilePath]: source },
+) {
+  const data = source.match(/const\s+SECTIONS\s*=\s*([\s\S]*?);\s*\r?\nconst\s+HYDRATABLE/);
   const previousOverrides = previous.variantOverrides ?? {};
+  if (!data && previous.sections.length > 0 && previous.sections.every(section =>
+    Boolean(section.sectionId && section.semanticType && section.variantId && section.primitiveId),
+  )) {
+    const candidateFiles = Object.entries(sourceFiles).filter(([path, content]) =>
+      /\.(?:tsx|jsx|ts|js)$/i.test(path)
+      && typeof content === 'string'
+      && previous.sections.some(section => !section.sourcePath || section.sourcePath === path),
+    );
+    const parsedFiles = candidateFiles.map(([path, content]) => ({
+      path,
+      content,
+      sourceFile: ts.createSourceFile(path, content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX),
+    }));
+    const requested = new Map(previous.sections.flatMap(section => {
+      const variantId = nextOverrides[section.sectionId];
+      if (!variantId || previousOverrides[section.sectionId] === variantId) return [];
+      const variant = getVariantById(variantId as VariantId);
+      if (!variant || variant.sectionType !== section.semanticType) {
+        throw new Error(`Cannot apply ${variantId} to ${section.sectionId} (${section.semanticType}).`);
+      }
+      if (!section.variantId || !section.primitiveId) {
+        throw new Error(`Section ${section.sectionId} has no registered implementation identity.`);
+      }
+      return [[section.sectionId, {
+        currentVariantId: section.variantId,
+        variantId: variant.id,
+        layout: getLayoutForVariantId(variant.id),
+      }] as const];
+    }));
+    const matches = new Map<string, Array<{ path: string; content: string; sourceFile: ts.SourceFile; root: ts.JsxOpeningElement }>>();
+    for (const parsed of parsedFiles) {
+      const visit = (node: ts.Node) => {
+        if (ts.isJsxOpeningElement(node)) {
+          const idAttribute = node.attributes.properties.find((property): property is ts.JsxAttribute =>
+            ts.isJsxAttribute(property) && property.name.getText(parsed.sourceFile) === 'data-ut-section-id');
+          const id = idAttribute?.initializer;
+          const sectionId = id && ts.isStringLiteral(id) ? id.text : null;
+          if (sectionId && requested.has(sectionId)) {
+            matches.set(sectionId, [...(matches.get(sectionId) ?? []), {
+              path: parsed.path,
+              content: parsed.content,
+              sourceFile: parsed.sourceFile,
+              root: node,
+            }]);
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(parsed.sourceFile);
+    }
+
+    const editsByFile = new Map<string, { content: string; edits: Array<{ start: number; end: number; text: string }> }>();
+    for (const [sectionId, update] of requested) {
+      const candidates = matches.get(sectionId) ?? [];
+      const roots = candidates.filter(candidate => !candidates.some(other =>
+        other.path === candidate.path
+        && other.root !== candidate.root
+        && other.root.getStart(other.sourceFile) <= candidate.root.getStart(candidate.sourceFile)
+        && other.root.getEnd() >= candidate.root.getEnd(),
+      ));
+      if (roots.length !== 1) throw new Error(`Cannot uniquely locate section ${sectionId} in ${previous.pageFilePath}.`);
+      const target = roots[0];
+      const { path: targetPath, content: targetSource, sourceFile, root } = target;
+      const targetEdits = editsByFile.get(targetPath) ?? { content: targetSource, edits: [] };
+      editsByFile.set(targetPath, targetEdits);
+      const originalSection = previous.sections.find(section => section.sectionId === sectionId)!;
+      if (originalSection.legacyRendererName) {
+        const sectionElement = root.parent && ts.isJsxElement(root.parent) ? root.parent : null;
+        if (!sectionElement || !originalSection.primitiveId || !originalSection.sourceModulePath || !originalSection.data) {
+          throw new Error(`Section ${sectionId} lacks the migration metadata required for a safe variant swap.`);
+        }
+        const legacyRenderers: Array<ts.JsxOpeningLikeElement> = [];
+        const findLegacyRenderer = (node: ts.Node) => {
+          if (node !== root && (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))) {
+            const nestedId = node.attributes.properties.find((property): property is ts.JsxAttribute =>
+              ts.isJsxAttribute(property) && property.name.getText(sourceFile) === 'data-ut-section-id');
+            const nestedValue = nestedId?.initializer;
+            if (nestedValue && ts.isStringLiteral(nestedValue) && nestedValue.text !== sectionId) return;
+          }
+          if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+            && node.tagName.getText(sourceFile) === originalSection.legacyRendererName) legacyRenderers.push(node);
+          ts.forEachChild(node, findLegacyRenderer);
+        };
+        findLegacyRenderer(sectionElement);
+        if (legacyRenderers.length !== 1) {
+          throw new Error(`Cannot uniquely locate legacy renderer ${originalSection.legacyRendererName} for section ${sectionId}.`);
+        }
+        const legacyRenderer = legacyRenderers[0];
+        const legacyElement = ts.isJsxOpeningElement(legacyRenderer) && legacyRenderer.parent && ts.isJsxElement(legacyRenderer.parent)
+          ? legacyRenderer.parent
+          : legacyRenderer;
+        if (ts.isJsxOpeningElement(legacyRenderer)) {
+          if (!ts.isJsxElement(legacyElement) || legacyElement.children.some(child =>
+            !ts.isJsxText(child) || child.text.trim().length > 0,
+          )) {
+            throw new Error(`Legacy renderer ${originalSection.legacyRendererName} has children that cannot be migrated as section data.`);
+          }
+        }
+        const dispatcher = originalSection.primitiveId;
+        const modulePath = originalSection.sourceModulePath.replace(/^\/src\//, '@/').replace(/\.(?:tsx?|jsx?)$/i, '');
+        const hasDispatcherImport = sourceFile.statements.some(statement =>
+          ts.isImportDeclaration(statement)
+          && ts.isStringLiteral(statement.moduleSpecifier)
+          && statement.moduleSpecifier.text === modulePath
+          && statement.importClause?.name?.text === dispatcher,
+        );
+        if (!hasDispatcherImport) {
+          const imports = sourceFile.statements.filter(ts.isImportDeclaration);
+          const insertAt = imports.length ? imports[imports.length - 1].getEnd() : 0;
+          targetEdits.edits.push({
+              start: insertAt,
+              end: insertAt,
+              text: `${insertAt ? '\n' : ''}import ${dispatcher} from ${JSON.stringify(modulePath)};\n`,
+          });
+        }
+        targetEdits.edits.push({
+          start: legacyElement.getStart(sourceFile),
+          end: legacyElement.getEnd(),
+          text: `<${dispatcher} sectionId=${JSON.stringify(sectionId)} variantId=${JSON.stringify(update.variantId)} props={${JSON.stringify(originalSection.data)}} />`,
+        });
+      } else {
+      const rendererMatches: ts.JsxOpeningLikeElement[] = [];
+      const sectionElement = root.parent && ts.isJsxElement(root.parent) ? root.parent : null;
+      if (!sectionElement) throw new Error(`Section ${sectionId} has no renderer subtree.`);
+      const visitRenderer = (node: ts.Node) => {
+        if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+          if (node !== root) {
+            const nestedId = node.attributes.properties.find((property): property is ts.JsxAttribute =>
+              ts.isJsxAttribute(property) && property.name.getText(sourceFile) === 'data-ut-section-id');
+            const nestedValue = nestedId?.initializer;
+            if (nestedValue && ts.isStringLiteral(nestedValue) && nestedValue.text !== sectionId) return;
+          }
+          if (node.tagName.getText(sourceFile) === originalSection.primitiveId) {
+            const variantAttribute = node.attributes.properties.find((property): property is ts.JsxAttribute =>
+              ts.isJsxAttribute(property) && property.name.getText(sourceFile) === 'variantId');
+            const initializer = variantAttribute?.initializer;
+            if (initializer && ts.isStringLiteral(initializer) && initializer.text === update.currentVariantId) {
+              rendererMatches.push(node);
+            }
+          }
+        }
+        ts.forEachChild(node, visitRenderer);
+      };
+      visitRenderer(sectionElement);
+      if (rendererMatches.length !== 1) {
+        throw new Error(`Section ${sectionId} must render exactly one ${originalSection.primitiveId} dispatcher for ${update.currentVariantId}.`);
+      }
+
+      const renderer = rendererMatches[0];
+      const variantAttribute = renderer.attributes.properties.find((property): property is ts.JsxAttribute =>
+        ts.isJsxAttribute(property) && property.name.getText(sourceFile) === 'variantId');
+      if (!variantAttribute) throw new Error(`Section ${sectionId} has no variant selector.`);
+      targetEdits.edits.push({
+        start: variantAttribute.getStart(sourceFile),
+        end: variantAttribute.getEnd(),
+        text: `variantId=${JSON.stringify(update.variantId)}`,
+      });
+      }
+
+      const values: Array<[string, string | undefined]> = [
+        ['data-ut-variant', update.variantId],
+        ['data-ut-layout', update.layout],
+      ];
+      const additions: string[] = [];
+      for (const [name, value] of values) {
+        const attribute = root.attributes.properties.find((property): property is ts.JsxAttribute =>
+          ts.isJsxAttribute(property) && property.name.getText(sourceFile) === name);
+        if (!value) {
+          if (attribute) targetEdits.edits.push({ start: attribute.getStart(sourceFile), end: attribute.getEnd(), text: '' });
+          continue;
+        }
+        const text = `${name}=${JSON.stringify(value)}`;
+        if (attribute) targetEdits.edits.push({ start: attribute.getStart(sourceFile), end: attribute.getEnd(), text });
+        else additions.push(text);
+      }
+      if (additions.length) targetEdits.edits.push({ start: root.attributes.end, end: root.attributes.end, text: ` ${additions.join(' ')}` });
+    }
+
+    const updatedSources: Record<string, string> = {};
+    for (const [path, { content, edits }] of editsByFile) {
+      let updated = content;
+      for (const edit of edits.sort((a, b) => b.start - a.start)) {
+        updated = `${updated.slice(0, edit.start)}${edit.text}${updated.slice(edit.end)}`;
+      }
+      updatedSources[path] = updated;
+    }
+    const sections = previous.sections.map(section => {
+      const update = requested.get(section.sectionId);
+      if (!update) return section;
+      const { legacyRendererName: _legacyRendererName, ...migrated } = section;
+      const sourcePath = editsByFile.size === 1 ? [...editsByFile.keys()][0] : section.sourcePath;
+      return { ...migrated, ...(sourcePath ? { sourcePath } : {}), variantId: update.variantId, layoutRecipe: update.layout };
+    });
+    const composition: ResolvedPageComposition = {
+      ...previous,
+      compiledBy: 'app-builder',
+      variantOverrides: { ...nextOverrides },
+      sections,
+    };
+    return { source: updatedSources[previous.pageFilePath] ?? source, updatedSources, composition };
+  }
+  if (!data) throw new Error(`Cannot apply a variant to custom page data: ${previous.pageFilePath}`);
+
   const sections = (JSON.parse(data[1]) as TemplateComposition['sections']).map(section => {
     const key = section.id in nextOverrides ? section.id : section.type !== 'hero' ? section.sourceSectionId : undefined;
     const nextVariantId = key ? nextOverrides[key] : undefined;

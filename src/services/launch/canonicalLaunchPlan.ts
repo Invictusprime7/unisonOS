@@ -34,6 +34,8 @@ import {
   type GeneratedUiManifest,
 } from '@/platform/core/generatedUiFoundation';
 import { getRequiredRadixPrimitives } from '@/sections/variants';
+import type { VariantId } from '@/sections/variants/types';
+import { collectResolvedCompositions } from '@/platform/core/resolvedComposition';
 import {
   buildThemeContractFiles,
 } from '@/platform/core/themeContract';
@@ -276,6 +278,17 @@ export function projectCanonicalLaunchCandidateSnapshot(
 ): SiteBundleSnapshot {
   const registry = plan.playground.pageRegistry;
   const pages = Object.values(registry.pages);
+  const generatedSectionVariants = Object.values(collectResolvedCompositions(candidateFiles))
+    .flatMap((composition) => composition.sections.flatMap((section) =>
+      section.variantId ? [[section.sectionId, section.variantId as VariantId] as const] : [],
+    ));
+  const designIntervention: WizardDesignIntervention = {
+    ...plan.designIntervention,
+    activeVariants: {
+      ...plan.designIntervention.activeVariants,
+      ...Object.fromEntries(generatedSectionVariants),
+    },
+  };
   const routes: RouteDef[] = pages.map((page) => ({
     path: page.path,
     pageId: page.pageId,
@@ -346,7 +359,7 @@ export function projectCanonicalLaunchCandidateSnapshot(
         layoutRecipe: plan.designIntervention.layoutRecipe ?? null,
         motionRecipes: plan.designIntervention.motionRecipes ?? null,
         experienceBudget: plan.designIntervention.experienceBudget ?? null,
-        activeVariants: plan.designIntervention.activeVariants,
+        activeVariants: designIntervention.activeVariants,
         pages: pages.map((page) => `${page.pageId}:${page.path}:${page.pageRole ?? page.pageType}`).sort(),
         routes: plan.sitePlan.pages.map((page) => page.route).sort(),
       }),
@@ -381,7 +394,7 @@ export function projectCanonicalLaunchCandidateSnapshot(
         registrySignature: designRegistrySignature(),
       } : undefined,
       generationBrief,
-      designIntervention: plan.designIntervention,
+      designIntervention,
       registryContext: plan.registryContext,
     },
   };

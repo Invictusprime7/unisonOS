@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveCapabilities } from '@/services/wizardCapabilityResolver';
 import { materializePlayground } from '@/services/wizardPlaygroundMaterializer';
-import { applyWizardBindingsToVfs, buildWizardBindingGuide } from '@/services/wizardBindingBridge';
+import { applyWizardBindingsToVfs, buildWizardBindingGuide, getWizardBindingMarkers, normalizeWizardBindingMarkers } from '@/services/wizardBindingBridge';
 import type { WizardSelections } from '@/types/playground';
 
 const salonSelections: WizardSelections = {
@@ -19,6 +19,50 @@ const salonSelections: WizardSelections = {
 };
 
 describe('Wizard form binding aliases', () => {
+  it('normalizes a uniquely matched icon binding before closure and stamps its final intent afterward', () => {
+    const capabilities = resolveCapabilities(salonSelections);
+    const { playground } = materializePlayground(salonSelections, capabilities);
+    const binding = Object.values(playground.bindings).find((candidate) => candidate.sourceSlot === 'icon-search');
+    expect(binding).toBeDefined();
+    const home = playground.pageRegistry.pages[binding!.sourcePageId];
+    const files = {
+      [home.filePath!]: 'export default function Home(){return <main><button type="button" aria-label="Search"><span><SearchIcon /></span></button></main>}',
+    };
+
+    const normalized = normalizeWizardBindingMarkers(files, playground.pageRegistry, [{
+      bindingId: binding!.bindingId,
+      pageId: binding!.sourcePageId,
+      sourceLabel: binding!.sourceLabel,
+      sourceSlot: binding!.sourceSlot!,
+      markers: getWizardBindingMarkers(binding!),
+    }]);
+    const wired = applyWizardBindingsToVfs(
+      normalized.files,
+      { ...playground, bindings: { [binding!.bindingId]: binding! } } as any,
+    );
+
+    expect(normalized.unresolvedBindingIds).toEqual([]);
+    expect(normalized.files[home.filePath!]).toContain('data-ut-cta="icon.search"');
+    expect(wired.missingBindings).toEqual([]);
+    expect(wired.files[home.filePath!]).toContain('data-ut-intent=');
+  });
+
+  it('does not seed commerce products for an ecommerce industry without purchase intent', () => {
+    const selections: WizardSelections = {
+      ...salonSelections,
+      businessModel: 'general',
+      industryOverlay: 'ecommerce',
+      sellsProducts: false,
+    };
+    const capabilities = resolveCapabilities(selections);
+    const { playground } = materializePlayground(selections, capabilities);
+
+    expect(capabilities.requiredProducts).toEqual([]);
+    expect(Object.values(playground.creatorData.componentInstances).some(
+      (component) => component.componentSlug === 'checkout-cta',
+    )).toBe(false);
+  });
+
   it('resolves booking, contact, and newsletter aliases to materialized canonical forms', () => {
     const capabilities = resolveCapabilities(salonSelections);
     const { playground, warnings } = materializePlayground(salonSelections, capabilities);

@@ -509,7 +509,8 @@ export function resolveCapabilities(selections: WizardSelections): CapabilityPac
   if (selections.needsBooking && calendarSet.size === 0) calendarSet.add('main_booking');
 
   // 5. Products
-  const productSet = new Set<string>(augment.products || []);
+  const purchaseRequested = selections.sellsProducts === true || model === 'ecommerce';
+  const productSet = new Set<string>(purchaseRequested ? augment.products || [] : []);
 
   // 6. Popups
   const popupSet = new Set<string>(augment.popups || []);

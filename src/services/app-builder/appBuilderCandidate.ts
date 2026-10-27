@@ -14,6 +14,8 @@ import {
 import { enforceSiteDesignContract } from '@/services/launch/homepageFirstContract';
 import { assertSiteShellClosure, buildSiteShellTopology } from '@/services/siteShellTopology';
 import { CANONICAL_COMPONENT_DEFINITIONS } from '@/services/canonicalComponentRegistry';
+import { RESOLVED_COMPOSITION_ROOT, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
+import { inspectAppBuilderPageSectionClosure } from './appBuilderSectionModel';
 import type {
   AppBuildCandidateClosureIssue,
   AppBuildCandidateClosureReport,
@@ -334,7 +336,8 @@ export async function validateAppBuildCandidate(input: {
   // Validate generation scope: App Builder can only generate in allowed directories
   const generatedFiles = Object.keys(files).filter((path) => !input.initialFiles[path]);
   for (const path of generatedFiles) {
-    if (!isAllowedGenerationPath(path)) {
+    const resolvedPageSidecar = pages.some((page) => resolvedCompositionPathFor(page.filePath) === path);
+    if (!isAllowedGenerationPath(path) && !resolvedPageSidecar) {
       issues.push({
         severity: 'blocker',
         code: 'generation-scope-violation',
@@ -441,9 +444,9 @@ export async function validateAppBuildCandidate(input: {
     const missingBusinessFields = component.requiredBusinessFields.filter((field) => !configuredFields.has(field));
     if (missingBusinessFields.length > 0) {
       issues.push({
-        severity: 'blocker',
+        severity: 'advisory',
         code: 'registered-component-business-fields-missing',
-        message: `${component.runtime.componentSlug} requires business fields: ${missingBusinessFields.join(', ')}.`,
+        message: `${component.runtime.componentSlug} needs setup fields before publish: ${missingBusinessFields.join(', ')}.`,
       });
     }
     if (!writeIntent) continue;
@@ -564,9 +567,38 @@ export async function validateAppBuildCandidate(input: {
   }
 
   const manifestSource = files['/.unison/design-source-manifest.json'] ?? input.initialFiles['/.unison/design-source-manifest.json'];
+  let sectionImplementations: Record<string, { modulePath: string; sectionType: string; exportName?: string }> = {};
+  try {
+    sectionImplementations = JSON.parse(manifestSource ?? 'null')?.implementations ?? {};
+  } catch {
+    sectionImplementations = {};
+  }
   for (const page of pages) {
     for (const found of findDesignSourceUsageIssues(manifestSource, files[page.filePath])) {
       issues.push({ severity: 'blocker', code: found.code, path: page.filePath, message: `${page.filePath} ${found.message}` });
+    }
+    if (Object.keys(sectionImplementations).length > 0) {
+      const inspection = inspectAppBuilderPageSectionClosure(page.filePath, files, sectionImplementations);
+      for (const message of inspection.issues) {
+        issues.push({ severity: 'blocker', code: 'section-model-invalid', path: page.filePath, message });
+      }
+      const sidecarPath = resolvedCompositionPathFor(page.filePath);
+      let serialized: { compiledBy?: string; sections?: unknown[]; variantOverrides?: Record<string, string> } | null = null;
+      try {
+        serialized = JSON.parse(files[sidecarPath] ?? 'null');
+      } catch {
+        serialized = null;
+      }
+      if (!serialized || serialized.compiledBy !== 'app-builder'
+        || JSON.stringify(serialized.sections) !== JSON.stringify(inspection.sections)
+        || !serialized.variantOverrides) {
+        issues.push({
+          severity: 'blocker',
+          code: 'section-model-not-persisted',
+          path: page.filePath,
+          message: `${page.filePath} must have a matching serialized App Builder section model before acceptance.`,
+        });
+      }
     }
   }
 

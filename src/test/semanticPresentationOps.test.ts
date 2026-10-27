@@ -54,6 +54,16 @@ describe('semantic presentation ops', () => {
     expect(next.compositionPlan?.pages[0].copy?.hero?.headline).toBe('New headline');
   });
 
+  it('records a variant for a section missing from the hydrated intervention', () => {
+    const fixture = buildFixture();
+    const next = applySemanticPresentationOps(fixture, [
+      { type: 'setVariant', sectionId: 'treatment-menu', variantId: 'services:expandable' },
+    ]);
+
+    expect(next.activeVariants['treatment-menu']).toBe('services:expandable');
+    expect(fixture.activeVariants['treatment-menu']).toBeUndefined();
+  });
+
   it('reorders only the sections the page already owns and keeps chrome pinned', () => {
     const fixture = buildFixture();
     const next = applySemanticPresentationOps(fixture, [

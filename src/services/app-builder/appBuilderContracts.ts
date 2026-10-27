@@ -264,6 +264,7 @@ export interface AppBuildIntentBinding {
   elementKey?: string;
   sourceSection: string;
   sourceSlot: string;
+  sourceLabel?: string;
   coreIntent: string;
   domIntent: string;
   ctaMarkers: string[];
@@ -351,6 +352,7 @@ function deriveIntentBindings(
         elementKey: binding.elementKey,
         sourceSection: binding.sourceSection!,
         sourceSlot: binding.sourceSlot!,
+        sourceLabel: binding.sourceLabel,
         coreIntent: intent.name,
         domIntent: resolvePlaygroundBindingDomIntent(binding),
         ctaMarkers: getWizardBindingMarkers(binding),

@@ -5,6 +5,7 @@ import {
   runProviderLoop,
   resetDirectQuotaCooldown,
 } from '../_shared/aiProviderLoop.ts';
+import { buildProviderPlan } from '../_shared/providerRouter.ts';
 const test = (name: string, fn: () => unknown) => Deno.test(name, async () => { resetDirectQuotaCooldown(); await fn(); });
 import { isPageDesignRequest } from '../_shared/catalogTools.ts';
 import { buildResponseBody } from '../_shared/responseNormalizer.ts';
@@ -51,6 +52,69 @@ test('Composer image references survive provider fallback and format repair end 
     const candidate = JSON.parse(payload.content);
     assert(candidate.fileOps[0].content === 'export default function Home(){return <main>After</main>}', 'repaired file edit must read back intact');
     assert(!candidate.fileOps[0].content.includes(data), 'reference data must not leak into authored source');
+  });
+});
+
+test('Gemini-primary App Builder turns fall back to Lovable when available', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+    const calls: string[] = [];
+    let geminiCalls = 0;
+    const task = {
+      type: 'site_page_author' as const,
+      fastPath: false,
+      shouldUseMemory: false,
+      shouldUseCompactContext: false,
+      prefersJsonOutput: true,
+      skipResearch: true,
+      skipThinking: false,
+    };
+    const providerPlan = buildProviderPlan(task, true, undefined, 'complex', 'composer', (name) => ({
+      GEMINI_API_KEY: 'test',
+      OPENAI_API_KEY: 'test',
+      LOVABLE_API_KEY: 'test',
+      AI_PROVIDER_MODE: 'gemini-primary',
+    }[name]));
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      calls.push(requestUrl);
+      if (requestUrl.includes('generativelanguage.googleapis.com')) {
+        geminiCalls++;
+        if (geminiCalls > 1) {
+          return new Response(JSON.stringify({ choices: [{ message: { content: 'Gemini recovered' } }] }));
+        }
+        throw new DOMException('Gemini timed out', 'TimeoutError');
+      }
+      if (requestUrl.includes('api.openai.com')) {
+        return new Response('OpenAI unavailable', { status: 500 });
+      }
+      if (requestUrl.includes('lovable')) {
+        return new Response(JSON.stringify({ choices: [{ message: { content: 'Recovered page' } }] }));
+      }
+      throw new Error(`Unexpected provider request: ${requestUrl}`);
+    }) as typeof fetch;
+
+    const result = await runProviderLoop({
+      aiMessages: [{ role: 'user', content: 'Author the Home page' }],
+      providerPlan,
+      navPageGen: false,
+    });
+
+    assert(providerPlan.primaryProvider === 'gemini', 'Gemini must remain primary');
+    assert(providerPlan.geminiOnly !== true, 'Gemini-primary mode must allow configured direct fallbacks');
+    assert(result.providerUsed === 'lovable' && result.content === 'Recovered page', 'Lovable should recover the failed Gemini request');
+    assert(calls.length === 3
+      && calls[0].includes('generativelanguage.googleapis.com')
+      && calls[1].includes('api.openai.com')
+      && calls[2].includes('lovable'), 'Gemini, OpenAI, then Lovable must be attempted in order');
+
+    calls.length = 0;
+    const nextResult = await runProviderLoop({
+      aiMessages: [{ role: 'user', content: 'Author the next page' }],
+      providerPlan,
+      navPageGen: false,
+    });
+    assert(nextResult.providerUsed === 'gemini' && nextResult.content === 'Gemini recovered', 'a prior timeout must not make Lovable primary on the next turn');
+    assert(calls[0].includes('generativelanguage.googleapis.com'), 'the next turn must start with Gemini');
   });
 });
 

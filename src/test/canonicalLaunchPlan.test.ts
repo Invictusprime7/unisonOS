@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { THEME_PRESETS } from '@/components/onboarding/themePresets';
 import { themePresetToThemeTokens } from '@/components/onboarding/themePresetToTokens';
-import { buildCanonicalLaunchPlan } from '@/services/launch/canonicalLaunchPlan';
+import { buildCanonicalLaunchPlan, projectCanonicalLaunchCandidateSnapshot } from '@/services/launch/canonicalLaunchPlan';
 import { commitToPipeline } from '@/platform/core/commitToPipeline';
+import { resolvedCompositionPathFor, serializeResolvedComposition } from '@/platform/core/resolvedComposition';
 import type { WizardSelections } from '@/types/playground';
 
 const preset = THEME_PRESETS.find((item) => item.id === 'editorial')!;
@@ -28,6 +29,34 @@ const selections: WizardSelections = {
 };
 
 describe('canonical launch plan', () => {
+  it('projects serialized App Builder section variants into the sealed design authority', () => {
+    const plan = buildCanonicalLaunchPlan(selections);
+    const home = plan.sitePlan.pages.find((page) => page.isHome)!;
+    const sectionIds = ['site:navbar', 'home:services:0', 'site:footer'];
+    const activeVariants = ['navbar:standard', 'services:editorial-rows', 'footer:columns'];
+    const files = {
+      ...plan.infrastructureFiles,
+      [resolvedCompositionPathFor(home.filePath!)]: serializeResolvedComposition({
+        version: '1.0',
+        compiledBy: 'app-builder',
+        pageFilePath: home.filePath!,
+        sections: [
+          { sectionId: sectionIds[0], semanticType: 'navbar', primitiveId: 'Navbar', variantId: activeVariants[0], data: { links: [] } },
+          { sectionId: sectionIds[1], semanticType: 'services', primitiveId: 'Services', variantId: activeVariants[1], data: { headline: 'Treatments' } },
+          { sectionId: sectionIds[2], semanticType: 'footer', primitiveId: 'Footer', variantId: activeVariants[2], data: { links: [] } },
+        ],
+        variantOverrides: Object.fromEntries(sectionIds.map((id, index) => [id, activeVariants[index]])),
+      }),
+    };
+
+    const snapshot = projectCanonicalLaunchCandidateSnapshot(plan, selections, files);
+
+    expect(snapshot.meta.designIntervention?.activeVariants).toMatchObject(Object.fromEntries(sectionIds.map((id, index) => [id, activeVariants[index]])));
+    expect(snapshot.pageRegistry).toEqual(plan.playground.pageRegistry);
+    expect(snapshot.bindings).toEqual(plan.playground.bindings);
+    expect(snapshot.creatorData).toEqual(plan.playground.creatorData);
+  });
+
   it('resolves complete launch contracts and protected infrastructure without page bodies', () => {
     const plan = buildCanonicalLaunchPlan(selections, {
       '/.unison/wizard-seed.json': JSON.stringify({ id: 'plan-only-test' }),

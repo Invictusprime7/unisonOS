@@ -57,8 +57,16 @@ export interface ResolvedSection {
   semanticType: string;
   /** Component primitive Stage 4b compiled this section into (e.g. `Hero`). */
   primitiveId: string | null;
+  /** Certified family module used by the page-level dispatcher. */
+  sourceModulePath?: string;
+  /** VFS module containing the section root JSX; defaults to the page file. */
+  sourcePath?: string;
+  /** Old directly rendered named variant export, present only until first swap. */
+  legacyRendererName?: string;
   /** Registry-owned variant id (e.g. `hero:full-bleed`), when one was resolved. */
   variantId?: string;
+  /** JSON-safe content props retained for App Builder-authored sections. */
+  data?: Record<string, unknown>;
   /** Layout token executed for this section. */
   layoutRecipe?: string;
   /** Motion recipe executed for this section. */
@@ -71,8 +79,8 @@ export interface ResolvedSection {
 
 export interface ResolvedPageComposition {
   version: typeof RESOLVED_COMPOSITION_VERSION;
-  /** Always Stage 4b — no other layer may author this artifact. */
-  compiledBy: 'stage-4b';
+  /** Compiler-authorized source of this page's durable section model. */
+  compiledBy: 'stage-4b' | 'app-builder';
   /** Canonical VFS path of the page module this composition compiled into. */
   pageFilePath: string;
   /** Template composition name Stage 4b resolved for this page. */
@@ -116,7 +124,7 @@ function isResolvedPageComposition(value: unknown): value is ResolvedPageComposi
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<ResolvedPageComposition>;
   return (
-    candidate.compiledBy === 'stage-4b' &&
+    (candidate.compiledBy === 'stage-4b' || candidate.compiledBy === 'app-builder') &&
     typeof candidate.pageFilePath === 'string' &&
     Array.isArray(candidate.sections)
   );
