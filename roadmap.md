@@ -1,8 +1,9 @@
 # Roadmap
 
 ## Active: WYSIWYG selection recognition
-- [ ] Repair preview section/node identity and direct edit source targeting for saved sites; preserve ambiguity and protected-owner safety.
-- [ ] Run selection/toolbar regressions and verify live recognition where the available session permits.
+- [x] Repair preview section/node identity and direct edit source targeting for saved sites; exact source locators own toolbar edits, structural actions include imported files, inspector derives missing family from registered variants/slots and reads live composition.
+- [x] Run selection/toolbar source regressions (40 checks passed using Node environment; default browser environment lacks native canvas).
+- [ ] Verify Terra House click → edit → save → reopen; restored available session redirects to sign-in rather than opening the authoritative project.
 
 ## Active: OS8 canonical creative freedom
 - [x] P1: loaded revisions report whether their design index is database-stamped for that exact version (durable) or provisional, and never claim full coverage when source is uncertain.

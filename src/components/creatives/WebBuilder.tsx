@@ -2631,7 +2631,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       ?? readWizardDesignIntervention(liveFiles)?.activeVariants
       ?? readWizardDesignIntervention(currentSiteSnapshot?.vfsFiles)?.activeVariants;
     return resolveInspectorCanonicalSections(
-      pageComposition ? pageSections : undefined,
+      pageSections?.length ? pageSections : undefined,
       activeVariants,
     );
   }, [activePagePath, currentSiteSnapshot, getSandpackFiles]);
