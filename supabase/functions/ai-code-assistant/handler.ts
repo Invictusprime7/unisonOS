@@ -242,10 +242,22 @@ export async function handleAssistant(req: Request, pageGenerationOnly = false):
     if (message.includes("All AI providers failed") || message.includes("All AI models failed")) {
       const configuredNone = message.includes("Configured providers: none");
       const hasAuthFailure = /401|403|invalid[_\s-]?api[_\s-]?key|unauthorized|authentication/i.test(message);
+      const creditsExhausted = /prepayment credits (?:are )?depleted|out of prepaid credit|no credits remaining|insufficient[_\s-]*(?:quota|credits?)|exceeded your current quota|\b402\b/i.test(message);
       const detailsMatch = message.match(/Last errors:\s*(.+)$/i);
       const details = detailsMatch?.[1]?.slice(0, 220);
 
-      if (configuredNone) {
+      if (creditsExhausted) {
+        // Terminal: the key's balance is empty, so callers must pause instead of retrying every page.
+        const gemini = /gemini|ai\.studio/i.test(message);
+        return errorResponse(
+          gemini
+            ? "Your Gemini key (Google AI Studio) has run out of prepaid credits. Add credits in Google AI Studio, then try again."
+            : "An AI provider key has run out of credits. Add credits for that provider, then try again.",
+          402,
+          corsHeaders,
+          { errorType: "credits", details: message.slice(0, 600) },
+        );
+      } else if (configuredNone) {
         userMessage = "AI providers are not configured on the backend. Please verify the managed AI gateway secret is available.";
         errorType = "provider_not_configured";
       } else if (hasAuthFailure) {
