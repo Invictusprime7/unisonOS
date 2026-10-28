@@ -738,14 +738,17 @@ export async function runProviderLoop(opts: {
       // return quickly and can still fall through to the remaining providers.
       const isLeadModel = model.id === providerPlan.gatewayModels[0]?.id;
       const cap = providerPlan.perModelTimeoutMs;
-      const reserveMs = Math.min(lastResortReserveMs, Math.max(0, remaining * 0.25));
+      const remainingModels = providerPlan.gatewayModels.length - modelIndex;
+      // The owner's funded Gemini key is the main service: the backup never
+      // reserves time out of it, and runs only after Gemini itself fails.
+      const isPrimaryGemini = isGeminiModelId(model.id) && remainingModels === 1;
+      const reserveMs = isPrimaryGemini ? 0 : Math.min(lastResortReserveMs, Math.max(0, remaining * 0.25));
       const headroom = Math.max(8000, remaining - 2000 - reserveMs);
       const leadShare = Math.max(30000, Math.floor(headroom * 0.6));
-      const remainingModels = providerPlan.gatewayModels.length - modelIndex;
       const balancedAttemptMs = Math.max(12000, Math.floor(cap / remainingModels));
-      // With no backup left (no managed gateway, no later model), cutting the
-      // only attempt short just converts a slow answer into a timeout.
-      const isOnlyRemainingPath = !hasLastResortGateway && remainingModels === 1;
+      // With no other model left, cutting the attempt short just converts a
+      // slow answer into a timeout.
+      const isOnlyRemainingPath = isPrimaryGemini || (!hasLastResortGateway && remainingModels === 1);
       let perModelMs = providerPlan.balancedProviderAttempts && !isOnlyRemainingPath
         ? Math.min(cap, headroom, balancedAttemptMs)
         : isLeadModel
