@@ -5,6 +5,7 @@ import { createUnisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder'
 import { APP_BUILDER_PROTOCOL_VERSION, type AppBuildContract } from '@/services/app-builder/appBuilderContracts';
 import type { ComposerLoopResult } from '@/services/builder/aiRepairLoop';
 import { listContentTypes } from '@/services/cmsRecordService';
+import { saveAppBuilderAISettings } from '@/services/app-builder/appBuilderAISettings';
 
 vi.mock('@/services/cmsRecordService', () => ({ listContentTypes: vi.fn(async () => []) }));
 
@@ -98,6 +99,8 @@ describe('UnisonAppBuilder facade', () => {
         build: { changeSet: { id: 'repair', fileOps: [], routeOps: [], targetPages: ['home'], attempt: 1,
           provenance: { origin: 'repair', knowledgeVersion: 'test' } }, candidateFiles: repairedFiles, refused: [] } },
     }));
+    saveAppBuilderAISettings({ selectedModelId: 'google/gemini-3.8-flash', reasoningEffort: 'high',
+      timeoutMs: 110000, maxTokens: 32768, autoModelSelection: false, streamResponse: true });
     const result = await createTestBuilder({ authorSite, runComposer }).generate({
       operationId: 'lowtide-preview-repair', contract: contract(), initialFiles: previewFiles,
       entryPoint: '/src/main.tsx', baseRevisionId: null,
@@ -105,6 +108,10 @@ describe('UnisonAppBuilder facade', () => {
       pageCheck: (_path, source) => source.includes('marketplace/selectedPreview') ? ['Remove preview-only selectedPreview dependency'] : [],
     });
     expect(runComposer).toHaveBeenCalledOnce();
+    expect(authorSite.mock.calls[0]?.[0].gatewayOptions).toMatchObject({
+      selectedModelId: 'google/gemini-3.8-flash', reasoningEffort: 'high', timeoutMs: 110000, maxTokens: 32768,
+    });
+    expect(runComposer.mock.calls[0]?.[0]).toMatchObject({ gatewayOptions: authorSite.mock.calls[0]?.[0].gatewayOptions });
     const repair = runComposer.mock.calls[0] as unknown as [{ request: { diagnostics: string[]; runtimeContext: string } }];
     expect(repair[0].request.diagnostics.some(message => message.includes('Remove preview-only selectedPreview dependency'))).toBe(true);
     expect(repair[0].request.runtimeContext).toContain('Marketplace material must become standalone buyer-owned pages.');
