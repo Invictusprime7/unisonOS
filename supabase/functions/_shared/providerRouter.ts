@@ -424,21 +424,14 @@ export function buildProviderPlan(
   const wizardGeminiConfigured = task.type === "wizard_seed_generation"
     && Boolean(readEnv('GEMINI_API_KEY') || readEnv('GOOGLE_API_KEY') || readEnv('UNISONGEMINI_API_KEY'));
   const isComposerTask = task.type === "site_page_author" || task.type === "site_page_repair" || task.type === "builder_source_edit";
-  if (!hasExplicitModel && isComposerTask) {
-    // Gemini owns the first attempt; configured direct providers remain behind
-    // it so a slow Gemini response does not strand a template install.
+  if (isComposerTask) {
+    // Owner policy: authored pages and source repairs use the owner's Gemini
+    // key, even when older tabs retain an OpenAI model selection. The loop's
+    // managed Gemini backup stays enabled independently of direct providers.
     const geminiModel = m(composerGeminiModel(readEnv), Math.min(48_000, overrides?.maxTokens ?? 48_000));
-    const openAiFallbackAvailable = !isGeminiExclusiveProviderMode(readEnv) && Boolean(readEnv('OPENAI_API_KEY'));
-    plan.gatewayModels = [
-      geminiModel,
-      ...(openAiFallbackAvailable ? [m(MODELS.gpt41, Math.min(16_384, overrides?.maxTokens ?? 16_384))] : []),
-    ];
+    plan.gatewayModels = [geminiModel];
     plan.primaryProvider = 'gemini';
-    if (openAiFallbackAvailable) {
-      plan.balancedProviderAttempts = true;
-      plan.preferLongLeadAttempt = false;
-    }
-    if (isGeminiExclusiveProviderMode(readEnv)) plan.geminiOnly = true;
+    plan.geminiOnly = true;
     plan.raceGateway = false;
   } else if (!hasExplicitModel) {
     plan.primaryProvider = wizardGeminiConfigured

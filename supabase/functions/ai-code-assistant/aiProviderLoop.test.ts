@@ -100,12 +100,13 @@ test('Gemini-primary App Builder turns fall back to Lovable when available', asy
     });
 
     assert(providerPlan.primaryProvider === 'gemini', 'Gemini must remain primary');
-    assert(providerPlan.geminiOnly !== true, 'Gemini-primary mode must allow configured direct fallbacks');
+    assert(providerPlan.geminiOnly === true, 'App Builder must exclude other direct providers');
     assert(result.providerUsed === 'lovable' && result.content === 'Recovered page', 'Lovable should recover the failed Gemini request');
-    assert(calls.length === 3
+    assert(result.modelUsed === 'google/gemini-3.8-flash', 'managed backup must also use Gemini');
+    assert(calls.length === 2
       && calls[0].includes('generativelanguage.googleapis.com')
-      && calls[1].includes('api.openai.com')
-      && calls[2].includes('lovable'), 'Gemini, OpenAI, then Lovable must be attempted in order');
+      && calls[1].includes('lovable'), 'direct Gemini then managed Gemini only');
+    assert(!calls.some(url => ['api.openai.com', 'api.anthropic.com'].includes(new URL(url).hostname)), 'other provider keys must not be used');
 
     calls.length = 0;
     const nextResult = await runProviderLoop({
