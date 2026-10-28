@@ -43,7 +43,7 @@ describe('AI composer repair loop', () => {
     const pages = [{ pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' }];
     const timeoutResult = { data: null, error: { message: 'Edge function returned 500: gemini-3.8-flash: timeout.', context: { status: 500 } } };
     const invoke = vi.fn().mockResolvedValue(timeoutResult);
-    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null, businessName: 'No retry test', files: base, concurrency: 1, budgetMs: 200_000, now: () => 100_000, invoke: invoke as never, commitPage: async files => ({ files }) });
+    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null, businessName: 'No retry test', files: base, concurrency: 1, budgetMs: 120_000, now: () => 100_000, invoke: invoke as never, commitPage: async files => ({ files }) });
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(result.outcomes[0].status).toBe('kept-baseline');
   });
