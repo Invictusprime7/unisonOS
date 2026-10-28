@@ -36,6 +36,9 @@ async function addGuestOperationId(response: Response, operationId: string): Pro
 }
 
 export async function handleAssistant(req: Request, pageGenerationOnly = false): Promise<Response> {
+  // The generate-page adapter forwards internally with this header; it only
+  // ever narrows what a request may do, so honoring it cannot widen access.
+  const pageOnly = pageGenerationOnly || req.headers.get('x-unison-page-generation-only') === '1';
   const corsHeaders = getCorsHeaders(req);
   const preflight = handleCorsPreflightRequest(req, corsHeaders);
   if (preflight) {
