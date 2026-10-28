@@ -6,7 +6,7 @@
  */
 
 import { AIRequestSchema } from "../_shared/requestSchema.ts";
-import { isCanonicalPageRequest } from '../generate-page/request.ts';
+import { isCanonicalPageRequest } from '../_shared/canonicalPageRequest.ts';
 import { classifyBuilderEditTask, classifyTask } from "../_shared/taskClassifier.ts";
 import { runAssistantOrchestrator } from "./orchestrator.ts";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
@@ -36,6 +36,9 @@ async function addGuestOperationId(response: Response, operationId: string): Pro
 }
 
 export async function handleAssistant(req: Request, pageGenerationOnly = false): Promise<Response> {
+  // The generate-page adapter forwards internally with this header; it only
+  // ever narrows what a request may do, so honoring it cannot widen access.
+  const pageOnly = pageGenerationOnly || req.headers.get('x-unison-page-generation-only') === '1';
   const corsHeaders = getCorsHeaders(req);
   const preflight = handleCorsPreflightRequest(req, corsHeaders);
   if (preflight) {
@@ -62,7 +65,7 @@ export async function handleAssistant(req: Request, pageGenerationOnly = false):
       return errorResponse(parseError || "Invalid request body", status, corsHeaders);
     }
 
-    if (pageGenerationOnly && !isCanonicalPageRequest(rawBody)) {
+    if (pageOnly && !isCanonicalPageRequest(rawBody)) {
       return errorResponse('Page generation requires a canonical page authoring or repair request.', 400, corsHeaders);
     }
 

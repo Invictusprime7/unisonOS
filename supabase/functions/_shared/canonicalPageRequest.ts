@@ -1,6 +1,6 @@
-import { aiComposerRequestSchema } from '../_shared/aiComposerContract.ts';
+import { aiComposerRequestSchema } from './aiComposerContract.ts';
 
-/** Restrict this adapter to the existing page author/repair protocol. */
+/** Restrict the generate-page adapter to the existing page author/repair protocol. */
 export function isCanonicalPageRequest(body: unknown): boolean {
   if (!body || typeof body !== 'object') return false;
   const input = body as { mode?: unknown; messages?: unknown };
