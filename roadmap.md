@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Active: Marketplace install failure follow-up
+- [ ] Align marketplace installation with the same AI configuration used by App Builder; test shared settings and managed Gemini backup eligibility.
 - [x] Enforce the owner's Gemini key for App Builder and marketplace authoring, with no OpenAI/Anthropic attempts or stale-model bypass; preserve managed Gemini backup. All 120 edge tests pass, including direct timeout → managed Gemini and owner-key-alias routing.
 - [x] Trace prior routing: it permitted OpenAI after Gemini; the owner's follow-up now replaces that App Builder policy with direct Gemini and managed Gemini only.
 - [x] Separate terminal authoring failures from unfinished-page validation errors and deduplicate install diagnostics; targeted materialization/install/error tests pass.
