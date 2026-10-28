@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Marketplace install failure follow-up
+- [ ] Trace the current Gemini priority and fallback configuration without changing the selected providers.
+- [ ] Repair any confirmed installation error-handling defect and run focused regressions.
+- [ ] Verify live installation after canonical deployment and authoritative sign-in are available.
+
 ## Active: Floating toolbar actions
 - [x] Repair command routing: move now reaches the source executor matching the shared owner resolver; hide/duplicate/delete retain their existing canonical host handlers.
 - [x] Run command-routing and source-mutation regressions: 29 checks pass, including both move directions, hide, duplicate/delete and read-only refusal; move-down source-splicing regression already passed and required no production change.
