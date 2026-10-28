@@ -349,6 +349,23 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       };
     } else {
       loop = await runLoop(firstRequest);
+      // A timeout consumes the whole page window but is often transient
+      // provider latency. Retry once in a fresh invocation (fresh server
+      // budget) when the overall deadline still has room; credits, denials
+      // and rate limits never recover on retry.
+      const timedOut = !loop.ok && !input.signal?.aborted && (
+        (loop.reason === 'provider' && loop.errors.some((e) => /timeout|timed out|took too long/i.test(e)))
+        || (loop.reason === 'aborted' && loop.errors.some((e) => /too long|timed out|timeout/i.test(e)))
+      );
+      if (timedOut && !paused && deadline - now() >= 125_000) {
+        input.onProgress?.({ page, index, total: ordered.length, phase: 'authoring' });
+        const retryLoop = await runLoop(await buildRequest(null));
+        loop = {
+          ...retryLoop,
+          attempts: loop.attempts + retryLoop.attempts,
+          errors: retryLoop.ok ? retryLoop.errors : [...loop.errors, ...retryLoop.errors],
+        };
+      }
     }
     // Redundancy check: one targeted recomposition when this page repeats another page's topology.
     if (!cached && loop.ok && loop.prepared && now() < deadline) {

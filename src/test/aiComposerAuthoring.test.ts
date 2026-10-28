@@ -29,6 +29,24 @@ describe('AI composer repair loop', () => {
     expect(result.outcomes).toHaveLength(5);
     expect(result.outcomes.every(outcome => outcome.status === 'authored')).toBe(true);
   });
+  it('retries a timed-out page once in a fresh invocation when budget remains', async () => {
+    const pages = [{ pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' }];
+    const timeoutResult = { data: null, error: { message: 'Edge function returned 500: gemini-3.8-flash: timeout. No managed AI gateway fallback is configured.', context: { status: 500 } } };
+    const invoke = vi.fn()
+      .mockResolvedValueOnce(timeoutResult)
+      .mockResolvedValueOnce(good('/src/pages/Home.tsx', 'Recovered'));
+    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null, businessName: 'Retry test', files: base, concurrency: 1, budgetMs: 300_000, now: () => 100_000, invoke: invoke as never, commitPage: async files => ({ files }) });
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(result.outcomes[0].status).toBe('authored');
+  });
+  it('does not retry a timed-out page when the remaining budget cannot fit a fresh attempt', async () => {
+    const pages = [{ pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' }];
+    const timeoutResult = { data: null, error: { message: 'Edge function returned 500: gemini-3.8-flash: timeout.', context: { status: 500 } } };
+    const invoke = vi.fn().mockResolvedValue(timeoutResult);
+    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null, businessName: 'No retry test', files: base, concurrency: 1, budgetMs: 120_000, now: () => 100_000, invoke: invoke as never, commitPage: async files => ({ files }) });
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(result.outcomes[0].status).toBe('kept-baseline');
+  });
   it('shares one deadline across repair attempts and forwards the shorter server budget', async () => {
     let clock = 100_000;
     const spy = vi.spyOn(Date, 'now').mockImplementation(() => clock);
