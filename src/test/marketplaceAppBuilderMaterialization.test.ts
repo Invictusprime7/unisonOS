@@ -51,6 +51,8 @@ describe('marketplace App Builder convergence', () => {
     expect(generation.materialization.manifest.implementations).toHaveProperty('navbar:minimal-dark');
     expect(generation.materialization.manifest.implementations).toHaveProperty('hero:split-image');
     expect(generation.materialization.manifest.implementations).toHaveProperty('services:editorial-rows');
+    expect(generation.materialization.manifest.implementations).toHaveProperty('about:statement');
+    expect(generation.materialization.manifest.implementations).toHaveProperty('contact:editorial-form');
     expect(generation.materialization.manifest.implementations).toHaveProperty('cta:inset-panel');
     expect(generation.runtimeContextForPage('treatments')).toContain('services:product-cards');
     expect(generation.runtimeContextForPage('treatments')).toContain('faq:accordion');

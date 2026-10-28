@@ -135,7 +135,7 @@ function findRootVariantIdentity(
       const imported = component ? imports.get(component) : undefined;
       const expectedImport = implementation?.modulePath.replace(/^\/src\//, '@/').replace(/\.(?:tsx?|jsx?)$/i, '');
       if (implementation && expectedImport && imported?.modulePath === expectedImport
-        && imported.importedName === null && sectionId) {
+        && imported.importedName === null) {
         matches += 1;
         match = { sectionId, sectionType: implementation.sectionType, variantId };
       }
@@ -144,6 +144,105 @@ function findRootVariantIdentity(
   };
   visit(root);
   return matches === 1 ? match : {};
+}
+
+function staticDispatcherProps(element: ts.JsxOpeningLikeElement): Record<string, unknown> | null {
+  const props: Record<string, unknown> = {};
+  for (const property of element.attributes.properties) {
+    if (ts.isJsxSpreadAttribute(property)) return null;
+    if (!ts.isJsxAttribute(property)) return null;
+    const name = property.name.getText();
+    if (name === 'key' || name === 'sectionId' || name === 'variantId' || name === 'props'
+      || name.startsWith('data-ut-') || name === 'data-intent-form' || name === 'data-intent-trigger') continue;
+    if (!property.initializer) {
+      props[name] = true;
+      continue;
+    }
+    if (ts.isStringLiteralLike(property.initializer)) {
+      props[name] = property.initializer.text;
+      continue;
+    }
+    if (!ts.isJsxExpression(property.initializer) || !property.initializer.expression) return null;
+    const parsed = staticValue(property.initializer.expression);
+    if (!parsed.ok) return null;
+    props[name] = parsed.value;
+  }
+  return props;
+}
+
+function dispatcherProps(element: ts.JsxOpeningLikeElement): Record<string, unknown> | null {
+  const attribute = findAttribute(element, 'props');
+  if (attribute?.initializer && ts.isJsxExpression(attribute.initializer) && attribute.initializer.expression) {
+    const parsed = staticValue(attribute.initializer.expression);
+    if (parsed.ok && parsed.value && typeof parsed.value === 'object' && !Array.isArray(parsed.value)) {
+      return parsed.value as Record<string, unknown>;
+    }
+    return null;
+  }
+  if (attribute) return null;
+  return staticDispatcherProps(element);
+}
+
+function insertOpeningAttributes(
+  source: string,
+  element: ts.JsxOpeningLikeElement,
+  attributes: string[],
+  edits: Array<{ position: number; text: string }>,
+): void {
+  if (!attributes.length) return;
+  const tagEnd = element.getEnd();
+  const closingIndex = source[tagEnd - 2] === '/' ? tagEnd - 2 : tagEnd - 1;
+  edits.push({ position: closingIndex, text: ` ${attributes.join(' ')}` });
+}
+
+function normalizeRegisteredDispatcher(
+  root: ts.JsxElement | ts.JsxSelfClosingElement,
+  sourceFile: ts.SourceFile,
+  implementation: EligibleImplementation,
+  sectionId: string,
+  variantId: string,
+  source: string,
+  edits: Array<{ position: number; text: string }>,
+): void {
+  const expectedImport = implementation.modulePath.replace(/^\/src\//, '@/').replace(/\.(?:tsx?|jsx?)$/i, '');
+  const imports = moduleImports(sourceFile);
+  const dispatchers: ts.JsxOpeningLikeElement[] = [];
+  const rootOpening = ts.isJsxElement(root) ? root.openingElement : root;
+  const visit = (node: ts.Node) => {
+    if (node !== rootOpening && (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+      && SECTION_ROOT_TAGS.has(tagName(node.tagName) ?? '')) return;
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const component = tagName(node.tagName);
+      const imported = component ? imports.get(component) : undefined;
+      if (imported?.modulePath === expectedImport && imported.importedName === null) dispatchers.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  if (dispatchers.length !== 1) return;
+
+  const dispatcher = dispatchers[0];
+  const attributes: string[] = [];
+  for (const [name, value] of [['sectionId', sectionId], ['variantId', variantId]] as const) {
+    const existing = readStringAttribute(dispatcher, name);
+    if (existing === value) continue;
+    const attribute = findAttribute(dispatcher, name);
+    if (attribute?.initializer) {
+      edits.push({ position: attribute.initializer.getStart(sourceFile), text: JSON.stringify(value) });
+    } else if (attribute) {
+      edits.push({ position: attribute.name.getEnd(), text: `=${JSON.stringify(value)}` });
+    } else {
+      attributes.push(`${name}=${JSON.stringify(value)}`);
+    }
+  }
+  if (!findAttribute(dispatcher, 'props')) {
+    const props = staticDispatcherProps(dispatcher);
+    if (!props) return;
+    attributes.push(`props={${JSON.stringify(props)}}`);
+  } else if (!dispatcherProps(dispatcher)) {
+    return;
+  }
+  insertOpeningAttributes(source, dispatcher, attributes, edits);
 }
 
 function materializeSectionRootIdentity(
@@ -178,10 +277,11 @@ function materializeSectionRootIdentity(
         const inferred = rootElement
           ? findRootVariantIdentity(rootElement, sourceFile, implementations)
           : {};
+        const variantId = readStringAttribute(opening, 'data-ut-variant') ?? inferred.variantId;
         const sectionType = readStringAttribute(opening, 'data-ut-section-type')
           ?? (rootName === 'header' || rootName === 'nav' ? 'navbar'
-            : rootName === 'footer' ? 'footer' : inferred.sectionType);
-        const variantId = readStringAttribute(opening, 'data-ut-variant') ?? inferred.variantId;
+            : rootName === 'footer' ? 'footer'
+              : inferred.sectionType ?? (variantId ? implementations[variantId]?.sectionType : undefined));
         const existingId = readStringAttribute(opening, 'data-ut-section-id');
         const implementation = variantId ? implementations[variantId] : undefined;
         if (sectionType && variantId && implementation?.sectionType === sectionType) {
@@ -200,6 +300,9 @@ function materializeSectionRootIdentity(
             .map(([name, value]) => ` ${name}=${JSON.stringify(value)}`)
             .join('');
           if (missing) edits.push({ position: opening.end - 1, text: missing });
+          if (rootElement) {
+            normalizeRegisteredDispatcher(rootElement, sourceFile, implementation, sectionId, variantId, source, edits);
+          }
         }
       }
     }

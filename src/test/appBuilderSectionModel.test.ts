@@ -83,6 +83,21 @@ export default function Treatments(){return <><header><Navbar sectionId="site:na
     expect(repaired['/.unison/compositions/pages/treatments.json']).toContain('treatments:services:0');
   });
 
+  it('repairs dispatcher identity and wraps static direct props for the registered family', () => {
+    const source = `import Services from "@/unison/design-sources/Services";
+export default function Treatments(){return <main><section data-ut-section-id="treatments:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows"><Services headline="Treatments" items={[{title:"Facial",description:"Care"}]} /></section></main>}`;
+    const files = materializeAppBuilderSectionModels(
+      { '/src/pages/treatments.tsx': source },
+      [{ id: 'treatments', filePath: '/src/pages/treatments.tsx' }],
+      implementations,
+    );
+    const page = files['/src/pages/treatments.tsx'];
+
+    expect(page).toMatch(/<Services\b[^>]*sectionId="treatments:services:0"[^>]*variantId="services:editorial-rows"/);
+    expect(page).toContain('props={{"headline":"Treatments","items":[{"title":"Facial","description":"Care"}]}}');
+    expect(inspectAppBuilderPageSections('/src/pages/treatments.tsx', page, implementations, { requireChromeRoots: false }).issues).toEqual([]);
+  });
+
   it('normalizes registered roots in shared SiteNav and SiteFooter modules', () => {
     const marketplaceImplementations = {
       ...implementations,
@@ -97,9 +112,9 @@ import Services from "@/unison/design-sources/Services";
 import FAQ from "@/unison/design-sources/FAQ";
 export default function Treatments(){return <><SiteNav/><main><section><Services sectionId="treatments:services:0" variantId="services:product-cards" props={{headline:"Treatments",items:[]}} /></section><section><FAQ sectionId="treatments:faq:0" variantId="faq:accordion" props={{headline:"Questions",items:[]}} /></section></main><SiteFooter/></>}`,
       '/src/project-components/site/SiteNav.tsx': `import Navbar from "@/unison/design-sources/Navbar";
-export default function SiteNav(){return <header><Navbar sectionId="site:navbar" variantId="navbar:minimal-dark" props={{links:[]}} /></header>}`,
+    export default function SiteNav(){return <header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:minimal-dark"><Navbar links={[]} /></header>}`,
       '/src/project-components/site/SiteFooter.tsx': `import Footer from "@/unison/design-sources/Footer";
-export default function SiteFooter(){return <footer><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer>}`,
+    export default function SiteFooter(){return <footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer links={[]} /></footer>}`,
     };
     const normalized = materializeAppBuilderSectionModels(
       files,
