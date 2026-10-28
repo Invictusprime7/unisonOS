@@ -45,6 +45,31 @@ export interface ComposerLoopResult {
   response?: AIComposerResponse;
   prepared?: PreparedCandidate;
   errors: string[];
+  /**
+   * Set when the AI already returned a draft and a later fix round was cut
+   * off (timeout/transport). The caller can resume that fix round instead of
+   * paying to author the page again from scratch.
+   */
+  resume?: ComposerLoopResume;
+}
+
+export interface ComposerLoopResume {
+  request: AIComposerRequest;
+  files: Record<string, string>;
+  deletes: string[];
+  routeOps: TopologyChange[];
+  attemptsUsed: number;
+}
+
+/** A previous candidate for the repair prompt: FILES already carries its source, so send paths only. */
+export function compactPreviousResponse(response: AIComposerResponse, keepPaths?: ReadonlySet<string>, routeOps?: readonly TopologyChange[]): string {
+  return JSON.stringify({
+    ...response,
+    fileOps: response.fileOps
+      .filter((op) => !keepPaths || keepPaths.size === 0 || keepPaths.has(op.path))
+      .map((op) => ({ type: op.type, path: op.path, note: 'current content is in FILES' })),
+    ...(routeOps ? { routeOps } : {}),
+  }).slice(0, 60000);
 }
 
 export interface ComposerLoopInput {
