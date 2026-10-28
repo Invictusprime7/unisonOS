@@ -3,7 +3,7 @@ vi.mock('@/services/builderBrainClient', () => ({ runBuilderTurn: vi.fn() }));
 import { runBuilderTurn } from '@/services/builderBrainClient';
 import { createUnisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { composerProposalViolations, type AIComposerRequest } from '@/contracts/aiComposerContract';
-import { isCanonicalPageRequest } from '../../supabase/functions/generate-page/request';
+import { isCanonicalPageRequest } from '../../supabase/functions/_shared/canonicalPageRequest';
 
 const home = 'export default function Start(){return <main className="ut-body bg-background"><nav data-ut-variant="navbar:minimal-dark">Northstar</nav><h1>Northstar</h1><footer data-ut-variant="footer:columns">Northstar</footer></main>}';
 const files = {
