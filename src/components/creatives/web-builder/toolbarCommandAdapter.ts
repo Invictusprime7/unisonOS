@@ -62,6 +62,14 @@ export function useToolbarCommands(
           case 'duplicate':
             handlers.onDuplicate(selector);
             return ok(cmd, 'source', 'page source', ['element']);
+          case 'move': {
+            // The shared owner resolver classifies JSX reordering as source,
+            // just like delete/duplicate; it is not a presentation override.
+            const move = cmd.direction === 'up' ? handlers.onMoveUp : handlers.onMoveDown;
+            if (!move) return unsupported(cmd, 'source');
+            move(selector);
+            return ok(cmd, 'source', 'page order', ['position']);
+          }
           default:
             return unsupported(cmd, 'source');
         }
@@ -82,12 +90,6 @@ export function useToolbarCommands(
           case 'set-visibility':
             handlers.onUpdateStyles(selector, { display: cmd.visible ? 'block' : 'none' });
             return ok(cmd, 'presentation', 'page styles', ['display']);
-          case 'move': {
-            const move = cmd.direction === 'up' ? handlers.onMoveUp : handlers.onMoveDown;
-            if (!move) return unsupported(cmd, 'presentation');
-            move(selector);
-            return ok(cmd, 'presentation', 'page order', ['position']);
-          }
           default:
             return unsupported(cmd, 'presentation');
         }
