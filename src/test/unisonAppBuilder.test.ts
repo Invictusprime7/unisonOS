@@ -111,7 +111,7 @@ describe('UnisonAppBuilder facade', () => {
     expect(authorSite.mock.calls[0]?.[0].gatewayOptions).toMatchObject({
       selectedModelId: 'google/gemini-3.8-flash', reasoningEffort: 'high', timeoutMs: 110000, maxTokens: 32768,
     });
-    expect(runComposer.mock.calls[0]?.[0]).toMatchObject({ gatewayOptions: authorSite.mock.calls[0]?.[0].gatewayOptions });
+    expect(runComposer).toHaveBeenCalledWith(expect.objectContaining({ gatewayOptions: authorSite.mock.calls[0]?.[0].gatewayOptions }));
     const repair = runComposer.mock.calls[0] as unknown as [{ request: { diagnostics: string[]; runtimeContext: string } }];
     expect(repair[0].request.diagnostics.some(message => message.includes('Remove preview-only selectedPreview dependency'))).toBe(true);
     expect(repair[0].request.runtimeContext).toContain('Marketplace material must become standalone buyer-owned pages.');

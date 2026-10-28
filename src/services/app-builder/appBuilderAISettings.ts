@@ -33,6 +33,8 @@ export function saveAppBuilderAISettings(config: GatewayConfig): void {
 }
 
 export function resolveAppBuilderAIOptions(overrides?: Record<string, unknown>): Record<string, unknown> | undefined {
+  // Explicit request options remain intact; only unset callers inherit preferences.
+  if (overrides) return overrides;
   const config = readAppBuilderAISettings();
   if (!config) return overrides;
   return {
