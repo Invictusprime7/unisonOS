@@ -17,7 +17,7 @@ import { AI_AUTHORED_MARKER } from '@/contracts/aiComposerContract';
 import type { ResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import { projectSiteDesignContract } from '@/services/launch/siteDesignContract';
 import type { AIComposerRequest } from '@/contracts/aiComposerContract';
-import { runComposerRepairLoop, type ComposerInvoke, type ComposerLoopResult, type ComposerStopReason } from '@/services/builder/aiRepairLoop';
+import { runComposerRepairLoop, MIN_REPAIR_WINDOW_MS, type ComposerInvoke, type ComposerLoopResult, type ComposerLoopResume, type ComposerStopReason } from '@/services/builder/aiRepairLoop';
 import { buildAICandidateChangeSet, type AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
