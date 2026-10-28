@@ -21,6 +21,7 @@ export interface AppBuilderOrchestratorDependencies {
 }
 
 const CLOSURE_REPAIR_RESERVE_MS = 75_000;
+const MAX_CLOSURE_REPAIR_MS = 90_000;
 // A site-wide repair resends every page (~160k chars); the AI needs well over
 // 20s for that. With less time left the request can only time out, so skip it.
 const MIN_CLOSURE_REPAIR_MS = 60_000;
@@ -67,7 +68,13 @@ export async function orchestrateAppBuild(
   const pageCheck = (path: string, source: string, files?: Readonly<Record<string, string>>) => {
     const messages = findDesignSourceUsageIssues(manifestSource, source).map((issue) => issue.message);
     if (Object.keys(sectionImplementations).length > 0) {
-      messages.push(...inspectAppBuilderPageSectionClosure(path, files ?? { [path]: source }, sectionImplementations).issues);
+      const page = pages.find((candidate) => candidate.filePath === path);
+      const normalizedFiles = materializeAppBuilderSectionModels(
+        { ...(files ?? {}), [path]: source },
+        [{ id: page?.pageId ?? path, filePath: path }],
+        sectionImplementations,
+      );
+      messages.push(...inspectAppBuilderPageSectionClosure(path, normalizedFiles, sectionImplementations).issues);
     }
     messages.push(...(input.pageCheck?.(path, source, files) ?? []));
     const role = roleByPath.get(path);
@@ -170,7 +177,8 @@ export async function orchestrateAppBuild(
   // One site-wide repair attempt sees the complete closure diagnostics and protected-path constraints.
   const closureTimeLeftMs = startedAt + totalBudgetMs - Date.now();
   if (!compatibilityMode && !terminalAuthoringFailure && !closure.ok && !input.signal?.aborted && closureTimeLeftMs >= MIN_CLOSURE_REPAIR_MS) {
-    input.onStatus?.('Repairing final page and binding checks');
+    const closureRepairTimeoutMs = Math.min(closureTimeLeftMs, MAX_CLOSURE_REPAIR_MS);
+    input.onStatus?.('Repairing final checks (up to 1:30)');
     const home = pages.find((page) => page.pageId === input.contract.topology.sitePlan.homePageId) ?? pages[0];
     if (home) {
       const diagnostics = closure.issues
@@ -209,7 +217,7 @@ export async function orchestrateAppBuild(
         baseRevisionId: input.baseRevisionId ?? undefined,
         maxAttempts: 2,
         signal: input.signal,
-        timeoutMs: closureTimeLeftMs,
+        timeoutMs: closureRepairTimeoutMs,
         gatewayOptions: input.gatewayOptions,
         preflight: input.preflight,
         candidateOrigin: 'repair',

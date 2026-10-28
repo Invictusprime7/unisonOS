@@ -6,6 +6,8 @@ import { APP_BUILDER_PROTOCOL_VERSION, type AppBuildContract } from '@/services/
 import type { ComposerLoopResult } from '@/services/builder/aiRepairLoop';
 import { listContentTypes } from '@/services/cmsRecordService';
 import { saveAppBuilderAISettings } from '@/services/app-builder/appBuilderAISettings';
+import { buildWizardAggregatedRegistryContext } from '@/services/launch/wizardRegistryAggregation';
+import { deriveDesignSourceSelection } from '@/services/app-builder/appBuilderContracts';
 
 vi.mock('@/services/cmsRecordService', () => ({ listContentTypes: vi.fn(async () => []) }));
 
@@ -200,6 +202,53 @@ describe('UnisonAppBuilder facade', () => {
     expect(result.candidate.closure?.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
   });
 
+  it('normalizes registered section dispatchers before per-page candidate gates run', async () => {
+    const appContract = contract();
+    const registryContext = buildWizardAggregatedRegistryContext({
+      industry: 'salon', templateId: 'salon-premium', themePresetId: 'editorial', seed: 'page-check-normalization',
+    });
+    const page = {
+      pageId: 'home', title: 'Home', path: '/', filePath: '/src/pages/Home.tsx',
+      pageType: 'home', pageRole: 'home', isHome: true,
+    };
+    appContract.topology.pageRegistry.pages = { home: page as never };
+    appContract.design.registryContext = registryContext;
+    appContract.design.sourceSelection = deriveDesignSourceSelection(registryContext);
+    const pageCheckMessages: string[][] = [];
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => {
+      const manifest = JSON.parse(input.files['/.unison/design-source-manifest.json'] ?? '{}') as {
+        implementations?: Record<string, { sectionType: string }>;
+      };
+      const variantFor = (sectionType: string) => {
+        const variant = Object.entries(manifest.implementations ?? {}).find(([, entry]) => entry.sectionType === sectionType)?.[0];
+        if (!variant) throw new Error(`Missing registered ${sectionType} test variant`);
+        return variant;
+      };
+      const navbarVariant = variantFor('navbar');
+      const servicesVariant = variantFor('services');
+      const footerVariant = variantFor('footer');
+      const source = `import Navbar from "@/unison/design-sources/Navbar";
+import Services from "@/unison/design-sources/Services";
+import Footer from "@/unison/design-sources/Footer";
+export default function Home(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="${navbarVariant}"><Navbar links={[]} /></header><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="${servicesVariant}"><Services headline="Care" items={[]} /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="${footerVariant}"><Footer links={[]} /></footer></>}`;
+      pageCheckMessages.push(input.pageCheck?.(page.filePath, source, { ...input.files, [page.filePath]: source }) ?? []);
+      return {
+        files: { ...input.files, [page.filePath]: source },
+        revisionId: input.revisionId,
+        outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
+      };
+    });
+
+    await createTestBuilder({ authorSite }).generate({
+      operationId: 'registered-section-page-check', contract: appContract, initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null,
+    });
+
+    expect(pageCheckMessages).toHaveLength(1);
+    expect(pageCheckMessages[0].filter((message) => message.includes('section "')
+      || message.includes('every section requires literal'))).toEqual([]);
+  });
+
   it('adapts site authoring behind generate and preserves the candidate result', async () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
       files: { ...input.files, '/src/pages/Home.tsx': 'export default function Home(){return <main>After</main>}' },
@@ -287,6 +336,35 @@ describe('UnisonAppBuilder facade', () => {
     expect(result.candidate.closure?.ok).toBe(true);
     expect(result.candidate.provenance?.strategy).toBe('ai-candidate+closure-repair');
     expect(result.revisionId).toBeNull();
+  });
+
+  it('bounds and reports the site-wide closure repair phase', async () => {
+    const brokenFiles = {
+      ...baseFiles,
+      '/src/pages/Home.tsx': 'import Card from "../project-components/Card"; export default function Home(){return <Card />} ',
+    };
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: brokenFiles,
+      revisionId: input.revisionId,
+      outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
+    }));
+    let repairTimeoutMs = 0;
+    const runComposer = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['runComposer']>>[0]): Promise<ComposerLoopResult> => {
+      repairTimeoutMs = input.timeoutMs ?? 0;
+      return { ok: false, reason: 'provider', attempts: 1, errors: ['repair provider timeout'] };
+    });
+    const statuses: string[] = [];
+
+    await createTestBuilder({ authorSite, runComposer }).generate({
+      operationId: 'bounded-closure-repair', contract: contract(), initialFiles: brokenFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null, budgetMs: 250_000,
+      onStatus: (status) => statuses.push(status),
+    });
+
+    expect(runComposer).toHaveBeenCalledOnce();
+    expect(repairTimeoutMs).toBeGreaterThan(0);
+    expect(repairTimeoutMs).toBeLessThanOrEqual(90_000);
+    expect(statuses).toContain('Repairing final checks (up to 1:30)');
   });
 
   it('generates a complete multi-page candidate without a canonical commit callback', async () => {
