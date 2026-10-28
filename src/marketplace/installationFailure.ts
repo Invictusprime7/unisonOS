@@ -1,7 +1,7 @@
 export interface InstallationFailure {
   stopReason: string;
-  candidate: { diagnostics?: string[] };
-  outcomes?: Array<{ status: string; reason?: string; errors: string[] }>;
+  candidate: { diagnostics?: readonly string[] };
+  outcomes?: ReadonlyArray<{ status: string; reason?: string; errors: readonly string[] }>;
 }
 
 /** Keep failed authoring separate from validation of unfinished reference pages. */
