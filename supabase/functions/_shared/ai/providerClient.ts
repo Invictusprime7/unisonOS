@@ -18,6 +18,15 @@ type EnvReader = (name: string) => string | undefined;
 import { DEFAULT_GEMINI_GATEWAY_MODEL, configuredGeminiModel } from '../geminiModel.ts';
 
 const LOVABLE_GATEWAY_CHAT_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+// Backends without their own LOVABLE_API_KEY (UNISON) reach the managed
+// gateway through the Lovable Cloud `managed-ai-relay`, authenticated by a
+// shared MANAGED_AI_RELAY_SECRET.
+const DEFAULT_MANAGED_AI_RELAY_URL = "https://oruwtgdjurstvhgqcvbv.supabase.co/functions/v1/managed-ai-relay";
+
+/** True when the managed gateway is reachable directly or via the relay. */
+export function hasManagedGatewayAccess(): boolean {
+  return Boolean(Deno.env.get("LOVABLE_API_KEY") || Deno.env.get("MANAGED_AI_RELAY_SECRET"));
+}
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_IMAGE_URL = "https://api.openai.com/v1/images/generations";
 const GEMINI_CHAT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
@@ -248,8 +257,9 @@ async function callOpenAICompatible(
   const apiKey = provider === "openai"
     ? Deno.env.get("OPENAI_API_KEY")
     : provider === "lovable"
-      ? Deno.env.get("LOVABLE_API_KEY")
+      ? (Deno.env.get("LOVABLE_API_KEY") || Deno.env.get("MANAGED_AI_RELAY_SECRET"))
       : readGeminiApiKey();
+  const viaRelay = provider === "lovable" && !Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) throw new Error(`${provider} is not configured`);
 
   const model = modelFor(provider, request.model);
@@ -281,12 +291,16 @@ async function callOpenAICompatible(
     body.max_completion_tokens = Math.min(body.max_completion_tokens, 128_000);
   }
 
-  const url = provider === "lovable"
+  const url = viaRelay
+    ? (Deno.env.get("MANAGED_AI_RELAY_URL") || DEFAULT_MANAGED_AI_RELAY_URL)
+    : provider === "lovable"
     ? LOVABLE_GATEWAY_CHAT_URL
     : provider === "openai"
       ? OPENAI_CHAT_URL
       : GEMINI_CHAT_URL;
-  const headers: Record<string, string> = provider === "lovable"
+  const headers: Record<string, string> = viaRelay
+    ? { "x-managed-ai-relay-secret": apiKey, "Content-Type": "application/json" }
+    : provider === "lovable"
     ? { "Lovable-API-Key": apiKey, "Content-Type": "application/json" }
     : { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
 
@@ -448,7 +462,7 @@ export async function createLastResortGatewayChatCompletion(
   request: ChatCompletionRequest,
   signal?: AbortSignal,
 ): Promise<Response> {
-  if (!Deno.env.get("LOVABLE_API_KEY")) {
+  if (!hasManagedGatewayAccess()) {
     throw new Error("Managed AI gateway is not configured");
   }
   return callOpenAICompatible("lovable", request, signal);
