@@ -6,7 +6,7 @@
  */
 
 import { AIRequestSchema } from "../_shared/requestSchema.ts";
-import { isCanonicalPageRequest } from '../generate-page/request.ts';
+import { isCanonicalPageRequest } from '../_shared/canonicalPageRequest.ts';
 import { classifyBuilderEditTask, classifyTask } from "../_shared/taskClassifier.ts";
 import { runAssistantOrchestrator } from "./orchestrator.ts";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
