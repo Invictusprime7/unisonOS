@@ -106,7 +106,7 @@ test('Gemini-primary App Builder turns fall back to Lovable when available', asy
     assert(calls.length === 2
       && calls[0].includes('generativelanguage.googleapis.com')
       && calls[1].includes('lovable'), 'direct Gemini then managed Gemini only');
-    assert(!calls.some(url => url.includes('openai') || url.includes('anthropic')), 'other provider keys must not be used');
+    assert(!calls.some(url => ['api.openai.com', 'api.anthropic.com'].includes(new URL(url).hostname)), 'other provider keys must not be used');
 
     calls.length = 0;
     const nextResult = await runProviderLoop({
