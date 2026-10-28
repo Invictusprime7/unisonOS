@@ -622,6 +622,8 @@ export interface AppBuildPageOutcome {
   summary?: string;
   errors: readonly string[];
   revisionId?: string | null;
+  /** The AI already returned a draft for this page before a later fix round stopped. */
+  draftProduced?: boolean;
 }
 
 function stableJsonValue(value: unknown): unknown {
