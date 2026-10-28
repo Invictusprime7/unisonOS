@@ -51,6 +51,10 @@ interface JsxCandidate {
   openTagEnd: number;
   openTagStart: number;
   text: string;
+  tagName: string;
+  href?: string;
+  type?: string;
+  insideForm: boolean;
 }
 
 function escapeRegex(value: string): string {
@@ -168,6 +172,7 @@ function normalizeText(value: string): string {
 interface BindingMatchTarget {
   sourceSlot?: string;
   sourceLabel?: string;
+  targetPath?: string;
 }
 
 function getIconKeywords(binding: BindingMatchTarget): string[] {
@@ -251,6 +256,28 @@ function collectStaticJsxText(children: readonly ts.JsxChild[]): string {
   return parts.join(' ');
 }
 
+function staticJsxAttribute(element: ts.JsxOpeningLikeElement, name: string): string | undefined {
+  const attribute = element.attributes.properties.find((property): property is ts.JsxAttribute =>
+    ts.isJsxAttribute(property) && property.name.getText() === name,
+  );
+  if (!attribute?.initializer) return undefined;
+  if (ts.isStringLiteralLike(attribute.initializer)) return attribute.initializer.text;
+  if (ts.isJsxExpression(attribute.initializer) && attribute.initializer.expression
+    && (ts.isStringLiteral(attribute.initializer.expression) || ts.isNoSubstitutionTemplateLiteral(attribute.initializer.expression))) {
+    return attribute.initializer.expression.text;
+  }
+  return undefined;
+}
+
+function isInsideForm(node: ts.Node): boolean {
+  let parent = node.parent;
+  while (parent && !ts.isSourceFile(parent)) {
+    if (ts.isJsxElement(parent) && getJsxTagName(parent.openingElement.tagName, parent.getSourceFile()).toLowerCase() === 'form') return true;
+    parent = parent.parent;
+  }
+  return false;
+}
+
 function collectJsxCandidates(
   content: string,
   filePath: string,
@@ -264,7 +291,7 @@ function collectJsxCandidates(
   const allowed = new Set(allowedTags);
   const candidates: JsxCandidate[] = [];
 
-  const pushCandidate = (tagName: string, rawStart: number, openTagEnd: number, fullEnd: number, text: string) => {
+  const pushCandidate = (element: ts.JsxOpeningLikeElement, tagName: string, rawStart: number, openTagEnd: number, fullEnd: number, text: string) => {
     if (!allowed.has(tagName)) {
       return;
     }
@@ -275,6 +302,10 @@ function collectJsxCandidates(
       openTagEnd,
       openTagStart: rawStart,
       text: normalizeText(text),
+      tagName,
+      href: staticJsxAttribute(element, 'href'),
+      type: staticJsxAttribute(element, 'type'),
+      insideForm: isInsideForm(element),
     });
   };
 
@@ -284,6 +315,7 @@ function collectJsxCandidates(
       const openTagStart = findOpeningTagStart(content, node.openingElement.getStart(sourceFile));
       if (openTagStart !== undefined) {
         pushCandidate(
+          node.openingElement,
           tagName,
           openTagStart,
           node.openingElement.getEnd(),
@@ -295,7 +327,7 @@ function collectJsxCandidates(
       const tagName = getJsxTagName(node.tagName, sourceFile);
       const openTagStart = findOpeningTagStart(content, node.getStart(sourceFile));
       if (openTagStart !== undefined) {
-        pushCandidate(tagName, openTagStart, node.getEnd(), node.getEnd(), '');
+        pushCandidate(node, tagName, openTagStart, node.getEnd(), node.getEnd(), '');
       }
     }
 
@@ -489,6 +521,25 @@ function applyBindingByJsxAst(
     }
   }
 
+  if (selected.length < limit && binding.targetPath) {
+    const targetPath = binding.targetPath.trim();
+    for (const candidate of labelCandidates) {
+      if (selected.length >= limit) break;
+      if (candidate.href !== targetPath || matched.has(candidate.openTagStart)) continue;
+      matched.add(candidate.openTagStart);
+      selected.push(candidate);
+    }
+  }
+
+  const formSubmitSlot = /(?:submit|booking|quote)/i.test(binding.sourceSlot ?? '');
+  if (selected.length === 0 && formSubmitSlot) {
+    const submitCandidates = labelCandidates.filter((candidate) =>
+      candidate.insideForm && candidate.type?.toLowerCase() === 'submit'
+      && (candidate.tagName.toLowerCase() === 'button' || candidate.tagName.toLowerCase() === 'input'),
+    );
+    if (submitCandidates.length === 1) selected.push(submitCandidates[0]);
+  }
+
   if (selected.length < limit && keywords.length > 0) {
     for (const candidate of iconCandidates) {
       if (selected.length >= limit) break;
@@ -571,6 +622,7 @@ export function normalizeWizardBindingMarkers(
     const target: BindingMatchTarget = {
       sourceSlot: requirement.sourceSlot,
       sourceLabel: requirement.sourceLabel ?? '',
+      targetPath: requirement.targetPath,
     };
     const attrs: Record<string, string> = { 'data-ut-cta': requirement.markers[0] };
     if (requirement.sourceSlot) attrs['data-ut-slot'] = requirement.sourceSlot;

@@ -169,5 +169,11 @@ export default function Page() { return <main data-marketplace-preview-surface>$
   // Material only: App Builder must converge this source before canonical acceptance.
   return { files, siteBundleSnapshot: snapshot, canonicalPlayground: plan.playground, entryPoint: '/src/App.tsx', plan, selections,
     mediaAssets: starter.mediaAssets, templateIntents: template.bindings.map(binding => binding.intent),
-    portableBindings: template.bindings };
+    portableBindings: template.bindings,
+    pinnedImplementationsByPage: {
+      [registry.homePageId]: [...new Set([
+        ...('homeVariants' in profile ? profile.homeVariants : []),
+        ...Object.values(profile.variants),
+      ])],
+    } };
 }

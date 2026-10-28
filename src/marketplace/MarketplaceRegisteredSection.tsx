@@ -63,6 +63,7 @@ export const MARKETPLACE_TEMPLATE_VARIANT_PROFILES = {
   },
   'aster-skin-studio': {
     artDirectionPackId: 'luxury-minimal',
+    homeVariants: ['hero:split-image', 'services:product-cards', 'services:editorial-rows', 'cta:inset-panel', 'navbar:minimal-dark'],
     variants: { gallery: 'gallery:editorial-mosaic', services: 'services:product-cards', team: 'team:profile-cards', testimonials: 'testimonials:editorial', faq: 'faq:accordion' },
   },
   'terra-house': {
@@ -100,6 +101,7 @@ export const MARKETPLACE_TEMPLATE_VARIANT_PROFILES = {
 } as const satisfies Record<string, {
   artDirectionPackId: ArtDirectionPackId;
   variants: Partial<Record<MarketplaceSectionVariantSlot, VariantId>>;
+  homeVariants?: readonly VariantId[];
 }>;
 
 interface MarketplaceRegisteredSectionProps {

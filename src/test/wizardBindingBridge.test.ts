@@ -77,6 +77,34 @@ describe('Wizard form binding aliases', () => {
     expect(getWizardBindingMarkers({ sourceSection: 'navbar', sourceSlot: 'route-materials-link' } as any)).toEqual(['cta.nav-link']);
   });
 
+  it('resolves nav anchors by exact href and form slots by a unique submit control when copy changes', () => {
+    const capabilities = resolveCapabilities(salonSelections);
+    const { playground } = materializePlayground(salonSelections, capabilities);
+    const home = Object.values(playground.pageRegistry.pages).find((page) => page.isHome)!;
+    const files = {
+      [home.filePath!]: '<main><nav><a href="#treatments">Explore care</a></nav><section><form><button type="submit">Reserve a visit</button></form></section></main>',
+    };
+    const result = normalizeWizardBindingMarkers(files, playground.pageRegistry, [
+      {
+        bindingId: 'treatments-nav', pageId: home.pageId, sourceLabel: 'Treatments', sourceSection: 'navbar',
+        sourceSlot: 'treatments-link', domIntent: 'nav.anchor', targetType: 'url', targetId: '#treatments',
+        targetPath: '#treatments', markers: ['cta.nav-link'],
+      },
+      {
+        bindingId: 'booking-submit', pageId: home.pageId, sourceLabel: 'Request an appointment', sourceSection: 'booking',
+        sourceSlot: 'booking-submit', domIntent: 'booking.create', targetType: 'calendar', targetId: 'buyer-calendar',
+        markers: ['cta.form-submit'],
+      },
+    ]);
+    const normalized = result.files[home.filePath!];
+
+    expect(result.unresolvedBindingIds).toEqual([]);
+    expect(normalized).toContain('<a href="#treatments" data-ut-cta="cta.nav-link"');
+    expect(normalized).toContain('data-ut-binding-id="treatments-nav"');
+    expect(normalized).toContain('<button type="submit" data-ut-cta="cta.form-submit"');
+    expect(normalized).toContain('data-ut-binding-id="booking-submit"');
+  });
+
   it('does not seed commerce products for an ecommerce industry without purchase intent', () => {
     const selections: WizardSelections = {
       ...salonSelections,

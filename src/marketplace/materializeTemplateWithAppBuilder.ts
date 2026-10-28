@@ -71,6 +71,7 @@ export interface MarketplaceTemplateMaterial {
   entryPoint: string;
   templateIntents?: string[];
   portableBindings?: readonly MarketplaceTemplateBinding[];
+  pinnedImplementationsByPage?: Readonly<Record<string, readonly string[]>>;
   mediaAssets?: Array<{ id: string; kind: string; url: string }>;
 }
 
@@ -262,14 +263,22 @@ function templatePinnedImplementationsByPage(
     const page = pages.find((candidate) => candidate.filePath === composition.pageFilePath);
     for (const section of composition.sections) add(page?.pageId, section.variantId);
   }
+  for (const [pageId, variantIds] of Object.entries(material.pinnedImplementationsByPage ?? {})) {
+    for (const variantId of variantIds) add(pageId, variantId);
+  }
   const sharedChromeIds = new Set(['site:navbar', 'site:footer']);
   const pack = ART_DIRECTION_PACKS[artDirectionPackId as keyof typeof ART_DIRECTION_PACKS];
   for (const page of pages) {
     for (const variantId of pack?.navbarFamily ?? []) add(page.pageId, variantId);
   }
-  for (const [sectionId, variantId] of Object.entries(plan.designIntervention.activeVariants)) {
-    if (!sharedChromeIds.has(sectionId)) continue;
-    for (const page of pages) add(page.pageId, variantId);
+  const activeVariants = material.siteBundleSnapshot.meta.designIntervention?.activeVariants
+    ?? plan.designIntervention.activeVariants;
+  for (const [sectionId, variantId] of Object.entries(activeVariants)) {
+    if (sharedChromeIds.has(sectionId)) {
+      for (const page of pages) add(page.pageId, variantId);
+      continue;
+    }
+    add(sectionId.split(':')[0], variantId);
   }
   return Object.fromEntries([...pinned].map(([pageId, variants]) => [pageId, [...variants].sort()]));
 }
