@@ -15,6 +15,7 @@ import { getIntentDef } from '@/platform/core/intentSurfaceRegistry';
 import { buildWizardBindingGuide } from '@/services/wizardBindingBridge';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 import { readSealedArtDirection } from '@/sections/variants/resolvedArtDirection';
+import { installationFailureMessage } from './installationFailure';
 
 const PAGE_ROLES = new Set<string>(['home', 'about', 'services', 'contact', 'pricing', 'gallery', 'faq', 'booking', 'checkout', 'thank_you', 'blog', 'shop', 'immersive', 'custom']);
 function templatePageRole(role: string): PageRole {
@@ -144,7 +145,7 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   });
   if (options.signal?.aborted) throw new Error(String(options.signal.reason ?? 'Installation was stopped before the draft was built.'));
   if (result.candidate.status !== 'ready-for-commit' || result.stopReason !== 'complete') {
-    throw new Error(`App Builder could not prepare this template: ${result.candidate.diagnostics?.slice(0, 6).join(' ') || result.stopReason}`);
+    throw new Error(installationFailureMessage(result));
   }
   const files = await materializePreviewImages(result.candidateFiles);
   for (const page of plan.sitePlan.pages) {

@@ -1,10 +1,15 @@
 # Roadmap
 
+## Active: Marketplace install failure follow-up
+- [x] Trace current routing: source now explicitly uses Gemini first, configured OpenAI afterward and managed AI last; earlier Gemini-only summary no longer describes current source. No provider configuration changed.
+- [x] Separate terminal authoring failures from unfinished-page validation errors and deduplicate install diagnostics; targeted materialization/install/error tests pass.
+- [ ] Verify live installation after canonical deployment and authoritative sign-in are available.
+
 ## Active: Floating toolbar actions
 - [x] Repair command routing: move now reaches the source executor matching the shared owner resolver; hide/duplicate/delete retain their existing canonical host handlers.
 - [x] Run command-routing and source-mutation regressions: 29 checks pass, including both move directions, hide, duplicate/delete and read-only refusal; move-down source-splicing regression already passed and required no production change.
 - [ ] Verify saved-site toolbar actions and reopen in the browser: available session redirects the designated Terra House project to sign-in.
-- [x] Explain marketplace AI error: screenshot shows Gemini timeout, failed OpenAI credit fallback, absent managed fallback and section-contract errors; current source restricts Composer to Gemini, but deployed version is unverified and this project's gateway logs contain no matching requests.
+- [x] Explain marketplace AI error: screenshot shows Gemini timeout, failed OpenAI credit fallback, absent managed fallback and section-contract errors; follow-up confirms current source allows configured OpenAI behind Gemini. Deployed version remains unverified and this project's gateway logs contain no matching requests.
 
 ## Active: WYSIWYG selection recognition
 - [x] Repair preview section/node identity and direct edit source targeting for saved sites; exact source locators own toolbar edits, structural actions include imported files, inspector derives missing family from registered variants/slots and reads live composition.
