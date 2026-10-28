@@ -56,6 +56,64 @@ export default function Home() {
     expect(result.issues.some((issue) => issue.includes('duplicate section id "same"'))).toBe(true);
   });
 
+  it('stamps missing root identity from one certified family dispatcher', () => {
+    const source = `import Navbar from "@/unison/design-sources/Navbar";
+import Services from "@/unison/design-sources/Services";
+import Footer from "@/unison/design-sources/Footer";
+export default function Treatments(){return <><header><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{ links: [] }} /></header><main><section><Services sectionId="treatments:services:0" variantId="services:editorial-rows" props={{ headline: "Treatments", items: [{ title: "Facial", description: "Care" }] }} /></section></main><footer><Footer sectionId="site:footer" variantId="footer:columns" props={{ links: [] }} /></footer></>}`;
+    const files = materializeAppBuilderSectionModels(
+      { '/src/pages/treatments.tsx': source },
+      [{ id: 'treatments', filePath: '/src/pages/treatments.tsx' }],
+      implementations,
+    );
+    const page = files['/src/pages/treatments.tsx'];
+
+    expect(page).toContain('<header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard">');
+    expect(page).toContain('<section data-ut-section-id="treatments:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows">');
+    expect(page).toContain('<footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns">');
+    expect(inspectAppBuilderPageSectionClosure('/src/pages/treatments.tsx', files, implementations).issues).toEqual([]);
+
+    const repaired = materializeAppBuilderSectionModels({
+      ...files,
+      '/.unison/compositions/pages/treatments.json': JSON.stringify({
+        version: '1.0', compiledBy: 'app-builder', pageFilePath: '/src/pages/treatments.tsx', sections: [],
+      }),
+      '/src/pages/treatments.tsx': source,
+    }, [{ id: 'treatments', filePath: '/src/pages/treatments.tsx' }], implementations);
+    expect(repaired['/.unison/compositions/pages/treatments.json']).toContain('treatments:services:0');
+  });
+
+  it('normalizes registered roots in shared SiteNav and SiteFooter modules', () => {
+    const marketplaceImplementations = {
+      ...implementations,
+      'navbar:minimal-dark': { modulePath: '/src/unison/design-sources/Navbar.tsx', sectionType: 'navbar' },
+      'services:product-cards': { modulePath: '/src/unison/design-sources/Services.tsx', sectionType: 'services' },
+      'faq:accordion': { modulePath: '/src/unison/design-sources/FAQ.tsx', sectionType: 'faq' },
+    };
+    const files = {
+      '/src/pages/treatments.tsx': `import SiteNav from "../project-components/site/SiteNav";
+import SiteFooter from "../project-components/site/SiteFooter";
+import Services from "@/unison/design-sources/Services";
+import FAQ from "@/unison/design-sources/FAQ";
+export default function Treatments(){return <><SiteNav/><main><section><Services sectionId="treatments:services:0" variantId="services:product-cards" props={{headline:"Treatments",items:[]}} /></section><section><FAQ sectionId="treatments:faq:0" variantId="faq:accordion" props={{headline:"Questions",items:[]}} /></section></main><SiteFooter/></>}`,
+      '/src/project-components/site/SiteNav.tsx': `import Navbar from "@/unison/design-sources/Navbar";
+export default function SiteNav(){return <header><Navbar sectionId="site:navbar" variantId="navbar:minimal-dark" props={{links:[]}} /></header>}`,
+      '/src/project-components/site/SiteFooter.tsx': `import Footer from "@/unison/design-sources/Footer";
+export default function SiteFooter(){return <footer><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer>}`,
+    };
+    const normalized = materializeAppBuilderSectionModels(
+      files,
+      [{ id: 'treatments', filePath: '/src/pages/treatments.tsx' }],
+      marketplaceImplementations,
+    );
+
+    expect(normalized['/src/project-components/site/SiteNav.tsx']).toContain('data-ut-variant="navbar:minimal-dark"');
+    expect(normalized['/src/project-components/site/SiteNav.tsx']).toContain('data-ut-section-id="site:navbar"');
+    expect(normalized['/src/pages/treatments.tsx']).toContain('data-ut-section-id="treatments:services:0"');
+    expect(normalized['/src/pages/treatments.tsx']).toContain('data-ut-section-id="treatments:faq:0"');
+    expect(inspectAppBuilderPageSectionClosure('/src/pages/treatments.tsx', normalized, marketplaceImplementations).issues).toEqual([]);
+  });
+
   it('builds a migration sidecar for one uniquely imported registered variant export', () => {
     const legacyImplementations = {
       ...implementations,

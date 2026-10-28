@@ -110,6 +110,109 @@ function moduleImports(sourceFile: ts.SourceFile): Map<string, ImportedBinding> 
   return imports;
 }
 
+interface RootVariantIdentity {
+  sectionId?: string;
+  sectionType?: string;
+  variantId?: string;
+}
+
+function findRootVariantIdentity(
+  root: ts.JsxElement | ts.JsxSelfClosingElement,
+  sourceFile: ts.SourceFile,
+  implementations: Readonly<Record<string, EligibleImplementation>>,
+): RootVariantIdentity {
+  const imports = moduleImports(sourceFile);
+  let match: RootVariantIdentity = {};
+  let matches = 0;
+  const visit = (node: ts.Node) => {
+    if (node !== root && (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+      && SECTION_ROOT_TAGS.has(tagName(node.tagName) ?? '')) return;
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const component = tagName(node.tagName);
+      const variantId = readStringAttribute(node, 'variantId') ?? readStringAttribute(node, 'data-ut-variant');
+      const sectionId = readStringAttribute(node, 'sectionId') ?? readStringAttribute(node, 'data-ut-section-id');
+      const implementation = variantId ? implementations[variantId] : undefined;
+      const imported = component ? imports.get(component) : undefined;
+      const expectedImport = implementation?.modulePath.replace(/^\/src\//, '@/').replace(/\.(?:tsx?|jsx?)$/i, '');
+      if (implementation && expectedImport && imported?.modulePath === expectedImport
+        && imported.importedName === null && sectionId) {
+        matches += 1;
+        match = { sectionId, sectionType: implementation.sectionType, variantId };
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return matches === 1 ? match : {};
+}
+
+function materializeSectionRootIdentity(
+  filePath: string,
+  source: string,
+  implementations: Readonly<Record<string, EligibleImplementation>>,
+): string {
+  const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const edits: Array<{ position: number; text: string }> = [];
+  const identityCounts = new Map<string, number>();
+  const visit = (node: ts.Node) => {
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+      && SECTION_ROOT_TAGS.has(tagName(node.tagName) ?? '')) {
+      const parent = node.parent;
+      const nested = (() => {
+        let current = parent;
+        while (current && !ts.isSourceFile(current)) {
+          if (current !== parent && (ts.isJsxElement(current) || ts.isJsxSelfClosingElement(current))) {
+            const name = ts.isJsxElement(current) ? tagName(current.openingElement.tagName) : tagName(current.tagName);
+            if (SECTION_ROOT_TAGS.has(name ?? '')) return true;
+          }
+          current = current.parent;
+        }
+        return false;
+      })();
+      if (!nested) {
+        const opening = ts.isJsxOpeningElement(node) ? node : node;
+        const rootName = tagName(opening.tagName) ?? '';
+        const rootElement = ts.isJsxSelfClosingElement(opening)
+          ? opening
+          : ts.isJsxElement(opening.parent) ? opening.parent : undefined;
+        const inferred = rootElement
+          ? findRootVariantIdentity(rootElement, sourceFile, implementations)
+          : {};
+        const sectionType = readStringAttribute(opening, 'data-ut-section-type')
+          ?? (rootName === 'header' || rootName === 'nav' ? 'navbar'
+            : rootName === 'footer' ? 'footer' : inferred.sectionType);
+        const variantId = readStringAttribute(opening, 'data-ut-variant') ?? inferred.variantId;
+        const existingId = readStringAttribute(opening, 'data-ut-section-id');
+        const implementation = variantId ? implementations[variantId] : undefined;
+        if (sectionType && variantId && implementation?.sectionType === sectionType) {
+          const sharedId = sectionType === 'navbar' ? 'site:navbar' : sectionType === 'footer' ? 'site:footer' : undefined;
+          const count = identityCounts.get(sectionType) ?? 0;
+          identityCounts.set(sectionType, count + 1);
+          const pageName = filePath.split('/').pop()?.replace(/\.(?:tsx?|jsx?)$/i, '').toLowerCase() || 'page';
+          const sectionId = existingId ?? inferred.sectionId ?? sharedId ?? `${pageName}:${sectionType}:${count}`;
+          const attributes: Array<[string, string | undefined]> = [
+            ['data-ut-section-id', existingId ?? sectionId],
+            ['data-ut-section-type', readStringAttribute(opening, 'data-ut-section-type') ?? sectionType],
+            ['data-ut-variant', readStringAttribute(opening, 'data-ut-variant') ?? variantId],
+          ];
+          const missing = attributes
+            .filter(([name]) => !findAttribute(opening, name))
+            .map(([name, value]) => ` ${name}=${JSON.stringify(value)}`)
+            .join('');
+          if (missing) edits.push({ position: opening.end - 1, text: missing });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  let next = source;
+  for (const edit of edits.sort((a, b) => b.position - a.position)) {
+    next = `${next.slice(0, edit.position)}${edit.text}${next.slice(edit.position)}`;
+  }
+  return next;
+}
+
 function findSectionRenderer(
   element: ts.JsxOpeningElement,
   sourceFile: ts.SourceFile,
@@ -333,14 +436,13 @@ export function materializeAppBuilderSectionModels(
   const result = { ...files };
   for (const page of pages) {
     const sidecarPath = resolvedCompositionPathFor(page.filePath);
-    if (files[sidecarPath]) {
-      try {
-        if (JSON.parse(files[sidecarPath]).compiledBy === 'app-builder') continue;
-      } catch {
-        // A malformed or legacy descriptor can be replaced only if source inspection succeeds.
-      }
+    const sourcePaths = collectLocalImportClosure(result, page.filePath, (path) =>
+      /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/i.test(path),
+    );
+    for (const path of sourcePaths) {
+      result[path] = materializeSectionRootIdentity(path, result[path] ?? '', implementations);
     }
-    const inspection = inspectAppBuilderPageSectionClosure(page.filePath, files, implementations, { allowNamedExports: true });
+    const inspection = inspectAppBuilderPageSectionClosure(page.filePath, result, implementations, { allowNamedExports: true });
     if (inspection.issues.length || !inspection.sections.length) continue;
     const variantOverrides = Object.fromEntries(inspection.sections.map((section) => [section.sectionId, section.variantId!]));
     const composition: ResolvedPageComposition = {
