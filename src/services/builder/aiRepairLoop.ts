@@ -94,6 +94,8 @@ export interface ComposerLoopInput {
   resolveDependencies?: boolean;
   /** Per-page check run inside every attempt so a bad page is repaired in its own loop. */
   pageCheck?: PageCheck;
+  /** Continue an interrupted fix round with its accumulated draft. */
+  resume?: ComposerLoopResume;
 }
 
 /** Provider replies that mean the key's balance is empty; they never recover on retry. */
