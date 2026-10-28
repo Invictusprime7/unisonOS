@@ -278,6 +278,32 @@ test('hybrid fallbacks reach Lovable after Gemini and OpenAI failures', async ()
   });
 });
 
+test('Gemini credits exhausted falls back to Lovable Cloud AI and stays there while cooled down', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      if (String(url).includes('googleapis')) {
+        return new Response('{"error":{"message":"Your prepayment credits are depleted. Please add credits."}}', { status: 402 });
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'Recovered by Lovable Cloud AI' } }] }));
+    }) as typeof fetch;
+    const geminiOnlyPlan = {
+      ...hybridPlan,
+      gatewayModels: [hybridPlan.gatewayModels[0]],
+      geminiOnly: true,
+    };
+    const first = await runProviderLoop({ aiMessages: messages, providerPlan: geminiOnlyPlan, navPageGen: false });
+    assert(first.providerUsed === 'lovable' && first.content === 'Recovered by Lovable Cloud AI', 'Lovable Cloud AI must take over when Gemini credit is out');
+    assert(calls.length === 2 && calls[0].includes('googleapis') && calls[1].includes('lovable'), 'expected Gemini attempt then managed gateway');
+
+    calls.length = 0;
+    const second = await runProviderLoop({ aiMessages: messages, providerPlan: geminiOnlyPlan, navPageGen: false });
+    assert(second.providerUsed === 'lovable', 'cooled-down Gemini must not be retried');
+    assert(calls.length === 1 && calls[0].includes('lovable'), 'the depleted key must be skipped until credits are added');
+  });
+});
+
 test('provider failover respects the remaining Composer request budget', async () => {
   await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test' }, async () => {
     const originalNow = Date.now;
