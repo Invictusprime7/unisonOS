@@ -76,16 +76,26 @@ Deno.test("parses explicit Gemini/OpenAI traffic weights", () => {
   assertEquals(parseProviderDistribution("invalid"), { gemini: 100, openai: 0 });
 });
 
-Deno.test('App Builder keeps Gemini first and retains configured direct fallbacks', () => {
+Deno.test('App Builder uses only Gemini even if other direct keys exist', () => {
   const env = (name: string) => name === 'LOVABLE_API_KEY' ? 'lovable-test-key'
     : name === 'AI_PROVIDER_DISTRIBUTION' ? 'gemini=0,openai=100' : bothProviders(name);
   for (const type of ['site_page_author', 'site_page_repair', 'builder_source_edit'] as const) {
     const plan = buildProviderPlan({ ...task, type }, true, undefined, 'complex', 'composer', env);
     assertEquals(plan.primaryProvider, 'gemini');
-    assertEquals(plan.geminiOnly, undefined);
-    assertEquals(plan.gatewayModels.map(model => model.id), ['google/gemini-3.8-flash', 'openai/gpt-4.1']);
-    assertEquals(plan.balancedProviderAttempts, true);
-    assertEquals(plan.preferLongLeadAttempt, false);
+    assertEquals(plan.geminiOnly, true);
+    assertEquals(plan.gatewayModels.map(model => model.id), ['google/gemini-3.8-flash']);
+  }
+});
+
+Deno.test('App Builder ignores stale OpenAI selections and uses the owner Gemini key alias', () => {
+  for (const type of ['site_page_author', 'site_page_repair', 'builder_source_edit'] as const) {
+    const plan = buildProviderPlan({ ...task, type }, true,
+      { autoModelSelection: false, selectedModelId: 'openai/gpt-4.1', maxTokens: 8000 },
+      'complex', 'marketplace', name => name === 'UNISONGEMINI_API_KEY' ? 'fixture' : undefined);
+    assertEquals(plan.geminiOnly, true);
+    assertEquals(plan.primaryProvider, 'gemini');
+    assertEquals(plan.gatewayModels.map(model => model.id), ['google/gemini-3.8-flash']);
+    assertEquals(plan.gatewayModels[0].maxTokens, 8000);
   }
 });
 
@@ -263,11 +273,12 @@ Deno.test("keeps Wizard content enrichment bounded to small structured-output mo
   assertEquals(plan.perModelTimeoutMs, 35_000);
 });
 
-Deno.test("Gemini-primary mode keeps Gemini first with OpenAI fallback", () => {
+Deno.test("Gemini-primary mode keeps App Builder restricted to Gemini", () => {
   const plan = buildProviderPlan({ ...task, type: "site_page_author" }, true, undefined, "complex", "composer",
     name => name === "AI_PROVIDER_MODE" ? "gemini-primary" : name === "LOVABLE_API_KEY" ? "test-key" : bothProviders(name));
   assertEquals(plan.primaryProvider, "gemini");
-  assertEquals(plan.gatewayModels.map((model) => model.id), ["google/gemini-3.8-flash", "openai/gpt-4.1"]);
+  assertEquals(plan.gatewayModels.map((model) => model.id), ["google/gemini-3.8-flash"]);
+  assertEquals(plan.geminiOnly, true);
 });
 
 Deno.test("explicit gemini-only mode removes App Builder direct fallbacks", () => {
