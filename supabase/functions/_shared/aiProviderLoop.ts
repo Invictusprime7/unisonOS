@@ -743,10 +743,13 @@ export async function runProviderLoop(opts: {
       const leadShare = Math.max(30000, Math.floor(headroom * 0.6));
       const remainingModels = providerPlan.gatewayModels.length - modelIndex;
       const balancedAttemptMs = Math.max(12000, Math.floor(cap / remainingModels));
-      let perModelMs = providerPlan.balancedProviderAttempts
+      // With no backup left (no managed gateway, no later model), cutting the
+      // only attempt short just converts a slow answer into a timeout.
+      const isOnlyRemainingPath = !hasLastResortGateway && remainingModels === 1;
+      let perModelMs = providerPlan.balancedProviderAttempts && !isOnlyRemainingPath
         ? Math.min(cap, headroom, balancedAttemptMs)
         : isLeadModel
-          ? Math.min(cap, headroom, providerPlan.preferLongLeadAttempt ? headroom : leadShare)
+          ? Math.min(cap, headroom, providerPlan.preferLongLeadAttempt || isOnlyRemainingPath ? headroom : leadShare)
           : Math.min(cap, Math.max(12000, headroom));
 
       // Earlier billing failures must not let a later reasoning model consume
