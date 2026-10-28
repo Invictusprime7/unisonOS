@@ -65,7 +65,7 @@ export async function handleAssistant(req: Request, pageGenerationOnly = false):
       return errorResponse(parseError || "Invalid request body", status, corsHeaders);
     }
 
-    if (pageGenerationOnly && !isCanonicalPageRequest(rawBody)) {
+    if (pageOnly && !isCanonicalPageRequest(rawBody)) {
       return errorResponse('Page generation requires a canonical page authoring or repair request.', 400, corsHeaders);
     }
 
