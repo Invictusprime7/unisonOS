@@ -8,11 +8,12 @@ import { generateCanonicalRouter } from '@/utils/topologyRouterGenerator';
 import { createWizardDesignSelection } from '@/services/wizardDesignSelection';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import type { ConfirmedLaunchIds } from '@/services/confirmedLaunchProvisioner';
-import type { WizardSelections } from '@/types/playground';
+import type { PlaygroundBinding, WizardSelections } from '@/types/playground';
 import type { PageRole } from '@/platform/core/siteTopologyPlanner';
 import { materializePreviewImages } from './materializePreviewImages';
-import { getIntentDef } from '@/platform/core/intentSurfaceRegistry';
+import { getIntentDef, resolveIntentName } from '@/platform/core/intentSurfaceRegistry';
 import { buildWizardBindingGuide } from '@/services/wizardBindingBridge';
+import type { MarketplaceTemplateBinding } from './marketplaceTemplatePrimitives';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 import { readSealedArtDirection } from '@/sections/variants/resolvedArtDirection';
 import { installationFailureMessage } from './installationFailure';
@@ -67,6 +68,7 @@ export interface MarketplaceTemplateMaterial {
   siteBundleSnapshot: SiteBundleSnapshot;
   entryPoint: string;
   templateIntents?: string[];
+  portableBindings?: readonly MarketplaceTemplateBinding[];
   mediaAssets?: Array<{ id: string; kind: string; url: string }>;
 }
 
@@ -75,12 +77,171 @@ export interface MaterializeOptions {
   onPage?: (event: { title: string; index: number; total: number; phase: string }) => void;
 }
 
+function playgroundIntentFor(coreIntent: string): PlaygroundBinding['intent'] {
+  if (coreIntent === 'nav.external') return 'external.open';
+  if (coreIntent.startsWith('nav.')) return 'nav.goto_page';
+  if (coreIntent.startsWith('cart.') || coreIntent === 'pay.checkout') return 'checkout.start';
+  if (coreIntent.startsWith('booking.')) return 'calendar.open';
+  return 'form.open';
+}
+
+function resolveTemplateSourcePages(
+  binding: MarketplaceTemplateBinding,
+  plan: ReturnType<typeof buildCanonicalLaunchPlan>,
+): string[] {
+  const pages = Object.values(plan.playground.pageRegistry.pages);
+  if (binding.sourcePageId && plan.playground.pageRegistry.pages[binding.sourcePageId]) return [binding.sourcePageId];
+  if (binding.sourceSection === 'navbar') return pages.map((page) => page.pageId);
+  const matchingPage = pages.find((page) => page.pageId === binding.sourceSection
+    || (page.pageRole ?? page.pageType) === binding.sourceSection);
+  return [matchingPage?.pageId ?? plan.playground.pageRegistry.homePageId ?? pages.find((page) => page.isHome)?.pageId ?? 'home'];
+}
+
+function projectPortableBindings(
+  bindings: readonly MarketplaceTemplateBinding[],
+  plan: ReturnType<typeof buildCanonicalLaunchPlan>,
+): Record<string, PlaygroundBinding> {
+  const projected = { ...plan.playground.bindings };
+  const registry = plan.playground.pageRegistry;
+  const buyerBindings = Object.values(plan.playground.bindings);
+  const forms = Object.values(plan.playground.creatorData.forms ?? {});
+
+  for (const binding of bindings) {
+    const intent = resolveIntentName(binding.intent);
+    const definition = intent ? getIntentDef(intent) : null;
+    if (!definition || definition.status !== 'stable' || definition.triggerType !== 'user-action') continue;
+    for (const pageId of resolveTemplateSourcePages(binding, plan)) {
+      const sourcePage = registry.pages[pageId];
+      if (!sourcePage) continue;
+      const targetPage = binding.targetPageId ? registry.pages[binding.targetPageId] : undefined;
+      const canonical = buyerBindings.find((candidate) => candidate.coreIntent === intent);
+      let targetType: PlaygroundBinding['targetType'];
+      let targetId: string;
+      if (intent.startsWith('nav.') && targetPage) {
+        targetType = 'page';
+        targetId = targetPage.pageId;
+      } else if (intent.startsWith('nav.')) {
+        targetType = 'url';
+        targetId = binding.targetSectionId ? `#${binding.targetSectionId}` : sourcePage.path;
+      } else if (intent === 'cart.add') {
+        const product = Object.values(plan.playground.creatorData.products ?? {})
+          .find((candidate) => candidate.status !== 'archived'
+            && (!binding.product?.name || candidate.name.toLowerCase() === binding.product.name.toLowerCase()));
+        if (!product) continue;
+        targetType = 'product';
+        targetId = product.productId;
+      } else if (intent === 'cart.view') {
+        targetType = 'url';
+        targetId = '#cart';
+      } else if (canonical) {
+        targetType = canonical.targetType;
+        targetId = canonical.targetId;
+      } else if (definition.requiredCapabilities?.includes('booking')) {
+        const calendar = Object.values(plan.playground.calendars)[0];
+        if (!calendar) continue;
+        targetType = 'calendar';
+        targetId = calendar.calendarId;
+      } else {
+        const formPurpose = intent.includes('booking') ? 'booking'
+          : intent.includes('newsletter') ? 'newsletter'
+            : intent.includes('quote') || intent.includes('contact') ? 'contact'
+              : undefined;
+        const form = forms.find((candidate) => candidate.submitIntentId === intent)
+          ?? (formPurpose ? forms.find((candidate) => candidate.name.toLowerCase().includes(formPurpose)) : undefined)
+          ?? forms[0];
+        if (!form) continue;
+        targetType = 'form';
+        targetId = form.formId;
+      }
+
+      const bindingId = `marketplace:${binding.id}:${pageId}`;
+      projected[bindingId] = {
+        ...(canonical ?? {}),
+        bindingId,
+        sourcePageId: pageId,
+        sourceLabel: binding.label,
+        intent: playgroundIntentFor(intent),
+        targetId,
+        targetType,
+        confidence: 1,
+        source: 'manual',
+        isValid: true,
+        elementKey: `${pageId}.${binding.sourceSection}.${binding.sourceSlot}`,
+        sourceSection: binding.sourceSection as PlaygroundBinding['sourceSection'],
+        sourceSlot: binding.sourceSlot as PlaygroundBinding['sourceSlot'],
+        coreIntent: intent,
+        requiredCapabilities: [...(definition.requiredCapabilities ?? [])],
+        payloadTemplate: canonical?.payloadTemplate,
+        readiness: 'preview-ready',
+      };
+    }
+  }
+  const navDefinition = getIntentDef('nav.goto');
+  if (navDefinition) {
+    for (const sourcePage of Object.values(registry.pages)) {
+      for (const targetPage of Object.values(registry.pages)) {
+        const bindingId = `marketplace:route:${sourcePage.pageId}:${targetPage.pageId}`;
+        projected[bindingId] = {
+          bindingId,
+          sourcePageId: sourcePage.pageId,
+          sourceLabel: targetPage.title,
+          intent: 'nav.goto_page',
+          targetId: targetPage.pageId,
+          targetType: 'page',
+          confidence: 1,
+          source: 'manual',
+          isValid: true,
+          elementKey: `${sourcePage.pageId}.navbar.route-${targetPage.pageId}-link`,
+          sourceSection: 'navbar',
+          sourceSlot: `route-${targetPage.pageId}-link` as PlaygroundBinding['sourceSlot'],
+          coreIntent: navDefinition.name,
+          requiredCapabilities: [...(navDefinition.requiredCapabilities ?? [])],
+          readiness: 'preview-ready',
+        };
+      }
+    }
+  }
+  return projected;
+}
+
+function portableBindingsFor(material: MarketplaceTemplateMaterial): MarketplaceTemplateBinding[] {
+  if (material.portableBindings?.length) return [...material.portableBindings];
+  return Object.values(material.siteBundleSnapshot.bindings ?? {}).flatMap((binding) => {
+    if (!binding.sourceSection || !binding.sourceSlot) return [];
+    const intent = resolveIntentName(binding.coreIntent ?? binding.intent);
+    if (!intent) return [];
+    const product = binding.targetType === 'product'
+      ? material.siteBundleSnapshot.creatorData.products?.[binding.targetId]
+      : undefined;
+    return [{
+      id: binding.bindingId,
+      intent,
+      label: binding.sourceLabel || binding.sourceSlot,
+      sourceSection: binding.sourceSection,
+      sourceSlot: binding.sourceSlot,
+      sourcePageId: binding.sourcePageId,
+      ...(product ? { product: { productId: product.productId, name: product.name, price: product.price, quantity: 1 } } : {}),
+      targetPageId: binding.targetType === 'page'
+        ? binding.targetId
+        : undefined,
+      targetSectionId: binding.targetType === 'url' && binding.targetId.startsWith('#')
+        ? binding.targetId.slice(1)
+        : undefined,
+    }];
+  });
+}
+
 /** Candidate-only bridge. The installer remains responsible for one durable acceptance. */
 export async function materializeTemplateWithAppBuilder(material: MarketplaceTemplateMaterial, ids: ConfirmedLaunchIds, options: MaterializeOptions = {}) {
   const snapshot = material.siteBundleSnapshot;
   const packId = readSealedArtDirection(snapshot.meta)?.storagePackId;
   if (!snapshot.themeTokens || !packId) throw new Error('This template is missing its saved design contract.');
-  const intents = [...new Set([...(material.templateIntents ?? []), ...Object.values(snapshot.bindings ?? {}).flatMap(binding => binding.coreIntent ? [binding.coreIntent] : [])])];
+  const portableBindings = portableBindingsFor(material);
+  const intents = [...new Set([
+    ...(material.templateIntents ?? []),
+    ...portableBindings.map((binding) => binding.intent),
+    ...Object.values(snapshot.bindings ?? {}).flatMap(binding => binding.coreIntent ? [binding.coreIntent] : []),
+  ])];
   const capabilities = [...new Set(intents.flatMap(intent => getIntentDef(intent)?.requiredCapabilities ?? []))];
   const selections: WizardSelections = {
     businessName: snapshot.businessName, businessModel: 'general', industryOverlay: snapshot.industry as WizardSelections['industryOverlay'],
@@ -111,6 +272,9 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   // The selected registry replaces the planner's routes; discard bindings to routes not installed.
   plan.playground.bindings = Object.fromEntries(Object.entries(plan.playground.bindings)
     .filter(([, binding]) => Boolean(snapshot.pageRegistry.pages[binding.sourcePageId])));
+  if (portableBindings.length) {
+    plan.playground.bindings = projectPortableBindings(portableBindings, plan);
+  }
   const bindingGuide = buildWizardBindingGuide(plan.playground, { industry: snapshot.industry, enabledCapabilities: capabilities });
   const seed = snapshot.meta.generationSeed ?? plan.designIntervention.seed;
   const contract = buildAppBuildContract({

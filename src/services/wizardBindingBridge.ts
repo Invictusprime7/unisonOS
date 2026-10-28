@@ -29,7 +29,12 @@ export interface WizardBindingMarkerRequirement {
   bindingId: string;
   pageId: string;
   sourceLabel?: string;
+  sourceSection?: string;
   sourceSlot: string;
+  domIntent?: string;
+  targetType?: string;
+  targetId?: string;
+  targetPath?: string;
   markers: readonly string[];
 }
 
@@ -112,19 +117,27 @@ function resolveBindingFilePath(files: Record<string, string>, page: BuilderPage
 }
 
 function getSlotMarkers(binding: PlaygroundBinding): string[] {
-  const section = binding.sourceSection;
-  const slot = binding.sourceSlot;
+  const section = binding.sourceSection as string | undefined;
+  const slot = binding.sourceSlot as string | undefined;
 
   if (!section || !slot) return [];
 
   if (section === 'hero' && slot === 'primary-cta') return ['cta.hero'];
   if (section === 'hero' && slot === 'secondary-cta') return ['cta.hero-secondary'];
   if (section === 'navbar' && slot === 'primary-cta') return ['cta.nav'];
+  if (slot === 'primary-cta') return ['cta.primary'];
+  if (slot === 'secondary-cta') return ['cta.secondary'];
   if (slot === 'card-cta') return ['cta.card'];
   if (slot === 'checkout-cta') return ['cta.checkout'];
   if (slot === 'form-submit') return ['cta.form-submit'];
   if (slot === 'newsletter-submit') return ['cta.newsletter-submit', 'cta.newsletter'];
   if (slot === 'newsletter') return ['cta.newsletter'];
+  if (slot === 'booking-submit' || slot === 'quote-submit' || slot === 'contact-submit'
+    || slot === 'class-booking' || slot === 'stay-booking') return ['cta.form-submit'];
+  if (slot === 'page-route' || slot.endsWith('-link')) return ['cta.nav-link'];
+  if (slot === 'primary-action') return section === 'navbar' ? ['cta.nav'] : ['cta.primary'];
+  if (slot === 'product-primary-action') return ['cta.card'];
+  if (slot === 'signup-action' || slot === 'donation-action') return ['cta.primary'];
   if (slot === 'phone-link') return ['cta.phone', 'icon.phone'];
   if (slot === 'email-link') return ['cta.email', 'icon.email'];
   if (slot === 'address-link') return ['cta.address', 'cta.directions', 'icon.address'];
@@ -537,11 +550,6 @@ function applyBindingByIconAffinity(
   return { content: next, applied: appliedCount > 0 };
 }
 
-function containsCtaMarker(source: string, marker: string): boolean {
-  const escaped = escapeRegex(marker);
-  return new RegExp(`data-ut-cta\\s*=\\s*(?:["']${escaped}["']|\\{\\s*["']${escaped}["']\\s*\\})`).test(source);
-}
-
 /** Restore deterministic CTA markers before App Builder closure validation. */
 export function normalizeWizardBindingMarkers(
   files: Record<string, string>,
@@ -560,15 +568,26 @@ export function normalizeWizardBindingMarkers(
     }
 
     const surface = collectLocalImportClosure(nextFiles, filePath, (path) => SHARED_SURFACE_PATH.test(path));
-    if (surface.some((path) => requirement.markers.some((marker) => containsCtaMarker(nextFiles[path] ?? '', marker)))) {
-      continue;
-    }
-
     const target: BindingMatchTarget = {
       sourceSlot: requirement.sourceSlot,
       sourceLabel: requirement.sourceLabel ?? '',
     };
-    const attrs = { 'data-ut-cta': requirement.markers[0] };
+    const attrs: Record<string, string> = { 'data-ut-cta': requirement.markers[0] };
+    if (requirement.sourceSlot) attrs['data-ut-slot'] = requirement.sourceSlot;
+    if (requirement.sourceSection) attrs['data-ut-section-role'] = requirement.sourceSection;
+    if (requirement.pageId && requirement.sourceSection) {
+      attrs['data-ut-slot-id'] = `${requirement.pageId}:${requirement.sourceSection}:${requirement.sourceSlot}`;
+    }
+    if (requirement.domIntent) {
+      attrs['data-ut-intent'] = requirement.domIntent;
+      attrs['data-intent'] = requirement.domIntent;
+    }
+    if (requirement.bindingId) attrs['data-ut-binding-id'] = requirement.bindingId;
+    if (requirement.sourceLabel) attrs['data-ut-label'] = requirement.sourceLabel;
+    if (requirement.targetType) attrs['data-ut-target-type'] = requirement.targetType;
+    if (requirement.targetId) attrs['data-ut-target-id'] = requirement.targetId;
+    if (requirement.targetPath) attrs['data-ut-path'] = requirement.targetPath;
+    if (requirement.targetType === 'url' && requirement.targetId) attrs['data-ut-url'] = requirement.targetId;
     let applied = false;
     for (const candidatePath of surface) {
       const source = nextFiles[candidatePath] ?? '';

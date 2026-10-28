@@ -62,6 +62,7 @@ export async function orchestrateAppBuild(
   const roleByPath = new Map(pages.map((page) => [page.filePath, page.role]));
   const sectionImplementations = generation.materialization.manifest.implementations;
   const photoUrls = verifiedPhotosFor(input.contract.design.resolvedSiteDesignContext?.contract.industry ?? input.contract.business.industry);
+  let unresolvedMarkerBindingIds: string[] = [];
   const pageCheck = (path: string, source: string, files?: Readonly<Record<string, string>>) => {
     const messages = findDesignSourceUsageIssues(manifestSource, source).map((issue) => issue.message);
     if (Object.keys(sectionImplementations).length > 0) {
@@ -110,29 +111,50 @@ export async function orchestrateAppBuild(
     outcome.status !== 'authored' && ['credits', 'denied', 'provider', 'rate_limited', 'invalid_response', 'aborted'].includes(outcome.reason));
   const validateClosure = async (files: Record<string, string>) => {
     const report = await validateAppBuildCandidate({ contract: input.contract, files, initialFiles: baseFiles });
+    const bindingIssues = unresolvedMarkerBindingIds.map((bindingId) => ({
+      severity: 'blocker' as const,
+      code: 'binding-marker-unresolved',
+      path: input.contract.business.intentBindings.find((binding) => binding.bindingId === bindingId)?.route,
+      message: `Canonical binding ${bindingId} has no matching generated control in its registered page surface.`,
+    }));
     const pageIssues = pages.flatMap((page) =>
       (input.pageCheck?.(page.filePath, files[page.filePath] ?? '', files) ?? []).map((message) => ({
         severity: 'blocker' as const, code: 'page-contract', path: page.filePath, message,
       })));
-    return { ...report, ok: report.ok && pageIssues.length === 0, issues: [...report.issues, ...pageIssues] };
+    return {
+      ...report,
+      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0,
+      issues: [...report.issues, ...bindingIssues, ...pageIssues],
+    };
   };
   const markerRequirements = input.contract.business.intentBindings
     .filter((binding) => binding.missingCapabilities.length === 0 && binding.ctaMarkers.length > 0)
-    .map((binding) => ({
-      bindingId: binding.bindingId,
-      pageId: binding.pageId,
-      sourceLabel: binding.sourceLabel,
-      sourceSlot: binding.sourceSlot,
-      markers: binding.ctaMarkers,
-    }));
+    .map((binding) => {
+      const targetPage = binding.targetType === 'page'
+        ? input.contract.topology.pageRegistry.pages[binding.targetId]
+        : undefined;
+      return {
+        bindingId: binding.bindingId,
+        pageId: binding.pageId,
+        sourceLabel: binding.sourceLabel,
+        sourceSection: binding.sourceSection,
+        sourceSlot: binding.sourceSlot,
+        domIntent: binding.domIntent,
+        targetType: binding.targetType,
+        targetId: binding.targetId,
+        targetPath: targetPage?.path ?? (binding.targetType === 'url' ? binding.targetId : undefined),
+        markers: binding.ctaMarkers,
+      };
+    });
   const normalizeCandidateFiles = (files: Record<string, string>) => {
     const materialized = materializeRegisteredComponents(input.contract, files).files;
-    const normalized = normalizeWizardBindingMarkers(
+    const markerNormalization = normalizeWizardBindingMarkers(
       materialized,
       input.contract.topology.pageRegistry,
       markerRequirements,
-    ).files;
-    return materializeAppBuilderSectionModels(normalized, pages.map((page) => ({
+    );
+    unresolvedMarkerBindingIds = markerNormalization.unresolvedBindingIds;
+    return materializeAppBuilderSectionModels(markerNormalization.files, pages.map((page) => ({
       id: page.pageId,
       filePath: page.filePath,
     })), sectionImplementations);

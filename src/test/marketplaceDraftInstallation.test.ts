@@ -16,7 +16,18 @@ describe('template draft acceptance', () => {
     mocks.seed.mockResolvedValue({ created: 3 });
     mocks.bindings.mockResolvedValue({ failed: 0 });
     mocks.forms.mockResolvedValue({ error: null });
-    const artifacts = { files: { '/src/App.tsx': 'source' }, entryPoint: '/src/App.tsx', runtimeManifest: {}, siteBundleSnapshot: { industry: 'ecommerce', meta: { themePresetId: 'modern' } } };
+    const artifacts = {
+      files: { '/src/App.tsx': 'source' }, entryPoint: '/src/App.tsx', runtimeManifest: {},
+      siteBundleSnapshot: {
+        industry: 'ecommerce', meta: { themePresetId: 'modern' },
+        pageRegistry: { pages: { home: { pageId: 'home', path: '/', filePath: '/src/pages/Home.tsx' } } },
+        bindings: { contact: {
+          bindingId: 'contact', sourcePageId: 'home', sourceLabel: 'Contact', intent: 'form.open',
+          coreIntent: 'contact.submit', targetId: 'buyer-form', targetType: 'form', sourceSection: 'contact',
+          sourceSlot: 'contact-submit', confidence: 1, source: 'manual', isValid: true,
+        } },
+      },
+    };
     mocks.getUser.mockResolvedValue({ data: { user: { id: 'buyer' } } });
     mocks.concept.mockReturnValue(artifacts); mocks.build.mockReturnValue(artifacts);
     mocks.provision.mockResolvedValue({ businessId: 'business', projectId: 'project', draftId: 'draft', siteId: 'site' });
@@ -37,6 +48,13 @@ describe('template draft acceptance', () => {
     expect(mocks.seed).toHaveBeenCalledWith(expect.objectContaining({ businessId: 'business', projectId: 'project' }));
     expect(mocks.commit.mock.invocationCallOrder[0]).toBeLessThan(mocks.seed.mock.invocationCallOrder[0]);
     expect(mocks.bindings).toHaveBeenCalledWith(expect.objectContaining({ businessId: 'business', projectId: 'project' }));
+    expect(mocks.bindings).toHaveBeenCalledWith(expect.objectContaining({
+      pageRoutesById: { home: '/' },
+      pageSurfaces: [{
+        route: '/', filePath: '/src/pages/Home.tsx',
+        bindings: [{ sourceSlot: 'contact-submit', intent: 'contact.submit' }],
+      }],
+    }));
   });
   it('does not persist when App Builder rejects the template', async () => {
     mocks.build.mockRejectedValue(new Error('App Builder could not prepare this template'));

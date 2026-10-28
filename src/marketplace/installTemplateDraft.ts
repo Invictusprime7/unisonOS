@@ -11,6 +11,7 @@ import { seedLaunchAssets } from '@/services/resources/seedLaunchAssets';
 import { persistGeneratedBindings } from '@/services/persistGeneratedBindings';
 import { planLaunchFormDefinitions } from '@/services/launchFormDefinitions';
 import { persistLaunchFormDefinitions } from '@/services/launchFormDefinitionPersistence';
+import { resolvePlaygroundBindingDomIntent } from '@/platform/core/playground';
 
 export type MarketplaceDraftSelection = { kind: 'concept'; template: AuthoredMarketplaceTemplate } | { kind: 'release'; slug: string; title: string };
 
@@ -75,7 +76,24 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection,
     await seedLaunchAssets({ businessId: ids.businessId, projectId: ids.projectId, industry: snapshot.industry,
       creatorData: commit.playground?.creatorData ?? buyerArtifacts.siteBundleSnapshot.creatorData,
       mediaAssets: artifacts.mediaAssets });
-    const bindings = await persistGeneratedBindings({ businessId: ids.businessId, projectId: ids.projectId, files: commit.vfsFiles });
+    const acceptedSnapshot = commit.siteBundleSnapshot ?? buyerArtifacts.siteBundleSnapshot;
+    const pages = Object.values(acceptedSnapshot.pageRegistry?.pages ?? {});
+    const bindings = await persistGeneratedBindings({
+      businessId: ids.businessId,
+      projectId: ids.projectId,
+      files: commit.vfsFiles,
+      pageRoutesById: Object.fromEntries(pages.map((page) => [page.pageId, page.path || '/'])),
+      pageSurfaces: pages.flatMap((page) => page.filePath ? [{
+        route: page.path || '/',
+        filePath: page.filePath,
+        bindings: Object.values(acceptedSnapshot.bindings ?? {})
+          .filter((binding) => binding.sourcePageId === page.pageId && binding.sourceSlot && binding.coreIntent)
+          .map((binding) => ({
+            sourceSlot: binding.sourceSlot!,
+            intent: resolvePlaygroundBindingDomIntent(binding),
+          })),
+      }] : []),
+    });
     if (bindings.failed) throw new Error('Some template actions could not be saved.');
     const forms = await persistLaunchFormDefinitions({ businessId: ids.businessId, projectId: ids.projectId, siteId: ids.siteId,
       definitions: planLaunchFormDefinitions({ vfsFiles: commit.vfsFiles }) });

@@ -53,7 +53,9 @@ export interface MarketplaceTemplateBinding {
   label: string;
   sourceSection: string;
   sourceSlot: string;
+  sourcePageId?: string;
   targetSectionId?: string;
+  targetPageId?: string;
   product?: CartItem;
 }
 

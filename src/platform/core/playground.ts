@@ -394,6 +394,7 @@ export interface PlaygroundBinding {
 
 /** Runtime DOM intent emitted by the canonical binding bridge for a Playground intent. */
 export function resolvePlaygroundBindingDomIntent(binding: PlaygroundBinding): string {
+  if (binding.coreIntent === 'nav.anchor') return 'nav.anchor';
   switch (binding.intent) {
     case 'nav.goto_page':
       return 'nav.goto';

@@ -47,6 +47,36 @@ describe('Wizard form binding aliases', () => {
     expect(wired.files[home.filePath!]).toContain('data-ut-intent=');
   });
 
+  it('normalizes each same-marker slot independently and stamps persistable runtime identity', () => {
+    const capabilities = resolveCapabilities(salonSelections);
+    const { playground } = materializePlayground(salonSelections, capabilities);
+    const home = Object.values(playground.pageRegistry.pages).find((page) => page.isHome)!;
+    const source = '<nav><a data-ut-cta="cta.nav-link">Home</a><a data-ut-cta="cta.nav-link">Treatments</a></nav>';
+    const result = normalizeWizardBindingMarkers({ [home.filePath!]: source }, playground.pageRegistry, [
+      {
+        bindingId: 'home-link', pageId: home.pageId, sourceSection: 'navbar', sourceSlot: 'nav-link',
+        sourceLabel: 'Home', domIntent: 'nav.anchor', markers: ['cta.nav-link'],
+      },
+      {
+        bindingId: 'treatments-link', pageId: home.pageId, sourceSection: 'navbar', sourceSlot: 'nav-link',
+        sourceLabel: 'Treatments', domIntent: 'nav.anchor', markers: ['cta.nav-link'],
+      },
+    ]);
+    const normalized = result.files[home.filePath!];
+
+    expect(result.unresolvedBindingIds).toEqual([]);
+    expect(normalized).toContain('data-ut-binding-id="home-link"');
+    expect(normalized).toContain('data-ut-binding-id="treatments-link"');
+    expect(normalized.match(/data-ut-intent="nav.anchor"/g)).toHaveLength(2);
+    expect(normalized.match(/data-ut-slot-id=/g)).toHaveLength(2);
+  });
+
+  it('maps portable marketplace slot names to canonical marker families', () => {
+    expect(getWizardBindingMarkers({ sourceSection: 'booking', sourceSlot: 'booking-submit' } as any)).toEqual(['cta.form-submit']);
+    expect(getWizardBindingMarkers({ sourceSection: 'navbar', sourceSlot: 'brand-link' } as any)).toEqual(['cta.nav-link']);
+    expect(getWizardBindingMarkers({ sourceSection: 'navbar', sourceSlot: 'route-materials-link' } as any)).toEqual(['cta.nav-link']);
+  });
+
   it('does not seed commerce products for an ecommerce industry without purchase intent', () => {
     const selections: WizardSelections = {
       ...salonSelections,

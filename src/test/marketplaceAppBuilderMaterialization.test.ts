@@ -26,6 +26,30 @@ describe('marketplace App Builder convergence', () => {
     expect(request.pageCheck('/src/pages/home.tsx', files['/src/pages/home.tsx'], files)).toEqual([]);
     expect(request.contract.business.intents).toContain('cart.add');
     expect(request.contract.business.capabilities).toContain('commerce');
+    expect(request.contract.business.intentBindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        bindingId: expect.stringMatching(/^marketplace:pollen:home:/),
+        coreIntent: 'nav.anchor',
+        domIntent: 'nav.anchor',
+        sourceSlot: 'brand-link',
+        targetType: 'url',
+        targetId: '#top',
+      }),
+      expect.objectContaining({
+        bindingId: expect.stringMatching(/^marketplace:pollen:add-cup:/),
+        coreIntent: 'cart.add',
+        targetType: 'product',
+        targetId: expect.not.stringContaining('pollen:sunday-cup'),
+      }),
+      expect.objectContaining({
+        bindingId: 'marketplace:route:home:materials',
+        coreIntent: 'nav.goto',
+        domIntent: 'nav.goto',
+        sourceSlot: 'route-materials-link',
+        targetType: 'page',
+        targetId: 'materials',
+      }),
+    ]));
     expect(request.runtimeContext).toContain('Sunday cup');
     expect(request.runtimeContext).toContain('MARKETPLACE TEMPLATE DESIGN LOCK');
     expect(request.runtimeContext).toContain(template.pages[0].sections[0].id);
@@ -38,6 +62,28 @@ describe('marketplace App Builder convergence', () => {
     mocks.compile.mockClear();
     await expect(materializeTemplateWithAppBuilder(material, { projectId: 'buyer-project', businessId: 'buyer-business', siteId: 'buyer-site', draftId: 'buyer-draft', buildId: 'build', bundleId: 'bundle' })).rejects.toThrow('still depends on preview material');
     expect(mocks.compile).not.toHaveBeenCalled();
+    const releaseBinding = {
+      bindingId: 'seller-contact-binding', sourcePageId: 'home', sourceLabel: 'Contact',
+      intent: 'form.open', targetId: 'seller-form-id', targetType: 'form', confidence: 1,
+      source: 'manual', isValid: true, sourceSection: 'contact', sourceSlot: 'contact-submit',
+      coreIntent: 'contact.submit',
+    };
+    const releaseMaterial = {
+      ...material,
+      portableBindings: undefined,
+      siteBundleSnapshot: { ...material.siteBundleSnapshot, bindings: { 'seller-contact-binding': releaseBinding } },
+    };
+    mocks.generate.mockResolvedValue({ candidate: { status: 'ready-for-commit' }, stopReason: 'complete', candidateFiles: files });
+    mocks.compile.mockReturnValue({ files });
+    await materializeTemplateWithAppBuilder(releaseMaterial, { projectId: 'buyer-project', businessId: 'buyer-business', siteId: 'buyer-site', draftId: 'buyer-draft', buildId: 'build', bundleId: 'bundle' });
+    const releaseContract = mocks.generate.mock.calls.at(-1)?.[0].contract;
+    expect(releaseContract.business.intentBindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        coreIntent: 'contact.submit',
+        targetType: 'form',
+        targetId: expect.not.stringMatching(/seller-form-id/),
+      }),
+    ]));
     mocks.generate.mockResolvedValue({ candidate: { status: 'rejected', diagnostics: ['Syntax error'] }, stopReason: 'validation-failed' });
     mocks.compile.mockClear();
     await expect(materializeTemplateWithAppBuilder(material, { projectId: 'buyer-project', businessId: 'buyer-business', siteId: 'buyer-site', draftId: 'buyer-draft', buildId: 'build', bundleId: 'bundle' })).rejects.toThrow('Syntax error');

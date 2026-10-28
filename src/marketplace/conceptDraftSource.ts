@@ -168,5 +168,6 @@ export default function Page() { return <main data-marketplace-preview-surface>$
   snapshot.creatorData = starter.creatorData;
   // Material only: App Builder must converge this source before canonical acceptance.
   return { files, siteBundleSnapshot: snapshot, canonicalPlayground: plan.playground, entryPoint: '/src/App.tsx', plan, selections,
-    mediaAssets: starter.mediaAssets, templateIntents: template.bindings.map(binding => binding.intent) };
+    mediaAssets: starter.mediaAssets, templateIntents: template.bindings.map(binding => binding.intent),
+    portableBindings: template.bindings };
 }

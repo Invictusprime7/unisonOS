@@ -53,10 +53,11 @@ export function templateStarterData(template: AuthoredMarketplaceTemplate) {
     const product = binding.product;
     if (!product?.name || product.price === undefined) continue;
     const existing = Object.entries(data.products).find(([, item]) => item.name.toLowerCase() === product.name?.toLowerCase());
+    const buyerProductId = `buyer-product:${crypto.randomUUID()}`;
     if (existing) {
       delete data.products[existing[0]];
-      data.products[product.productId] = { ...existing[1], productId: product.productId };
-    } else data.products[product.productId] = { productId: product.productId, catalogSurface: 'products', name: product.name,
+      data.products[buyerProductId] = { ...existing[1], productId: buyerProductId };
+    } else data.products[buyerProductId] = { productId: buyerProductId, catalogSurface: 'products', name: product.name,
       price: product.price, currency: 'USD', sortOrder: Object.keys(data.products).length };
   }
   return { creatorData: data as CreatorData, mediaAssets };
