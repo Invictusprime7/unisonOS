@@ -992,7 +992,12 @@ export async function runProviderLoop(opts: {
       hasDirectGemini ? 'gemini' : '',
       hasDirectOpenAI ? 'openai' : '',
     ].filter(Boolean);
-    const errorTrail = providerErrors.slice(-10).join(' | ') || lastError || 'no provider attempts completed';
+    // A key skipped for a remembered depleted balance must name that cause, or
+    // later pages report "no providers configured" instead of the real remedy.
+    const cooldownNotes = (['gemini', 'openai'] as const)
+      .filter(provider => directOnCooldown(provider))
+      .map(provider => `${provider}: 402 key is out of prepaid credit (skipped until credits are added)`);
+    const errorTrail = [...providerErrors.slice(-10), ...cooldownNotes].join(' | ') || lastError || 'no provider attempts completed';
     const gatewayStatus = geminiExclusive
       ? 'Gemini-only provider mode is active; OpenAI and managed fallbacks are disabled.'
       : hasLastResortGateway
