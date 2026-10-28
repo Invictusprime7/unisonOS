@@ -21,6 +21,13 @@ describe('selected source edits', () => {
     const moved = mutateSelectedStructure(source, selector, 'up', selectedSourceFinder(selection));
     expect(moved).toContain('>Second</section>\n<section data-component="intent-newsletter">First</section>');
   });
+  it('moves the first section down without losing or duplicating source', () => {
+    const finder = selectedSourceFinder({ ...selection, descriptor: { sourceLocator: '/src/components/News.tsx:2:1' } });
+    expect(mutateSelectedStructure(source, selector, 'down', finder)).toBe(source.replace('>First</section>\n<section data-component="intent-newsletter">Second', '>Second</section>\n<section data-component="intent-newsletter">First'));
+  });
+  it('duplicates only the clicked section', () => {
+    expect(mutateSelectedStructure(source, selector, 'duplicate', selectedSourceFinder(selection))).toBe(source.replace('>Second</section>', '>Second</section>\n<section data-component="intent-newsletter">Second</section>'));
+  });
   it('does not fall back to a matching selector for a stale or protected locator', () => {
     for (const locator of ['/src/components/News.tsx:3:2', 'bad', '/src/unison/News.tsx:3:1']) {
       expect(mutateSelectedStructure(source, selector, 'delete', selectedSourceFinder({ ...selection, descriptor: { sourceLocator: locator } }))).toBeNull();
