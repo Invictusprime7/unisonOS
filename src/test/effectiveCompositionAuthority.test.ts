@@ -54,7 +54,28 @@ describe('withRebuiltComposition (open-time rebuild)', { timeout: 30_000 }, () =
   });
   it('leaves a durable revision untouched', async () => {
     const { withRebuiltComposition } = await import('@/services/vfsCommitService');
-    const rev = { ...base, siteBundleSnapshot: { meta: {} }, compositionAuthority: { status: 'durable', reason: 'revision-stamped', revisionId: 'rev-1', uncertainPages: [], complete: true } } as never;
+    const { hashVfsFiles } = await import('@/services/vfsCommitService');
+    const rev = { ...base, vfsHash: await hashVfsFiles(base.vfsFiles), siteBundleSnapshot: { meta: {} }, compositionAuthority: { status: 'durable', reason: 'revision-stamped', revisionId: 'rev-1', uncertainPages: [], complete: true } } as never;
     expect(await withRebuiltComposition(rev)).toBe(rev);
+  });
+  it('rebuilds a stamped index provisionally when the loaded source bytes fail the stored VFS hash', async () => {
+    const { hashVfsFiles, withRebuiltComposition } = await import('@/services/vfsCommitService');
+    const actualVfsHash = await hashVfsFiles(base.vfsFiles);
+    const rev = {
+      ...base,
+      vfsHash: 'stale-stored-hash',
+      siteBundleSnapshot: {
+        meta: { effectiveComposition: { ...stamped, vfsHash: 'stale-stored-hash' } },
+        pageRegistry: { pages: { home: { filePath: '/src/pages/Home.tsx' } } },
+      },
+      compositionAuthority: { status: 'durable', reason: 'revision-stamped', revisionId: 'rev-1', uncertainPages: [], complete: true },
+    } as never;
+
+    const out = await withRebuiltComposition(rev);
+    const snapshot = out.siteBundleSnapshot as { meta: { effectiveComposition: { vfsHash: string; revisionId?: string } } };
+
+    expect(out.compositionAuthority).toMatchObject({ status: 'provisional', reason: 'vfs-hash-mismatch', rebuilt: true });
+    expect(snapshot.meta.effectiveComposition.vfsHash).toBe(actualVfsHash);
+    expect(snapshot.meta.effectiveComposition.revisionId).toBeUndefined();
   });
 });

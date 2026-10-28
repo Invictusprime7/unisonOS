@@ -2820,8 +2820,19 @@ export async function listRecentRevisionsForProject(
  * revisionId stamp) until a new save is stamped by the database.
  */
 export async function withRebuiltComposition(revision: LoadedRevision): Promise<LoadedRevision> {
-  const authority = revision.compositionAuthority;
-  if (!authority || authority.status === 'durable' || revision.status !== 'committed') return revision;
+  if (revision.status !== 'committed') return revision;
+  const actualVfsHash = await hashVfsFiles(revision.vfsFiles);
+  const sourceHashMatches = Boolean(revision.vfsHash && actualVfsHash === revision.vfsHash);
+  const authority = sourceHashMatches
+    ? revision.compositionAuthority ?? {
+        status: 'provisional' as const, reason: 'absent' as const, revisionId: null,
+        uncertainPages: [], complete: false,
+      }
+    : {
+        status: 'provisional' as const, reason: 'vfs-hash-mismatch' as const, revisionId: null,
+        uncertainPages: [], complete: false,
+      };
+  if (sourceHashMatches && authority.status === 'durable') return revision;
   const snapshot = revision.siteBundleSnapshot as { meta?: Record<string, unknown>; pageRegistry?: { pages?: Record<string, { filePath?: string | null }> }; bindings?: Record<string, never> } | null;
   if (!snapshot || !snapshot.pageRegistry?.pages) return revision;
   try {
@@ -2831,7 +2842,7 @@ export async function withRebuiltComposition(revision: LoadedRevision): Promise<
       fileProvenance: revision.fileProvenance as never,
       bindings: snapshot.bindings,
       baseRevisionId: revision.parentRevisionId,
-      vfsHash: revision.vfsHash ?? await hashVfsFiles(revision.vfsFiles),
+      vfsHash: actualVfsHash,
       hashSource: (path, source) => hashVfsFiles({ [path]: source }),
     });
     const { revisionId: _unstamped, ...provisional } = projection;
