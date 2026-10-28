@@ -5,6 +5,8 @@
 - [x] Enforce the owner's Gemini key for App Builder and marketplace authoring, with no OpenAI/Anthropic attempts or stale-model bypass; preserve managed Gemini backup. All 120 edge tests pass, including direct timeout → managed Gemini and owner-key-alias routing.
 - [x] Trace prior routing: it permitted OpenAI after Gemini; the owner's follow-up now replaces that App Builder policy with direct Gemini and managed Gemini only.
 - [x] Separate terminal authoring failures from unfinished-page validation errors and deduplicate install diagnostics; targeted materialization/install/error tests pass.
+- [x] Diagnose latest install failure: owner's Gemini key returned 402 "prepayment credits depleted" (Google AI Studio); built-in backup secret absent on UNISON. Credits replies now stop authoring at the first page, return 402 from the backend, and name the AI Studio remedy.
+- [ ] Owner adds Google AI Studio credits (and optionally the built-in AI backup key on UNISON), then runs the deploy workflow.
 - [ ] Verify live installation after canonical deployment and authoritative sign-in are available.
 
 ## Active: Floating toolbar actions
