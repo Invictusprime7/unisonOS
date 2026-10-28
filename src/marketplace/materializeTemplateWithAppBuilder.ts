@@ -3,7 +3,7 @@ import { buildAppBuildContract } from '@/services/app-builder/appBuilderContract
 import { compileResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import { buildCanonicalLaunchPlan, projectCanonicalLaunchCandidateSnapshot } from '@/services/launch/canonicalLaunchPlan';
 import { WIZARD_LANE_B_PROTECTED_PATHS } from '@/services/wizardLaneBEnrichment';
-import { buildCanonicalLaunchArtifacts } from '@/services/canonicalLaunchVfs';
+import { buildCanonicalLaunchArtifactsAsync } from '@/services/canonicalLaunchVfs';
 import { generateCanonicalRouter } from '@/utils/topologyRouterGenerator';
 import { createWizardDesignSelection } from '@/services/wizardDesignSelection';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
@@ -76,6 +76,7 @@ export interface MarketplaceTemplateMaterial {
 
 export interface MaterializeOptions {
   signal?: AbortSignal;
+  onStatus?: (label: string) => void;
   onPage?: (event: { title: string; index: number; total: number; phase: string }) => void;
 }
 
@@ -275,6 +276,7 @@ function templatePinnedImplementationsByPage(
 
 /** Candidate-only bridge. The installer remains responsible for one durable acceptance. */
 export async function materializeTemplateWithAppBuilder(material: MarketplaceTemplateMaterial, ids: ConfirmedLaunchIds, options: MaterializeOptions = {}) {
+  options.onStatus?.('Preparing template design and bindings');
   const snapshot = material.siteBundleSnapshot;
   const packId = readSealedArtDirection(snapshot.meta)?.storagePackId;
   if (!snapshot.themeTokens || !packId) throw new Error('This template is missing its saved design contract.');
@@ -343,6 +345,7 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   const result = await unisonAppBuilder.generate({
     operationId: `marketplace-install:${ids.draftId}:app-build`, contract, initialFiles, entryPoint: '/src/App.tsx', baseRevisionId: null, budgetMs: 430_000,
     reuseAcceptedPages: false, signal: options.signal,
+    onStatus: options.onStatus,
     onProgress: event => options.onPage?.({ title: event.page.title, index: event.index, total: event.total, phase: event.phase }),
     pageCheck: (path, source, files) => {
       const reference = collectLocalImportClosure({ ...initialFiles, ...files, [path]: source }, path)
@@ -359,7 +362,8 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   if (result.candidate.status !== 'ready-for-commit' || result.stopReason !== 'complete') {
     throw new Error(installationFailureMessage(result));
   }
-  const files = await materializePreviewImages(result.candidateFiles);
+  options.onStatus?.('Embedding template images');
+  const files = await materializePreviewImages(result.candidateFiles, { signal: options.signal });
   for (const page of plan.sitePlan.pages) {
     const reference = collectLocalImportClosure(files, page.filePath).find(path => path.startsWith('/src/marketplace/'));
     if (reference) throw new Error(`App Builder did not materialize ${page.title}: it still depends on preview material (${reference}).`);
@@ -367,11 +371,15 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   const acceptedSnapshot = projectCanonicalLaunchCandidateSnapshot(plan, selections, files);
   acceptedSnapshot.meta = { ...acceptedSnapshot.meta, generationSeed: seed,
     artDirection: snapshot.meta.artDirection ?? plan.artDirection, artDirectionPackId: packId };
-  return buildCanonicalLaunchArtifacts({ generatedFiles: files, siteBundleSnapshot: acceptedSnapshot, canonicalPlayground: plan.playground,
+  options.onStatus?.('Building canonical preview and runtime');
+  return buildCanonicalLaunchArtifactsAsync({ generatedFiles: files, siteBundleSnapshot: acceptedSnapshot, canonicalPlayground: plan.playground,
     // Same workspace identity as fresh launch: without it the saved draft cannot open in the Builder.
     preferredEntryPoint: '/src/App.tsx', organizationId: ids.businessId, businessId: ids.businessId, projectId: ids.projectId, siteId: ids.siteId,
     mergeWithCanonicalSnapshot: true, allowCanonicalPageFallback: false, preservePageSources: true, strictPreflight: true,
-    themePresetId: plan.themePresetId, businessName: snapshot.businessName, industry: snapshot.industry });
+    themePresetId: plan.themePresetId, businessName: snapshot.businessName, industry: snapshot.industry }, {
+      yieldToHost: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+      signal: options.signal,
+    });
 }
 function starterSummary(data: SiteBundleSnapshot['creatorData']) {
   const names = (rows: Record<string, { name?: string; question?: string; title?: string }> | undefined) =>

@@ -29,6 +29,7 @@ export async function orchestrateAppBuild(
   input: AppBuildRequest,
   dependencies: AppBuilderOrchestratorDependencies,
 ): Promise<AppBuildResult> {
+  input.onStatus?.('Preparing App Builder context');
   const pages = input.contract.topology.sitePlan.pages.map((page) => ({
     pageId: page.id,
     title: page.title,
@@ -103,6 +104,7 @@ export async function orchestrateAppBuild(
     reuseAcceptedPages: input.reuseAcceptedPages ?? true,
     resolveDependencies: false,
   });
+  input.onStatus?.('Checking authored pages, sections and bindings');
 
   const compatibilityMode = Boolean(input.acceptPage);
   // A valid baseline is not an authored application. Preserve terminal provider
@@ -168,6 +170,7 @@ export async function orchestrateAppBuild(
   // One site-wide repair attempt sees the complete closure diagnostics and protected-path constraints.
   const closureTimeLeftMs = startedAt + totalBudgetMs - Date.now();
   if (!compatibilityMode && !terminalAuthoringFailure && !closure.ok && !input.signal?.aborted && closureTimeLeftMs >= MIN_CLOSURE_REPAIR_MS) {
+    input.onStatus?.('Repairing final page and binding checks');
     const home = pages.find((page) => page.pageId === input.contract.topology.sitePlan.homePageId) ?? pages[0];
     if (home) {
       const diagnostics = closure.issues
@@ -253,6 +256,7 @@ export async function orchestrateAppBuild(
       strategy,
     },
   };
+  input.onStatus?.(ready ? 'Preparing accepted template' : 'Finishing App Builder diagnostics');
   return {
     operationId: input.operationId,
     protocolVersion: APP_BUILDER_PROTOCOL_VERSION,

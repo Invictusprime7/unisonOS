@@ -4,8 +4,8 @@ import { Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { installTemplateDraft, type InstallProgress, type MarketplaceDraftSelection } from './installTemplateDraft';
 
-/** App Builder authors every page; long installs must stay visibly alive and bounded. */
-export const INSTALL_TIME_LIMIT_MS = 7 * 60_000;
+/** Includes App Builder's 430s authoring budget plus image, compile and save phases. */
+export const INSTALL_TIME_LIMIT_MS = 10 * 60_000;
 
 function elapsedLabel(ms: number) {
   const seconds = Math.floor(ms / 1000);

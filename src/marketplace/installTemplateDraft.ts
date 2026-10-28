@@ -52,6 +52,7 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection,
   let built = 0;
   const buyerArtifacts = await materializeTemplateWithAppBuilder({ ...artifacts, siteBundleSnapshot: snapshot }, ids, {
     signal: options.signal,
+    onStatus: label => status({ label, done: built, total: pageCount }),
     onPage: event => {
       if (event.phase !== 'authoring') built = Math.min(event.total, built + 1);
       status({ label: event.phase === 'authoring' ? `Building ${event.title}` : 'Building pages', done: built, total: event.total });

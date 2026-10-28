@@ -13,4 +13,20 @@ describe('installed preview image persistence', () => {
       expect(fetchImage).toHaveBeenCalledOnce();
     } finally { fetchImage.mockRestore(); }
   });
+
+  it('aborts in-flight sample image requests with the marketplace install', async () => {
+    const controller = new AbortController();
+    const fetchImage = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    }));
+    try {
+      const pending = materializePreviewImages(
+        { '/src/images.ts': `export const image = '${MARKETPLACE_SAMPLE_IMAGES.objects}'` },
+        { signal: controller.signal },
+      );
+      controller.abort(new Error('Marketplace install stopped'));
+      await expect(pending).rejects.toThrow('Marketplace install stopped');
+      expect(fetchImage.mock.calls[0][1]?.signal).toBe(controller.signal);
+    } finally { fetchImage.mockRestore(); }
+  });
 });

@@ -462,6 +462,7 @@ export interface AppBuildRequest {
   pageCheck?: (path: string, source: string, files?: Readonly<Record<string, string>>) => string[];
   concurrency?: number;
   preflight?: (files: Record<string, string>) => Record<string, string>;
+  onStatus?: (phase: string) => void;
   onProgress?: (event: {
     page: AppBuilderPageTarget;
     index: number;

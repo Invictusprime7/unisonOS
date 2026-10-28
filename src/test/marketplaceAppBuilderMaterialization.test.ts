@@ -4,7 +4,14 @@ import { buildConceptDraftSource } from '@/marketplace/conceptDraftSource';
 import { buildAppBuilderGenerationContext } from '@/services/app-builder/appBuilderGenerationContext';
 const mocks = vi.hoisted(() => ({ generate: vi.fn(), compile: vi.fn() }));
 vi.mock('@/services/app-builder/UnisonAppBuilder', () => ({ unisonAppBuilder: { generate: mocks.generate } }));
-vi.mock('@/services/canonicalLaunchVfs', () => ({ buildCanonicalLaunchArtifacts: mocks.compile }));
+vi.mock('@/services/canonicalLaunchVfs', () => ({
+  buildCanonicalLaunchArtifacts: mocks.compile,
+  buildCanonicalLaunchArtifactsAsync: async (input: unknown, options: { yieldToHost: () => Promise<void>; signal?: AbortSignal }) => {
+    await options.yieldToHost();
+    if (options.signal?.aborted) throw options.signal.reason;
+    return mocks.compile(input);
+  },
+}));
 vi.mock('@/marketplace/materializePreviewImages', () => ({ materializePreviewImages: async (files: Record<string, string>) => files }));
 import { materializeTemplateWithAppBuilder } from '@/marketplace/materializeTemplateWithAppBuilder';
 
@@ -21,8 +28,18 @@ describe('marketplace App Builder convergence', () => {
     }
     mocks.generate.mockResolvedValue({ candidate: { status: 'ready-for-commit' }, stopReason: 'complete', candidateFiles: files });
     mocks.compile.mockReturnValue({ files });
+    const statuses: string[] = [];
 
-    await materializeTemplateWithAppBuilder(material, { projectId: 'buyer-project', businessId: 'buyer-business', siteId: 'buyer-site', draftId: 'buyer-draft', buildId: 'build', bundleId: 'bundle' });
+    await materializeTemplateWithAppBuilder(
+      material,
+      { projectId: 'buyer-project', businessId: 'buyer-business', siteId: 'buyer-site', draftId: 'buyer-draft', buildId: 'build', bundleId: 'bundle' },
+      { onStatus: (label) => statuses.push(label) },
+    );
+    expect(statuses).toEqual(expect.arrayContaining([
+      'Preparing template design and bindings',
+      'Embedding template images',
+      'Building canonical preview and runtime',
+    ]));
 
     const request = mocks.generate.mock.calls.at(-1)?.[0];
     expect(request.contract.design.registryContext.sections.find((section: { type: string }) => section.type === 'services')?.allowedVariantIds)
