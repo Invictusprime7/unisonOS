@@ -34,29 +34,60 @@ interface StaticResult {
   value?: unknown;
 }
 
-function staticValue(expression: ts.Expression): StaticResult {
+function staticValue(
+  expression: ts.Expression,
+  sourceFile?: ts.SourceFile,
+  resolving: ReadonlySet<string> = new Set(),
+): StaticResult {
   if (ts.isParenthesizedExpression(expression)
     || ts.isAsExpression(expression)
     || ts.isTypeAssertionExpression(expression)
-    || ts.isSatisfiesExpression(expression)) return staticValue(expression.expression);
+    || ts.isSatisfiesExpression(expression)) return staticValue(expression.expression, sourceFile, resolving);
+  if (ts.isIdentifier(expression) && sourceFile) {
+    const name = expression.text;
+    if (resolving.has(name)) return { ok: false };
+    const declarations: ts.Expression[] = [];
+    const findDeclaration = (node: ts.Node) => {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name
+        && ts.isVariableDeclarationList(node.parent) && (node.parent.flags & ts.NodeFlags.Const) !== 0
+        && node.initializer) declarations.push(node.initializer);
+      ts.forEachChild(node, findDeclaration);
+    };
+    findDeclaration(sourceFile);
+    if (declarations.length !== 1) return { ok: false };
+    return staticValue(declarations[0], sourceFile, new Set([...resolving, name]));
+  }
   if (ts.isStringLiteralLike(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) return { ok: true, value: expression.text };
   if (ts.isNumericLiteral(expression)) return { ok: true, value: Number(expression.text) };
   if (expression.kind === ts.SyntaxKind.TrueKeyword) return { ok: true, value: true };
   if (expression.kind === ts.SyntaxKind.FalseKeyword) return { ok: true, value: false };
   if (expression.kind === ts.SyntaxKind.NullKeyword) return { ok: true, value: null };
   if (ts.isArrayLiteralExpression(expression)) {
-    const values = expression.elements.map((entry) => ts.isSpreadElement(entry) ? { ok: false } : staticValue(entry));
-    return values.every((entry) => entry.ok) ? { ok: true, value: values.map((entry) => entry.value) } : { ok: false };
+    const values: unknown[] = [];
+    for (const entry of expression.elements) {
+      const spread = ts.isSpreadElement(entry);
+      const parsed = staticValue(spread ? entry.expression : entry, sourceFile, resolving);
+      if (!parsed.ok || (spread && !Array.isArray(parsed.value))) return { ok: false };
+      if (spread) values.push(...parsed.value as unknown[]);
+      else values.push(parsed.value);
+    }
+    return { ok: true, value: values };
   }
   if (ts.isObjectLiteralExpression(expression)) {
     const value: Record<string, unknown> = {};
     for (const property of expression.properties) {
+      if (ts.isSpreadAssignment(property)) {
+        const parsed = staticValue(property.expression, sourceFile, resolving);
+        if (!parsed.ok || !parsed.value || typeof parsed.value !== 'object' || Array.isArray(parsed.value)) return { ok: false };
+        Object.assign(value, parsed.value);
+        continue;
+      }
       if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) return { ok: false };
       const key = ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name) || ts.isNumericLiteral(property.name)
         ? property.name.text
         : null;
       if (key === null) return { ok: false };
-      const parsed = staticValue(property.initializer);
+      const parsed = staticValue(property.initializer, sourceFile, resolving);
       if (!parsed.ok) return { ok: false };
       value[key] = parsed.value;
     }
@@ -77,18 +108,27 @@ function findAttribute(element: ts.JsxOpeningLikeElement, name: string): ts.JsxA
   );
 }
 
-function readStringAttribute(element: ts.JsxOpeningLikeElement, name: string): string | undefined {
+function readStringAttribute(element: ts.JsxOpeningLikeElement, name: string, sourceFile?: ts.SourceFile): string | undefined {
   const initializer = findAttribute(element, name)?.initializer;
   if (!initializer) return undefined;
   if (ts.isStringLiteralLike(initializer)) return initializer.text;
   if (!ts.isJsxExpression(initializer) || !initializer.expression) return undefined;
-  const parsed = staticValue(initializer.expression);
+  const parsed = staticValue(initializer.expression, sourceFile);
   return parsed.ok && typeof parsed.value === 'string' ? parsed.value : undefined;
 }
 
 interface ImportedBinding {
   modulePath: string;
   importedName: string | null;
+}
+
+function importsRegisteredImplementation(
+  imported: ImportedBinding | undefined,
+  expectedImport: string,
+  implementation: EligibleImplementation,
+): boolean {
+  return imported?.modulePath === expectedImport
+    && (imported.importedName === null || imported.importedName === implementation.exportName);
 }
 
 function moduleImports(sourceFile: ts.SourceFile): Map<string, ImportedBinding> {
@@ -129,13 +169,12 @@ function findRootVariantIdentity(
       && SECTION_ROOT_TAGS.has(tagName(node.tagName) ?? '')) return;
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const component = tagName(node.tagName);
-      const variantId = readStringAttribute(node, 'variantId') ?? readStringAttribute(node, 'data-ut-variant');
-      const sectionId = readStringAttribute(node, 'sectionId') ?? readStringAttribute(node, 'data-ut-section-id');
+      const variantId = readStringAttribute(node, 'variantId', sourceFile) ?? readStringAttribute(node, 'data-ut-variant', sourceFile);
+      const sectionId = readStringAttribute(node, 'sectionId', sourceFile) ?? readStringAttribute(node, 'data-ut-section-id', sourceFile);
       const implementation = variantId ? implementations[variantId] : undefined;
       const imported = component ? imports.get(component) : undefined;
       const expectedImport = implementation?.modulePath.replace(/^\/src\//, '@/').replace(/\.(?:tsx?|jsx?)$/i, '');
-      if (implementation && expectedImport && imported?.modulePath === expectedImport
-        && imported.importedName === null) {
+      if (implementation && expectedImport && importsRegisteredImplementation(imported, expectedImport, implementation)) {
         matches += 1;
         match = { sectionId, sectionType: implementation.sectionType, variantId };
       }
@@ -146,7 +185,7 @@ function findRootVariantIdentity(
   return matches === 1 ? match : {};
 }
 
-function staticDispatcherProps(element: ts.JsxOpeningLikeElement): Record<string, unknown> | null {
+function staticDispatcherProps(element: ts.JsxOpeningLikeElement, sourceFile: ts.SourceFile): Record<string, unknown> | null {
   const props: Record<string, unknown> = {};
   for (const property of element.attributes.properties) {
     if (ts.isJsxSpreadAttribute(property)) return null;
@@ -163,24 +202,24 @@ function staticDispatcherProps(element: ts.JsxOpeningLikeElement): Record<string
       continue;
     }
     if (!ts.isJsxExpression(property.initializer) || !property.initializer.expression) return null;
-    const parsed = staticValue(property.initializer.expression);
+    const parsed = staticValue(property.initializer.expression, sourceFile);
     if (!parsed.ok) return null;
     props[name] = parsed.value;
   }
   return props;
 }
 
-function dispatcherProps(element: ts.JsxOpeningLikeElement): Record<string, unknown> | null {
+function dispatcherProps(element: ts.JsxOpeningLikeElement, sourceFile: ts.SourceFile): Record<string, unknown> | null {
   const attribute = findAttribute(element, 'props');
   if (attribute?.initializer && ts.isJsxExpression(attribute.initializer) && attribute.initializer.expression) {
-    const parsed = staticValue(attribute.initializer.expression);
+    const parsed = staticValue(attribute.initializer.expression, sourceFile);
     if (parsed.ok && parsed.value && typeof parsed.value === 'object' && !Array.isArray(parsed.value)) {
       return parsed.value as Record<string, unknown>;
     }
     return null;
   }
   if (attribute) return null;
-  return staticDispatcherProps(element);
+  return staticDispatcherProps(element, sourceFile);
 }
 
 function insertOpeningAttributes(
@@ -214,7 +253,7 @@ function normalizeRegisteredDispatcher(
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const component = tagName(node.tagName);
       const imported = component ? imports.get(component) : undefined;
-      if (imported?.modulePath === expectedImport && imported.importedName === null) dispatchers.push(node);
+      if (importsRegisteredImplementation(imported, expectedImport, implementation)) dispatchers.push(node);
     }
     ts.forEachChild(node, visit);
   };
@@ -224,7 +263,7 @@ function normalizeRegisteredDispatcher(
   const dispatcher = dispatchers[0];
   const attributes: string[] = [];
   for (const [name, value] of [['sectionId', sectionId], ['variantId', variantId]] as const) {
-    const existing = readStringAttribute(dispatcher, name);
+    const existing = readStringAttribute(dispatcher, name, sourceFile);
     if (existing === value) continue;
     const attribute = findAttribute(dispatcher, name);
     if (attribute?.initializer) {
@@ -236,10 +275,10 @@ function normalizeRegisteredDispatcher(
     }
   }
   if (!findAttribute(dispatcher, 'props')) {
-    const props = staticDispatcherProps(dispatcher);
+    const props = staticDispatcherProps(dispatcher, sourceFile);
     if (!props) return;
     attributes.push(`props={${JSON.stringify(props)}}`);
-  } else if (!dispatcherProps(dispatcher)) {
+  } else if (!dispatcherProps(dispatcher, sourceFile)) {
     return;
   }
   insertOpeningAttributes(source, dispatcher, attributes, edits);
@@ -277,12 +316,12 @@ function materializeSectionRootIdentity(
         const inferred = rootElement
           ? findRootVariantIdentity(rootElement, sourceFile, implementations)
           : {};
-        const variantId = readStringAttribute(opening, 'data-ut-variant') ?? inferred.variantId;
-        const sectionType = readStringAttribute(opening, 'data-ut-section-type')
+        const variantId = readStringAttribute(opening, 'data-ut-variant', sourceFile) ?? inferred.variantId;
+        const sectionType = readStringAttribute(opening, 'data-ut-section-type', sourceFile)
           ?? (rootName === 'header' || rootName === 'nav' ? 'navbar'
             : rootName === 'footer' ? 'footer'
               : inferred.sectionType ?? (variantId ? implementations[variantId]?.sectionType : undefined));
-        const existingId = readStringAttribute(opening, 'data-ut-section-id');
+        const existingId = readStringAttribute(opening, 'data-ut-section-id', sourceFile);
         const implementation = variantId ? implementations[variantId] : undefined;
         if (sectionType && variantId && implementation?.sectionType === sectionType) {
           const sharedId = sectionType === 'navbar' ? 'site:navbar' : sectionType === 'footer' ? 'site:footer' : undefined;
@@ -292,8 +331,8 @@ function materializeSectionRootIdentity(
           const sectionId = existingId ?? inferred.sectionId ?? sharedId ?? `${pageName}:${sectionType}:${count}`;
           const attributes: Array<[string, string | undefined]> = [
             ['data-ut-section-id', existingId ?? sectionId],
-            ['data-ut-section-type', readStringAttribute(opening, 'data-ut-section-type') ?? sectionType],
-            ['data-ut-variant', readStringAttribute(opening, 'data-ut-variant') ?? variantId],
+            ['data-ut-section-type', readStringAttribute(opening, 'data-ut-section-type', sourceFile) ?? sectionType],
+            ['data-ut-variant', readStringAttribute(opening, 'data-ut-variant', sourceFile) ?? variantId],
           ];
           const missing = attributes
             .filter(([name]) => !findAttribute(opening, name))
@@ -336,10 +375,10 @@ function findSectionRenderer(
       const propsAttribute = findAttribute(node, 'props')?.initializer;
       const imported = component ? imports.get(component) : undefined;
       if (component && imported?.modulePath === expectedImport && imported.importedName === null
-        && readStringAttribute(node, 'variantId') === variantId
-        && readStringAttribute(node, 'sectionId') === sectionId
+        && readStringAttribute(node, 'variantId', sourceFile) === variantId
+        && readStringAttribute(node, 'sectionId', sourceFile) === sectionId
         && propsAttribute && ts.isJsxExpression(propsAttribute) && propsAttribute.expression) {
-        const parsed = staticValue(propsAttribute.expression);
+        const parsed = staticValue(propsAttribute.expression, sourceFile);
         matches += 1;
         if (parsed.ok && parsed.value && typeof parsed.value === 'object' && !Array.isArray(parsed.value)) {
           name = component;
@@ -381,7 +420,7 @@ function findLegacyNamedRenderer(
       && localNames.has(tagName(node.tagName) ?? '')) {
       matches += 1;
       rendererNames.push(tagName(node.tagName)!);
-      const parsed = staticNamedVariantProps(node);
+      const parsed = staticNamedVariantProps(node, sourceFile);
       if (parsed) props = parsed;
     }
     ts.forEachChild(node, visit);
@@ -433,9 +472,9 @@ export function inspectAppBuilderPageSections(
   const visit = (node: ts.Node) => {
     if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
       && SECTION_ROOT_TAGS.has(tagName(node.tagName) ?? '') && !isNestedRoot(node)) {
-      const sectionId = readStringAttribute(node, 'data-ut-section-id');
-      const sectionType = readStringAttribute(node, 'data-ut-section-type');
-      const variantId = readStringAttribute(node, 'data-ut-variant');
+      const sectionId = readStringAttribute(node, 'data-ut-section-id', sourceFile);
+      const sectionType = readStringAttribute(node, 'data-ut-section-type', sourceFile);
+      const variantId = readStringAttribute(node, 'data-ut-variant', sourceFile);
       if (!sectionId || !sectionType || !variantId) {
         issues.push(`${pagePath}: every section requires literal data-ut-section-id, data-ut-section-type, and data-ut-variant attributes.`);
       } else if (ids.has(sectionId)) {
@@ -560,7 +599,7 @@ export function materializeAppBuilderSectionModels(
   return result;
 }
 
-function staticNamedVariantProps(element: ts.JsxOpeningLikeElement): Record<string, unknown> | null {
+function staticNamedVariantProps(element: ts.JsxOpeningLikeElement, sourceFile?: ts.SourceFile): Record<string, unknown> | null {
   const props: Record<string, unknown> = {};
   for (const property of element.attributes.properties) {
     if (ts.isJsxSpreadAttribute(property)) return null;
@@ -577,7 +616,7 @@ function staticNamedVariantProps(element: ts.JsxOpeningLikeElement): Record<stri
       continue;
     }
     if (!ts.isJsxExpression(property.initializer) || !property.initializer.expression) return null;
-    const parsed = staticValue(property.initializer.expression);
+    const parsed = staticValue(property.initializer.expression, sourceFile);
     if (!parsed.ok) return null;
     props[name] = parsed.value;
   }

@@ -98,6 +98,44 @@ export default function Treatments(){return <main><section data-ut-section-id="t
     expect(inspectAppBuilderPageSections('/src/pages/treatments.tsx', page, implementations, { requireChromeRoots: false }).issues).toEqual([]);
   });
 
+  it('normalizes a certified named variant import while preserving its migration identity', () => {
+    const namedImplementations = {
+      ...implementations,
+      'services:editorial-rows': { ...implementations['services:editorial-rows'], exportName: 'ServicesEditorialRows' },
+    };
+    const source = `import { ServicesEditorialRows } from "@/unison/design-sources/Services";
+export default function Treatments(){return <main><section data-ut-section-id="treatments:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows"><ServicesEditorialRows headline="Treatments" items={[]} /></section></main>}`;
+    const files = materializeAppBuilderSectionModels(
+      { '/src/pages/treatments.tsx': source },
+      [{ id: 'treatments', filePath: '/src/pages/treatments.tsx' }],
+      namedImplementations,
+    );
+    const page = files['/src/pages/treatments.tsx'];
+    const result = inspectAppBuilderPageSections('/src/pages/treatments.tsx', page, namedImplementations, {
+      allowNamedExports: true,
+      requireChromeRoots: false,
+    });
+
+    expect(page).toContain('sectionId="treatments:services:0"');
+    expect(page).toContain('variantId="services:editorial-rows"');
+    expect(page).toContain('props={{"headline":"Treatments","items":[]}}');
+    expect(result.issues).toEqual([]);
+    expect(result.sections[0]).toMatchObject({ legacyRendererName: 'ServicesEditorialRows' });
+  });
+
+  it('accepts a unique literal const object as dispatcher props', () => {
+    const source = `import Services from "@/unison/design-sources/Services";
+const SECTION_PROPS = { headline: "Treatments", items: [{ title: "Facial", description: "Care" }] };
+export default function Treatments(){return <main><section data-ut-section-id="treatments:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows"><Services sectionId="treatments:services:0" variantId="services:editorial-rows" props={SECTION_PROPS} /></section></main>}`;
+
+    const result = inspectAppBuilderPageSections('/src/pages/treatments.tsx', source, implementations, {
+      requireChromeRoots: false,
+    });
+
+    expect(result.issues).toEqual([]);
+    expect(result.sections[0].data).toEqual({ headline: 'Treatments', items: [{ title: 'Facial', description: 'Care' }] });
+  });
+
   it('normalizes registered roots in shared SiteNav and SiteFooter modules', () => {
     const marketplaceImplementations = {
       ...implementations,
