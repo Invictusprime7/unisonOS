@@ -71,13 +71,19 @@ export interface ComposerLoopInput {
   pageCheck?: PageCheck;
 }
 
-function classifyError(error: unknown): ComposerStopReason {
+/** Provider replies that mean the key's balance is empty; they never recover on retry. */
+export const PROVIDER_CREDITS_EXHAUSTED = /prepayment credits (?:are )?depleted|out of (?:prepaid )?credit|no credits remaining|insufficient[_\s-]*(?:quota|credits?|funds?)|credits? (?:are )?(?:depleted|exhausted)|exceeded your current quota|payment required|\b402\b/i;
+
+export function classifyError(error: unknown): ComposerStopReason {
   const status = (error as { context?: { status?: number } } | null)?.context?.status
     ?? (error as { status?: number } | null)?.status;
   if (status === 402) return 'credits';
   if (status === 401 || status === 403) return 'denied';
   if (status === 429) return 'rate_limited';
   if (status === 400) return 'invalid_response';
+  // Older backends wrap a provider's 402 in a 500; the body still names it.
+  const message = String((error as { message?: unknown } | null)?.message ?? '');
+  if (PROVIDER_CREDITS_EXHAUSTED.test(message)) return 'credits';
   return 'provider';
 }
 
