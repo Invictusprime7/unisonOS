@@ -132,23 +132,37 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
   const invoke = input.invoke ?? runBuilderTurn;
   const maxAttempts = Math.max(1, input.maxAttempts ?? 3);
   const deadline = Date.now() + (input.timeoutMs ?? 145_000);
-  let request = input.request;
-  let lastErrors: string[] = [];
+  const resumed = input.resume;
+  let request = resumed?.request ?? input.request;
+  let lastErrors: string[] = [...(resumed?.request.diagnostics ?? [])];
   let lastResponse: AIComposerResponse | undefined;
   let lastPrepared: PreparedCandidate | undefined;
-  const accumulatedFiles: Record<string, string> = {};
-  const accumulatedDeletes = new Set<string>();
+  const accumulatedFiles: Record<string, string> = { ...(resumed?.files ?? {}) };
+  const accumulatedDeletes = new Set<string>(resumed?.deletes ?? []);
   const accumulatedRouteOps = new Map<string, TopologyChange>();
   for (const op of input.initialRouteOps ?? []) accumulatedRouteOps.set(`${op.type}:${op.pageId ?? ''}`, { ...op });
+  for (const op of resumed?.routeOps ?? []) accumulatedRouteOps.set(`${op.type}:${op.pageId ?? ''}`, { ...op });
+  const firstAttempt = Math.min(maxAttempts, (resumed?.attemptsUsed ?? 0) + 1);
+  // Only a fix round has paid-for work worth resuming: the AI already drafted it.
+  const resumeState = (attemptsUsed: number): ComposerLoopResume | undefined =>
+    (lastResponse || resumed) && request.task !== input.request.task || (resumed && attemptsUsed >= firstAttempt - 1)
+      ? {
+        request,
+        files: { ...accumulatedFiles },
+        deletes: [...accumulatedDeletes],
+        routeOps: [...accumulatedRouteOps.values()],
+        attemptsUsed,
+      }
+      : undefined;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = firstAttempt; attempt <= maxAttempts; attempt++) {
     if (input.signal?.aborted) return { ok: false, reason: 'aborted', attempts: attempt - 1, errors: ['Cancelled.'] };
     const remainingMs = deadline - Date.now();
-    if (remainingMs <= 5_000) return { ok: false, reason: 'aborted', attempts: attempt - 1, errors: ['AI page authoring exhausted its shared time budget.'], response: lastResponse, prepared: lastPrepared };
+    if (remainingMs <= 5_000) return { ok: false, reason: 'aborted', attempts: attempt - 1, errors: ['AI page authoring exhausted its shared time budget.'], response: lastResponse, prepared: lastPrepared, resume: resumeState(attempt - 1) };
     // A repair turn resends the whole page plus its errors (~150k chars) and
     // needs about a minute; a shorter window can only time out on the server.
     if (attempt > 1 && remainingMs < MIN_REPAIR_WINDOW_MS) {
-      return { ok: false, reason: 'gates_exhausted', attempts: attempt - 1, errors: lastErrors.length ? lastErrors : ['Not enough time left to repair this page.'], response: lastResponse, prepared: lastPrepared };
+      return { ok: false, reason: 'gates_exhausted', attempts: attempt - 1, errors: lastErrors.length ? lastErrors : ['Not enough time left to repair this page.'], response: lastResponse, prepared: lastPrepared, resume: resumeState(attempt - 1) };
     }
     narrate('understanding', attempt === 1 ? 'Thinking through the change' : `Adjusting (round ${attempt} of ${maxAttempts})`, 'running');
     const { data, error } = await invoke({
