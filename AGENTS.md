@@ -24,6 +24,7 @@
 - Toolbar executors follow property-owner routing: JSX move/delete/duplicate use source, styling and visibility use presentation. Why: a presentation-only move handler was unreachable and rejected every reorder before saving.
 
 - Service/recipe rules: `src/services/AGENTS.md`; provider rules: `supabase/functions/_shared/AGENTS.md`.
+- App Builder enforces its provider contract in the shared plan independently of stale client model overrides; the existing loop preserves direct-first and managed-backup execution. Why: runtime key presence must not authorize a different provider for template installation.
 - UNISON is the only backend: `src/integrations/supabase/env.ts` ignores other injected refs, `main.tsx` fails closed on identity mismatch, and backend changes deploy only via `.github/workflows/supabase-auto-update.yml`, so every schema change needs a timestamped `supabase/migrations` file (drizzle alone fails CI); why: Lovable tooling targets its built-in database.
 - Auth listeners stay synchronous; events win initial reads; SDK alone invalidates refresh; tab bridges yield to persisted auth; chunk retries are explicit. Auth/callbacks go Home or Demo; handoffs skip both and Auth. Why: avoid deadlocks, stale sign-out and reloads.
 - Before app load, bridge only auth keys to sessionStorage on quota errors; never evict project data or edit the generated client. Why: full storage must not block sign-in; fallback lasts until the tab closes.
