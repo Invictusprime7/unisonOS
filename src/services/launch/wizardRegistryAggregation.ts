@@ -167,6 +167,8 @@ export interface WizardAggregatedRegistryContext {
 
   /** v2 executable, pack-filtered inventory; absent on older snapshots. */
   implementations?: WizardRegistryImplementationSummary[];
+  /** Exact pack-approved implementation pins for authored template sections. */
+  pinnedImplementationIdsByPage?: Record<string, string[]>;
 
   /** All registered artifact surfaces (catalog, business-profile, authored, behavioral) */
   artifacts: WizardRegistryArtifactSummary[];
@@ -202,6 +204,8 @@ export function buildWizardAggregatedRegistryContext(options: {
   /** Injectable for tests; callers must still provide the active ownership boundary. */
   assets?: readonly Asset[];
   designSelection?: WizardDesignSelection;
+  /** Exact section variants sealed by a selected template composition. */
+  pinnedImplementationIds?: readonly string[];
 }): WizardAggregatedRegistryContext {
   const pack = resolveArtDirectionPack({
     industry: options.industry,
@@ -219,6 +223,9 @@ export function buildWizardAggregatedRegistryContext(options: {
     // Canonical eligibility resolver orders (and, for authored contracts,
     // narrows) the pack-executable set. Never widens it; empty → keep pack set.
     const executableIds = executable.map(variant => variant.id as string);
+    const pinnedForSection = (options.pinnedImplementationIds ?? []).filter((id) =>
+      id.startsWith(`${type}:`) && executableIds.includes(id) && isKnownImplementation(id),
+    );
     const experiencePreference = options.designSelection?.experience;
     const ranked = resolveEligibleImplementations({
       sectionType: type,
@@ -234,7 +241,7 @@ export function buildWizardAggregatedRegistryContext(options: {
     const rankedSet = new Set(rankedExecutable);
     // Executable ids the resolver doesn't know (e.g. pack-only aliases) keep their pack order after ranked ones.
     const unknownToResolver = executableIds.filter(id => !rankedSet.has(id) && !ranked.includes(id) && !isKnownImplementation(id));
-    const ordered = [...rankedExecutable, ...unknownToResolver];
+    const ordered = [...new Set([...rankedExecutable, ...pinnedForSection, ...unknownToResolver])];
     const allowedVariantIds = (ordered.length > 0 ? ordered : executableIds) as typeof executableIds;
 
     return {

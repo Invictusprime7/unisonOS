@@ -12,6 +12,8 @@ import type { PlaygroundBinding, WizardSelections } from '@/types/playground';
 import type { PageRole } from '@/platform/core/siteTopologyPlanner';
 import { materializePreviewImages } from './materializePreviewImages';
 import { getIntentDef, resolveIntentName } from '@/platform/core/intentSurfaceRegistry';
+import { collectResolvedCompositions } from '@/platform/core/resolvedComposition';
+import { ART_DIRECTION_PACKS } from '@/sections/variants';
 import { buildWizardBindingGuide } from '@/services/wizardBindingBridge';
 import type { MarketplaceTemplateBinding } from './marketplaceTemplatePrimitives';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
@@ -231,6 +233,46 @@ function portableBindingsFor(material: MarketplaceTemplateMaterial): Marketplace
   });
 }
 
+function templatePinnedImplementationsByPage(
+  material: MarketplaceTemplateMaterial,
+  plan: ReturnType<typeof buildCanonicalLaunchPlan>,
+  artDirectionPackId: string,
+): Record<string, string[]> {
+  const pinned = new Map<string, Set<string>>();
+  const pages = Object.values(material.siteBundleSnapshot.pageRegistry.pages);
+  const add = (pageId: string | undefined, variantId: string | undefined) => {
+    if (!pageId || !variantId || !material.siteBundleSnapshot.pageRegistry.pages[pageId]) return;
+    const variants = pinned.get(pageId) ?? new Set<string>();
+    variants.add(variantId);
+    pinned.set(pageId, variants);
+  };
+  const templateSource = material.files['/src/marketplace/template.ts'];
+  if (templateSource?.startsWith('export default ')) {
+    try {
+      const template = JSON.parse(templateSource.slice('export default '.length).replace(/;\s*$/, '')) as {
+        pages?: Array<{ id?: string; sections?: Array<{ variantId?: string }> }>;
+      };
+      for (const page of template.pages ?? []) {
+        for (const section of page.sections ?? []) add(page.id, section.variantId);
+      }
+    } catch { /* Invalid reference metadata is ignored; the candidate gate remains authoritative. */ }
+  }
+  for (const composition of Object.values(collectResolvedCompositions(material.files))) {
+    const page = pages.find((candidate) => candidate.filePath === composition.pageFilePath);
+    for (const section of composition.sections) add(page?.pageId, section.variantId);
+  }
+  const sharedChromeIds = new Set(['site:navbar', 'site:footer']);
+  const pack = ART_DIRECTION_PACKS[artDirectionPackId as keyof typeof ART_DIRECTION_PACKS];
+  for (const page of pages) {
+    for (const variantId of pack?.navbarFamily ?? []) add(page.pageId, variantId);
+  }
+  for (const [sectionId, variantId] of Object.entries(plan.designIntervention.activeVariants)) {
+    if (!sharedChromeIds.has(sectionId)) continue;
+    for (const page of pages) add(page.pageId, variantId);
+  }
+  return Object.fromEntries([...pinned].map(([pageId, variants]) => [pageId, [...variants].sort()]));
+}
+
 /** Candidate-only bridge. The installer remains responsible for one durable acceptance. */
 export async function materializeTemplateWithAppBuilder(material: MarketplaceTemplateMaterial, ids: ConfirmedLaunchIds, options: MaterializeOptions = {}) {
   const snapshot = material.siteBundleSnapshot;
@@ -253,6 +295,10 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
     wantsLeadCapture: capabilities.includes('lead-capture'),
   };
   const plan = buildCanonicalLaunchPlan(selections);
+  const registryContext = {
+    ...(snapshot.meta.registryContext ?? plan.registryContext),
+    pinnedImplementationIdsByPage: templatePinnedImplementationsByPage(material, plan, packId),
+  };
   plan.playground.pageRegistry = snapshot.pageRegistry;
   plan.sitePlan.pages = Object.values(snapshot.pageRegistry.pages).map(page => ({
     id: page.pageId, name: page.pageId, title: page.title, route: page.path, role: templatePageRole(page.pageRole ?? page.pageType),
@@ -286,7 +332,7 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
     businessProfile: plan.playground.creatorData.businessInfo,
     themeTokens: snapshot.themeTokens, artDirection: snapshot.meta.artDirection ?? plan.artDirection,
     designContext: compileResolvedSiteDesignContext({ industry: snapshot.industry, roles: plan.sitePlan.pages.map(page => page.role), artDirectionPackId: packId as never, designSeed: seed, businessModel: 'general' }),
-    uiFoundation: plan.uiFoundationContract, registryContext: snapshot.meta.registryContext ?? plan.registryContext,
+    uiFoundation: plan.uiFoundationContract, registryContext,
     protectedPaths: WIZARD_LANE_B_PROTECTED_PATHS,
   });
   // Images are embedded after acceptance: data URLs exceed the per-file request limit.

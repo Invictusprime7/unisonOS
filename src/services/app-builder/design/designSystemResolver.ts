@@ -59,7 +59,9 @@ export function resolveDesignSourceBundle(contract: AppBuildContract): DesignSou
 
   const eligibleByPage: Record<string, string[]> = {};
   for (const page of contract.topology.sitePlan.pages) {
-    const roleFit = pool.filter((impl) => impl.pageRoles.length === 0 || impl.pageRoles.includes(page.role));
+    const pinnedIds = new Set(registry.pinnedImplementationIdsByPage?.[page.id] ?? []);
+    const roleFit = pool.filter((impl) => pinnedIds.has(impl.id)
+      || impl.pageRoles.length === 0 || impl.pageRoles.includes(page.role));
     const richerTypes = new Set(roleFit.filter((impl) => !isGenericImplementationId(impl.id)).map((impl) => impl.sectionType));
     const rank = (impl: WizardRegistryImplementationSummary) =>
       (preferred[impl.sectionType] ?? []).includes(impl.id) ? 0 : 1;
@@ -72,7 +74,15 @@ export function resolveDesignSourceBundle(contract: AppBuildContract): DesignSou
     for (let round = 0; interleaved.length < ranked.length; round += 1) {
       for (const group of byType.values()) if (group[round]) interleaved.push(group[round]);
     }
-    eligibleByPage[page.id] = interleaved.slice(0, MAX_ELIGIBLE_PER_PAGE).map((impl) => impl.id);
+    const bounded = interleaved.slice(0, MAX_ELIGIBLE_PER_PAGE);
+    const boundedIds = new Set(bounded.map((impl) => impl.id));
+    for (const implementation of interleaved) {
+      if (pinnedIds.has(implementation.id) && !boundedIds.has(implementation.id)) {
+        bounded.push(implementation);
+        boundedIds.add(implementation.id);
+      }
+    }
+    eligibleByPage[page.id] = bounded.map((impl) => impl.id);
   }
 
   const used = new Set(Object.values(eligibleByPage).flat());

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AUTHORED_MARKETPLACE_TEMPLATES } from '@/marketplace/authoredTemplatePreviews';
 import { buildConceptDraftSource } from '@/marketplace/conceptDraftSource';
+import { buildAppBuilderGenerationContext } from '@/services/app-builder/appBuilderGenerationContext';
 const mocks = vi.hoisted(() => ({ generate: vi.fn(), compile: vi.fn() }));
 vi.mock('@/services/app-builder/UnisonAppBuilder', () => ({ unisonAppBuilder: { generate: mocks.generate } }));
 vi.mock('@/services/canonicalLaunchVfs', () => ({ buildCanonicalLaunchArtifacts: mocks.compile }));
@@ -8,7 +9,37 @@ vi.mock('@/marketplace/materializePreviewImages', () => ({ materializePreviewIma
 import { materializeTemplateWithAppBuilder } from '@/marketplace/materializeTemplateWithAppBuilder';
 
 describe('marketplace App Builder convergence', () => {
+  it('materializes the Aster template variants in its canonical design-source manifest', async () => {
+    mocks.generate.mockClear();
+    mocks.compile.mockClear();
+    const template = AUTHORED_MARKETPLACE_TEMPLATES.find((item) => item.id === 'aster-skin-studio');
+    if (!template) throw new Error('Missing Aster template');
+    const material = buildConceptDraftSource(template);
+    const files = { ...material.files };
+    for (const page of Object.values(material.siteBundleSnapshot.pageRegistry.pages)) {
+      if (page.filePath) files[page.filePath] = 'export default function Page(){ return <main /> }';
+    }
+    mocks.generate.mockResolvedValue({ candidate: { status: 'ready-for-commit' }, stopReason: 'complete', candidateFiles: files });
+    mocks.compile.mockReturnValue({ files });
+
+    await materializeTemplateWithAppBuilder(material, { projectId: 'buyer-project', businessId: 'buyer-business', siteId: 'buyer-site', draftId: 'buyer-draft', buildId: 'build', bundleId: 'bundle' });
+
+    const request = mocks.generate.mock.calls.at(-1)?.[0];
+    expect(request.contract.design.registryContext.sections.find((section: { type: string }) => section.type === 'services')?.allowedVariantIds)
+      .toContain('services:product-cards');
+    expect(request.contract.design.sourceSelection.implementationIds).toContain('services:product-cards');
+    const generation = buildAppBuilderGenerationContext(request.contract);
+    expect(generation.materialization.manifest.implementations).toHaveProperty('services:product-cards');
+    expect(generation.materialization.manifest.implementations).toHaveProperty('faq:accordion');
+    expect(generation.materialization.manifest.implementations).toHaveProperty('navbar:minimal-dark');
+    expect(generation.runtimeContextForPage('treatments')).toContain('services:product-cards');
+    expect(generation.runtimeContextForPage('treatments')).toContain('faq:accordion');
+    expect(generation.runtimeContextForPage('treatments')).toContain('navbar:minimal-dark');
+  });
+
   it('passes preview material and sealed topology to App Builder before compilation', async () => {
+    mocks.generate.mockClear();
+    mocks.compile.mockClear();
     const template = AUTHORED_MARKETPLACE_TEMPLATES.find(item => item.id === 'pollen-objects');
     if (!template) throw new Error('Missing Pollen template');
     const material = buildConceptDraftSource(template);
