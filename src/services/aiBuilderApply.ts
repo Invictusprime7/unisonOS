@@ -1,5 +1,6 @@
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import type { AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
+import type { BuilderRequestEnvelope } from '@/types/builderRequestEnvelope';
 
 export interface AIBuilderApplyMeta {
   prompt?: string;
@@ -14,6 +15,8 @@ export interface AIBuilderApplyMeta {
   routeOps?: TopologyChange[];
   /** Exact Composer candidate, retained through the UI apply boundary. */
   candidate?: AICandidateChangeSet;
+  /** Validated request interpretation; absent when the interpreter degraded. */
+  interpretation?: BuilderRequestEnvelope;
   requiresApproval?: boolean;
   warnings?: Array<{ severity?: string; message?: string }>;
 }

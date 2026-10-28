@@ -8441,6 +8441,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                           pageImports: resolveLocalImports(beforeFiles, activePagePath),
                           expectedRevisionId: currentRevisionIdRef.current || null,
                           structural: Boolean((applyMeta?.candidate?.routeOps ?? applyMeta?.routeOps)?.length),
+                          interpretation: applyMeta?.interpretation,
                         }) : undefined,
                       }
                     : null;
@@ -8668,6 +8669,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                         pageImports: resolveLocalImports(beforeFiles, activePagePath),
                         expectedRevisionId: currentRevisionIdRef.current || null,
                         structural: Boolean((applyMeta?.candidate?.routeOps ?? applyMeta?.routeOps)?.length),
+                        interpretation: applyMeta?.interpretation,
                       }) : undefined,
                     }
                   : null;

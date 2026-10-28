@@ -624,7 +624,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   const [isApplyingPermissionAction, setIsApplyingPermissionAction] = useState(false);
   // Files the auto-apply guard held back. Without this the AI "resolved" a
   // rewrite that never materialized anywhere — now the user can still apply it.
-  const [heldFiles, setHeldFiles] = useState<{ files: Record<string, string>; deletions?: string[]; routeOps?: TopologyChange[]; candidate?: AICandidateChangeSet; guestDemoOperationId?: string; reason: string } | null>(null);
+  const [heldFiles, setHeldFiles] = useState<{ files: Record<string, string>; deletions?: string[]; routeOps?: TopologyChange[]; candidate?: AICandidateChangeSet; guestDemoOperationId?: string; interpretation?: AIBuilderApplyMeta['interpretation']; reason: string } | null>(null);
   const [isApplyingHeld, setIsApplyingHeld] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -1184,6 +1184,10 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       hasExistingTemplate: Object.keys(vfsFiles ?? {}).length > 0,
       recentTurns: messages.filter(m => !m.isStreaming && (m.role === 'user' || m.role === 'assistant') && m.content.trim()).map(m => ({ role: m.role, content: m.content })),
     });
+    const structuredEditInterpretation = !capabilityInterpretation.degraded
+      && capabilityInterpretation.envelope.source !== 'heuristic'
+      ? capabilityInterpretation.envelope
+      : undefined;
 
     const capabilityPlan = planBusinessCapabilities({
       requestId: generateId(),
@@ -2381,12 +2385,12 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
         if (scopeBlockReason) {
           console.warn('[AIBuilderPanel] SCOPE BLOCK:', scopeBlockReason);
-          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: `Edit held back: ${scopeBlockReason}` });
+          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, interpretation: structuredEditInterpretation, reason: `Edit held back: ${scopeBlockReason}` });
           toast.warning(`⚠️ Edit held for review: ${scopeBlockReason}`);
           transactionVerdict = transactionVerdictLine('held-for-review', scopeBlockReason);
         } else if (!canAutoApply(permissionCategory)) {
           const permissionReason = `${permissionCategory[0].toUpperCase()}${permissionCategory.slice(1)} edits are set to review before apply.`;
-          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: permissionReason });
+          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, interpretation: structuredEditInterpretation, reason: permissionReason });
           toast.info('AI patch held for review', { description: permissionReason });
           transactionVerdict = transactionVerdictLine('held-for-review', permissionReason);
         } else if (shouldBlock) {
@@ -2394,7 +2398,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           console.warn('[AIBuilderPanel] Patch requires approval — NOT auto-applying');
           const heldReason = responseMeta?.warnings?.map((warning) => warning.message).filter(Boolean).join('; ')
             || 'The reviewer flagged this patch. Review the warnings, then apply.';
-          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, reason: heldReason });
+          setHeldFiles({ files: normalizedFiles, deletions: multiFileDeletions, routeOps: canonicalRouteOps, candidate: canonicalCandidate, guestDemoOperationId: responseMeta?.guestDemoOperationId, interpretation: structuredEditInterpretation, reason: heldReason });
           toast.warning('⚠️ AI patch flagged for review — apply it from the review card when ready');
           transactionVerdict = transactionVerdictLine('held-for-review', heldReason);
         } else {
@@ -2421,6 +2425,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 deletions: task.deletions,
                 routeOps: taskIndex === sequentialTasks.length - 1 ? canonicalRouteOps : [],
                 candidate: canonicalCandidate,
+                interpretation: structuredEditInterpretation,
                 requiresApproval: responseMeta?.requiresApproval,
                 warnings: responseMeta?.warnings,
               });
@@ -2547,6 +2552,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           summary: responseMeta?.reviewSummary,
           actionType: responseMeta?.actionType,
           guestDemoOperationId: responseMeta?.guestDemoOperationId,
+          interpretation: structuredEditInterpretation,
         });
         if (dataOutcome.success) {
           const verification = await awaitPreviewVerification();
@@ -3043,14 +3049,14 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                     const candidate = heldFiles.candidate;
                     const guestDemoOperationId = heldFiles.guestDemoOperationId;
                     setIsApplyingHeld(true);
-                    const outcome = await applyAIBuilderFiles(onApplyToVFS, pending, { origin: 'held-review', deletions, routeOps, candidate, guestDemoOperationId });
+                    const outcome = await applyAIBuilderFiles(onApplyToVFS, pending, { origin: 'held-review', deletions, routeOps, candidate, guestDemoOperationId, interpretation: heldFiles.interpretation });
                     setIsApplyingHeld(false);
                     if (outcome.success) {
                       setHeldFiles(null);
                       toast.success('Held changes applied to your project');
                     } else {
                       toast.error('Apply failed', { description: outcome.errors?.[0] });
-                      setHeldFiles({ files: pending, deletions, routeOps, candidate, guestDemoOperationId, reason: outcome.errors?.[0] ?? 'Apply failed.' });
+                      setHeldFiles({ files: pending, deletions, routeOps, candidate, guestDemoOperationId, interpretation: heldFiles.interpretation, reason: outcome.errors?.[0] ?? 'Apply failed.' });
                     }
                   }}
                 >

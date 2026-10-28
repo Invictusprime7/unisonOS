@@ -100,7 +100,8 @@ export async function runBuilderAiMutation(
     });
     if (violations.length > 0) {
       const v = violations[0];
-      const reason = v.code === 'stale-revision' ? 'The project changed since this edit started. Try the request again.'
+      const reason = v.code === 'ambiguous-intent' ? `I need clarification before applying this edit: ${v.ambiguities.join('; ')}`
+        : v.code === 'stale-revision' ? 'The project changed since this edit started. Try the request again.'
         : v.code === 'cross-page-consent' ? `This edit would also change ${v.paths.join(', ')}. Confirm you want other pages changed.`
           : v.code === 'backend-consent' ? 'This edit would change business data or backend setup. Confirm before it is saved.'
             : v.code === 'binding-removed' ? `This edit would remove a working button (${v.bindings.join(', ')}).`

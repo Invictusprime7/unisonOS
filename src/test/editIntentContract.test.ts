@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkEditAgainstIntent, classifyEditOperation, normalizeEditIntent } from '@/services/editor/editIntentContract';
+import { checkEditAgainstIntent, classifyEditOperation, classifyEditOperations, normalizeEditIntent } from '@/services/editor/editIntentContract';
 
 const home = '/src/pages/Home.tsx';
 const prev = { [home]: '<button data-ut-intent="booking.create">Book</button>', '/src/pages/About.tsx': '<p>About</p>' };
@@ -11,6 +11,8 @@ describe('edit intent contract', () => {
     expect(classifyEditOperation('add a testimonials strip')).toBe('insert');
     expect(classifyEditOperation('redesign the layout of this section')).toBe('restructure');
     expect(classifyEditOperation('reword the title')).toBe('text');
+    expect(classifyEditOperations('redesign the hero and replace its photo')).toEqual(['restructure', 'replace']);
+    expect(classifyEditOperations("don't replace the photo, just update the headline")).toEqual(['text']);
   });
   it('scopes to the selection, or to the site when asked', () => {
     const c = normalizeEditIntent({ prompt: 'add a quote', scope, pagePath: home, expectedRevisionId: 'r1' });
@@ -53,6 +55,25 @@ describe('editIntentForRequest', () => {
     expect(__mk({ ...base, prompt: 'also update the about page' }).consent.crossPage).toBe(true);
     expect(__mk({ ...base, prompt: 'x', structural: true }).consent.crossPage).toBe(true);
     expect(__mk({ ...base, prompt: 'connect the form to the booking system' }).consent.backend).toBe(true);
+  });
+  it('does not interpret negated page or backend mentions as consent', () => {
+    expect(__mk({ ...base, prompt: "don't update the about page" }).consent.crossPage).toBe(false);
+    expect(__mk({ ...base, prompt: 'redesign every page' }).consent.crossPage).toBe(true);
+    expect(__mk({ ...base, prompt: "don't change the booking backend" }).consent.backend).toBe(false);
+    expect(__mk({ ...base, prompt: 'redesign the page but connect its form to booking' }).consent.backend).toBe(true);
+  });
+  it('prefers validated structured scope and operations, and blocks unresolved ambiguity', () => {
+    const interpretation = {
+      scope: { level: 'site', targets: [], relation: 'site_wide' },
+      editorOperations: ['style.update', 'asset.replace'],
+      requestKinds: ['edit'],
+      ambiguities: [],
+    } as never;
+    const contract = __mk({ ...base, prompt: 'change the hero', interpretation });
+    expect(contract).toMatchObject({ editScope: 'site', operations: ['style', 'replace'], consent: { crossPage: true } });
+    const ambiguous = normalizeEditIntent({ prompt: 'change it', interpretation: { ...interpretation, ambiguities: ['Which page should change?'] } as never });
+    expect(checkEditAgainstIntent(ambiguous, { baseRevisionId: 'r1', previousFiles: prev, files: { [home]: '<main/>' } })[0])
+      .toEqual({ code: 'ambiguous-intent', ambiguities: ['Which page should change?'] });
   });
 });
 import { editIntentForRequest as __mk } from '@/services/editor/editIntentContract';

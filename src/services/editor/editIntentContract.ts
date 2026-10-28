@@ -1,4 +1,5 @@
 import type { EditScope } from '@/services/editScopeResolver';
+import type { BuilderEditorOperation, BuilderRequestEnvelope, BuilderScopeLevel } from '@/types/builderRequestEnvelope';
 
 /**
  * P3 — intent-based AI editing.
@@ -14,10 +15,12 @@ export type EditIntentOperation = 'text' | 'style' | 'replace' | 'insert' | 'res
 export interface EditIntentContract {
   editScope: EditIntentScope;
   operation: EditIntentOperation;
+  operations: EditIntentOperation[];
   /** Existing files the change may modify. New files under `/src/components/` are also allowed. */
   allowedPaths: string[];
   /** `data-ut-intent` bindings that must survive the change. */
   requiredBindings: string[];
+  ambiguities: string[];
   expectedRevisionId: string | null;
   dependencyPlan: { newFiles: 'scoped-components'; packages: 'declared-only' };
   consent: { crossPage: boolean; backend: boolean };
@@ -31,11 +34,52 @@ const OPERATION_PATTERNS: Array<[EditIntentOperation, RegExp]> = [
   ['text', /\b(text|copy|wording|headline|title|rename|reword|say|says|label)\b/i],
 ];
 const SITE_PATTERN = /\b(every page|all pages|whole site|entire site|site-?wide|across the site|everywhere)\b/i;
-const BACKEND_PATTERN = /\b(database|table|backend|payment|stripe|checkout|booking system|email|login|sign[- ]?in|auth|cms|records?)\b/i;
+const BACKEND_PATTERN = /\b(database|table|backend|payment|stripe|checkout|booking system|connect (?:the|its) form to booking|email|login|sign[- ]?in|auth|cms|records?)\b/i;
+const NEGATED_INTENT_PATTERN = /\b(?:don't|dont|do not|never|avoid|without|leave|keep|preserve|retain)\b/i;
+const CLAUSE_BREAK_PATTERN = /[,;.!?\n]|\b(?:but|however|instead|except|then)\b/gi;
+
+function promptClauses(prompt: string): string[] {
+  return prompt.split(CLAUSE_BREAK_PATTERN).map((clause) => clause.trim()).filter(Boolean);
+}
+
+function hasPositiveMention(prompt: string, pattern: RegExp): boolean {
+  return promptClauses(prompt).some((clause) => !NEGATED_INTENT_PATTERN.test(clause) && pattern.test(clause));
+}
+
+export function classifyEditOperations(prompt: string): EditIntentOperation[] {
+  const clauses = promptClauses(prompt).filter((clause) => !NEGATED_INTENT_PATTERN.test(clause));
+  return OPERATION_PATTERNS
+    .filter(([, pattern]) => clauses.some((clause) => pattern.test(clause)))
+    .map(([operation]) => operation);
+}
 
 export function classifyEditOperation(prompt: string): EditIntentOperation {
-  for (const [operation, pattern] of OPERATION_PATTERNS) if (pattern.test(prompt)) return operation;
-  return 'replace';
+  return classifyEditOperations(prompt)[0] ?? 'replace';
+}
+
+const STRUCTURED_OPERATION_MAP: Partial<Record<BuilderEditorOperation, EditIntentOperation>> = {
+  'copy.rewrite': 'text', 'copy.move': 'restructure', 'copy.reorder': 'restructure',
+  'section.create': 'insert', 'section.remove': 'restructure', 'section.move': 'restructure',
+  'section.reorder': 'restructure', 'page.create': 'insert', 'page.rename': 'text',
+  'page.remove': 'restructure', 'route.bind': 'restructure', 'navigation.update': 'restructure',
+  'style.update': 'style', 'theme.update': 'style', 'asset.replace': 'replace',
+  'resource.update': 'replace', 'binding.update': 'replace', 'intent.bind': 'insert',
+  'behavior.update': 'restructure',
+};
+
+function editScopeFromStructuredLevel(level: BuilderScopeLevel): EditIntentScope {
+  if (level === 'element') return 'node';
+  if (level === 'block' || level === 'section') return 'section';
+  if (level === 'page') return 'page';
+  return 'site';
+}
+
+function operationsFromInterpretation(interpretation?: BuilderRequestEnvelope): EditIntentOperation[] {
+  if (!interpretation) return [];
+  return [...new Set(interpretation.editorOperations.flatMap((operation) => {
+    const mapped = STRUCTURED_OPERATION_MAP[operation];
+    return mapped ? [mapped] : [];
+  }))];
 }
 
 export function normalizeEditIntent(input: {
@@ -45,9 +89,15 @@ export function normalizeEditIntent(input: {
   sharedPaths?: readonly string[];
   expectedRevisionId?: string | null;
   consent?: Partial<EditIntentContract['consent']>;
+  interpretation?: BuilderRequestEnvelope;
 }): EditIntentContract {
-  const site = SITE_PATTERN.test(input.prompt) || input.scope?.scopeType === 'site';
+  const interpretedOperations = operationsFromInterpretation(input.interpretation);
+  const operations = interpretedOperations.length ? interpretedOperations : classifyEditOperations(input.prompt);
+  const structuredScope = input.interpretation ? editScopeFromStructuredLevel(input.interpretation.scope.level) : null;
+  const site = structuredScope === 'site' || hasPositiveMention(input.prompt, SITE_PATTERN) || input.scope?.scopeType === 'site';
   const editScope: EditIntentScope = site ? 'site'
+    : structuredScope
+      ? structuredScope
     : input.scope?.scopeType === 'section' || input.scope?.scopeType === 'block' ? 'section'
       : input.scope?.scopeType === 'element' ? 'node'
         : 'page';
@@ -55,21 +105,31 @@ export function normalizeEditIntent(input: {
   const allowedPaths = site ? [] : [...new Set([owner, input.pagePath, ...(input.sharedPaths ?? [])].filter((p): p is string => !!p))];
   return {
     editScope,
-    operation: classifyEditOperation(input.prompt),
+    operation: operations[0] ?? 'replace',
+    operations: operations.length ? operations : ['replace'],
     allowedPaths,
     requiredBindings: [...(input.scope?.lockedBindings ?? [])].sort(),
+    ambiguities: [...(input.interpretation?.ambiguities ?? [])],
     expectedRevisionId: input.expectedRevisionId ?? null,
     dependencyPlan: { newFiles: 'scoped-components', packages: 'declared-only' },
-    consent: { crossPage: input.consent?.crossPage === true, backend: input.consent?.backend === true },
+    consent: {
+      crossPage: input.consent?.crossPage === true || site
+        || input.interpretation?.scope.relation === 'multi_target'
+        || input.interpretation?.scope.relation === 'site_wide',
+      backend: input.consent?.backend === true
+        || input.interpretation?.requestKinds.some((kind) => kind === 'backend_configuration' || kind === 'data_binding') === true
+        || input.interpretation?.editorOperations.some((operation) => operation === 'backend.configure' || operation === 'intent.bind' || operation === 'binding.update') === true,
+    },
   };
 }
 
 /** True when the prompt itself asks for backend/business-data work. */
 export function promptTouchesBackend(prompt: string): boolean {
-  return BACKEND_PATTERN.test(prompt);
+  return hasPositiveMention(prompt, BACKEND_PATTERN);
 }
 
 export type EditIntentViolation =
+  | { code: 'ambiguous-intent'; ambiguities: string[] }
   | { code: 'stale-revision'; expected: string; actual: string | null }
   | { code: 'cross-page-consent'; paths: string[] }
   | { code: 'backend-consent'; paths: string[] }
@@ -84,6 +144,7 @@ export function checkEditAgainstIntent(contract: EditIntentContract, proposal: {
   installedPackages?: readonly string[];
 }): EditIntentViolation[] {
   const violations: EditIntentViolation[] = [];
+  if (contract.ambiguities.length) violations.push({ code: 'ambiguous-intent', ambiguities: contract.ambiguities });
   if (contract.expectedRevisionId && proposal.baseRevisionId !== contract.expectedRevisionId) {
     violations.push({ code: 'stale-revision', expected: contract.expectedRevisionId, actual: proposal.baseRevisionId });
   }
@@ -130,14 +191,16 @@ export function editIntentForRequest(input: {
   selectionOwnerPath?: string | null;
   expectedRevisionId: string | null;
   structural?: boolean;
+  interpretation?: BuilderRequestEnvelope;
 }): EditIntentContract {
   const contract = normalizeEditIntent({
     prompt: input.prompt,
     pagePath: input.activePagePath,
     sharedPaths: [...input.pageImports, ...(input.selectionOwnerPath ? [input.selectionOwnerPath] : []), ...PLATFORM_DERIVED],
     expectedRevisionId: input.expectedRevisionId,
+    interpretation: input.interpretation,
     consent: {
-      crossPage: input.structural === true || OTHER_PAGE_PATTERN.test(input.prompt),
+      crossPage: input.structural === true || hasPositiveMention(input.prompt, OTHER_PAGE_PATTERN),
       backend: promptTouchesBackend(input.prompt),
     },
   });

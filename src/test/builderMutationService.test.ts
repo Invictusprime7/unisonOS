@@ -106,6 +106,23 @@ describe('builder AI mutation transaction', () => {
     expect(outcome.reason).toBe(outcome.errors[0]);
   });
 
+  it('asks for clarification instead of committing an ambiguous interpreted request', async () => {
+    const outcome = await runBuilderAiMutation({
+      ...ctx,
+      editIntent: {
+        editScope: 'section', operation: 'replace', operations: ['replace'],
+        allowedPaths: ['/src/pages/Home.tsx'], requiredBindings: [],
+        ambiguities: ['Which page should change?'], expectedRevisionId: 'rev-1',
+        dependencyPlan: { newFiles: 'scoped-components', packages: 'declared-only' },
+        consent: { crossPage: false, backend: false },
+      },
+    }, { mirror: () => ({ success: true }) });
+
+    expect(outcome.state).toBe('rejected');
+    expect(outcome.reason).toContain('Which page should change?');
+    expect(persistAiCommit).not.toHaveBeenCalled();
+  });
+
   it('mirrors the complete committed map and reports deleted paths', async () => {
     const deletionCtx = {
       ...ctx,
