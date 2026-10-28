@@ -3,6 +3,16 @@ import { installationFailureMessage } from '@/marketplace/installationFailure';
 import { classifyError } from '@/services/builder/aiRepairLoop';
 
 describe('marketplace installation failure classification', () => {
+  it('does not claim the AI failed when Gemini drafted the page and only a fix round timed out', () => {
+    const message = installationFailureMessage({
+      stopReason: 'provider-error',
+      candidate: { diagnostics: [] },
+      outcomes: [{ status: 'kept-baseline', reason: 'provider', draftProduced: true, page: { title: 'Treatments' }, errors: ['AI request failed (provider): gemini-3.8-flash: timeout. No managed AI gateway fallback is configured.'] }],
+    });
+    expect(message).not.toContain('failed before');
+    expect(message).toContain('Gemini did write the pages (Treatments)');
+    expect(message).toContain('did not finish in time');
+  });
   it('reports failed authoring rather than validation of unfinished pages', () => {
     const message = installationFailureMessage({
       stopReason: 'provider-error',

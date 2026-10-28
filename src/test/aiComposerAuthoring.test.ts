@@ -47,6 +47,26 @@ describe('AI composer repair loop', () => {
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(result.outcomes[0].status).toBe('kept-baseline');
   });
+  it('resumes a timed-out fix round from the paid draft instead of authoring the page again', async () => {
+    const pages = [{ pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' }];
+    const timeoutResult = { data: null, error: { message: 'Edge function returned 500: gemini-3.8-flash: timeout.', context: { status: 500 } } };
+    const invoke = vi.fn()
+      .mockResolvedValueOnce(bad('/src/pages/Home.tsx'))
+      .mockResolvedValueOnce(timeoutResult)
+      .mockResolvedValueOnce(good('/src/pages/Home.tsx', 'Fixed'));
+    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null, businessName: 'Resume test', files: base, concurrency: 1, budgetMs: 300_000, now: () => 100_000, invoke: invoke as never, commitPage: async files => ({ files }) });
+    expect(invoke).toHaveBeenCalledTimes(3);
+    const tasks = invoke.mock.calls.map(([input]) => JSON.parse(input.messages[0].content).task);
+    expect(tasks).toEqual(['site_page_author', 'site_page_repair', 'site_page_repair']);
+    expect(result.outcomes[0].status).toBe('authored');
+  }, 20000);
+  it('sends fix rounds the candidate once, not again inside the previous response', async () => {
+    const invoke = vi.fn().mockResolvedValueOnce(bad('/src/pages/Home.tsx')).mockResolvedValueOnce(good('/src/pages/Home.tsx', 'Fixed'));
+    await runComposerRepairLoop({ request, baseFiles: base, invoke: invoke as never });
+    const second = JSON.parse(invoke.mock.calls[1][0].messages[0].content);
+    expect(second.files['/src/pages/Home.tsx']).toContain('./Nope');
+    expect(second.previousResponse).not.toContain('./Nope');
+  }, 20000);
   it('shares one deadline across repair attempts and forwards the shorter server budget', async () => {
     let clock = 100_000;
     const spy = vi.spyOn(Date, 'now').mockImplementation(() => clock);

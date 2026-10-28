@@ -45,6 +45,31 @@ export interface ComposerLoopResult {
   response?: AIComposerResponse;
   prepared?: PreparedCandidate;
   errors: string[];
+  /**
+   * Set when the AI already returned a draft and a later fix round was cut
+   * off (timeout/transport). The caller can resume that fix round instead of
+   * paying to author the page again from scratch.
+   */
+  resume?: ComposerLoopResume;
+}
+
+export interface ComposerLoopResume {
+  request: AIComposerRequest;
+  files: Record<string, string>;
+  deletes: string[];
+  routeOps: TopologyChange[];
+  attemptsUsed: number;
+}
+
+/** A previous candidate for the repair prompt: FILES already carries its source, so send paths only. */
+export function compactPreviousResponse(response: AIComposerResponse, keepPaths?: ReadonlySet<string>, routeOps?: readonly TopologyChange[]): string {
+  return JSON.stringify({
+    ...response,
+    fileOps: response.fileOps
+      .filter((op) => !keepPaths || keepPaths.size === 0 || keepPaths.has(op.path))
+      .map((op) => ({ type: op.type, path: op.path, note: 'current content is in FILES' })),
+    ...(routeOps ? { routeOps } : {}),
+  }).slice(0, 60000);
 }
 
 export interface ComposerLoopInput {
@@ -69,6 +94,8 @@ export interface ComposerLoopInput {
   resolveDependencies?: boolean;
   /** Per-page check run inside every attempt so a bad page is repaired in its own loop. */
   pageCheck?: PageCheck;
+  /** Continue an interrupted fix round with its accumulated draft. */
+  resume?: ComposerLoopResume;
 }
 
 /** Provider replies that mean the key's balance is empty; they never recover on retry. */
@@ -105,23 +132,37 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
   const invoke = input.invoke ?? runBuilderTurn;
   const maxAttempts = Math.max(1, input.maxAttempts ?? 3);
   const deadline = Date.now() + (input.timeoutMs ?? 145_000);
-  let request = input.request;
-  let lastErrors: string[] = [];
+  const resumed = input.resume;
+  let request = resumed?.request ?? input.request;
+  let lastErrors: string[] = [...(resumed?.request.diagnostics ?? [])];
   let lastResponse: AIComposerResponse | undefined;
   let lastPrepared: PreparedCandidate | undefined;
-  const accumulatedFiles: Record<string, string> = {};
-  const accumulatedDeletes = new Set<string>();
+  const accumulatedFiles: Record<string, string> = { ...(resumed?.files ?? {}) };
+  const accumulatedDeletes = new Set<string>(resumed?.deletes ?? []);
   const accumulatedRouteOps = new Map<string, TopologyChange>();
   for (const op of input.initialRouteOps ?? []) accumulatedRouteOps.set(`${op.type}:${op.pageId ?? ''}`, { ...op });
+  for (const op of resumed?.routeOps ?? []) accumulatedRouteOps.set(`${op.type}:${op.pageId ?? ''}`, { ...op });
+  const firstAttempt = Math.min(maxAttempts, (resumed?.attemptsUsed ?? 0) + 1);
+  // Only a fix round has paid-for work worth resuming: the AI already drafted it.
+  const resumeState = (attemptsUsed: number): ComposerLoopResume | undefined =>
+    resumed || request !== input.request
+      ? {
+        request,
+        files: { ...accumulatedFiles },
+        deletes: [...accumulatedDeletes],
+        routeOps: [...accumulatedRouteOps.values()],
+        attemptsUsed,
+      }
+      : undefined;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = firstAttempt; attempt <= maxAttempts; attempt++) {
     if (input.signal?.aborted) return { ok: false, reason: 'aborted', attempts: attempt - 1, errors: ['Cancelled.'] };
     const remainingMs = deadline - Date.now();
-    if (remainingMs <= 5_000) return { ok: false, reason: 'aborted', attempts: attempt - 1, errors: ['AI page authoring exhausted its shared time budget.'], response: lastResponse, prepared: lastPrepared };
+    if (remainingMs <= 5_000) return { ok: false, reason: 'aborted', attempts: attempt - 1, errors: ['AI page authoring exhausted its shared time budget.'], response: lastResponse, prepared: lastPrepared, resume: resumeState(attempt - 1) };
     // A repair turn resends the whole page plus its errors (~150k chars) and
     // needs about a minute; a shorter window can only time out on the server.
     if (attempt > 1 && remainingMs < MIN_REPAIR_WINDOW_MS) {
-      return { ok: false, reason: 'gates_exhausted', attempts: attempt - 1, errors: lastErrors.length ? lastErrors : ['Not enough time left to repair this page.'], response: lastResponse, prepared: lastPrepared };
+      return { ok: false, reason: 'gates_exhausted', attempts: attempt - 1, errors: lastErrors.length ? lastErrors : ['Not enough time left to repair this page.'], response: lastResponse, prepared: lastPrepared, resume: resumeState(attempt - 1) };
     }
     narrate('understanding', attempt === 1 ? 'Thinking through the change' : `Adjusting (round ${attempt} of ${maxAttempts})`, 'running');
     const { data, error } = await invoke({
@@ -146,7 +187,11 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
           || (errName === 'TimeoutError' || !input.signal?.aborted
             ? 'The AI took too long to answer and the edit was stopped. Try a smaller, more specific change.'
             : 'The edit was cancelled.');
-        return { ok: false, reason: 'aborted', attempts: attempt, errors: [why], response: lastResponse, prepared: lastPrepared };
+        return {
+          ok: false, reason: 'aborted', attempts: attempt, errors: [why], response: lastResponse, prepared: lastPrepared,
+          // A user cancel is final; a timeout on a fix round keeps its draft resumable.
+          resume: input.signal?.aborted ? undefined : resumeState(attempt - 1),
+        };
       }
       const reason = classifyError(error);
       // Only transient failures would be retryable; the client already retried
@@ -158,7 +203,10 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
         ? `AI request failed (${reason}): ${detail}`
         : `AI request failed (${reason}).`;
       console.warn('[aiRepairLoop] provider request failed', { reason, status: (error as { context?: { status?: number } } | null)?.context?.status, detail });
-      return { ok: false, reason, attempts: attempt, errors: [message], response: lastResponse, prepared: lastPrepared };
+      return {
+        ok: false, reason, attempts: attempt, errors: [message], response: lastResponse, prepared: lastPrepared,
+        resume: reason === 'provider' ? resumeState(attempt - 1) : undefined,
+      };
     }
     const response = decodeComposerResponse(data);
     if (!response) {
@@ -174,7 +222,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
         ...request,
         task: request.task === 'builder_source_edit' ? 'builder_source_edit' : 'site_page_repair',
         diagnostics: scope.slice(0, 30),
-        previousResponse: JSON.stringify(response).slice(0, 60000),
+        previousResponse: compactPreviousResponse(response),
       };
       continue;
     }
@@ -235,11 +283,9 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       // may return only the failing file without discarding valid files from
       // earlier attempts.
       files: repairFiles,
-      previousResponse: JSON.stringify({
-        ...response,
-        fileOps: response.fileOps.filter((op) => failingPaths.has(op.path) || failingPaths.size === 0),
-        routeOps: [...accumulatedRouteOps.values()],
-      }).slice(0, 60000),
+      // FILES above already carries the full candidate; resending its source
+      // here doubled the prompt and made fix rounds time out after the paid draft.
+      previousResponse: compactPreviousResponse(response, failingPaths, [...accumulatedRouteOps.values()]),
     };
   }
   return { ok: false, reason: 'gates_exhausted', attempts: maxAttempts, response: lastResponse, prepared: lastPrepared, errors: lastErrors };
