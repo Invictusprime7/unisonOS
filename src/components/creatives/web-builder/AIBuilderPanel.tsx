@@ -1,4 +1,5 @@
 import { resolvePreviewSource } from '@/services/editor/previewSourceResolver';
+import { readAppBuilderAISettings, saveAppBuilderAISettings } from '@/services/app-builder/appBuilderAISettings';
 import { clarifyBuilderRequest } from '@/services/builder/conversationalClarifier';
 import { isThemeOnlyRequest } from '@/services/theme/themeEdit';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
@@ -632,7 +633,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
   const featuresRef = useRef(features);
   featuresRef.current = features;
   useEffect(() => { try { localStorage.setItem(BUILDER_FEATURE_KEY, JSON.stringify(features)); } catch { /* optional cache */ } }, [features]);
-  const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig | undefined>(undefined);
+  const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig | undefined>(readAppBuilderAISettings);
   const [pendingCapabilityProposal, setPendingCapabilityProposal] = useState<{
     plan: CapabilityPlan;
     resolution: CapabilityIntentBindingResolution;
@@ -3087,7 +3088,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           <div className="builder-actions">
             {features.tools && <Button variant="link" onClick={() => window.dispatchEvent(new Event('unison:open-command-tools'))}>Tools</Button>}
             {features.catalog && <CatalogPanel files={vfsFiles ?? {}} businessId={businessId} onApply={onApplyToVFS} />}
-            <details><summary className="text-muted-foreground cursor-pointer">Model</summary><AIGatewayOptions config={gatewayConfig} onChange={setGatewayConfig} /></details>
+            <details><summary className="text-muted-foreground cursor-pointer">Model</summary><AIGatewayOptions config={gatewayConfig} onChange={config => { saveAppBuilderAISettings(config); setGatewayConfig(config); }} /></details>
           </div>
         </TabsContent>
 

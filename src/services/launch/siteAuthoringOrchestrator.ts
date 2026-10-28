@@ -88,6 +88,7 @@ export interface SiteAuthoringInput {
   concurrency?: number;
   signal?: AbortSignal;
   invoke?: ComposerInvoke;
+  gatewayOptions?: Record<string, unknown>;
   now?: () => number;
   /** Site-wide composition plan (hero patterns, geometry allocation, section order). */
   compositionPlan?: SiteCompositionPlan;
@@ -312,6 +313,7 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       signal: input.signal,
       timeoutMs: Math.max(1, pageDeadline - now()),
       invoke: input.invoke,
+      gatewayOptions: input.gatewayOptions,
       affinity: {
         language: establishedLanguage,
         forbiddenImplementations: input.designContext?.hardLegality.forbiddenImplementations,

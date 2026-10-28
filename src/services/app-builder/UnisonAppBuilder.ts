@@ -33,6 +33,7 @@ import { orchestrateAppBuild } from './appBuilderOrchestrator';
 import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
 import { runBuilderTurn } from '@/services/builderBrainClient';
+import { resolveAppBuilderAIOptions } from './appBuilderAISettings';
 import { listContentTypes } from '@/services/cmsRecordService';
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
 
@@ -70,7 +71,7 @@ export function createUnisonAppBuilder(
   const runComposer = dependencies.runComposer ?? runComposerRepairLoop;
   const service: UnisonAppBuilder = {
     async generate(input) {
-      return orchestrateAppBuild(input, {
+      return orchestrateAppBuild({ ...input, gatewayOptions: resolveAppBuilderAIOptions(input.gatewayOptions) }, {
         authorSite,
         runComposer,
         loadContentTypes: dependencies.loadContentTypes ?? ((scope) => listContentTypes(scope)),
@@ -148,6 +149,7 @@ export function createUnisonAppBuilder(
         runtimeContext: [renderUnisonBuilderDirective(connector), input.runtimeContext].filter(Boolean).join('\n'),
         signal: input.signal,
         budgetMs: input.budgetMs,
+        gatewayOptions: resolveAppBuilderAIOptions(input.gatewayOptions),
         concurrency: input.concurrency,
         onProgress: input.onProgress,
         invoke: dependencies.invokePage ?? ((request, options) => runBuilderTurn(request, { ...options, functionName: 'generate-page' })),
@@ -241,7 +243,7 @@ export function createUnisonAppBuilder(
         maxAttempts: 3,
         signal: input.signal,
         timeoutMs: input.timeoutMs,
-        gatewayOptions: input.gatewayOptions,
+        gatewayOptions: resolveAppBuilderAIOptions(input.gatewayOptions),
         preflight: input.preflight,
         initialRouteOps: input.initialRouteOps,
         candidateOrigin: input.diagnostics?.length ? 'repair' : 'builder',

@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Active: Marketplace install failure follow-up
+- [x] Align marketplace installation with App Builder owner AI preferences through the shared facade, including page authoring and closure repair; 23 client regressions pass and Gemini provider/backup tests pass. No server credential or provider-policy changes; live installation still awaits canonical deployment and authoritative sign-in below.
 - [x] Enforce the owner's Gemini key for App Builder and marketplace authoring, with no OpenAI/Anthropic attempts or stale-model bypass; preserve managed Gemini backup. All 120 edge tests pass, including direct timeout → managed Gemini and owner-key-alias routing.
 - [x] Trace prior routing: it permitted OpenAI after Gemini; the owner's follow-up now replaces that App Builder policy with direct Gemini and managed Gemini only.
 - [x] Separate terminal authoring failures from unfinished-page validation errors and deduplicate install diagnostics; targeted materialization/install/error tests pass.

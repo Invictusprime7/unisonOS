@@ -2,6 +2,8 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Settings2, Zap, Brain, Sparkles, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_GEMINI_MODEL_ID, DEFAULT_GEMINI_MODEL_LABEL } from '@/config/aiModels';
+import type { GatewayConfig } from '@/services/app-builder/appBuilderAISettings';
+export type { GatewayConfig } from '@/services/app-builder/appBuilderAISettings';
 
 export interface GatewayModel {
   id: string;
@@ -19,15 +21,6 @@ const AVAILABLE_MODELS: GatewayModel[] = [
 ];
 
 export type ReasoningEffort = "none" | "low" | "medium" | "high";
-
-export interface GatewayConfig {
-  selectedModelId: string;
-  reasoningEffort: ReasoningEffort;
-  timeoutMs: number;
-  autoModelSelection: boolean;
-  streamResponse: boolean;
-  maxTokens: number;
-}
 
 const DEFAULT_CONFIG: GatewayConfig = {
   selectedModelId: DEFAULT_GEMINI_MODEL_ID,

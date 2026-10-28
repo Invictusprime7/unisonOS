@@ -446,6 +446,7 @@ export interface BuildAppBuildContractInput {
 
 export interface AppBuildRequest {
   operationId: string;
+  gatewayOptions?: Record<string, unknown>;
   contract: AppBuildContract;
   initialFiles: Readonly<Record<string, string>>;
   entryPoint: string;
@@ -493,6 +494,7 @@ export interface AppBuilderNewPageTarget extends AppBuilderPageTarget {
 
 export interface AppBuilderPageGenerationRequest {
   operationId: string;
+  gatewayOptions?: Record<string, unknown>;
   connectorContext?: import('@/types/unisonBuilderConnector').UnisonBuilderConnectorInput;
   baseRevisionId?: string | null;
   currentFiles: Readonly<Record<string, string>>;
