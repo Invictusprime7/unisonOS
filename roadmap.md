@@ -1,8 +1,8 @@
 # Roadmap
 
 ## Active: Marketplace install failure follow-up
-- [ ] Trace the current Gemini priority and fallback configuration without changing the selected providers.
-- [ ] Repair any confirmed installation error-handling defect and run focused regressions.
+- [x] Trace current routing: source now explicitly uses Gemini first, configured OpenAI afterward and managed AI last; earlier Gemini-only summary no longer describes current source. No provider configuration changed.
+- [x] Separate terminal authoring failures from unfinished-page validation errors and deduplicate install diagnostics; targeted materialization/install/error tests pass.
 - [ ] Verify live installation after canonical deployment and authoritative sign-in are available.
 
 ## Active: Floating toolbar actions

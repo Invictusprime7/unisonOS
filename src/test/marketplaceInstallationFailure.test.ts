@@ -9,7 +9,7 @@ describe('marketplace installation failure classification', () => {
       outcomes: [{ status: 'failed', reason: 'provider', errors: ['gemini-3.8-flash: timeout | GPT-4.1: You have no credits remaining. No managed AI gateway fallback is configured.'] }],
     });
     expect(message).toContain('Gemini did not finish');
-    expect(message).toContain('backup reported insufficient credits');
+    expect(message).toContain('AI provider reported insufficient credits');
     expect(message).toContain('backup is not configured');
     expect(message).not.toContain('section model');
   });
