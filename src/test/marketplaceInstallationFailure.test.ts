@@ -47,3 +47,14 @@ describe('marketplace installation failure classification', () => {
     expect(message.split('Missing section identity')).toHaveLength(2);
   });
 });
+describe('installationFailureMessage backup password mismatch', () => {
+  it('names the rejected backup password instead of only blaming Gemini credits', () => {
+    const message = installationFailureMessage({
+      stopReason: 'provider-error',
+      candidate: { diagnostics: [] },
+      outcomes: [{ status: 'failed', reason: 'credits', errors: ['gemini-3.8-flash: 402 prepayment credits are depleted | Managed gateway fallback: 401 {"error":"Unauthorized"}'] }],
+    });
+    expect(message).toMatch(/refused the backend password/);
+    expect(message).toMatch(/run out of prepaid credits/);
+  });
+});
