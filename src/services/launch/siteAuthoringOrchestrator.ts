@@ -55,6 +55,8 @@ export interface PageAuthoringOutcome {
   summary?: string;
   errors: string[];
   revisionId?: string | null;
+  /** The AI returned a draft for this page before a later fix round stopped. */
+  draftProduced?: boolean;
 }
 
 export interface SiteAuthoringProgress {
@@ -305,8 +307,9 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
     // window only produces a guaranteed timeout. Later pages past the overall
     // budget keep their baseline instead.
     const pageDeadline = Math.min(deadline, now() + Math.min(150_000, Math.max(120_000, (deadline - now()) / waves)));
-    const runLoop = (request: AIComposerRequest) => runComposerRepairLoop({
+    const runLoop = (request: AIComposerRequest, resume?: ComposerLoopResume) => runComposerRepairLoop({
       request,
+      resume,
       baseFiles,
       baseRevisionId: revisionId ?? undefined,
       preflight: input.preflight,
@@ -357,13 +360,20 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
         (loop.reason === 'provider' && loop.errors.some((e) => /timeout|timed out|took too long/i.test(e)))
         || (loop.reason === 'aborted' && loop.errors.some((e) => /too long|timed out|timeout/i.test(e)))
       );
-      if (timedOut && !paused && deadline - now() >= 125_000) {
+      // A fix round that was cut off resumes from its paid-for draft in a
+      // fresh window; only a page with no draft at all is authored again.
+      const interrupted = !loop.ok && !input.signal?.aborted && Boolean(loop.resume)
+        && (loop.reason === 'provider' || loop.reason === 'aborted' || loop.reason === 'gates_exhausted');
+      if ((timedOut || interrupted) && !paused && deadline - now() >= (loop.resume ? MIN_REPAIR_WINDOW_MS + 5_000 : 125_000)) {
         input.onProgress?.({ page, index, total: ordered.length, phase: 'authoring' });
-        const retryLoop = await runLoop(await buildRequest(null));
+        const retryLoop = loop.resume
+          ? await runLoop(firstRequest, loop.resume)
+          : await runLoop(await buildRequest(null));
         loop = {
           ...retryLoop,
-          attempts: loop.attempts + retryLoop.attempts,
-          errors: retryLoop.ok ? retryLoop.errors : [...loop.errors, ...retryLoop.errors],
+          attempts: loop.resume ? Math.max(loop.attempts, retryLoop.attempts) : loop.attempts + retryLoop.attempts,
+          errors: retryLoop.ok ? retryLoop.errors : [...new Set([...loop.errors, ...retryLoop.errors])],
+          resume: retryLoop.resume ?? loop.resume,
         };
       }
     }
@@ -378,7 +388,10 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
     if (loop.reason === 'credits' || loop.reason === 'denied') paused = loop.reason;
 
     if (!loop.ok || !loop.prepared) {
-      outcomeSlots[index] = { page, status: 'kept-baseline', reason: loop.reason, attempts: loop.attempts, errors: loop.errors };
+      outcomeSlots[index] = {
+        page, status: 'kept-baseline', reason: loop.reason, attempts: loop.attempts, errors: loop.errors,
+        draftProduced: Boolean(loop.resume || loop.response),
+      };
       input.onProgress?.({ page, index, total: ordered.length, phase: 'kept-baseline' });
       return;
     }
