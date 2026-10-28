@@ -18,10 +18,11 @@ function safeEqual(a: string, b: string): boolean {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json(405, { error: "Method not allowed" });
-  const expected = Deno.env.get("MANAGED_AI_RELAY_SECRET");
+  const expected = Deno.env.get("MANAGED_AI_RELAY_SECRET")?.trim();
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!expected || !apiKey) return json(503, { error: "Managed AI relay is not configured" });
-  const presented = req.headers.get("x-managed-ai-relay-secret") ?? "";
+  // Trim both sides: a pasted secret often carries a stray space or newline.
+  const presented = (req.headers.get("x-managed-ai-relay-secret") ?? "").trim();
   if (!safeEqual(presented, expected)) {
     console.warn("[managed-ai-relay] rejected unauthenticated request");
     return json(401, { error: "Unauthorized" });

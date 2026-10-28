@@ -47,7 +47,7 @@ export function MarketplaceInstallButton({ selection }: { selection: Marketplace
   };
 
   const pages = progress?.total ? ` · ${progress.done ?? 0} of ${progress.total} pages ready` : '';
-  return <div>
+  return <div className="max-w-md">
     <div className="flex items-center gap-2">
       <Button size="sm" disabled={busy} onClick={start}>
         {busy ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Download aria-hidden="true" />}
@@ -58,6 +58,6 @@ export function MarketplaceInstallButton({ selection }: { selection: Marketplace
     {busy && progress && <p role="status" aria-live="polite" className="text-muted-foreground text-xs">
       {progress.label}{pages} · {elapsedLabel(now - startedAt)} (usually 2–5 minutes)
     </p>}
-    {error && <p role="alert" className="text-destructive">{error} {error.startsWith('Sign in') && <Button variant="link" size="sm" onClick={() => navigate('/auth')}>Sign in</Button>}</p>}
+    {error && <p role="alert" className="text-sm text-destructive">{error} {error.startsWith('Sign in') && <Button variant="link" size="sm" onClick={() => navigate('/auth')}>Sign in</Button>}</p>}
   </div>;
 }

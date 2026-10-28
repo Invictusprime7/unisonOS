@@ -344,7 +344,10 @@ export function builderEdgeErrorMessage(
   if (!details || details === summary) return summary;
   // Edge diagnostics are already server-truncated; retain a compact final
   // portion so the UI names the failed provider without dumping its response.
-  return `${summary} ${details.slice(0, 360)}`;
+  const compact = details.slice(0, 360);
+  // Keep the backup's outcome even when the lead provider's error fills the slice.
+  const fallback = details.match(/Managed gateway fallback: [^|]{0,120}/)?.[0];
+  return fallback && !compact.includes(fallback) ? `${summary} ${compact} | ${fallback.trim()}` : `${summary} ${compact}`;
 }
 
 export function isBuilderProviderUnavailable(message: string): boolean {
