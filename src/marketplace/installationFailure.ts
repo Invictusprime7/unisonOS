@@ -16,7 +16,7 @@ export function installationFailureMessage(result: InstallationFailure): string 
     const evidence = details.join(' ');
     const issues: string[] = [];
     if (/gemini[^\n]*?timeout|gemini[^\n]*?timed out/i.test(evidence)) issues.push('Gemini did not finish before the request timed out.');
-    if (/no credits remaining|insufficient[_\s-]*(?:quota|credits)|credit balance/i.test(evidence)) issues.push('A configured backup reported insufficient credits.');
+    if (/no credits remaining|insufficient[_\s-]*(?:quota|credits)|credit balance/i.test(evidence)) issues.push('An AI provider reported insufficient credits.');
     if (/No managed AI gateway fallback is configured/i.test(evidence)) issues.push('The managed AI backup is not configured for this request.');
     return `The AI request failed before the template could be installed. Nothing was saved. ${issues.length ? issues.join(' ') : details.join(' ') || 'The AI service did not return a usable response.'}`;
   }
