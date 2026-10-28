@@ -171,3 +171,6 @@ verify_jwt = false
 
 [functions.marketplace-release-preview]
 verify_jwt = false
+
+[functions.managed-ai-relay]
+verify_jwt = false
