@@ -160,18 +160,40 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     `Preserve the logo's intrinsic ratio with object-fit: contain within ${business.branding.brandMark.image.maxWidthPx}x${business.branding.brandMark.image.maxHeightPx}px; use accessible name "${business.branding.brandMark.accessibleName}". If the profile has no logo, render the text wordmark "${business.branding.brandMark.missingAssetFallback.text}"; do not generate or source a replacement mark.`,
     `Logo cloud is separate social proof: use ${business.branding.logoCloud.artifactId} only with owner-authored entries, at least ${business.branding.logoCloud.minimumItems}; generated entries are forbidden and the empty behavior is ${business.branding.logoCloud.emptyBehavior}.`,
   ].join('\n');
-  const registeredComponentContext = `REGISTERED COMPONENT CONTRACT: ${business.registeredComponents.length ? business.registeredComponents.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; pages ${component.runtime.usedOnPages.join(', ') || 'not page-bound'}; target ${component.targetType}; status ${component.runtime.status}; write intent ${component.runtime.writeIntent ?? 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required native form fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this launch.'}`;
-  const registeredComponentBlueprints = [
+  const bindingsForPage = (pageId?: string) => pageId
+    ? business.intentBindings.filter((binding) => binding.pageId === pageId)
+    : business.intentBindings;
+  const componentsForPage = (pageId?: string) => {
+    if (!pageId) return business.registeredComponents;
+    const bindingComponentIds = new Set(bindingsForPage(pageId)
+      .map((binding) => binding.componentInstanceId)
+      .filter((instanceId): instanceId is string => Boolean(instanceId)));
+    return business.registeredComponents.filter((component) =>
+      component.runtime.usedOnPages.length === 0
+      || component.runtime.usedOnPages.includes(pageId)
+      || bindingComponentIds.has(component.runtime.instanceId));
+  };
+  const registeredComponentContext = (pageId?: string) => {
+    const components = componentsForPage(pageId);
+    return `REGISTERED COMPONENT CONTRACT: ${components.length ? components.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; pages ${component.runtime.usedOnPages.join(', ') || 'site-wide'}; target ${component.targetType}; status ${component.runtime.status}; write intent ${component.runtime.writeIntent ?? 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required native form fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this page.'}`;
+  };
+  const registeredComponentBlueprints = (pageId?: string) => [
     'REGISTERED COMPONENT BLUEPRINTS: preserve these canonical native hosts, field names, and intent markers exactly; they define behavior, while certified design-source modules define presentation.',
-    ...business.registeredComponents
+    ...componentsForPage(pageId)
       .filter((component) => component.nativeComponentTemplate)
       .map((component) => `${component.runtime.componentSlug}:\n${component.nativeComponentTemplate}`),
     'Use Unison form controls and semantic theme tokens around registered hosts. Never replace canonical native markup with a generic form or alter its intent trigger.',
   ].join('\n');
+  const canonicalIntentBindings = (pageId?: string) => {
+    const bindings = bindingsForPage(pageId);
+    return [
+      `${pageId ? 'PAGE ' : ''}CANONICAL INTENT BINDINGS: ${bindings.length ? bindings.map((binding) => `${binding.bindingId}: page ${binding.pageId} ${binding.route} ${binding.sourceSection}.${binding.sourceSlot} -> core intent ${binding.coreIntent}, DOM intent ${binding.domIntent}, required marker ${binding.ctaMarkers.map((marker) => `data-ut-cta="${marker}"`).join(' or ') || 'none'}, handler ${binding.intentHandler}, target ${binding.targetType}:${binding.targetId}${binding.componentSlug ? `, registered ${binding.componentSlug} instance ${binding.componentInstanceId} (write intent ${binding.componentWriteIntent ?? 'none'})` : ''}${binding.missingCapabilities.length ? `, INACTIVE missing capabilities ${binding.missingCapabilities.join(', ')}; omit this interaction` : ''}`).join('\n') : 'none.'}`,
+      'Use these supplied IDs only; do not invent binding, target, or component-instance IDs. The platform stamps the canonical intent and component-instance ID after candidate validation from the exact CTA marker and registered component slug.',
+    ].join('\n');
+  };
   const businessParameterContext = [
     `PUBLIC BUSINESS FACTS: use only these public contact and brand values ${JSON.stringify(business.parameters)} and public profile projection ${JSON.stringify(business.businessProfile)}. Private notification recipients, payment routing, and CRM destinations are intentionally excluded and are resolved by the tenant-scoped runtime.`,
     `CONFIGURATION READINESS: these business fields are configured: ${business.configuredBusinessFields.join(', ') || 'none'}. The field names are readiness metadata only; do not infer or emit their values.`,
-    `CANONICAL INTENT BINDINGS: ${business.intentBindings.length ? business.intentBindings.map((binding) => `${binding.route} ${binding.sourceSection}.${binding.sourceSlot} -> core intent ${binding.coreIntent}, DOM intent ${binding.domIntent}, required marker ${binding.ctaMarkers.map((marker) => `data-ut-cta="${marker}"`).join(' or ') || 'none'}, handler ${binding.intentHandler}, target ${binding.targetType}:${binding.targetId}${binding.componentSlug ? `, registered ${binding.componentSlug} instance ${binding.componentInstanceId} (write intent ${binding.componentWriteIntent ?? 'none'})` : ''}${binding.missingCapabilities.length ? `, INACTIVE missing capabilities ${binding.missingCapabilities.join(', ')}; omit this interaction` : ''}`).join('\n') : 'none.'}`,
     'For operational interactions, render only the exact registered component and intent handler assigned by the contract. Tenant-scoped server handlers resolve private CRM destinations and notification recipients; never place those values in generated markup or client source. Do not invent component IDs, alternate intent handlers, direct database writes, or local success handlers.',
   ].join('\n');
   const interactiveSurfaceContract = [
@@ -202,17 +224,18 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   };
   const compose = (modules: string, pageId?: string) => [
     pageId ? pageIdentityContext(pageId) : '',
-    business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '',
+    !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '',
     'PERSISTABLE SECTION CONTRACT: every page-level body <section>, shared <header> navbar, and shared <footer> must carry literal stable data-ut-section-id, data-ut-section-type, and data-ut-variant values. Use site:navbar and site:footer as the shared chrome IDs across pages. For a listed certified variant, import its default family dispatcher from @/unison/design-sources/<Family> and render exactly one per root with matching sectionId/variantId and JSON-serializable props={{...}}. For a unique authored body component that has no suitable listed variant, use data-ut-variant="custom:<kebab-slug>" on a known non-chrome section family and render exactly one default component imported from @/project-components/ or @/components/generated/ inside that root; keep all JSX props literal and serializable. Never use custom variants for navbar/footer. Keep existing data-ut-intent, data-ut-cta, data-ut-resource, slot, and registered component markers inside the root; never replace or regenerate those bindings when changing visual layout.',
     'CANONICAL SHARED SHELL: import and render the existing named SiteNav from @/project-components/site/SiteNav and SiteFooter from @/project-components/site/SiteFooter exactly once on every page, outside <main>. These wrappers are compiler-materialized from the canonical route registry and shared eligible design variants; do not inline, duplicate, or re-author page-local navigation or footer.',
-    registeredComponentContext,
-    registeredComponentBlueprints,
+    registeredComponentContext(pageId),
+    registeredComponentBlueprints(pageId),
     `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}.`,
     industryContext,
     iconContext,
     buildRegisteredResourceContext(contentTypes),
     logoContext,
     businessParameterContext,
+    canonicalIntentBindings(pageId),
     `Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.`,
     commerceSetupContext,
     interactiveSurfaceContract,

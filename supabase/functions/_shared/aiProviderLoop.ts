@@ -601,7 +601,11 @@ export async function runProviderLoop(opts: {
         !hasDirectGemini || geminiQuotaExhausted || directOnCooldown(),
         providerPlan.primaryProvider === 'gemini' && providerPlan.preferLongLeadAttempt === true,
       );
-      const reserveMs = isPrimaryGemini ? 0 : Math.min(lastResortReserveMs, Math.max(0, remaining * 0.25));
+      // Gemini owns the lead attempt, but the managed gateway still needs a
+      // usable window if that long request times out.
+      const reserveMs = hasLastResortGateway
+        ? Math.min(lastResortReserveMs, Math.max(0, remaining * 0.25))
+        : 0;
       const headroom = Math.max(8000, remaining - 2000 - reserveMs);
       const leadShare = Math.max(30000, Math.floor(headroom * 0.6));
       const balancedAttemptMs = Math.max(12000, Math.floor(cap / remainingModels));

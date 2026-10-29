@@ -256,6 +256,49 @@ test('funded Gemini answers before configured Lovable fallback', async () => {
   });
 });
 
+test('preserves a managed recovery window behind the single Gemini lead', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+    const calls: string[] = [];
+    const logs: string[] = [];
+    const originalLog = console.log;
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      calls.push(requestUrl);
+      if (requestUrl.includes('generativelanguage.googleapis.com')) {
+        return new Response('Gemini timed out upstream', { status: 500 });
+      }
+      if (requestUrl.includes('lovable')) {
+        return new Response(JSON.stringify({ choices: [{ message: { content: 'Recovered by managed gateway' } }] }));
+      }
+      throw new Error(`Unexpected provider request: ${requestUrl}`);
+    }) as typeof fetch;
+    console.log = (...values: unknown[]) => { logs.push(values.join(' ')); };
+
+    try {
+      const result = await runProviderLoop({
+        aiMessages: messages,
+        providerPlan: {
+          gatewayModels: [{ id: 'google/gemini-3.8-flash', label: 'Gemini', maxTokens: 1000 }],
+          perModelTimeoutMs: 110_000,
+          fallbackMaxTokens: 1000,
+          preferLongLeadAttempt: true,
+        },
+        navPageGen: false,
+        totalBudgetMs: 115_000,
+      });
+
+      assert(result.providerUsed === 'lovable' && result.content === 'Recovered by managed gateway',
+        'managed gateway should recover after the Gemini lead fails');
+      assert(logs.some((line) => line.includes('Trying planned direct model Gemini (timeout: 84.25s')),
+        'Gemini must leave the bounded managed fallback reserve inside the 115-second Composer request budget');
+      assert(calls.length === 2 && calls[0].includes('generativelanguage.googleapis.com') && calls[1].includes('lovable'),
+        'the request should try direct Gemini and then the managed gateway');
+    } finally {
+      console.log = originalLog;
+    }
+  });
+});
+
 test('guest metering pins generation to priced Gemini and reconciles returned usage', async () => {
   await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
     const requests: Array<{ url: string; body: Record<string, unknown> }> = [];

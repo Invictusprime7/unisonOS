@@ -17,6 +17,7 @@ import {
 } from '@/services/canonicalComponentRegistry';
 import { resolveComponentRuntimeContract } from '@/services/componentRuntimeContract';
 import { buildAppBuilderGenerationContext } from '@/services/app-builder/appBuilderGenerationContext';
+import type { PlaygroundBinding } from '@/platform/core/playground';
 
 const createdAt = '2026-09-30T12:00:00.000Z';
 const home = createBuilderPage('page-home', 'Home', '/', 'home', {
@@ -174,6 +175,52 @@ describe('AppBuildContract', () => {
     }];
 
     expect(() => buildAppBuildContract(input)).toThrow('component future-widget is not registered');
+  });
+
+  it('keeps canonical binding and component IDs together in page-scoped context', () => {
+    const input = makeInput();
+    input.capabilities = ['booking', 'contact'];
+    const booking = createCanonicalComponentInstance('booking-scheduler', {
+      usedOnPages: ['page-home'],
+      bindings: { calendarId: 'calendar-home-1' },
+    });
+    const contactForm = createCanonicalComponentInstance('contact-form', {
+      usedOnPages: ['page-contact'],
+      bindings: { formId: 'form-contact-1' },
+    });
+    expect(booking).not.toBeNull();
+    expect(contactForm).not.toBeNull();
+    input.registeredComponentInstances = [booking!, contactForm!];
+    input.canonicalBindings = [
+      {
+        bindingId: 'binding-home-booking', sourcePageId: 'page-home', sourceLabel: 'Book now',
+        intent: 'calendar.open', targetId: 'calendar-home-1', targetType: 'calendar',
+        confidence: 1, source: 'wizard', isValid: true, sourceSection: 'hero', sourceSlot: 'booking-submit',
+        coreIntent: 'booking.create', requiredCapabilities: ['booking'],
+      },
+      {
+        bindingId: 'binding-contact-form', sourcePageId: 'page-contact', sourceLabel: 'Send a message',
+        intent: 'form.open', targetId: 'form-contact-1', targetType: 'form',
+        confidence: 1, source: 'wizard', isValid: true, sourceSection: 'contact', sourceSlot: 'form-submit',
+        coreIntent: 'contact.submit', requiredCapabilities: ['contact'],
+      },
+    ] satisfies PlaygroundBinding[];
+
+    const contract = buildAppBuildContract(input);
+    const generation = buildAppBuilderGenerationContext(contract);
+    const homeContext = generation.runtimeContextForPage('page-home');
+    const contactContext = generation.runtimeContextForPage('page-contact');
+
+    expect(homeContext).toContain('binding-home-booking');
+    expect(homeContext).toContain('calendar:calendar-home-1');
+    expect(homeContext).toContain(`booking-scheduler instance ${booking!.instanceId}`);
+    expect(homeContext).not.toContain('binding-contact-form');
+    expect(homeContext).not.toContain(contactForm!.instanceId);
+    expect(contactContext).toContain('binding-contact-form');
+    expect(contactContext).toContain('form:form-contact-1');
+    expect(contactContext).toContain(`contact-form instance ${contactForm!.instanceId}`);
+    expect(contactContext).not.toContain('binding-home-booking');
+    expect(contactContext).not.toContain(booking!.instanceId);
   });
 
   it('keeps payment setup readiness from blocking checkout authoring', () => {
