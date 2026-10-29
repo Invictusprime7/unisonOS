@@ -10,6 +10,8 @@ declare const Deno: { env: { get(key: string): string | undefined } };
 
 /** Trusted origins for production CORS */
 const TRUSTED_ORIGINS: string[] = [
+  "https://unisonai.dev",
+  "https://www.unisonai.dev",
   "https://unisonos.ai",
   "https://www.unisonos.ai",
   "https://unisonos.vercel.app",

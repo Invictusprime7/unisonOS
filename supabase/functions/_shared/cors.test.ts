@@ -18,6 +18,8 @@ Deno.test("allows canonical UnisonOS Vercel deployments", () => {
 });
 
 Deno.test("allows canonical UnisonOS custom domains", () => {
+  assertEquals(headersFor("https://unisonai.dev")["Access-Control-Allow-Origin"], "https://unisonai.dev");
+  assertEquals(headersFor("https://www.unisonai.dev")["Access-Control-Allow-Origin"], "https://www.unisonai.dev");
   assertEquals(headersFor("https://unisonos.ai")["Access-Control-Allow-Origin"], "https://unisonos.ai");
   assertEquals(headersFor("https://www.unisonos.ai")["Access-Control-Allow-Origin"], "https://www.unisonos.ai");
   assertEquals(headersFor("https://unisonai.vercel.app")["Access-Control-Allow-Origin"], "https://unisonai.vercel.app");
