@@ -3,7 +3,7 @@ import { getIntentDef } from '@/platform/core';
 import { getIndustryIntentProfile } from '@/platform/core/industryIntentProfiles';
 import { resolveCapabilities } from '@/services/wizardCapabilityResolver';
 import { materializePlayground } from '@/services/wizardPlaygroundMaterializer';
-import { applyWizardBindingsToVfs } from '@/services/wizardBindingBridge';
+import { applyWizardBindingsToVfs, getWizardBindingMarkers } from '@/services/wizardBindingBridge';
 import type { BusinessModel, IndustryOverlay, WizardSelections } from '@/types/playground';
 
 function selections(
@@ -47,6 +47,21 @@ describe('wizard intent binding', () => {
     expect(getIntentDef('quote.request')?.requiredCapabilities).toEqual(['quoting']);
     expect(getIntentDef('lead.capture')?.requiredCapabilities).toEqual(['lead-capture']);
     expect(getIntentDef('newsletter.subscribe')?.requiredCapabilities).toEqual(['newsletter']);
+  });
+
+  it('uses intent semantics before slot names when choosing CTA markers', () => {
+    expect(getWizardBindingMarkers({
+      sourceSection: 'checkout',
+      sourceSlot: 'checkout-cta',
+      intent: 'nav.goto_page',
+      coreIntent: 'nav.goto',
+    } as never)).toEqual(['cta.nav-link']);
+    expect(getWizardBindingMarkers({
+      sourceSection: 'cart',
+      sourceSlot: 'checkout-cta',
+      intent: 'cart.checkout',
+      coreIntent: 'cart.checkout',
+    } as never)).toEqual(['cta.checkout']);
   });
 
   it('resolves industry-specific hero CTAs deterministically', () => {
