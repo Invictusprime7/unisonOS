@@ -18,6 +18,7 @@ import { compositionToReactFileSet } from '@/sections/compositionToFileSet';
 import { getCompositionById } from '@/sections/templates';
 import { computeFilesFingerprint } from '@/services/publishAttestation';
 import { UNISON_ATTRIBUTION_ASSET } from '@/services/export/unisonAttribution';
+import { materializeCanonicalProjectMedia } from '../../supabase/functions/_shared/canonicalPublishMedia';
 
 const mocks = vi.hoisted(() => {
   const projectQuery: Record<string, ReturnType<typeof vi.fn>> = {};
@@ -209,6 +210,58 @@ describe('persisted publish parity (M1 exit condition)', () => {
     expect(publishedPrint.fingerprint).toBe(canonicalPrint.fingerprint);
     expect(publishedPrint.fileCount).toBe(canonicalPrint.fileCount);
     expect(publishedPrint.fileCount).toBeGreaterThan(0);
+  });
+
+  it('publishes the accepted custom animated design and makes its project photo portable', async () => {
+    const storagePath = 'owner-1/site-uploads/project-1/hero.webp';
+    const signedUrl = `https://project.supabase.co/storage/v1/object/sign/user-files/${storagePath}?token=temporary`;
+    const accepted = {
+      '/src/App.tsx': "import Home from './pages/Home'; export default function App(){return <Home/>}",
+      '/src/pages/Home.tsx': `import { motion } from 'framer-motion';\nexport default function Home(){return <main><motion.section initial={{opacity:0}} animate={{opacity:1}}><h1>Salt House</h1><img src="${signedUrl}" alt="Tide line at dawn" /></motion.section></main>}`,
+      '/src/components/EditorialHero.tsx': 'export default function EditorialHero(){return <section className="editorial-hero"/>}',
+      '/public/media/manifest.json': JSON.stringify({
+        version: 1,
+        assets: [{
+          storagePath, bucket: 'user-files', name: 'hero.webp', kind: 'image', mimeType: 'image/webp',
+          url: signedUrl, usedBy: ['/src/pages/Home.tsx'],
+        }],
+      }),
+      '/index.html': INDEX_HTML,
+    };
+    mocks.loadLatestPublishReadyRevisionForProject.mockResolvedValue({
+      id: 'revision-ai-authored',
+      projectId: 'project-1',
+      businessId: 'business-1',
+      draftId: 'draft-1',
+      vfsFiles: accepted,
+      siteBundleSnapshot: null,
+      runtimeManifest: { backendRequired: false },
+      vfsHash: 'accepted-vfs-hash',
+    });
+
+    const result = await deployToProvider({
+      provider: 'vercel',
+      projectId: 'project-1',
+      expectedRevisionId: 'revision-ai-authored',
+      files: { '/src/pages/Home.tsx': 'uncommitted caller layout' },
+    });
+
+    expect(result.status).toBe('success');
+    const submitted = publishedPayload();
+    expect(submitted['src/pages/Home.tsx']).toBe(accepted['/src/pages/Home.tsx']);
+    expect(submitted['src/components/EditorialHero.tsx']).toBe(accepted['/src/components/EditorialHero.tsx']);
+    expect(submitted['src/pages/Home.tsx']).not.toContain('uncommitted caller layout');
+
+    const materialized = await materializeCanonicalProjectMedia({
+      files: submitted,
+      manifestFiles: accepted,
+      userId: 'owner-1',
+      storageOrigin: 'https://project.supabase.co',
+      download: async () => new Uint8Array([0x52, 0x49, 0x46, 0x46]),
+    });
+    expect(materialized.mediaCount).toBe(1);
+    expect(materialized.files['src/pages/Home.tsx']).toContain('data:image/webp;base64,UklGRg==');
+    expect(materialized.files).not.toHaveProperty('public/media/manifest.json');
   });
 
   it('refuses to publish when no publish-ready revision exists', async () => {
