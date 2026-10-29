@@ -1,7 +1,7 @@
 /** Candidate-only full-application orchestration behind UnisonAppBuilder. */
 
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
-import type { ComposerLoopInput, ComposerLoopResult } from '@/services/builder/aiRepairLoop';
+import type { ComposerLoopInput, ComposerLoopResult, ComposerStopReason } from '@/services/builder/aiRepairLoop';
 import type { SiteAuthoringInput, SiteAuthoringResult } from '@/services/launch/siteAuthoringOrchestrator';
 import { APP_BUILDER_PROTOCOL_VERSION, type AppBuildRequest, type AppBuildResult } from './appBuilderContracts';
 import { findDesignSourceUsageIssues, validateAppBuildCandidate } from './appBuilderCandidate';
@@ -79,6 +79,7 @@ export async function orchestrateAppBuild(
   const photoUrls = verifiedPhotosFor(input.contract.design.resolvedSiteDesignContext?.contract.industry ?? input.contract.business.industry);
   let unresolvedMarkerBindingIds: string[] = [];
   let systemMaterializedCompositionFiles: Record<string, string> = {};
+  let closureRepairFailure: { reason: ComposerStopReason; errors: string[] } | undefined;
   const pageCheck = (path: string, source: string, files?: Readonly<Record<string, string>>) => {
     const messages = findDesignSourceUsageIssues(manifestSource, source).map((issue) => issue.message);
     if (Object.keys(sectionImplementations).length > 0) {
@@ -267,6 +268,9 @@ export async function orchestrateAppBuild(
         resolveDependencies: false,
       });
       closureRepairAttempts = repaired.attempts;
+      if (!repaired.ok && ['credits', 'denied', 'rate_limited', 'provider', 'invalid_response'].includes(repaired.reason)) {
+        closureRepairFailure = { reason: repaired.reason, errors: repaired.errors };
+      }
       if (repaired.ok && repaired.prepared) {
         candidateFiles = repaired.prepared.nextFiles;
         if (input.preflight) candidateFiles = input.preflight(candidateFiles);
@@ -277,14 +281,14 @@ export async function orchestrateAppBuild(
   }
 
   const cancelled = input.signal?.aborted === true;
-  const ready = !terminalAuthoringFailure && (compatibilityMode || closure.ok);
+  const ready = !terminalAuthoringFailure && !closureRepairFailure && (compatibilityMode || closure.ok);
   const authorDiagnostics = authored.outcomes.flatMap((outcome) => outcome.errors);
   const closureDiagnostics = closure.issues
     .filter((issue) => issue.severity === 'blocker')
     .map((issue) => issue.message);
   const surfacedDiagnostics = terminalAuthoringFailure
     ? authorDiagnostics
-    : [...authorDiagnostics, ...closureDiagnostics];
+    : [...(closureRepairFailure?.errors ?? []), ...authorDiagnostics, ...closureDiagnostics];
   const strategy = generationMode === 'deterministic'
     ? 'deterministic-scaffold' as const
     : compatibilityMode
@@ -323,7 +327,7 @@ export async function orchestrateAppBuild(
     protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
     candidate,
     candidateFiles,
-    stopReason: cancelled ? 'cancelled' : ready ? 'complete' : terminalAuthoringFailure ? 'provider-error' : closureRepairAttempts ? 'repair-exhausted' : 'validation-failed',
+    stopReason: cancelled ? 'cancelled' : ready ? 'complete' : terminalAuthoringFailure || closureRepairFailure ? 'provider-error' : closureRepairAttempts ? 'repair-exhausted' : 'validation-failed',
     outcomes: authored.outcomes,
     revisionId: authored.revisionId,
   };

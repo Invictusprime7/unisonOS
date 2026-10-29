@@ -150,6 +150,31 @@ describe('UnisonAppBuilder facade', () => {
     expect(runComposer).not.toHaveBeenCalled();
   });
 
+  it('surfaces a closure-repair provider failure instead of masking it as section validation', async () => {
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: { ...input.files, '/src/pages/Home.tsx': 'export default function Home(){return <main>Authored home</main>}' },
+      revisionId: input.revisionId,
+      outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
+    }));
+    const runComposer = vi.fn(async (): Promise<ComposerLoopResult> => ({
+      ok: false,
+      reason: 'provider',
+      attempts: 1,
+      errors: ['AI providers failed to produce a response. Gemini timed out.'],
+    }));
+
+    const result = await createTestBuilder({ authorSite, runComposer }).generate({
+      operationId: 'closure-repair-provider-failure', contract: contract(), initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null,
+      pageCheck: () => ['Registered section closure needs repair.'],
+    });
+
+    expect(runComposer).toHaveBeenCalledOnce();
+    expect(result.stopReason).toBe('provider-error');
+    expect(result.candidate.diagnostics[0]).toContain('Gemini timed out');
+    expect(result.candidate.diagnostics).toContain('Registered section closure needs repair.');
+  });
+
   it('builds a validated five-page ecommerce scaffold without claiming AI authorship', async () => {
     const authorSite = vi.fn();
     const runComposer = vi.fn();

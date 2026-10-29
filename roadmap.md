@@ -93,7 +93,9 @@
 - [x] Match existing AI-authored React Router controls by canonical `data-ut-target-page-id` or registered route before label heuristics; stamp the binding ID and CTA marker in place without duplicating the authored link.
 - [x] App Builder integration regression reaches `ready-for-commit` with a canonical `targetPageId` link and no unresolved-binding diagnostic; the existing target path is retained as a hash route.
 - [x] Local Playwright on signed-in Lowtide House: home → `/the-house`, footer → `/rooms`, and back home all rendered; the four Shore footer links resolve to registered `/the-house` metadata. Candidate was not applied and no save/deploy was performed.
-- [ ] Fresh AI generation → canonical commit → reopen on this project; route interaction was verified, but a held source-edit candidate is not generation or persistence evidence.
+- [x] Preserve closure-repair provider failures in the App Builder result instead of masking them as section-validation failures; regression asserts `provider-error` and keeps closure blockers as secondary diagnostics.
+- [ ] Live AI generation attempt on a separate named test project: planning and contract completed, but page authoring hit Gemini timeout/HTTP 500 with no configured fallback. Closure also rejected Home's unmaterialized section roots (missing literal identity/type/variant and serialized section model); the newly preserved provider failure is now the primary diagnostic. No candidate was accepted, no project was created, and no deterministic fallback was used.
+- [ ] Retry AI generation after a usable provider/fallback is configured; then verify candidate closure, canonical commit, preview, route interaction, and reopen. Supabase MCP log/advisor access was unauthorized in this session.
 - [ ] Clear local browser diagnostics: Home's `cleanup_empty_projects` RPC returns 404, Sandpack telemetry request to `col.csbops.io` timed out, and Motion reports non-animatable transparent background transitions. These did not block the tested preview routes.
 
 ## Active: Selected text editing
