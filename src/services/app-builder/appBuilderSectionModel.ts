@@ -683,6 +683,7 @@ export function inspectAppBuilderPageSectionClosure(
   implementations: Readonly<Record<string, EligibleImplementation>>,
   options: { allowNamedExports?: boolean } = {},
 ): AppBuilderSectionInspection {
+  const inspectionOptions = { allowNamedExports: true, ...options };
   const pageImplementations = {
     ...implementations,
     ...findCustomSectionImplementations(pagePath, files, implementations),
@@ -695,7 +696,7 @@ export function inspectAppBuilderPageSectionClosure(
   const seenIds = new Set<string>();
   for (const path of paths) {
     const inspection = inspectAppBuilderPageSections(path, files[path] ?? '', pageImplementations, {
-      ...options,
+      ...inspectionOptions,
       requireChromeRoots: false,
       allowEmpty: true,
     });

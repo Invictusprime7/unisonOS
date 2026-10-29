@@ -66,7 +66,7 @@ Deno.test('Unison directive contains targets, constraints, and ordered work', ()
 });
 
 Deno.test('provider requests use documented reasoning effort parameters', () => {
-  for (const id of ['openai/gpt-5', 'google/gemini-3-flash-preview']) {
+  for (const id of ['google/gemini-3-flash-preview']) {
     const request = buildPlannedChatCompletionRequest({
       model: { id, label: id, maxTokens: 40_000 },
       aiMessages: [{ role: 'user', content: 'Fix the checkout flow' }],

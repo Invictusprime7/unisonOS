@@ -13,7 +13,7 @@ export type ChatCompletionRequest = {
   [key: string]: unknown;
 };
 
-type Provider = "lovable" | "openai" | "gemini" | "anthropic";
+type Provider = "lovable" | "gemini" | "anthropic";
 type EnvReader = (name: string) => string | undefined;
 import { DEFAULT_GEMINI_GATEWAY_MODEL, configuredGeminiModel } from '../geminiModel.ts';
 
@@ -27,9 +27,8 @@ const DEFAULT_MANAGED_AI_RELAY_URL = "https://oruwtgdjurstvhgqcvbv.supabase.co/f
 export function hasManagedGatewayAccess(): boolean {
   return Boolean(Deno.env.get("LOVABLE_API_KEY") || Deno.env.get("MANAGED_AI_RELAY_SECRET"));
 }
-const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
-const OPENAI_IMAGE_URL = "https://api.openai.com/v1/images/generations";
 const GEMINI_CHAT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image';
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const DEFAULT_RATE_LIMIT_RETRY_MS = 750;
 const DEFAULT_TRANSIENT_RETRY_MS = 1_000;
@@ -92,7 +91,6 @@ function readGeminiApiKey(readEnv: EnvReader = (name) => Deno.env.get(name)): st
 function requestedProvider(model?: string): Provider | undefined {
   if (!model) return undefined;
   if (model.startsWith("google/") || model.startsWith("gemini-")) return "gemini";
-  if (model.startsWith("openai/") || model.startsWith("gpt-")) return "openai";
   if (model.startsWith("anthropic/") || model.startsWith("claude-")) return "anthropic";
   return undefined;
 }
@@ -105,7 +103,6 @@ export function resolveConfiguredProviders(
   // fallback order when Gemini is unavailable.
   const providers: Provider[] = [];
   if (readGeminiApiKey(readEnv)) providers.push("gemini");
-  if (readEnv("OPENAI_API_KEY")) providers.push("openai");
   if (readEnv("ANTHROPIC_API_KEY")) providers.push("anthropic");
 
   const preferred = providers.includes("gemini") ? "gemini" : requestedProvider(model);
@@ -124,92 +121,49 @@ export function isTextGenerationConfigured(): boolean {
 }
 
 export function isImageGenerationConfigured(): boolean {
-  return Boolean(Deno.env.get("LOVABLE_API_KEY") || Deno.env.get("OPENAI_API_KEY"));
-}
-
-const LOVABLE_IMAGE_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
-
-const IMAGE_GATEWAY_MODEL = "openai/gpt-image-2.5-sunburst";
-/**
- * A rate-limited gateway is retried on that same healthy endpoint with a bounded
- * wait. Piling a second provider onto an already exhausted budget turns one
- * honest "busy" into two refusals, so the direct provider is kept only for a
- * genuinely unavailable gateway.
- */
-const IMAGE_RATE_LIMIT_ATTEMPTS = 2;
-const IMAGE_RATE_LIMIT_MAX_WAIT_MS = 20_000;
-const IMAGE_RATE_LIMIT_FALLBACK_WAIT_MS = 2_000;
-
-/** How long the gateway asked us to wait, or null when the wait is too long to honor. */
-function gatewayRetryWaitMs(headers: Headers): number | null {
-  const retryAfter = headers.get("retry-after");
-  if (!retryAfter) return IMAGE_RATE_LIMIT_FALLBACK_WAIT_MS;
-  const seconds = Number(retryAfter);
-  const delay = Number.isFinite(seconds)
-    ? Math.max(0, Math.round(seconds * 1000))
-    : Math.max(0, Date.parse(retryAfter) - Date.now());
-  return Number.isFinite(delay) && delay <= IMAGE_RATE_LIMIT_MAX_WAIT_MS ? delay : null;
+  return Boolean(readGeminiApiKey());
 }
 
 export async function createImageGeneration(
   request: { prompt: string; size?: string; quality?: "low" | "medium" | "high" | "auto"; model?: string },
   signal?: AbortSignal,
 ): Promise<Response> {
-  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-  if (lovableKey) {
-    const body = JSON.stringify({
-      model: IMAGE_GATEWAY_MODEL,
-      prompt: request.prompt,
-      n: 1,
-      size: request.size ?? "1024x1024",
-      quality: request.quality ?? "medium",
-    });
-    const send = () => fetch(LOVABLE_IMAGE_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
-      body,
-      signal,
-    });
-    let gw = await send();
-    for (let attempt = 0; attempt < IMAGE_RATE_LIMIT_ATTEMPTS && gw.status === 429; attempt++) {
-      const waitMs = gatewayRetryWaitMs(gw.headers);
-      if (waitMs === null) break;
-      console.warn(`[image] gateway rate limited; waiting ${waitMs}ms then retrying`);
-      await waitForRetry(waitMs, signal);
-      gw = await send();
-    }
-    // Credit, policy and access denials are terminal and a rate limit is answered
-    // honestly with the real wait; only an unavailable gateway (5xx) justifies
-    // falling through to the directly configured provider.
-    if (gw.ok || !Deno.env.get("OPENAI_API_KEY") || (gw.status >= 400 && gw.status < 500)) {
-      return withProviderHeader(gw, "lovable");
-    }
-    console.warn("[image] gateway transient failure", gw.status);
-  }
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) {
-    throw new Error("No image provider is configured.");
-  }
-
-  const response = await fetch(OPENAI_IMAGE_URL, {
+  const apiKey = readGeminiApiKey();
+  if (!apiKey) throw new Error('Gemini image generation is not configured.');
+  const dimensions = (request.size ?? '1024x1024').split('x').map(Number);
+  const width = dimensions[0] || 1024;
+  const height = dimensions[1] || 1024;
+  const aspectRatio = width > height ? '3:2' : height > width ? '2:3' : '1:1';
+  const requestedModel = request.model?.replace(/^google\//, '');
+  const model = requestedModel?.startsWith('gemini-') ? requestedModel : GEMINI_IMAGE_MODEL;
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: { 'x-goog-api-key': apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: request.model ?? Deno.env.get("OPENAI_IMAGE_MODEL") ?? "gpt-image-1",
-      prompt: request.prompt,
-      n: 1,
-      size: request.size ?? "1024x1024",
-      quality: request.quality ?? "medium",
-      output_format: "png",
+      contents: [{ parts: [{ text: request.prompt }] }],
+      generationConfig: {
+        responseModalities: ['IMAGE'],
+        imageConfig: { aspectRatio, imageSize: request.quality === 'high' ? '2K' : '1K' },
+      },
     }),
     signal,
   });
-  return withProviderHeader(response, "openai");
-}
-
-export function normalizeOpenAIModel(model: string): string {
-  const bare = model.replace(/^openai\//, '');
-  return /^gpt-5/.test(bare) ? 'gpt-4.1' : bare;
+  if (!response.ok) return withProviderHeader(response, 'gemini');
+  const payload = await response.json() as {
+    candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }>;
+  };
+  const image = payload.candidates?.flatMap((candidate) => candidate.content?.parts ?? [])
+    .find((part) => typeof part.inlineData?.data === 'string')?.inlineData;
+  if (!image?.data) {
+    return new Response(JSON.stringify({ error: 'Gemini returned no image data.' }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json', 'X-Unison-AI-Provider': 'gemini' },
+    });
+  }
+  return new Response(JSON.stringify({ data: [{ b64_json: image.data, mime_type: image.mimeType ?? 'image/png' }] }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', 'X-Unison-AI-Provider': 'gemini' },
+  });
 }
 
 function modelFor(provider: Provider, requestedModel?: string): string {
@@ -218,16 +172,9 @@ function modelFor(provider: Provider, requestedModel?: string): string {
   if (provider === "lovable") {
     // Gateway ids are always `vendor/model`; bare ids get their vendor restored.
     if (model.includes("/")) return model;
-    if (model.startsWith("gpt-")) return `openai/${model}`;
     if (model.startsWith("gemini-")) return `google/${model}`;
     if (model.startsWith("claude-")) return `anthropic/${model}`;
     return DEFAULT_GEMINI_GATEWAY_MODEL;
-  }
-
-  if (provider === "openai") {
-    const bare = normalizeOpenAIModel(Deno.env.get("OPENAI_MODEL") || model);
-    if (bare.startsWith("gpt-")) return bare;
-    return "gpt-4o-mini";
   }
 
   if (provider === "gemini") {
@@ -248,15 +195,13 @@ function withProviderHeader(response: Response, provider: Provider): Response {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-async function callOpenAICompatible(
-  provider: "lovable" | "openai" | "gemini",
+async function callChatCompletionTransport(
+  provider: "lovable" | "gemini",
   request: ChatCompletionRequest,
   signal?: AbortSignal,
   retryRateLimits = true,
 ): Promise<Response> {
-  const apiKey = provider === "openai"
-    ? Deno.env.get("OPENAI_API_KEY")
-    : provider === "lovable"
+  const apiKey = provider === "lovable"
       ? (Deno.env.get("LOVABLE_API_KEY") || Deno.env.get("MANAGED_AI_RELAY_SECRET"))
       : readGeminiApiKey();
   const viaRelay = provider === "lovable" && !Deno.env.get("LOVABLE_API_KEY");
@@ -271,38 +216,16 @@ async function callOpenAICompatible(
     body.reasoning_effort = "low";
   }
   // Apply limits to the actual wire model, including deployment overrides.
-  if (/^(?:openai\/)?gpt-4o(?:-|$)/.test(model)) {
-    const tokens = body.max_completion_tokens ?? body.max_tokens;
-    if (typeof tokens === "number") body.max_tokens = Math.min(tokens, 16_384);
-    delete body.max_completion_tokens;
-    delete body.reasoning_effort;
-  }
-  if (/^(?:openai\/)?gpt-4\.1(?:-|$)/.test(model)) {
-    const tokens = body.max_completion_tokens ?? body.max_tokens;
-    if (typeof tokens === "number") body.max_tokens = Math.min(tokens, 16_384);
-    delete body.max_completion_tokens;
-    delete body.reasoning_effort;
-  }
-  if (/(^|\/)gpt-5/.test(String(model)) && body.max_tokens !== undefined) {
-    body.max_completion_tokens = body.max_completion_tokens ?? body.max_tokens;
-    delete body.max_tokens;
-  }
-  if (/(^|\/)gpt-5/.test(model) && typeof body.max_completion_tokens === "number") {
-    body.max_completion_tokens = Math.min(body.max_completion_tokens, 128_000);
-  }
-
   const url = viaRelay
     ? (Deno.env.get("MANAGED_AI_RELAY_URL") || DEFAULT_MANAGED_AI_RELAY_URL)
     : provider === "lovable"
     ? LOVABLE_GATEWAY_CHAT_URL
-    : provider === "openai"
-      ? OPENAI_CHAT_URL
       : GEMINI_CHAT_URL;
   const headers: Record<string, string> = viaRelay
     ? { "x-managed-ai-relay-secret": apiKey, "Content-Type": "application/json" }
     : provider === "lovable"
-    ? { "Lovable-API-Key": apiKey, "Content-Type": "application/json" }
-    : { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+      ? { "Lovable-API-Key": apiKey, "Content-Type": "application/json" }
+      : { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
 
   const requestInit: RequestInit = {
     method: "POST",
@@ -387,7 +310,7 @@ export async function createChatCompletion(request: ChatCompletionRequest, signa
     provider !== "anthropic" || (!request.stream && !Array.isArray(request.tools))
   ));
   if (providers.length === 0) {
-    throw new Error("No AI provider is configured. Set LOVABLE_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, or ANTHROPIC_API_KEY.");
+    throw new Error("No supported AI provider is configured. Set GEMINI_API_KEY, GOOGLE_API_KEY, UNISONGEMINI_API_KEY, ANTHROPIC_API_KEY, or LOVABLE_API_KEY.");
   }
 
   let lastResponse: Response | undefined;
@@ -411,7 +334,7 @@ export async function createChatCompletion(request: ChatCompletionRequest, signa
     try {
       const response = provider === "anthropic"
         ? await callAnthropic(request, child.signal)
-        : await callOpenAICompatible(provider, request, child.signal);
+        : await callChatCompletionTransport(provider, request, child.signal);
       if (response.ok) return response;
       console.warn(`[providerClient] ${provider} failed with ${response.status}; trying next provider`);
       lastResponse = response;
@@ -447,7 +370,7 @@ export async function createPlannedChatCompletion(
   if (!provider || provider === "anthropic") {
     throw new Error(`Unsupported planned chat model: ${request.model ?? "unknown"}`);
   }
-  return callOpenAICompatible(provider, request, signal, retryRateLimits);
+  return callChatCompletionTransport(provider, request, signal, retryRateLimits);
 }
 
 /**
@@ -465,5 +388,5 @@ export async function createLastResortGatewayChatCompletion(
   if (!hasManagedGatewayAccess()) {
     throw new Error("Managed AI gateway is not configured");
   }
-  return callOpenAICompatible("lovable", request, signal);
+  return callChatCompletionTransport("lovable", request, signal);
 }

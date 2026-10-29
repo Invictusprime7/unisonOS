@@ -10,6 +10,7 @@
 import { z } from "zod";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createChatCompletion } from "../_shared/ai/providerClient.ts";
+import { DEFAULT_GEMINI_GATEWAY_MODEL } from "../_shared/geminiModel.ts";
 import { generateAndStoreSiteImage, SiteImageError, sizeFor } from "../_shared/ai/siteImage.ts";
 import { errorResponse, secureJsonResponse } from "../_shared/response.ts";
 
@@ -75,7 +76,7 @@ async function writeArtDirection(body: ImageGenerateBody, business: string, sign
   ].filter(Boolean).join("\n");
 
   const response = await createChatCompletion({
-    model: "openai/gpt-6-astra",
+    model: DEFAULT_GEMINI_GATEWAY_MODEL,
     messages: [
       {
         role: "system",

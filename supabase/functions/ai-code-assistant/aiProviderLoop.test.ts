@@ -1,5 +1,6 @@
 import {
   buildPlannedChatCompletionRequest,
+  geminiOwnsLeadBudget,
   reserveFallbackWindow,
   PROVIDER_LOOP_TOTAL_BUDGET_MS,
   runProviderLoop,
@@ -12,7 +13,7 @@ import { buildResponseBody } from '../_shared/responseNormalizer.ts';
 import { runComposerLane } from './composerLane.ts';
 
 test('Composer image references survive provider fallback and format repair end to end', async () => {
-  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
     const data = 'data:image/png;base64,aGVsbG8=';
     const durableUrl = 'https://example.test/upload.png';
     const sent: Array<{ url: string; messages: Array<{ role: string; content: unknown }> }> = [];
@@ -38,9 +39,9 @@ test('Composer image references survive provider fallback and format repair end 
     }), {}, async aiMessages => runProviderLoop({ aiMessages, providerPlan: hybridPlan, navPageGen: false }));
     assert(response.status === 200, 'Composer should accept the repaired candidate');
     assert(gatewayCalls === 2, 'both generation and format repair must run');
-    assert(sent.length === 4, 'failed Gemini/OpenAI leads, gateway generation and gateway repair must run');
-    assert(sent[0].url.includes('googleapis') && sent[1].url.includes('openai'), 'both direct provider families must be exercised');
-    assert(sent.slice(2).every(call => call.url.includes('lovable')), 'repair uses the surviving gateway');
+    assert(sent.length === 3, 'failed Gemini lead, gateway generation and gateway repair must run');
+    assert(sent[0].url.includes('googleapis') && sent.slice(1).every(call => call.url.includes('lovable')),
+      'Gemini must fall back directly to the surviving gateway');
     for (const call of sent) {
       const content = call.messages.find(message => message.role === 'user')?.content;
       assert(Array.isArray(content), 'image content must not be flattened to text');
@@ -55,8 +56,8 @@ test('Composer image references survive provider fallback and format repair end 
   });
 });
 
-test('Gemini-primary App Builder turns use OpenAI then Lovable fallbacks', async () => {
-  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+test('Gemini-primary App Builder turns use Lovable after Gemini fails', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
     const calls: string[] = [];
     let geminiCalls = 0;
     const task = {
@@ -70,7 +71,6 @@ test('Gemini-primary App Builder turns use OpenAI then Lovable fallbacks', async
     };
     const providerPlan = buildProviderPlan(task, true, undefined, 'complex', 'composer', (name) => ({
       GEMINI_API_KEY: 'test',
-      OPENAI_API_KEY: 'test',
       LOVABLE_API_KEY: 'test',
       AI_PROVIDER_MODE: 'gemini-primary',
     }[name]));
@@ -83,9 +83,6 @@ test('Gemini-primary App Builder turns use OpenAI then Lovable fallbacks', async
           return new Response(JSON.stringify({ choices: [{ message: { content: 'Gemini recovered' } }] }));
         }
         throw new DOMException('Gemini timed out', 'TimeoutError');
-      }
-      if (requestUrl.includes('api.openai.com')) {
-        return new Response('OpenAI unavailable', { status: 500 });
       }
       if (requestUrl.includes('lovable')) {
         return new Response(JSON.stringify({ choices: [{ message: { content: 'Recovered page' } }] }));
@@ -103,10 +100,9 @@ test('Gemini-primary App Builder turns use OpenAI then Lovable fallbacks', async
     assert(providerPlan.geminiOnly === false, 'Gemini-primary mode must retain configured fallbacks');
     assert(result.providerUsed === 'lovable' && result.content === 'Recovered page', 'Lovable should recover the failed Gemini request');
     assert(result.modelUsed === 'google/gemini-3.8-flash', 'managed backup must also use Gemini');
-    assert(calls.length === 3
+    assert(calls.length === 2
       && calls[0].includes('generativelanguage.googleapis.com')
-      && calls[1].includes('api.openai.com')
-      && calls[2].includes('lovable'), 'direct Gemini, OpenAI fallback, then managed gateway');
+      && calls[1].includes('lovable'), 'direct Gemini then managed gateway');
 
     calls.length = 0;
     const nextResult = await runProviderLoop({
@@ -126,9 +122,69 @@ test('page design requests cannot be diverted into catalog mutations', () => {
   assert(!isPageDesignRequest('change the haircut price to $45'), 'catalog edits retain tools');
 });
 
-test('preserves tool-only fallback success after billing exhaustion and a model timeout', async () => {
+test('Gemini receives the remaining direct-provider window when no alternative direct provider exists', () => {
+  const models = [
+    { id: 'google/gemini-3.8-flash', label: 'Gemini', maxTokens: 16000 },
+  ];
+
+  assert(geminiOwnsLeadBudget(models, 0, false), 'Gemini owns the plan when no alternative direct provider exists');
+  assert(geminiOwnsLeadBudget(models, 0, false, true), 'a prioritized Gemini lead owns its generation window');
+  assert(!geminiOwnsLeadBudget(models, 0, true), 'an unavailable Gemini model cannot own the request window');
+  assert(!geminiOwnsLeadBudget(models, 1, false), 'an absent model cannot own the request window');
+});
+
+test('a failed Gemini page attempt leaves the next request its full remaining window', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test' }, async () => {
+    const calls: string[] = [];
+    const logs: string[] = [];
+    const originalLog = console.log;
+    let geminiAttempt = 0;
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      calls.push(requestUrl);
+      if (requestUrl.includes('generativelanguage.googleapis.com')) {
+        geminiAttempt++;
+        return geminiAttempt === 1
+          ? new Response('temporary provider error', { status: 500 })
+          : new Response(JSON.stringify({ choices: [{ message: { content: 'Gemini page' } }] }));
+      }
+      throw new Error(`Unexpected provider request: ${requestUrl}`);
+    }) as typeof fetch;
+    console.log = (...values: unknown[]) => { logs.push(values.join(' ')); };
+
+    try {
+      const providerPlan = {
+        gatewayModels: [
+          { id: 'google/gemini-3.8-flash', label: 'Gemini', maxTokens: 16000 },
+        ],
+        perModelTimeoutMs: 145_000,
+        fallbackMaxTokens: 16000,
+        preferLongLeadAttempt: true,
+        fallbackReserveMs: 30_000,
+      };
+      let firstTurnFailed = false;
+      try {
+        await runProviderLoop({ aiMessages: messages, providerPlan, navPageGen: false });
+      } catch {
+        firstTurnFailed = true;
+      }
+      assert(firstTurnFailed, 'the first turn should report the exhausted provider chain');
+      calls.length = 0;
+      const result = await runProviderLoop({ aiMessages: messages, providerPlan, navPageGen: false });
+
+      assert(result.providerUsed === 'gemini' && result.content === 'Gemini page', 'the next page should still use Gemini');
+      assert(calls.length === 1 && calls[0].includes('generativelanguage.googleapis.com'), 'the failed Gemini request must be retried on the next turn');
+      assert(logs.some((line) => line.includes('Trying planned direct model Gemini (timeout: 143s')),
+        'Gemini should receive the remaining 145 s budget minus 2 s response headroom');
+    } finally {
+      console.log = originalLog;
+    }
+  });
+});
+
+test('preserves tool-only managed fallback success after Gemini billing exhaustion', async () => {
   const originalFetch = globalThis.fetch;
-  const names = ['AI_PROVIDER_MODE', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'UNISONGEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'LOVABLE_API_KEY'];
+  const names = ['AI_PROVIDER_MODE', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'UNISONGEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'LOVABLE_API_KEY'];
   const originalEnv = new Map(names.map(name => [name, Deno.env.get(name)]));
   const calls: string[] = [];
   const toolCalls = [{ id: 'call_test', type: 'function', function: { name: 'updateCatalogRow', arguments: '{"patch":{"price":45}}' } }];
@@ -136,16 +192,13 @@ test('preserves tool-only fallback success after billing exhaustion and a model 
     for (const name of names) Deno.env.delete(name);
     Deno.env.set('AI_PROVIDER_MODE', 'hybrid');
     Deno.env.set('GEMINI_API_KEY', 'test');
-    Deno.env.set('OPENAI_API_KEY', 'test');
-    // If failover incorrectly continues, these configured providers must not run.
-    Deno.env.set('ANTHROPIC_API_KEY', 'test');
     Deno.env.set('LOVABLE_API_KEY', 'test');
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body));
       calls.push(request.model);
-      if (request.model.includes('gemini')) return new Response('{"error":{"message":"Billing is required"}}', { status: 402 });
-      if (request.model === 'gpt-4.1') throw new DOMException('Provider attempt timed out', 'TimeoutError');
-      if (request.model === 'gpt-4o-mini') return new Response(JSON.stringify({ choices: [{ message: { content: null, tool_calls: toolCalls } }] }));
+      const requestUrl = input instanceof Request ? input.url : String(input);
+      if (requestUrl.includes('googleapis')) return new Response('{"error":{"message":"Billing is required"}}', { status: 402 });
+      if (requestUrl.includes('lovable')) return new Response(JSON.stringify({ choices: [{ message: { content: null, tool_calls: toolCalls } }] }));
       throw new Error('Unexpected fallback after success');
     }) as typeof fetch;
     const result = await runProviderLoop({
@@ -153,13 +206,13 @@ test('preserves tool-only fallback success after billing exhaustion and a model 
       navPageGen: false,
       tools: [{ type: 'function', function: { name: 'updateCatalogRow', parameters: { type: 'object' } } }],
       providerPlan: {
-        gatewayModels: ['google/gemini-3.8-flash', 'openai/gpt-4.1', 'openai/gpt-4o-mini'].map(id => ({ id, label: id, maxTokens: 1000 })),
+        gatewayModels: [{ id: 'google/gemini-3.8-flash', label: 'Gemini', maxTokens: 1000 }],
         perModelTimeoutMs: 45000, fallbackMaxTokens: 1000,
       },
     });
-    assert(result.modelUsed === 'openai/gpt-4o-mini', 'successful fallback must be returned');
+    assert(result.providerUsed === 'lovable', 'successful managed fallback must be returned');
     assert(result.toolCalls?.[0].id === 'call_test', 'tool call must survive');
-    assert(calls[0] === 'gemini-3.8-flash' && calls.length === 3, 'Gemini first, then no further providers after tool-only success: ' + calls.join(','));
+    assert(calls.length === 2, 'Gemini then managed fallback, with no later providers after tool-only success');
     const body = buildResponseBody({ ...result, generatedImageUrl: '' });
     assert(Array.isArray(body.tool_calls) && body.tool_calls.length === 1, 'HTTP response must forward the tool call');
   } finally {
@@ -171,7 +224,7 @@ test('preserves tool-only fallback success after billing exhaustion and a model 
   }
 });
 
-const integrationEnvNames = ['AI_PROVIDER_MODE', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'UNISONGEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'LOVABLE_API_KEY'];
+const integrationEnvNames = ['AI_PROVIDER_MODE', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'UNISONGEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'LOVABLE_API_KEY'];
 async function withProviderEnv(config: Record<string, string>, run: () => Promise<void>) {
   const originalEnv = new Map(integrationEnvNames.map(name => [name, Deno.env.get(name)]));
   const originalFetch = globalThis.fetch;
@@ -188,11 +241,10 @@ async function withProviderEnv(config: Record<string, string>, run: () => Promis
 }
 const hybridPlan = { gatewayModels: [
   { id: 'google/gemini-3.8-flash', label: 'Gemini', maxTokens: 1000 },
-  { id: 'openai/gpt-4.1', label: 'OpenAI', maxTokens: 1000 },
 ], perModelTimeoutMs: 110_000, fallbackMaxTokens: 1000, preferLongLeadAttempt: true, fallbackReserveMs: 30_000 };
 
-test('funded Gemini answers before configured Lovable or OpenAI fallbacks', async () => {
-  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+test('funded Gemini answers before configured Lovable fallback', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
     const calls: string[] = [];
     globalThis.fetch = (async (url: RequestInfo | URL) => {
       calls.push(String(url));
@@ -205,7 +257,7 @@ test('funded Gemini answers before configured Lovable or OpenAI fallbacks', asyn
 });
 
 test('guest metering pins generation to priced Gemini and reconciles returned usage', async () => {
-  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
     const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
     let tokenCountCalls = 0;
     let tokenCountRequest: Record<string, unknown> | undefined;
@@ -246,7 +298,7 @@ test('guest metering pins generation to priced Gemini and reconciles returned us
     });
 
     assert(result.providerUsed === 'gemini' && result.content === 'Guest page', 'guest should receive the priced Gemini result');
-    assert(requests.length === 1 && requests[0].url.includes('generativelanguage.googleapis.com'), 'guest calls must not reach OpenAI or the managed gateway');
+    assert(requests.length === 1 && requests[0].url.includes('generativelanguage.googleapis.com'), 'guest calls must not reach the managed gateway');
     assert(tokenCountCalls === 1, 'guest cost reservation must count the complete prompt before generation');
     const generationRequest = tokenCountRequest?.generateContentRequest as {
       systemInstruction?: { parts?: Array<{ text?: string }> };
@@ -263,8 +315,8 @@ test('guest metering pins generation to priced Gemini and reconciles returned us
   });
 });
 
-test('hybrid fallbacks reach Lovable after Gemini and OpenAI failures', async () => {
-  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+test('hybrid fallbacks reach Lovable after Gemini failure', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
     const calls: string[] = [];
     globalThis.fetch = (async (url: RequestInfo | URL) => {
       calls.push(String(url));
@@ -273,7 +325,7 @@ test('hybrid fallbacks reach Lovable after Gemini and OpenAI failures', async ()
     }) as typeof fetch;
     const result = await runProviderLoop({ aiMessages: messages, providerPlan: hybridPlan, navPageGen: false });
     assert(result.providerUsed === 'lovable' && result.content === 'Recovered page', 'managed fallback should recover');
-    assert(calls.length === 3 && calls[0].includes('googleapis') && calls[1].includes('openai') && calls[2].includes('lovable'), 'expected Gemini, OpenAI, Lovable');
+    assert(calls.length === 2 && calls[0].includes('googleapis') && calls[1].includes('lovable'), 'expected Gemini then Lovable');
   });
 });
 
@@ -304,7 +356,7 @@ test('Gemini credits exhausted falls back to Lovable Cloud AI and stays there wh
 });
 
 test('provider failover respects the remaining Composer request budget', async () => {
-  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test' }, async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test' }, async () => {
     const originalNow = Date.now;
     let now = 1000, calls = 0;
     Date.now = () => now;
@@ -313,12 +365,8 @@ test('provider failover respects the remaining Composer request budget', async (
         calls++; now += 18_000;
         return new Response('{"error":{"message":"Billing is required"}}', { status: 402 });
       }) as typeof fetch;
-      try {
-        await runProviderLoop({ aiMessages: messages, providerPlan: hybridPlan, navPageGen: false, totalBudgetMs: 20_000 });
-        throw new Error('Expected a failed provider request');
-      } catch (error) {
-        assert(error instanceof Error && error.message.includes('All AI providers failed'), 'failure should retain provider diagnostics');
-      }
+      const result = await runProviderLoop({ aiMessages: messages, providerPlan: hybridPlan, navPageGen: false, totalBudgetMs: 20_000 });
+      assert(result.earlyError?.status === 402, 'provider failure should remain available to the caller');
       assert(calls === 1, 'the fallback must not start a new 135 second budget');
     } finally { Date.now = originalNow; }
   });
@@ -370,7 +418,7 @@ function assert(condition: boolean, message: string): void {
 
 const messages = [{ role: 'user', content: 'Generate the requested site.' }];
 
-test('preserves a full minute for GPT-4.1 after a reasoning timeout', () => {
+test('preserves fallback time after a reasoning timeout', () => {
   assert(reserveFallbackWindow(90_000, 134_800, 60_000) === 72_800, 'lead must preserve fallback time after billing failure');
   assert(reserveFallbackWindow(110_000, 135_000, 60_000) === 73_000, 'Composer must preserve fallback time');
 });
@@ -379,18 +427,7 @@ test('keeps server headroom beyond the funded Wizard lead attempt', () => {
   assert(PROVIDER_LOOP_TOTAL_BUDGET_MS === 145_000, 'provider loop should allow 145 seconds');
 });
 
-test('omits reasoning_effort for the GPT-4.1 Wizard fallback', () => {
-  const request = buildPlannedChatCompletionRequest({
-    model: { id: 'openai/gpt-4.1', label: 'GPT-4.1', maxTokens: 32_000 },
-    aiMessages: messages,
-    reasoningEffort: 'medium',
-  });
-
-  assert(request.max_tokens === 32_000, 'GPT-4.1 should use max_tokens');
-  assert(!('reasoning_effort' in request), 'GPT-4.1 must not receive reasoning_effort');
-});
-
-test('keeps reasoning_effort for Gemini OpenAI-compatible requests', () => {
+test('keeps reasoning_effort for Gemini compatibility requests', () => {
   const request = buildPlannedChatCompletionRequest({
     model: { id: 'google/gemini-3.8-flash', label: 'Gemini 3.8 Flash', maxTokens: 36_000 },
     aiMessages: messages,
@@ -399,17 +436,6 @@ test('keeps reasoning_effort for Gemini OpenAI-compatible requests', () => {
 
   assert(request.max_tokens === 36_000, 'Gemini should use max_tokens');
   assert(request.reasoning_effort === 'medium', 'Gemini should retain reasoning_effort');
-});
-
-test('keeps GPT-5 completion tokens and reasoning controls', () => {
-  const request = buildPlannedChatCompletionRequest({
-    model: { id: 'openai/gpt-5-mini', label: 'GPT-5 Mini', maxTokens: 32_000 },
-    aiMessages: messages,
-    reasoningEffort: 'low',
-  });
-
-  assert(request.max_completion_tokens === 32_000, 'GPT-5 should use max_completion_tokens');
-  assert(request.reasoning_effort === 'low', 'GPT-5 should retain reasoning_effort');
 });
 
 test('does not cooldown funded Gemini after a request-rate quota 429', async () => {
@@ -443,15 +469,14 @@ test('does not cooldown funded Gemini after a request-rate quota 429', async () 
     });
   });
 
-  test('continues from Gemini billing exhaustion to the OpenAI fallback in hybrid mode', async () => {
+  test('Gemini billing exhaustion does not invoke an unsupported direct provider', async () => {
   const originalFetch = globalThis.fetch;
-  const envNames = ['AI_PROVIDER_MODE', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'UNISONGEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'LOVABLE_API_KEY'];
+  const envNames = ['AI_PROVIDER_MODE', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'UNISONGEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'LOVABLE_API_KEY'];
   const originalEnv = new Map(envNames.map((name) => [name, Deno.env.get(name)]));
   const requestedUrls: string[] = [];
 
   Deno.env.set('AI_PROVIDER_MODE', 'hybrid');
   Deno.env.set('GEMINI_API_KEY', 'test-gemini-key');
-  Deno.env.set('OPENAI_API_KEY', 'test-openai-key');
   Deno.env.delete('GOOGLE_API_KEY');
   Deno.env.delete('UNISONGEMINI_API_KEY');
   Deno.env.delete('ANTHROPIC_API_KEY');
@@ -466,14 +491,6 @@ test('does not cooldown funded Gemini after a request-rate quota 429', async () 
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    if (url.includes('api.openai.com')) {
-      return new Response(JSON.stringify({
-        choices: [{ message: { content: 'OpenAI recovered the Wizard turn.' } }],
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
     throw new Error(`Unexpected provider URL: ${url}`);
   }) as typeof fetch;
 
@@ -483,7 +500,6 @@ test('does not cooldown funded Gemini after a request-rate quota 429', async () 
       providerPlan: {
         gatewayModels: [
           { id: 'google/gemini-3.8-flash', label: 'Gemini 3.8 Flash', maxTokens: 36_000 },
-          { id: 'openai/gpt-4.1', label: 'OpenAI GPT-4.1', maxTokens: 32_000 },
         ],
         perModelTimeoutMs: 30_000,
         fallbackMaxTokens: 36_000,
@@ -491,11 +507,9 @@ test('does not cooldown funded Gemini after a request-rate quota 429', async () 
       navPageGen: false,
     });
 
-    assert(result.content === 'OpenAI recovered the Wizard turn.', 'OpenAI should recover the failed Gemini turn');
-    assert(result.providerUsed === 'openai', 'the recovered response should identify OpenAI');
-    assert(requestedUrls.length === 2, 'the loop should make one Gemini request and one OpenAI request');
-    assert(requestedUrls[0].includes('generativelanguage.googleapis.com'), 'Gemini should remain the lead provider');
-    assert(requestedUrls[1].includes('api.openai.com'), 'OpenAI should run after Gemini billing exhaustion');
+    assert(result.earlyError?.status === 402, 'Gemini billing exhaustion should be surfaced');
+    assert(requestedUrls.length === 1, 'the loop should make only the configured Gemini request');
+    assert(requestedUrls[0].includes('generativelanguage.googleapis.com'), 'the configured Gemini provider should be used');
   } finally {
     globalThis.fetch = originalFetch;
     for (const [name, value] of originalEnv) {
@@ -505,15 +519,14 @@ test('does not cooldown funded Gemini after a request-rate quota 429', async () 
   }
 });
 
-test('Lovable AI 429 is retried, and its refusal is never masked by a dead OpenAI key', async () => {
+test('Lovable AI 429 is retried and its refusal remains visible', async () => {
   const originalFetch = globalThis.fetch;
-  const names = ['AI_PROVIDER_MODE', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'UNISONGEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'LOVABLE_API_KEY'];
+  const names = ['AI_PROVIDER_MODE', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'UNISONGEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'LOVABLE_API_KEY'];
   const originalEnv = new Map(names.map(name => [name, Deno.env.get(name)]));
-  const plan = { gatewayModels: [{ id: 'openai/gpt-4.1', label: 'gpt-4.1', maxTokens: 1000 }], perModelTimeoutMs: 45000, fallbackMaxTokens: 1000 };
+  const plan = { gatewayModels: [{ id: 'google/gemini-3.8-flash', label: 'Gemini', maxTokens: 1000 }], perModelTimeoutMs: 45000, fallbackMaxTokens: 1000 };
   try {
     for (const name of names) Deno.env.delete(name);
     Deno.env.set('AI_PROVIDER_MODE', 'hybrid');
-    Deno.env.set('OPENAI_API_KEY', 'test');
     Deno.env.set('LOVABLE_API_KEY', 'test');
     const isGateway = (input: RequestInfo | URL) => String(input instanceof Request ? input.url : input).includes('lovable');
 
@@ -531,15 +544,14 @@ test('Lovable AI 429 is retried, and its refusal is never masked by a dead OpenA
     assert(ok.providerUsed === 'lovable' && ok.content === 'page source', 'gateway retry must recover the page');
     assert(gatewayCalls === 3, 'two bounded retries');
 
-    // 2) Gateway keeps refusing, OpenAI key is out of credit: surface the gateway's answer.
+    // 2) Gateway keeps refusing: surface the gateway's answer.
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       if (isGateway(input)) return new Response('{"message":"Too many requests right now"}', { status: 429, headers: { 'retry-after': '1' } });
-      return new Response('{"error":{"message":"insufficient_quota"}}', { status: 402 });
+      throw new Error('no direct provider should run after the gateway refusal');
     }) as typeof fetch;
     const failed = await runProviderLoop({ aiMessages: [{ role: 'user', content: 'x' }], navPageGen: false, providerPlan: plan });
     assert(failed.earlyError?.status === 429, `expected gateway 429, got ${failed.earlyError?.status}`);
     assert(/Lovable AI: Too many requests/.test(failed.earlyError?.error ?? ''), failed.earlyError?.error ?? 'missing');
-    assert(!/OpenAI account/.test(failed.earlyError?.error ?? ''), 'dead OpenAI key must not mask the real cause');
   } finally {
     globalThis.fetch = originalFetch;
     for (const [name, value] of originalEnv) {

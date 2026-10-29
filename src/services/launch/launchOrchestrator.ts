@@ -117,6 +117,7 @@ import { buildWizardBindingGuide } from '@/services/wizardBindingBridge';
 import type { CommitMutationResult } from "@/services/vfsCommitService";
 import { compileResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import { buildAppBuildContract } from '@/services/app-builder/appBuilderContracts';
+import type { AppBuildGenerationMode } from '@/services/app-builder/appBuilderContracts';
 import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { WIZARD_LANE_B_PROTECTED_PATHS } from '@/services/wizardLaneBEnrichment';
 import {
@@ -127,6 +128,7 @@ import { createWizardCompileArtifact } from '@/platform/core/snapshotSeal';
 import { resolveBusinessLaunchPlan } from '@/services/launch/launchCapabilities';
 
 export interface LaunchOrchestratorInput {
+  generationMode?: AppBuildGenerationMode;
   demoGeneration?: boolean;
   systemId: BusinessSystemType;
   template?: TemplateCardData;
@@ -563,11 +565,12 @@ async function runReservedLaunchPipeline(
   });
 
   // ── Stage: app-build (one isolated, whole-site candidate) ─────────────────
-  status("Designing your application…");
+  status(input.generationMode === 'deterministic' ? 'Building a deterministic starter…' : 'Designing your application…');
   const appBuild = await run.stage("app-build", async (signal) => {
     const result = await unisonAppBuilder.generate({
       operationId: `launch:${plan.ids.draftId}:app-build`,
       contract: appBuildContract,
+      generationMode: input.generationMode ?? 'ai',
       initialFiles: canonicalPlan.infrastructureFiles,
       entryPoint: '/src/App.tsx',
       baseRevisionId: null,

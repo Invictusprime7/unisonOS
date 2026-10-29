@@ -16,7 +16,7 @@ export interface ModelSpec {
 export interface ProviderPlan {
   /** Ordered list of direct-provider models to try. */
   gatewayModels: ModelSpec[];
-  /** Provider selected by the weighted runtime before fallbacks. */
+  /** Gemini is the sole supported direct text provider. */
   primaryProvider?: ParallelTextProvider;
   /** Per-model timeout in ms */
   perModelTimeoutMs: number;
@@ -26,8 +26,6 @@ export interface ProviderPlan {
   preferLongLeadAttempt?: boolean;
   /** Split a bounded focused turn across compatible provider attempts. */
   balancedProviderAttempts?: boolean;
-  /** Keep a usable window for the non-reasoning fallback after a slow lead. */
-  fallbackReserveMs?: number;
   /** Run the lead model and the managed gateway simultaneously; first valid answer wins. */
   raceGateway?: boolean;
   /** Only Gemini models may serve this turn (direct Gemini API first, Gemini on the managed gateway as backup). */
@@ -42,83 +40,27 @@ export interface GatewayOverrides {
   maxTokens?: number;
 }
 
-export type ParallelTextProvider = "gemini" | "openai";
-type EnvReader = (name: string) => string | undefined;
+export type ParallelTextProvider = 'gemini';
 
-export interface ProviderDistribution {
-  gemini: number;
-  openai: number;
-}
+type EnvReader = (name: string) => string | undefined;
 
 export function isGeminiExclusiveProviderMode(
   readEnv: EnvReader = (name) => Deno.env.get(name),
 ): boolean {
   const mode = (readEnv('AI_PROVIDER_MODE') || 'hybrid').trim().toLowerCase();
   if (mode !== 'gemini-only') return false;
-  // Never lock to Gemini when it has no key but OpenAI does.
   if (!readEnv('GEMINI_API_KEY') && !readEnv('GOOGLE_API_KEY') && !readEnv('UNISONGEMINI_API_KEY')) return false;
   return true;
 }
 
-// Funded Gemini leads; configured OpenAI remains a hybrid fallback.
-const DEFAULT_PROVIDER_DISTRIBUTION: ProviderDistribution = { gemini: 100, openai: 0 };
-
-/** Parses `gemini=50,openai=50` or `gemini:50,openai:50`. */
-export function parseProviderDistribution(raw?: string): ProviderDistribution {
-  if (!raw?.trim()) return { ...DEFAULT_PROVIDER_DISTRIBUTION };
-
-  const parsed: Partial<ProviderDistribution> = {};
-  for (const entry of raw.split(',')) {
-    const [name, value] = entry.split(/[:=]/, 2).map((part) => part.trim().toLowerCase());
-    if ((name !== 'gemini' && name !== 'openai') || !value) continue;
-    const weight = Number(value);
-    if (Number.isFinite(weight) && weight >= 0) parsed[name] = weight;
-  }
-
-  const gemini = parsed.gemini ?? 0;
-  const openai = parsed.openai ?? 0;
-  return gemini + openai > 0 ? { gemini, openai } : { ...DEFAULT_PROVIDER_DISTRIBUTION };
-}
-
-function stableBucket(value: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) / 0x1_0000_0000;
-}
-
-export function selectParallelProvider(
-  routingKey: string,
-  distribution: ProviderDistribution,
-): ParallelTextProvider {
-  const total = distribution.gemini + distribution.openai;
-  if (total <= 0) return 'gemini';
-  return stableBucket(routingKey || 'unison-default') * total < distribution.gemini
-    ? 'gemini'
-    : 'openai';
-}
-
 function providerForModel(modelId: string): ParallelTextProvider | null {
   if (modelId.startsWith('google/') || modelId.startsWith('gemini-')) return 'gemini';
-  if (modelId.startsWith('openai/') || modelId.startsWith('gpt-')) return 'openai';
   return null;
 }
 
-function selectPrimaryProvider(
-  routingKey: string | undefined,
-  readEnv: EnvReader,
-): ParallelTextProvider | undefined {
+function selectPrimaryProvider(readEnv: EnvReader): ParallelTextProvider | undefined {
   const hasGemini = Boolean(readEnv('GEMINI_API_KEY') || readEnv('GOOGLE_API_KEY') || readEnv('UNISONGEMINI_API_KEY'));
-  const hasOpenAI = !isGeminiExclusiveProviderMode(readEnv) && Boolean(readEnv('OPENAI_API_KEY'));
-  if (!hasGemini && !hasOpenAI) return undefined;
-  if (!hasGemini) return 'openai';
-  if (!hasOpenAI) return 'gemini';
-  return selectParallelProvider(
-    routingKey || 'unison-default',
-    parseProviderDistribution(readEnv('AI_PROVIDER_DISTRIBUTION')),
-  );
+  return hasGemini ? 'gemini' : undefined;
 }
 
 function prioritizeProviderModels(models: ModelSpec[], primaryProvider?: ParallelTextProvider): ModelSpec[] {
@@ -132,13 +74,8 @@ function prioritizeProviderModels(models: ModelSpec[], primaryProvider?: Paralle
 // ── Model tiers ─────────────────────────────────────────────────────────────
 
 const MODELS = {
-  // Gemini 3.8 Flash is the one supported Gemini text model. Provider
-  // failover is handled by OpenAI and Lovable, not a stale Gemini version.
+  // Gemini 3.8 Flash is the sole supported direct text model.
   geminiFlash: { id: DEFAULT_GEMINI_GATEWAY_MODEL, label: "Gemini 3.8 Flash" },
-  gpt41: { id: "openai/gpt-4.1", label: "GPT-4.1" },
-  gpt41Mini: { id: "openai/gpt-4.1-mini", label: "GPT-4.1 Mini" },
-  gpt4oMini: { id: "openai/gpt-4o-mini", label: "GPT-4o Mini" },
-  gpt4o: { id: "openai/gpt-4o", label: "GPT-4o" },
 } as const;
 
 /** Direct-Gemini composition model; GEMINI_COMPOSER_MODEL can name a newer one the key can use. */
@@ -168,21 +105,11 @@ function applyComplexityUpgrade(
 
   if (complexity === "advanced") {
     const advancedTokens = 64_000;
-    const advancedModels: ModelSpec[] = [
-      m(MODELS.gpt41, 32_768),
-      m(MODELS.gpt4o, 16_384),
-      m(MODELS.geminiFlash, advancedTokens),
-      m(MODELS.gpt4oMini, advancedTokens),
-    ];
+    const advancedModels: ModelSpec[] = [m(MODELS.geminiFlash, advancedTokens)];
     return { models: advancedModels, timeoutBoostMs: 45000 };
   }
 
-  return { models: [
-    m(MODELS.gpt41, 32_768),
-    m(MODELS.gpt4o, 16_384),
-    m(MODELS.geminiFlash, 48_000),
-    m(MODELS.gpt4oMini, 48_000),
-  ], timeoutBoostMs: 30000 };
+  return { models: [m(MODELS.geminiFlash, 48_000)], timeoutBoostMs: 30000 };
 }
 
 /**
@@ -212,49 +139,31 @@ export function buildProviderPlan(
   let plan: ProviderPlan;
 
   switch (task.type) {
-    // Repair turns apply targeted diagnostics to existing files: a smaller model leads, full models back it up.
+    // Repair turns apply targeted diagnostics to existing files.
     case "site_page_repair":
       plan = {
-        gatewayModels: [
-          m(MODELS.gpt41Mini, 16_384),
-          m(MODELS.gpt41, 16_384),
-          m(composerGeminiModel(readEnv), 48_000),
-        ],
+        gatewayModels: [m(composerGeminiModel(readEnv), 48_000)],
         perModelTimeoutMs: 110_000,
         fallbackMaxTokens: 32_000,
         preferLongLeadAttempt: true,
-        fallbackReserveMs: 30_000,
       };
       break;
     case "site_page_author":
     case "builder_source_edit":
       plan = {
-        gatewayModels: [
-          m(MODELS.gpt41, 16_384),
-          m(MODELS.gpt4o, 16_384),
-          // Stronger Gemini leads composition when funded Gemini serves the turn.
-          m(composerGeminiModel(readEnv), 48_000),
-        ],
+        gatewayModels: [m(composerGeminiModel(readEnv), 48_000)],
         // Full-page authoring gets the platform window; scoped EDIT turns are small.
         perModelTimeoutMs: task.type === "site_page_author" ? 135_000 : 110_000,
         fallbackMaxTokens: 32_000,
         preferLongLeadAttempt: true,
-        fallbackReserveMs: 30_000,
       };
       break;
     // ── Lane B: Wizard seed (full builder-brain path — sole wizard lane) ──
     case "wizard_seed_generation":
-      // Two-model lineup so a single provider blip (prose leak, soft-fail,
-      // token cutoff) can't strand a Wizard launch with an empty/partial
-      // bundle. Both honor the same multi-file JSON output contract.
+      // Gemini owns the complete long-output Wizard turn; the managed gateway
+      // remains the managed fallback after direct Gemini fails.
       plan = {
-        gatewayModels: [
-          // Current stable model for full-site generation.
-          m(MODELS.geminiFlash, 36_000),
-          // GPT-4.1 has a 32k output window without a reasoning phase, making
-          // it a better bounded fallback for this large structured response.
-          m(MODELS.gpt41, 32_000),
-        ],
+        gatewayModels: [m(MODELS.geminiFlash, 36_000)],
         // Production Wizard responses commonly exceed 20k output tokens.
         // Production traces include valid large Wizard generations that run
         // beyond 95 seconds. Keep this below the provider loop's 135-second
@@ -279,11 +188,7 @@ export function buildProviderPlan(
 
     case "nav_page_generation":
       plan = {
-        gatewayModels: [
-          m(MODELS.geminiFlash, 12000),
-          m(MODELS.gpt41, 12000),
-          m(MODELS.gpt4oMini, 12000),
-        ],
+        gatewayModels: [m(MODELS.geminiFlash, 12000)],
         perModelTimeoutMs: 30000,
         fallbackMaxTokens: 10000,
       };
@@ -291,12 +196,7 @@ export function buildProviderPlan(
 
     case "single_file_edit":
       plan = {
-        gatewayModels: [
-          m(MODELS.geminiFlash, 24000),
-          m(MODELS.gpt41, 24000),
-          m(MODELS.gpt4oMini, 24000),
-          m(MODELS.gpt4o, 24000),
-        ],
+        gatewayModels: [m(MODELS.geminiFlash, 24000)],
         perModelTimeoutMs: 40000,
         fallbackMaxTokens: 24000,
       };
@@ -305,12 +205,7 @@ export function buildProviderPlan(
     // ── Lane B: Heavy reasoning tasks ───────────────────────────────────
     case "debug_fix":
       plan = {
-        gatewayModels: [
-          m(MODELS.geminiFlash, 32000),
-          m(MODELS.gpt41, 32000),
-          m(MODELS.gpt4oMini, 32000),
-          m(MODELS.gpt4o, 32000),
-        ],
+        gatewayModels: [m(MODELS.geminiFlash, 32000)],
         perModelTimeoutMs: 45000,
         fallbackMaxTokens: 32000,
       };
@@ -319,12 +214,7 @@ export function buildProviderPlan(
     case "multi_file_edit":
     case "surgical_edit":
       plan = {
-        gatewayModels: [
-          m(MODELS.geminiFlash, 32000),
-          m(MODELS.gpt41, 32000),
-          m(MODELS.gpt4oMini, 32000),
-          m(MODELS.gpt4o, 32000),
-        ],
+        gatewayModels: [m(MODELS.geminiFlash, 32000)],
         perModelTimeoutMs: 45000,
         fallbackMaxTokens: 32000,
       };
@@ -335,12 +225,7 @@ export function buildProviderPlan(
     case "launch_desk":
     default:
       plan = {
-        gatewayModels: [
-          m(MODELS.geminiFlash, 32000),
-          m(MODELS.gpt41, 32000),
-          m(MODELS.gpt4oMini, 32000),
-          m(MODELS.gpt4o, 32000),
-        ],
+        gatewayModels: [m(MODELS.geminiFlash, 32000)],
         perModelTimeoutMs: 45000,
         fallbackMaxTokens: 32000,
       };
@@ -364,7 +249,6 @@ export function buildProviderPlan(
     if (complexity === 'complex' || complexity === 'advanced') {
       plan.fallbackMaxTokens = complexity === 'advanced' ? 64_000 : 48_000;
       plan.preferLongLeadAttempt = true;
-      plan.fallbackReserveMs = 60_000;
     }
   }
 
@@ -385,9 +269,11 @@ export function buildProviderPlan(
       && overrides.selectedModelId
     ) {
       const tokens = overrides.maxTokens ?? plan.gatewayModels[0]?.maxTokens ?? 32000;
-      // Older tabs can retain a GPT-5 selection after the menu is updated.
-      const modelId = /^(?:openai\/)?gpt-5/.test(overrides.selectedModelId)
-        ? 'openai/gpt-4.1' : overrides.selectedModelId;
+      // Older tabs may retain a provider choice that is no longer supported.
+      const selectedModelId = overrides.selectedModelId;
+      const modelId = selectedModelId.startsWith('google/') || selectedModelId.startsWith('gemini-')
+        ? selectedModelId
+        : composerGeminiModel(readEnv).id;
       const label = modelId.split("/").pop() ?? modelId;
       const userModel: ModelSpec = { id: modelId, maxTokens: tokens, label };
       // A focused isolated-page completion gets ONE model with its FULL
@@ -416,49 +302,30 @@ export function buildProviderPlan(
     }
   }
 
-  // Explicit user model selections always win. A funded Gemini Wizard is a
-  // long-output, single-provider contract: an exhausted OpenAI fallback can
-  // only consume the tail of the launch deadline after Gemini has timed out.
-  // Other tasks retain the stable weighted provider split.
+  // Gemini is the only supported direct provider. Stale saved selections are
+  // normalized above and never create an alternate provider route.
   const hasExplicitModel = overrides?.autoModelSelection === false && Boolean(overrides.selectedModelId);
   const wizardGeminiConfigured = task.type === "wizard_seed_generation"
     && Boolean(readEnv('GEMINI_API_KEY') || readEnv('GOOGLE_API_KEY') || readEnv('UNISONGEMINI_API_KEY'));
   const isComposerTask = task.type === "site_page_author" || task.type === "site_page_repair" || task.type === "builder_source_edit";
   if (isComposerTask) {
-    // Keep Gemini first for authored pages, but preserve configured OpenAI and
-    // the managed gateway as fallbacks unless deployment policy is exclusive.
     const geminiModel = m(composerGeminiModel(readEnv), Math.min(48_000, overrides?.maxTokens ?? 48_000));
-    const openAiFallbackAvailable = !isGeminiExclusiveProviderMode(readEnv)
-      && Boolean(readEnv('OPENAI_API_KEY'));
-    plan.gatewayModels = [
-      geminiModel,
-      ...(openAiFallbackAvailable ? [m(MODELS.gpt41, Math.min(16_384, overrides?.maxTokens ?? 16_384))] : []),
-    ];
+    plan.gatewayModels = [geminiModel];
     plan.primaryProvider = 'gemini';
     plan.geminiOnly = isGeminiExclusiveProviderMode(readEnv);
     plan.raceGateway = false;
-    if (openAiFallbackAvailable) plan.fallbackReserveMs = 30_000;
   } else if (!hasExplicitModel) {
     plan.primaryProvider = wizardGeminiConfigured
       ? 'gemini'
-      : selectPrimaryProvider(routingKey, readEnv);
+      : selectPrimaryProvider(readEnv);
     plan.gatewayModels = prioritizeProviderModels(plan.gatewayModels, plan.primaryProvider);
   }
 
-  // Gemini leads the Wizard when funded, but OpenAI models stay in the chain as
-  // fallbacks so a Gemini billing 429 does not fail the whole turn.
+  // The funded Gemini key owns all direct Wizard turns.
   if (wizardGeminiConfigured) {
-    const openAiFallbackAvailable = !isGeminiExclusiveProviderMode(readEnv)
-      && Boolean(readEnv('OPENAI_API_KEY'));
     const geminiModels = plan.gatewayModels.filter((model) => providerForModel(model.id) === 'gemini');
-    const openAiModels = openAiFallbackAvailable
-      ? plan.gatewayModels.filter((model) => providerForModel(model.id) === 'openai')
-      : [];
-    plan.gatewayModels = [...geminiModels, ...openAiModels];
-    if (openAiModels.length > 0) plan.preferLongLeadAttempt = false;
-    plan.primaryProvider = geminiModels.length > 0
-      ? 'gemini'
-      : (openAiModels.length > 0 ? 'openai' : undefined);
+    plan.gatewayModels = geminiModels;
+    plan.primaryProvider = geminiModels.length > 0 ? 'gemini' : undefined;
   }
 
   // Respect an explicit Gemini-only deployment policy; otherwise use configured providers.
@@ -478,12 +345,5 @@ export function buildProviderPlan(
 
   plan.gatewayModels = plan.gatewayModels.filter((model, index, models) =>
     models.findIndex(candidate => candidate.id === model.id) === index);
-  plan.gatewayModels = plan.gatewayModels.map((model) => ({
-    ...model,
-    maxTokens: /^(?:openai\/)?gpt-4o(?:-|$)/.test(model.id)
-      ? Math.min(model.maxTokens, 16_384)
-      : /^(?:openai\/)?gpt-4\.1(?:-|$)/.test(model.id)
-        ? Math.min(model.maxTokens, 16_384) : model.maxTokens,
-  }));
   return plan;
 }

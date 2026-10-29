@@ -3,6 +3,8 @@
  * Extracted from index.ts lines 1128-1207.
  */
 
+import { createImageGeneration, isImageGenerationConfigured } from '../_shared/ai/providerClient.ts';
+
 export interface ImageGenerationResult {
   generatedImageUrl: string;
   imageHtml: string;
@@ -13,15 +15,13 @@ export async function generateImageIfNeeded(opts: {
   generateImage: boolean;
   imagePlacement?: string;
   fastTemplateReact: boolean;
-  openaiApiKey?: string;
 }): Promise<ImageGenerationResult> {
   const result: ImageGenerationResult = { generatedImageUrl: '', imageHtml: '' };
 
   const imageKeywords = ['generate image', 'create image', 'generate a logo', 'create a logo', 'make a logo', 'add logo image', 'insert image'];
   const shouldGenerate = !opts.fastTemplateReact && (opts.generateImage || imageKeywords.some(kw => opts.userPrompt.includes(kw)));
 
-  const imageApiKey = opts.openaiApiKey;
-  if (!shouldGenerate || !imageApiKey) return result;
+  if (!shouldGenerate || !isImageGenerationConfigured()) return result;
 
   console.log('[AI-Code-Assistant] Generating image for request');
   const imagePromptMatch = opts.userPrompt.match(/(?:generate|create|add|place|insert)\s+(?:an?\s+)?(?:image|logo|photo|picture)\s+(?:of\s+)?(.+?)(?:\s+(?:in|at|on|to)\s+|$)/i);
@@ -41,22 +41,11 @@ export async function generateImageIfNeeded(opts: {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
-    const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${imageApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: Deno.env.get('OPENAI_IMAGE_MODEL') || 'gpt-image-1',
-        prompt: `${imageDescription}, ${isLogo ? 'clean professional logo design, minimal, vector style, transparent background' : 'high quality digital art'}`,
-        n: 1,
-        size: '1024x1024',
-        quality: 'low',
-        output_format: 'png',
-      }),
-      signal: controller.signal
-    });
+    const imageResponse = await createImageGeneration({
+      prompt: `${imageDescription}, ${isLogo ? 'clean professional logo design, minimal, vector style, transparent background' : 'high quality digital art'}`,
+      size: '1024x1024',
+      quality: 'low',
+    }, controller.signal);
     clearTimeout(timeoutId);
 
     if (imageResponse.ok) {
@@ -65,7 +54,8 @@ export async function generateImageIfNeeded(opts: {
         try {
           const imageData = JSON.parse(imageText);
           const b64 = imageData.data?.[0]?.b64_json || '';
-          result.generatedImageUrl = b64 ? `data:image/png;base64,${b64}` : imageData.data?.[0]?.url || '';
+          const mimeType = imageData.data?.[0]?.mime_type || 'image/png';
+          result.generatedImageUrl = b64 ? `data:${mimeType};base64,${b64}` : imageData.data?.[0]?.url || '';
           if (result.generatedImageUrl) {
             const placementStyles: Record<string, string> = {
               'top-left': 'position: absolute; top: 10px; left: 10px;',

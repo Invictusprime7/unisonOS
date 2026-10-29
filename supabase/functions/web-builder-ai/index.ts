@@ -47,7 +47,7 @@ serve(async (req) => {
       console.warn("No direct AI provider configured");
       return secureJsonResponse(
         { 
-          error: "AI features are not configured. Set OPENAI_API_KEY, GEMINI_API_KEY, or ANTHROPIC_API_KEY.",
+          error: "AI features are not configured. Set GEMINI_API_KEY, GOOGLE_API_KEY, UNISONGEMINI_API_KEY, ANTHROPIC_API_KEY, or LOVABLE_API_KEY.",
           isLocalDevelopment: true
         },
         503,

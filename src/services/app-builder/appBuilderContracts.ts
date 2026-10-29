@@ -445,6 +445,8 @@ export interface BuildAppBuildContractInput {
 }
 
 export interface AppBuildRequest {
+  /** AI authors by default; deterministic mode creates an explicit starter without provider calls. */
+  generationMode?: AppBuildGenerationMode;
   operationId: string;
   gatewayOptions?: Record<string, unknown>;
   contract: AppBuildContract;
@@ -477,6 +479,8 @@ export interface AppBuildRequest {
     candidate: AICandidateChangeSet,
   ) => Promise<{ files: Record<string, string>; revisionId?: string | null }>;
 }
+
+export type AppBuildGenerationMode = 'ai' | 'deterministic';
 
 export interface AppBuilderPageTarget {
   pageId?: string;
@@ -582,7 +586,7 @@ export interface AppBuildCandidateProvenance {
   contractSeed: string;
   sourceHash: string;
   authoredPageIds: readonly string[];
-  strategy: 'ai-candidate' | 'ai-candidate+closure-repair' | 'legacy-commit-adapter';
+  strategy: 'ai-candidate' | 'ai-candidate+closure-repair' | 'legacy-commit-adapter' | 'deterministic-scaffold';
 }
 
 export interface AppBuildCandidateClosureIssue {

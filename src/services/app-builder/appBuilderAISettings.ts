@@ -1,3 +1,5 @@
+import { DEFAULT_GEMINI_MODEL_ID } from '@/config/aiModels';
+
 /** Optional owner preferences shared by all App Builder entry points. No credentials. */
 export interface GatewayConfig {
   selectedModelId: string;
@@ -11,6 +13,16 @@ export interface GatewayConfig {
 const SETTINGS_KEY = 'unison:app-builder:ai-settings';
 let current: GatewayConfig | undefined;
 
+function normalizedConfig(config: GatewayConfig): GatewayConfig {
+  const selectedModelId = config.selectedModelId;
+  return {
+    ...config,
+    selectedModelId: selectedModelId.startsWith('google/') || selectedModelId.startsWith('gemini-')
+      ? selectedModelId
+      : DEFAULT_GEMINI_MODEL_ID,
+  };
+}
+
 export function readAppBuilderAISettings(): GatewayConfig | undefined {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -22,19 +34,24 @@ export function readAppBuilderAISettings(): GatewayConfig | undefined {
       || !Number.isFinite(value.maxTokens) || value.maxTokens <= 0
       || typeof value.autoModelSelection !== 'boolean'
       || typeof value.streamResponse !== 'boolean') return current;
-    current = value;
+    current = normalizedConfig(value as GatewayConfig);
   } catch { /* Preferences are optional; retain server defaults or current choices. */ }
   return current ? { ...current } : undefined;
 }
 
 export function saveAppBuilderAISettings(config: GatewayConfig): void {
-  current = { ...config };
+  current = normalizedConfig(config);
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(current)); } catch { /* optional cache */ }
 }
 
 export function resolveAppBuilderAIOptions(overrides?: Record<string, unknown>): Record<string, unknown> | undefined {
-  // Explicit request options remain intact; only unset callers inherit preferences.
-  if (overrides) return overrides;
+  // Explicit request options remain intact except stale provider model choices.
+  if (overrides) {
+    const selectedModelId = overrides.selectedModelId;
+    if (typeof selectedModelId !== 'string'
+      || selectedModelId.startsWith('google/') || selectedModelId.startsWith('gemini-')) return overrides;
+    return { ...overrides, selectedModelId: DEFAULT_GEMINI_MODEL_ID };
+  }
   const config = readAppBuilderAISettings();
   if (!config) return overrides;
   return {

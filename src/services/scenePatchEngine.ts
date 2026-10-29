@@ -827,7 +827,7 @@ export function parseAIEditsToPatches(
   edits: string,
   scene: RootNode
 ): PatchOperation[] {
-  // This would integrate with OpenAI to parse natural language
+  // This would integrate with the configured AI service to parse natural language.
   // For now, return empty array
   console.log('Parsing AI edits:', edits, 'for scene:', scene.id);
   return [];

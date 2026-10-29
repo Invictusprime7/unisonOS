@@ -376,7 +376,7 @@ async function runLaunchDeskLane(
   const geminiExclusive = isGeminiExclusiveProviderMode();
   const providerPlan = buildProviderPlan(task, Boolean(
     Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('UNISONGEMINI_API_KEY') ||
-    (!geminiExclusive && (Deno.env.get('OPENAI_API_KEY') || Deno.env.get('ANTHROPIC_API_KEY'))),
+    (!geminiExclusive && Deno.env.get('ANTHROPIC_API_KEY')),
   ), parsed.gatewayOptions, launchComplexity, userContent);
   const providerResult = await runProviderLoop({
     aiMessages,
@@ -445,14 +445,13 @@ async function runBuilderLane(
     'builder_generate'
   })`);
 
-  // Only funded providers count toward the full model plan. Gemini-only is the
-  // safe default until AI_PROVIDER_MODE is explicitly switched to "hybrid".
+  // Only funded supported providers count toward the full model plan.
   const geminiExclusive = isGeminiExclusiveProviderMode();
   const hasConfiguredProvider = Boolean(
     Deno.env.get('GEMINI_API_KEY') ||
     Deno.env.get('GOOGLE_API_KEY') ||
     Deno.env.get('UNISONGEMINI_API_KEY') ||
-    (!geminiExclusive && (Deno.env.get('OPENAI_API_KEY') || Deno.env.get('ANTHROPIC_API_KEY')))
+    (!geminiExclusive && Deno.env.get('ANTHROPIC_API_KEY'))
   );
   const {
     messages, mode, savePattern = true, generateImage = false, imagePlacement,
@@ -778,7 +777,6 @@ async function runBuilderLane(
   if (pageDesignRequest) {
     // These requests can include several page bodies even when their wording is short.
     providerPlan.perModelTimeoutMs = Math.max(providerPlan.perModelTimeoutMs, 90_000);
-    providerPlan.fallbackReserveMs = 40_000;
   }
   if (enableCatalogTools) {
     finalSystemPrompt += renderCatalogToolDirective();

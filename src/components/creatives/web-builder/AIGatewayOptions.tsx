@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Settings2, Zap, Brain, Sparkles, RotateCcw } from "lucide-react";
+import { Settings2, Zap, Sparkles, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_GEMINI_MODEL_ID, DEFAULT_GEMINI_MODEL_LABEL } from '@/config/aiModels';
 import type { GatewayConfig } from '@/services/app-builder/appBuilderAISettings';
@@ -8,16 +8,12 @@ export type { GatewayConfig } from '@/services/app-builder/appBuilderAISettings'
 export interface GatewayModel {
   id: string;
   label: string;
-  provider: "google" | "openai";
   tier: "lite" | "fast" | "standard" | "pro";
   supportsReasoning: boolean;
 }
 
 const AVAILABLE_MODELS: GatewayModel[] = [
-  { id: DEFAULT_GEMINI_MODEL_ID, label: DEFAULT_GEMINI_MODEL_LABEL, provider: "google", tier: "pro", supportsReasoning: true },
-  { id: "openai/gpt-4.1", label: "GPT-4.1", provider: "openai", tier: "standard", supportsReasoning: false },
-  { id: "openai/gpt-4o-mini", label: "GPT-4o Mini", provider: "openai", tier: "lite", supportsReasoning: false },
-  { id: "openai/gpt-4o", label: "GPT-4o", provider: "openai", tier: "standard", supportsReasoning: false },
+  { id: DEFAULT_GEMINI_MODEL_ID, label: DEFAULT_GEMINI_MODEL_LABEL, tier: "pro", supportsReasoning: true },
 ];
 
 export type ReasoningEffort = "none" | "low" | "medium" | "high";
@@ -121,7 +117,7 @@ export const AIGatewayOptions = ({ config: ext, onChange, className }: AIGateway
                 key={m.id}
                 type="button"
                 disabled={cfg.autoModelSelection}
-                onClick={() => update({ selectedModelId: m.id, maxTokens: m.id.includes('gpt-4o') ? 16384 : m.id.includes('gpt-4.1') ? 32768 : 64000 })}
+                onClick={() => update({ selectedModelId: m.id, maxTokens: 64000 })}
                 className={cn(
                   "w-full flex items-center gap-2 px-1.5 py-1 rounded text-[11px] transition-colors text-left",
                   cfg.selectedModelId === m.id && !cfg.autoModelSelection
@@ -130,7 +126,7 @@ export const AIGatewayOptions = ({ config: ext, onChange, className }: AIGateway
                   cfg.autoModelSelection && "opacity-40 pointer-events-none",
                 )}
               >
-                {m.provider === "google" ? <Zap className="h-3 w-3 shrink-0" /> : <Brain className="h-3 w-3 shrink-0" />}
+                <Zap className="h-3 w-3 shrink-0" />
                 {m.label}
               </button>
             ))}

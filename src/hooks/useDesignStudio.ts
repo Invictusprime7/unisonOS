@@ -323,7 +323,7 @@ export function useDesignStudio(initialScene?: RootNode): UseDesignStudioReturn 
     setLastError(null);
 
     try {
-      // This would call OpenAI to parse the edit
+      // This would send the edit to the configured AI service.
       // For now, we just log it
       console.log('AI Edit:', { prompt, targetNodeId, scene: scene.id });
 

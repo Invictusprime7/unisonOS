@@ -1,6 +1,6 @@
 /**
  * The production Gemini model for every text-generation Edge Function.
- * Keep fallback providers (OpenAI and Lovable) separate from model versioning.
+ * Keep the managed gateway separate from Gemini model versioning.
  */
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
 export const DEFAULT_GEMINI_GATEWAY_MODEL = `google/${DEFAULT_GEMINI_MODEL}`;

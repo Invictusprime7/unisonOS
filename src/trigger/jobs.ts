@@ -154,7 +154,7 @@ export const aiContentGenerationTask = task({
     }> = [];
 
     for (let i = 0; i < count; i++) {
-      // In production: call OpenAI, Anthropic, or other AI APIs
+      // In production: call the configured AI provider.
       const content = await generateContent(contentType, context);
       generatedContent.push(content);
       
@@ -305,7 +305,7 @@ async function processBatch(
 }
 
 async function generateContent(contentType: string, context: Record<string, unknown>) {
-  // Implement: call AI API (OpenAI, Anthropic, etc.)
+  // Implement: call the configured AI provider.
   return { content: "Generated content...", metadata: {} };
 }
 

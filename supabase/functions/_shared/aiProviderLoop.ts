@@ -9,7 +9,6 @@ import {
   createLastResortGatewayChatCompletion,
   hasManagedGatewayAccess,
   createPlannedChatCompletion,
-  normalizeOpenAIModel,
   toAnthropicMessages,
 } from "../_shared/ai/providerClient.ts";
 import type { ChatCompletionRequest, ChatMessage } from "../_shared/ai/providerClient.ts";
@@ -37,14 +36,11 @@ export interface ProviderCallResult {
   modelUsed?: string;
   /** Direct provider that served the successful response. */
   providerUsed?: string;
-  /** OpenAI-shaped tool_calls returned by the model (chat completions style). */
+  /** Tool calls returned through the supported chat-completions transport. */
   toolCalls?: RawToolCall[];
   /** Non-null when we should return an early HTTP error (rate limit, payment required) */
   earlyError?: ProviderEarlyError;
 }
-
-const providerForRace = (id: string) =>
-  id.startsWith('google/') || id.startsWith('gemini-') ? 'gemini' : 'openai';
 
 async function countGuestPromptTokens(
   aiMessages: Array<{ role: string; content: unknown }>,
@@ -98,14 +94,14 @@ export const PROVIDER_LOOP_TOTAL_BUDGET_MS = 145_000;
 // remember it per isolate for a while instead of rediscovering it (and
 // reserving deadline time for it) on every page.
 const DIRECT_QUOTA_COOLDOWN_MS = 15 * 60_000;
-const directQuotaCooldownUntil: Record<'gemini' | 'openai', number> = { gemini: 0, openai: 0 };
-const markDirectQuotaExhausted = (provider: 'gemini' | 'openai') => {
-  directQuotaCooldownUntil[provider] = Date.now() + DIRECT_QUOTA_COOLDOWN_MS;
-  console.warn(`[AI-Hybrid] ${provider} key is out of credit; skipping it for ${DIRECT_QUOTA_COOLDOWN_MS / 60_000} min`);
+const directQuotaCooldownUntil = { gemini: 0 };
+const markDirectQuotaExhausted = () => {
+  directQuotaCooldownUntil.gemini = Date.now() + DIRECT_QUOTA_COOLDOWN_MS;
+  console.warn(`[AI-Hybrid] Gemini key is out of credit; skipping it for ${DIRECT_QUOTA_COOLDOWN_MS / 60_000} min`);
 };
 /** Test hook: forget remembered out-of-credit keys. */
-export const resetDirectQuotaCooldown = () => { directQuotaCooldownUntil.gemini = 0; directQuotaCooldownUntil.openai = 0; };
-const directOnCooldown = (provider: 'gemini' | 'openai') => Date.now() < directQuotaCooldownUntil[provider];
+export const resetDirectQuotaCooldown = () => { directQuotaCooldownUntil.gemini = 0; };
+const directOnCooldown = () => Date.now() < directQuotaCooldownUntil.gemini;
 
 /** The gateway's own 402 message names the remedy (top-up, temporary hold); never replace it with generic text. */
 export function gatewayErrorMessage(errText: string): string {
@@ -122,6 +118,20 @@ export function reserveFallbackWindow(attemptMs: number, remainingMs: number, re
   return Math.min(attemptMs, Math.max(1000, remainingMs - reserveMs - 2000));
 }
 
+const isGeminiModelId = (id: string) => id.startsWith('google/') || id.startsWith('gemini-');
+
+export function geminiOwnsLeadBudget(
+  models: readonly ModelSpec[],
+  modelIndex: number,
+  geminiUnavailable: boolean,
+  prioritizedLead = false,
+): boolean {
+  const model = models[modelIndex];
+  if (!model || !isGeminiModelId(model.id)) return false;
+  if (modelIndex === 0 && prioritizedLead) return true;
+  return !geminiUnavailable && !models.slice(modelIndex + 1).some((candidate) => !isGeminiModelId(candidate.id));
+}
+
 export function buildPlannedChatCompletionRequest(opts: {
   model: ModelSpec;
   aiMessages: Array<{ role: string; content: unknown }>;
@@ -130,15 +140,11 @@ export function buildPlannedChatCompletionRequest(opts: {
   toolChoice?: unknown;
 }): ChatCompletionRequest {
   const { model, aiMessages, reasoningEffort, tools, toolChoice } = opts;
-  const usesCompletionTokens = model.id.includes('gpt-5');
-  const supportsReasoningEffort = usesCompletionTokens
-    || model.id.startsWith('google/')
+  const supportsReasoningEffort = model.id.startsWith('google/')
     || model.id.startsWith('gemini-');
   const request: ChatCompletionRequest = {
     model: model.id,
-    ...(usesCompletionTokens
-      ? { max_completion_tokens: model.maxTokens }
-      : { max_tokens: model.maxTokens }),
+    max_tokens: model.maxTokens,
     messages: aiMessages,
   };
 
@@ -211,8 +217,7 @@ export async function runProviderLoop(opts: {
   const activeAttempts = new Set<() => void>();
   const geminiExclusive = isGeminiExclusiveProviderMode();
   const geminiOnlyTurn = geminiExclusive || Boolean(providerPlan.geminiOnly);
-  const hasDirectOpenAI = !guestOnly && allowDirectFallbacks && !geminiOnlyTurn && !directOnCooldown('openai') && Boolean(Deno.env.get('OPENAI_API_KEY'));
-  const hasDirectGemini = allowDirectFallbacks && !directOnCooldown('gemini') && Boolean(Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('UNISONGEMINI_API_KEY'));
+  const hasDirectGemini = allowDirectFallbacks && !directOnCooldown() && Boolean(Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('UNISONGEMINI_API_KEY'));
   const hasDirectAnthropic = !guestOnly && !geminiOnlyTurn && allowDirectFallbacks && Boolean(Deno.env.get('ANTHROPIC_API_KEY'));
   // Guest actions use only models with a configured, enforceable price schedule.
   const hasLastResortGateway = !guestOnly && allowDirectFallbacks && hasManagedGatewayAccess();
@@ -224,14 +229,9 @@ export async function runProviderLoop(opts: {
   // A 429 whose body says billing/quota is exhausted is not a transient rate
   // limit: every further call to that provider will fail the same way. Mark the
   // whole family dead so the remaining budget goes to providers that can answer.
-  let geminiQuotaExhausted = directOnCooldown('gemini');
-  // Same for OpenAI: a 402 / billing-exhausted response means every further
-  // OpenAI model will fail identically, so skip them and give the remaining
-  // budget to Gemini and the managed gateway.
-  let openaiQuotaExhausted = directOnCooldown('openai');
+  let geminiQuotaExhausted = directOnCooldown();
   const isQuotaExhausted = (detail: string) =>
     /insufficient[_\s-]?quota|insufficient (?:credits?|funds?)|credits? (?:are )?(?:depleted|exhausted)|prepayment|billing.{0,40}(?:required|disabled|inactive|exhausted|insufficient)|payment required|exceeded your current quota/i.test(detail);
-  const isGeminiModelId = (id: string) => id.startsWith('google/') || id.startsWith('gemini-');
   // Tracks whether any provider failed for a non-rate-limit reason (timeout,
   // 500, empty response, etc.). When true, a deferred 429 from one provider
   // must NOT mask the real failure — the client would show "rate limited" even
@@ -290,145 +290,6 @@ export async function runProviderLoop(opts: {
     }
   };
 
-  const runDirectOpenAI = async (): Promise<void> => {
-    if (!allowDirectFallbacks) return;
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY || content) return;
-
-    // OpenAI is a direct provider in the local and deployed runtime.
-    // Use the plan's per-model timeout so wizard/builder tasks get their full budget
-    // (e.g. 110 s for wizard_seed_generation) instead of a hardcoded 25 s cap.
-    const role = 'direct';
-    console.log(`[AI-Hybrid] Direct OpenAI configured as ${role} provider`);
-    
-    const configuredOpenAIModel = Deno.env.get('OPENAI_MODEL')
-      ? normalizeOpenAIModel(Deno.env.get('OPENAI_MODEL')!) : undefined;
-    const fallbackTokens = providerPlan.fallbackMaxTokens;
-    // Model-specific output token limits (max_completion_tokens caps).
-    // gpt-4.1 supports 32 768 — enough for a full wizard seed (9+ pages).
-    // Keep this native fallback list short: planned routing owns normal model
-    // selection, while this branch only covers a provider family omitted from
-    // the plan.
-    const openaiModels = [
-      ...(configuredOpenAIModel
-        ? [{ id: configuredOpenAIModel, maxTokens: Math.min(fallbackTokens, 32768), label: `OpenAI ${configuredOpenAIModel}` }]
-        : []),
-      // gpt-4.1: faster throughput + 32 k output — primary direct-API choice.
-      { id: 'gpt-4.1', maxTokens: Math.min(fallbackTokens, 32768), label: 'OpenAI gpt-4.1' },
-    ].filter((model, index, models) => models.findIndex(m => m.id === model.id) === index);
-    
-    for (const model of openaiModels) {
-      throwIfCancelled();
-      const remaining = budgetRemaining();
-      if (remaining < 8000) {
-        console.warn(`[AI-Hybrid] Budget exhausted (${remaining}ms left), skipping remaining OpenAI models`);
-        lastError = lastError || 'budget exhausted before all models tried';
-        break;
-      }
-      // Use the plan's per-model timeout — not a hardcoded cap — so large tasks
-      // (wizard seed = 110 s) are not artificially cut short.
-      const perModelMs = Math.min(providerPlan.perModelTimeoutMs, Math.max(8000, remaining - 2000));
-      try {
-        console.log(`[AI-Hybrid] Trying ${role} ${model.label} (timeout: ${perModelMs / 1000}s, budget left: ${remaining / 1000}s)...`);
-        const attempt = createAttemptSignal(perModelMs);
-        
-        const requestBody: Record<string, unknown> = {
-          model: model.id,
-          messages: aiMessages,
-          max_completion_tokens: model.maxTokens,
-        };
-        if (hasTools) {
-          requestBody.tools = tools;
-          requestBody.tool_choice = effectiveToolChoice;
-        }
-        
-        const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: attempt.signal,
-        });
-
-        if (resp.status === 429 || resp.status === 402) {
-          const errText = await resp.text().catch(() => '');
-          const earlyError: ProviderEarlyError = resp.status === 429
-            ? { status: 429, error: 'Rate limit exceeded. Please try again later.' }
-            : { status: 402, error: 'Payment required. Please add credits to your OpenAI account.' };
-          recordProviderError(model.label, `${resp.status}${errText ? ` ${errText.substring(0, 200)}` : ''}`);
-          deferredEarlyError ??= earlyError;
-          console.warn(`[AI-Hybrid] ${model.label} returned ${resp.status}; continuing fallback chain...`);
-          // A 429 is per-model/tier, not terminal for the whole chain: keep
-          // walking the remaining models (including other provider families)
-          // instead of aborting generation on the first rate limit.
-          if (resp.status === 429 && !isQuotaExhausted(errText)) continue;
-          openaiQuotaExhausted = true;
-          markDirectQuotaExhausted('openai');
-          break;
-        }
-
-        if (!resp.ok) {
-          const errText = await resp.text();
-          console.warn(`[AI-Hybrid] ${model.label} error ${resp.status}: ${errText.substring(0, 300)}`);
-          if (resp.status === 400) {
-            console.error(`[AI-Hybrid] 400 Bad Request for ${model.id}. Request body keys: ${Object.keys(requestBody).join(', ')}`);
-          }
-          recordProviderError(model.label, `${resp.status} ${errText.substring(0, 200)}`);
-          continue;
-        }
-
-        const responseText = await resp.text();
-        if (!responseText || responseText.trim() === '') {
-          console.warn(`[AI-Hybrid] ${model.label} returned empty response, trying next...`);
-          recordProviderError(model.label, 'empty response');
-          continue;
-        }
-
-        let data;
-        try {
-          data = JSON.parse(responseText);
-        } catch {
-          console.warn(`[AI-Hybrid] ${model.label} returned invalid JSON, trying next...`);
-          recordProviderError(model.label, 'invalid JSON');
-          continue;
-        }
-
-        const message = data.choices?.[0]?.message ?? {};
-        const parsedContent = message.content || '';
-        const parsedToolCalls = Array.isArray(message.tool_calls) ? (message.tool_calls as RawToolCall[]) : undefined;
-        if (!parsedContent && (!parsedToolCalls || parsedToolCalls.length === 0)) {
-          console.warn(`[AI-Hybrid] ${model.label} returned no content, trying next...`);
-          recordProviderError(model.label, 'no content');
-          continue;
-        }
-
-        const extracted = extractThinkingTags(parsedContent);
-        if (extracted.reasoning) {
-          reasoning = extracted.reasoning;
-          console.log(`[AI-Hybrid] Thinking tags extracted from ${model.label}: ${extracted.reasoning.length} chars`);
-        }
-        content = extracted.content;
-        modelUsed = model.id;
-        providerUsed = 'openai';
-        if (parsedToolCalls && parsedToolCalls.length > 0) toolCalls = parsedToolCalls;
-        console.log(`[AI-Hybrid] Success with fallback ${model.label}`);
-        break;
-      } catch (err) {
-        throwIfCancelled();
-        if (err instanceof Error && err.name === 'AbortError') {
-          console.warn(`[AI-Hybrid] ${model.label} timed out, trying next...`);
-          recordProviderError(model.label, 'timeout');
-          continue;
-        }
-        console.warn(`[AI-Hybrid] ${model.label} failed:`, err);
-        recordProviderError(model.label, err instanceof Error ? err.message : 'unknown');
-        continue;
-      }
-    }
-  };
-
   // ── Direct Gemini API helper ──────────────────────────────────────────
   // Gemini 3.8 Flash supports 65 536 output tokens for large wizard seeds.
   const runDirectGemini = async (): Promise<void> => {
@@ -478,7 +339,7 @@ export async function runProviderLoop(opts: {
           recordProviderError(model.label, `${resp.status}${errText ? ` ${errText.substring(0, 200)}` : ''}`);
           if (exhausted) {
             geminiQuotaExhausted = true;
-            markDirectQuotaExhausted('gemini');
+            markDirectQuotaExhausted();
             deferredEarlyError ??= { status: 402, error: 'Payment required. Please add credits to your Google AI account.' };
             console.warn(`[AI-Hybrid] ${model.label} quota/billing exhausted; abandoning Gemini for this turn.`);
             break;
@@ -633,18 +494,15 @@ export async function runProviderLoop(opts: {
 
   // A direct Gemini that just timed out would burn the whole window again and
   // leave the gateway only the tail; keep it behind all available direct keys.
-  if (hasLastResortGateway && !hasDirectGemini && !hasDirectOpenAI && !hasDirectAnthropic) {
+  if (hasLastResortGateway && !hasDirectGemini && !hasDirectAnthropic) {
     gatewayTriedFirst = true;
     await runManagedGatewayAttempt(
       'Lovable AI fallback (no direct provider configured)',
       Math.min(providerPlan.perModelTimeoutMs, budgetRemaining() - 5_000));
   }
 
-  // ── Phase 0: Hybrid race (lead OpenAI model vs managed gateway) ────────
-  // Composer tasks start both at once; the first usable answer wins and the
-  // other request is aborted. A quick failure on one side leaves the other
-  // running, so a dead key never costs a sequential fallback round.
-  if (!hasResponse() && !hasDirectGemini && !hasDirectOpenAI && !hasDirectAnthropic && !gatewayTriedFirst && providerPlan.raceGateway && allowDirectFallbacks && hasLastResortGateway && providerPlan.gatewayModels.length > 0) {
+  // ── Phase 0: Gemini vs managed gateway race ────────────────────────────
+  if (!hasResponse() && !hasDirectGemini && !hasDirectAnthropic && !gatewayTriedFirst && providerPlan.raceGateway && allowDirectFallbacks && hasLastResortGateway && providerPlan.gatewayModels.length > 0) {
     const lead = providerPlan.gatewayModels[0];
     const gatewayModel: ModelSpec = {
       id: DEFAULT_GEMINI_GATEWAY_MODEL,
@@ -653,7 +511,7 @@ export async function runProviderLoop(opts: {
     };
     const raceMs = Math.min(providerPlan.perModelTimeoutMs, Math.max(8_000, budgetRemaining() - 5_000));
     const attempts = [
-      { model: lead, provider: providerForRace(lead.id), call: createPlannedChatCompletion, sig: createAttemptSignal(raceMs) },
+      { model: lead, provider: 'gemini', call: createPlannedChatCompletion, sig: createAttemptSignal(raceMs) },
       { model: gatewayModel, provider: 'lovable', call: createLastResortGatewayChatCompletion, sig: createAttemptSignal(raceMs) },
     ];
     console.log(`[AI-Hybrid] Racing ${lead.label} against managed gateway (timeout: ${raceMs / 1000}s)...`);
@@ -669,9 +527,9 @@ export async function runProviderLoop(opts: {
           if (a.provider === 'lovable' && resp.status === 402) {
             deferredEarlyError ??= { status: 402, error: gatewayErrorMessage(errText) };
           }
-          if (a.provider === 'openai' && (resp.status === 402 || isQuotaExhausted(errText))) {
-            openaiQuotaExhausted = true;
-            markDirectQuotaExhausted('openai');
+          if (a.provider === 'gemini' && (resp.status === 402 || isQuotaExhausted(errText))) {
+            geminiQuotaExhausted = true;
+            markDirectQuotaExhausted();
           }
           throw new Error('failed');
         }
@@ -715,18 +573,15 @@ export async function runProviderLoop(opts: {
     
     for (const [modelIndex, model] of providerPlan.gatewayModels.entries()) {
       throwIfCancelled();
+      if (directOnCooldown()) geminiQuotaExhausted = true;
       if (geminiQuotaExhausted && isGeminiModelId(model.id)) {
         console.warn(`[AI-Hybrid] Skipping ${model.label} — Gemini quota exhausted this turn.`);
-        continue;
-      }
-      if (openaiQuotaExhausted && !isGeminiModelId(model.id)) {
-        console.warn(`[AI-Hybrid] Skipping ${model.label} — OpenAI billing exhausted this turn.`);
         continue;
       }
       const remaining = budgetRemaining();
       // The user's selected primary provider owns generation; unavailable
       // direct keys are skipped rather than charged a timeout window.
-      if (isGeminiModelId(model.id) ? !hasDirectGemini : !hasDirectOpenAI) continue;
+      if (!isGeminiModelId(model.id) || !hasDirectGemini) continue;
 
       if (remaining < 8000) {
         console.warn(`[AI-Hybrid] Budget exhausted (${remaining}ms left), skipping remaining gateway models`);
@@ -740,9 +595,12 @@ export async function runProviderLoop(opts: {
       const isLeadModel = model.id === providerPlan.gatewayModels[0]?.id;
       const cap = providerPlan.perModelTimeoutMs;
       const remainingModels = providerPlan.gatewayModels.length - modelIndex;
-      // The owner's funded Gemini key is the main service: the backup never
-      // reserves time out of it, and runs only after Gemini itself fails.
-      const isPrimaryGemini = isGeminiModelId(model.id) && remainingModels === 1;
+      const isPrimaryGemini = geminiOwnsLeadBudget(
+        providerPlan.gatewayModels,
+        modelIndex,
+        !hasDirectGemini || geminiQuotaExhausted || directOnCooldown(),
+        providerPlan.primaryProvider === 'gemini' && providerPlan.preferLongLeadAttempt === true,
+      );
       const reserveMs = isPrimaryGemini ? 0 : Math.min(lastResortReserveMs, Math.max(0, remaining * 0.25));
       const headroom = Math.max(8000, remaining - 2000 - reserveMs);
       const leadShare = Math.max(30000, Math.floor(headroom * 0.6));
@@ -758,13 +616,6 @@ export async function runProviderLoop(opts: {
 
       // Earlier billing failures must not let a later reasoning model consume
       // the fallback's window. Apply this by remaining model, not list index.
-      const hasFastFallback = providerPlan.gatewayModels.slice(modelIndex + 1)
-        .some((candidate) => /(?:^|\/)gpt-4\.1(?:-|$)/.test(candidate.id));
-      if (providerPlan.fallbackReserveMs && hasFastFallback && !openaiQuotaExhausted) {
-        perModelMs = reserveFallbackWindow(perModelMs, remaining,
-          Math.min(providerPlan.fallbackReserveMs, Math.max(0, remaining * 0.25)));
-      }
-
       const attempt = createAttemptSignal(perModelMs);
       let guestUsageReservation: { callId: string; inputTokenLimit: number; outputTokenLimit: number } | undefined;
       try {
@@ -797,21 +648,14 @@ export async function runProviderLoop(opts: {
           const exhausted = isQuotaExhausted(errText) || resp.status === 402;
           const earlyError: ProviderEarlyError = resp.status === 429 && !exhausted
             ? { status: 429, error: 'Rate limit exceeded. Please try again later.' }
-            : isGeminiModelId(model.id)
-              ? { status: 402, error: 'Payment required. Please add credits to your Google AI account.' }
-              : { status: 402, error: 'Payment required. Please add credits to your OpenAI account.' };
+            : { status: 402, error: 'Payment required. Please add credits to your Google AI account.' };
           recordProviderError(model.label, detail);
-          if (exhausted && isGeminiModelId(model.id)) {
+          if (exhausted) {
             geminiQuotaExhausted = true;
-            markDirectQuotaExhausted('gemini');
+            markDirectQuotaExhausted();
             console.warn(`[AI-Hybrid] ${model.label} quota/billing exhausted; skipping all Gemini attempts this turn.`);
-          } else {
-            if (exhausted) {
-              openaiQuotaExhausted = true;
-              markDirectQuotaExhausted('openai');
-            }
-            deferredEarlyError ??= earlyError;
           }
+          deferredEarlyError ??= earlyError;
           console.warn(`[AI-Hybrid] ${model.label} returned ${resp.status}; trying next provider...`);
           continue;
         }
@@ -902,20 +746,10 @@ export async function runProviderLoop(opts: {
     }
   }
 
-  // ── Phase 2–3: Provider-native fallback models ───────────────────────
-  // Planned models already exercise both direct provider families. Repeating
-  // both complete provider-native lists after that used the entire wall-clock
-  // budget during 429/timeout storms and starved the true last-resort path.
-  // Only use the native list for a configured family that had no planned model.
-  const plannedProviders = new Set(providerPlan.gatewayModels.map((model) => (
-    model.id.startsWith('openai/') || model.id.startsWith('gpt-') ? 'openai' :
-    model.id.startsWith('google/') || model.id.startsWith('gemini-') ? 'gemini' :
-    'other'
-  )));
-  if (!hasResponse() && allowDirectFallbacks && !geminiOnlyTurn) {
-    if (hasDirectOpenAI && !plannedProviders.has('openai')) await runDirectOpenAI();
-    if (!hasResponse() && hasDirectGemini && !plannedProviders.has('gemini')) await runDirectGemini();
-  }
+  // Planned models own Gemini routing; only use the native Gemini helper if
+  // this plan did not contain a Gemini model.
+  const hasPlannedGemini = providerPlan.gatewayModels.some((model) => isGeminiModelId(model.id));
+  if (!hasResponse() && allowDirectFallbacks && hasDirectGemini && !hasPlannedGemini) await runDirectGemini();
 
   // ── Phase 4: Direct Anthropic API ─────────────────────────────────────
   if (!guestOnly && !geminiOnlyTurn && !hasResponse() && allowDirectFallbacks) {
@@ -997,16 +831,15 @@ export async function runProviderLoop(opts: {
     }
     const configuredProviders = [
       hasDirectGemini ? 'gemini' : '',
-      hasDirectOpenAI ? 'openai' : '',
     ].filter(Boolean);
     // A key skipped for a remembered depleted balance must name that cause, or
     // later pages report "no providers configured" instead of the real remedy.
-    const cooldownNotes = (['gemini', 'openai'] as const)
-      .filter(provider => directOnCooldown(provider))
-      .map(provider => `${provider}: 402 key is out of prepaid credit (skipped until credits are added)`);
+    const cooldownNotes = directOnCooldown()
+      ? ['gemini: 402 key is out of prepaid credit (skipped until credits are added)']
+      : [];
     const errorTrail = [...providerErrors.slice(-10), ...cooldownNotes].join(' | ') || lastError || 'no provider attempts completed';
     const gatewayStatus = geminiExclusive
-      ? 'Gemini-only provider mode is active; OpenAI and managed fallbacks are disabled.'
+      ? 'Gemini-only provider mode is active; non-Gemini fallbacks are disabled.'
       : hasLastResortGateway
         ? 'The managed AI gateway fallback was configured but did not recover the request.'
         : 'No managed AI gateway fallback is configured.';

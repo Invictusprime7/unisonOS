@@ -177,7 +177,7 @@ export function AIServiceDiagnostics() {
                   To fix this, set your API key in Supabase:
                 </p>
                 <code className="text-xs block mt-2 p-2 bg-muted rounded">
-                  supabase secrets set OPENAI_API_KEY=your_key
+                  supabase secrets set GEMINI_API_KEY=your_key
                 </code>
               </div>
             )}

@@ -184,7 +184,7 @@ export interface BuildProvenance {
   buildId: string;        // uuid
   buildMode: BuildMode;
   prompt?: string;        // original user prompt if applicable
-  model?: string;         // e.g. gpt-4o
+  model?: string;         // e.g. google/gemini-3.8-flash
   seed?: string;          // optional deterministic seed
   temperature?: number;
   startedAt: string;      // ISO

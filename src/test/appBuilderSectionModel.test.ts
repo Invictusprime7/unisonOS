@@ -126,6 +126,40 @@ export default function Treatments(){return <><header><Navbar sectionId="site:na
     expect(repaired['/.unison/compositions/pages/treatments.json']).toContain('treatments:services:0');
   });
 
+  it('repairs unannotated section roots that render one certified named variant', () => {
+    const namedImplementations = {
+      ...implementations,
+      'navbar:standard': { ...implementations['navbar:standard'], exportName: 'NavbarStandard' },
+      'footer:columns': { ...implementations['footer:columns'], exportName: 'FooterColumns' },
+      'hero:split-image': { modulePath: '/src/unison/design-sources/Hero.tsx', sectionType: 'hero', exportName: 'HeroSplitImage' },
+      'services:editorial-rows': { ...implementations['services:editorial-rows'], exportName: 'ServicesEditorialRows' },
+    };
+    const source = `import { HeroSplitImage } from "@/unison/design-sources/Hero";
+import { ServicesEditorialRows } from "@/unison/design-sources/Services";
+import { SiteNav } from "../project-components/site/SiteNav";
+import { SiteFooter } from "../project-components/site/SiteFooter";
+export default function Home(){return <><SiteNav/><main><section><HeroSplitImage headline="Northstar" image="https://images.unsplash.com/photo-1" /></section><section><ServicesEditorialRows headline="Care" items={[]} /></section></main><SiteFooter/></>}`;
+    const sourceFiles = {
+      '/src/pages/Home.tsx': source,
+      '/src/project-components/site/SiteNav.tsx': `import { NavbarStandard } from "@/unison/design-sources/Navbar";
+export function SiteNav(){return <header data-ut-section-id="site:navbar"><NavbarStandard brand="Northstar" links={[]} /></header>}`,
+      '/src/project-components/site/SiteFooter.tsx': `import { FooterColumns } from "@/unison/design-sources/Footer";
+export function SiteFooter(){return <footer data-ut-section-id="site:footer"><FooterColumns brand="Northstar" columns={[]} /></footer>}`,
+    };
+    const files = materializeAppBuilderSectionModels(
+      sourceFiles,
+      [{ id: 'home', filePath: '/src/pages/Home.tsx', route: '/' }],
+      namedImplementations,
+      { home: Object.keys(namedImplementations) },
+    );
+
+    expect(files['/src/pages/Home.tsx']).toContain('data-ut-section-type="hero"');
+    expect(files['/src/pages/Home.tsx']).toContain('data-ut-variant="hero:split-image"');
+    expect(files['/src/pages/Home.tsx']).toContain('variantId="hero:split-image"');
+    expect(files['/src/pages/Home.tsx']).toContain('props={{"headline":"Northstar","image":"https://images.unsplash.com/photo-1"}}');
+    expect(inspectAppBuilderPageSectionClosure('/src/pages/Home.tsx', files, namedImplementations).issues).toEqual([]);
+  });
+
   it('repairs dispatcher identity and wraps static direct props for the registered family', () => {
     const source = `import Services from "@/unison/design-sources/Services";
 export default function Treatments(){return <main><section data-ut-section-id="treatments:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows"><Services headline="Treatments" items={[{title:"Facial",description:"Care"}]} /></section></main>}`;
@@ -164,6 +198,34 @@ export default function Treatments(){return <main><section data-ut-section-id="t
     expect(page).toContain('props={{"headline":"Treatments","items":[]}}');
     expect(result.issues).toEqual([]);
     expect(result.sections[0]).toMatchObject({ legacyRendererName: 'ServicesEditorialRows' });
+  });
+
+  it('accepts named certified variants consistently across page and shared-shell closure checks', () => {
+    const namedImplementations = {
+      'navbar:standard': { ...implementations['navbar:standard'], exportName: 'NavbarStandard' },
+      'services:editorial-rows': { ...implementations['services:editorial-rows'], exportName: 'ServicesEditorialRows' },
+      'footer:columns': { ...implementations['footer:columns'], exportName: 'FooterColumns' },
+    };
+    const files = {
+      '/src/pages/Home.tsx': `import { SiteNav } from "../project-components/site/SiteNav";
+import { SiteFooter } from "../project-components/site/SiteFooter";
+import { ServicesEditorialRows } from "@/unison/design-sources/Services";
+export default function Home(){return <><SiteNav/><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows"><ServicesEditorialRows headline="Care" items={[]} /></section></main><SiteFooter/></>}`,
+      '/src/project-components/site/SiteNav.tsx': `import { NavbarStandard } from "@/unison/design-sources/Navbar";
+export function SiteNav(){return <header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><NavbarStandard brand="Northstar" links={[]} /></header>}`,
+      '/src/project-components/site/SiteFooter.tsx': `import { FooterColumns } from "@/unison/design-sources/Footer";
+export function SiteFooter(){return <footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><FooterColumns brand="Northstar" columns={[]} /></footer>}`,
+    };
+    const normalized = materializeAppBuilderSectionModels(
+      files,
+      [{ id: 'home', filePath: '/src/pages/Home.tsx', route: '/' }],
+      namedImplementations,
+      { home: Object.keys(namedImplementations) },
+    );
+
+    expect(normalized['/src/project-components/site/SiteNav.tsx']).toContain('props={{"brand":"Northstar","links":[]}}');
+    expect(normalized['/src/project-components/site/SiteFooter.tsx']).toContain('props={{"brand":"Northstar","columns":[]}}');
+    expect(inspectAppBuilderPageSectionClosure('/src/pages/Home.tsx', normalized, namedImplementations).issues).toEqual([]);
   });
 
   it('accepts a unique literal const object as dispatcher props', () => {

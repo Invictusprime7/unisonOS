@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Loader2,
   Monitor,
+  PanelsTopLeft,
   Smartphone,
   Sparkle,
   Sparkles,
@@ -65,6 +66,7 @@ import {
   runLaunchPipeline,
   type LaunchOrchestratorInput,
 } from "@/services/launch/launchOrchestrator";
+import type { AppBuildGenerationMode } from '@/services/app-builder/appBuilderContracts';
 import {
   createLaunchFailureReport,
   persistLaunchFailureReport,
@@ -241,22 +243,26 @@ export const LauncherWizard = ({
       return;
     }
     setDraftHydrated(false);
-    // A new idea typed by the user always wins over an abandoned draft.
-    const draft = initialVisionPrompt ? null : readLaunchInterviewDraft(draftScope);
+    const draft = readLaunchInterviewDraft(draftScope);
     if (initialVisionPrompt) clearLaunchInterviewDraft(draftScope);
     if (draft) {
-      setSelectedIndustry(draft.selections.industry);
-      setSystemId(draft.selections.systemId);
-      setBusinessName(draft.selections.businessName);
-      setPrimaryGoal(draft.selections.primaryGoal);
-      setCustomerNeeds(draft.selections.customerNeeds);
-      setSelectedPages(draft.selections.selectedPages);
-      setTheme(THEME_PRESETS.find((preset) => preset.id === draft.selections.themePresetId) ?? THEME_PRESETS[0] ?? null);
-      setExperience(draft.selections.experience);
-      setSectionPins(draft.selections.sectionPins as Record<string, VariantId>);
-      setSocialLinks(draft.selections.socialLinks);
+      if (initialVisionPrompt) {
+        setBusinessName((current) => draft.selections.businessName || current);
+        setSocialLinks((current) => ({ ...draft.selections.socialLinks, ...current }));
+      } else {
+        setSelectedIndustry(draft.selections.industry);
+        setSystemId(draft.selections.systemId);
+        setBusinessName(draft.selections.businessName);
+        setPrimaryGoal(draft.selections.primaryGoal);
+        setCustomerNeeds(draft.selections.customerNeeds);
+        setSelectedPages(draft.selections.selectedPages);
+        setTheme(THEME_PRESETS.find((preset) => preset.id === draft.selections.themePresetId) ?? THEME_PRESETS[0] ?? null);
+        setExperience(draft.selections.experience);
+        setSectionPins(draft.selections.sectionPins as Record<string, VariantId>);
+        setSocialLinks(draft.selections.socialLinks);
+        seededFromChatRef.current = true;
+      }
       setBusinessParameters((current) => ({ ...current, ...draft.publicAnswers, ...draft.privateAnswers }));
-      seededFromChatRef.current = true;
     }
     setDraftHydrated(true);
   }, [open, draftScope]);
@@ -501,7 +507,7 @@ export const LauncherWizard = ({
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (generationMode: AppBuildGenerationMode = 'ai') => {
     if (isLaunching || !systemId || !theme) return;
     if (!businessName.trim()) {
       setLaunchError("Please enter your business name.");
@@ -516,9 +522,10 @@ export const LauncherWizard = ({
     setLaunchError(null);
     setLaunchFailure(null);
     latestProgressRef.current = null;
-    setLaunchStatus("Preparing your site…");
+    setLaunchStatus(generationMode === 'deterministic' ? 'Building starter pages…' : 'Preparing your site…');
 
     const input: LaunchOrchestratorInput = {
+      generationMode,
       systemId,
       industry: selectedIndustry || undefined,
       visionPrompt: chatPlanRef.current
@@ -684,7 +691,7 @@ export const LauncherWizard = ({
             <div className="flex flex-col-reverse gap-2 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
               <div className="flex gap-2">
                 <Button variant="ghost" disabled={isLaunching} onClick={() => { reviewDecision.current?.(false); reviewDecision.current = null; setReview(null); }}>Edit details</Button>
-                <Button variant="outline" disabled={isLaunching} onClick={handleGenerate}>Try another</Button>
+                <Button variant="outline" disabled={isLaunching} onClick={() => handleGenerate('ai')}>Try another</Button>
               </div>
               <Button disabled={isLaunching || !previewReady} onClick={() => { setIsLaunching(true); reviewDecision.current?.(true); reviewDecision.current = null; }}>
                 {isLaunching ? <Loader2 className="animate-spin" /> : <Sparkle />}
@@ -802,7 +809,10 @@ export const LauncherWizard = ({
 
                 <footer className="mt-8 flex items-center justify-between border-t border-border pt-5">
                   {step === "industry" ? <span /> : <Button variant="ghost" onClick={goBack}><ArrowLeft />Back</Button>}
-                  {(isChat ? step === "confirm" : step === "aesthetic") ? <Button disabled={!canContinue || isLaunching} onClick={handleGenerate}>{isLaunching ? <Loader2 className="animate-spin" /> : <Sparkle />}{isLaunching ? 'Creating…' : 'Create site'}</Button> : <Button disabled={!canContinue || isLaunching} onClick={goNext}>Continue<ArrowRight /></Button>}
+                  {(isChat ? step === "confirm" : step === "aesthetic") ? <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button variant="outline" disabled={!canContinue || isLaunching} onClick={() => handleGenerate('deterministic')}><PanelsTopLeft />Build without AI</Button>
+                    <Button disabled={!canContinue || isLaunching} onClick={() => handleGenerate('ai')}>{isLaunching ? <Loader2 className="animate-spin" /> : <Sparkle />}{isLaunching ? 'Creating…' : 'Create site'}</Button>
+                  </div> : <Button disabled={!canContinue || isLaunching} onClick={goNext}>Continue<ArrowRight /></Button>}
                 </footer>
               </fieldset>
             )}

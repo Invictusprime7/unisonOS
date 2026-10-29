@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.63",
     "@babel/parser": "7.29.8",
     "@babel/standalone": "^7.28.4",
     "@cloudflare/vite-plugin": "1.39.2",

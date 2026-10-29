@@ -62,6 +62,53 @@ function contract(): AppBuildContract {
   };
 }
 
+function ecommerceContract(): AppBuildContract {
+  const result = contract();
+  const pages = [
+    { id: 'home', name: 'home', title: 'Home', route: '/', role: 'home', filePath: '/src/pages/Home.tsx', visibleInNav: true, isHome: true, generatedBy: 'wizard' as const },
+    { id: 'about', name: 'about', title: 'About', route: '/about', role: 'about', filePath: '/src/pages/About.tsx', visibleInNav: true, isHome: false, generatedBy: 'wizard' as const },
+    { id: 'contact', name: 'contact', title: 'Contact', route: '/contact', role: 'contact', filePath: '/src/pages/Contact.tsx', visibleInNav: true, isHome: false, generatedBy: 'wizard' as const },
+    { id: 'checkout', name: 'checkout', title: 'Checkout', route: '/checkout', role: 'checkout', filePath: '/src/pages/Checkout.tsx', visibleInNav: false, isHome: false, generatedBy: 'wizard' as const },
+    { id: 'shop', name: 'shop', title: 'Shop', route: '/shop', role: 'shop', filePath: '/src/pages/Shop.tsx', visibleInNav: true, isHome: false, generatedBy: 'wizard' as const },
+  ];
+  result.topology.sitePlan = { ...result.topology.sitePlan, industry: 'ecommerce', businessName: 'Northstar Market', pages };
+  result.topology.pageRegistry = {
+    pages: Object.fromEntries(pages.map((page, navOrder) => [page.id, {
+      pageId: page.id, title: page.title, path: page.route, filePath: page.filePath,
+      pageType: page.id === 'checkout' ? 'checkout' : page.id, pageRole: page.role,
+      isHome: page.isHome, showInNav: page.visibleInNav, navOrder,
+    }])),
+    funnels: {}, homePageId: 'home', version: 1,
+  } as never;
+  result.business.industry = 'ecommerce';
+  result.business.businessName = 'Northstar Market';
+  result.business.intents = ['nav.goto', 'cart.checkout'];
+  result.business.capabilities = ['commerce'];
+  result.business.bindingGuide = [
+    '- Page Checkout (/checkout), slot cart.checkout: label "Return to shop", marker data-ut-cta="cta.nav-link", intent nav.goto, target Shop (/shop)',
+    '- Page Shop (/shop), slot cart.checkout: label "Checkout", marker data-ut-cta="cta.checkout", intent cart.checkout, target cart-overlay',
+  ].join('\n');
+  result.business.intentBindings = [
+    {
+      bindingId: 'bind-checkout-return', pageId: 'checkout', route: '/checkout', elementKey: 'checkout.cart.checkout',
+      sourceSection: 'cart', sourceSlot: 'checkout-cta', sourceLabel: 'Return to shop', coreIntent: 'nav.goto', domIntent: 'nav.goto',
+      ctaMarkers: ['cta.nav-link'], intentHandler: 'client', targetType: 'page', targetId: 'shop',
+      requiredCapabilities: [], missingCapabilities: [],
+    },
+    {
+      bindingId: 'bind-shop-checkout', pageId: 'shop', route: '/shop', elementKey: 'shop.cart.checkout',
+      sourceSection: 'cart', sourceSlot: 'checkout-cta', sourceLabel: 'Checkout', coreIntent: 'cart.checkout', domIntent: 'cart.checkout',
+      ctaMarkers: ['cta.checkout'], intentHandler: 'client', targetType: 'url', targetId: 'cart-overlay',
+      requiredCapabilities: ['commerce'], missingCapabilities: [],
+    },
+  ] as never;
+  result.design.resolvedSiteDesignContext = compileResolvedSiteDesignContext({
+    designSeed: 'app-builder-test-ecommerce', businessModel: 'general' as never,
+    industry: 'ecommerce', roles: pages.map((page) => page.role),
+  });
+  return result;
+}
+
 const createTestBuilder = (dependencies: Parameters<typeof createUnisonAppBuilder>[0] = {}) =>
   createUnisonAppBuilder({ loadContentTypes: async () => [], ...dependencies });
 
@@ -101,6 +148,38 @@ describe('UnisonAppBuilder facade', () => {
       'AI request failed (credits): Payment required. Please add credits to your OpenAI account.',
     ]);
     expect(runComposer).not.toHaveBeenCalled();
+  });
+
+  it('builds a validated five-page ecommerce scaffold without claiming AI authorship', async () => {
+    const authorSite = vi.fn();
+    const runComposer = vi.fn();
+    const pages = ecommerceContract().topology.sitePlan.pages;
+    const navLinks = pages.filter((page) => page.visibleInNav).map((page) => `<a href="#${page.route}">${page.title}</a>`).join('');
+    const initialFiles = {
+      ...baseFiles,
+      '/src/App.tsx': 'export default function App(){return <></>}',
+      '/src/project-components/site/SiteNav.tsx': `export function SiteNav(){return <header><nav>${navLinks}</nav></header>}`,
+      '/src/project-components/site/SiteFooter.tsx': `export function SiteFooter(){return <footer>${navLinks}</footer>}`,
+    };
+
+    const result = await createTestBuilder({ authorSite, runComposer }).generate({
+      operationId: 'deterministic-ecommerce', contract: ecommerceContract(), initialFiles,
+      entryPoint: '/src/App.tsx', baseRevisionId: null, generationMode: 'deterministic',
+    });
+
+    expect(authorSite).not.toHaveBeenCalled();
+    expect(runComposer).not.toHaveBeenCalled();
+    expect(result.stopReason).toBe('complete');
+    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidate.closure?.ok).toBe(true);
+    expect(result.candidate.provenance).toMatchObject({ strategy: 'deterministic-scaffold', authoredPageIds: [] });
+    expect(result.outcomes).toEqual([]);
+    expect(result.candidateFiles['/src/pages/Checkout.tsx']).toContain('data-ut-cta="cta.nav-link"');
+    expect(result.candidateFiles['/src/pages/Checkout.tsx']).toContain('data-ut-intent="nav.goto"');
+    expect(result.candidateFiles['/src/pages/Checkout.tsx']).toContain('data-ut-path="/shop"');
+    expect(result.candidateFiles['/src/pages/Shop.tsx']).toContain('data-ut-cta="cta.checkout"');
+    expect(result.candidateFiles['/src/pages/Shop.tsx']).toContain('data-ut-intent="cart.checkout"');
+    for (const page of pages) expect(result.candidateFiles[page.filePath]).toContain('<SiteNav />');
   });
 
   it.each([true, false])('rechecks preview dependencies after closure repair (standalone: %s)', async (standalone) => {
@@ -535,7 +614,7 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
 
     expect(runComposer).toHaveBeenCalledOnce();
     const firstCall = runComposer.mock.calls[0] as unknown as [{ gatewayOptions?: unknown }] | undefined;
-    expect(firstCall?.[0].gatewayOptions).toEqual({ selectedModelId: 'openai/gpt-4.1', reasoningEffort: 'high', timeoutMs: 110_000 });
+    expect(firstCall?.[0].gatewayOptions).toEqual({ selectedModelId: 'google/gemini-3.8-flash', reasoningEffort: 'high', timeoutMs: 110_000 });
     expect(result.stopReason).toBe('complete');
     expect(result.changeSet).toBe(changeSet);
     expect(result.candidate.files).toEqual(nextFiles);

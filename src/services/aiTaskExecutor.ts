@@ -1,7 +1,7 @@
 /**
  * AI Task Executor for Claude Integration
  * 
- * Provides structured task execution for Claude/OpenAI models, enabling:
+ * Provides structured task execution for AI models, enabling:
  * - Multi-step troubleshooting workflows
  * - Real-time VFS state queries
  * - Runtime execution and error recovery

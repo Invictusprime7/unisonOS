@@ -1,14 +1,16 @@
 import {
+  createImageGeneration,
   createLastResortGatewayChatCompletion,
   createPlannedChatCompletion,
   fetchWithShortRateLimitRetry,
   getShortRateLimitRetryMs,
+  isImageGenerationConfigured,
   resolveConfiguredProviders,
 } from "./providerClient.ts";
 
-Deno.test("preserves multimodal image parts on Gemini, OpenAI and managed gateway wire requests", async () => {
+Deno.test("preserves multimodal image parts on Gemini and managed gateway wire requests", async () => {
   const originalFetch = globalThis.fetch;
-  const names = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "UNISONGEMINI_API_KEY", "OPENAI_API_KEY", "OPENAI_MODEL", "LOVABLE_API_KEY"];
+  const names = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "UNISONGEMINI_API_KEY", "LOVABLE_API_KEY"];
   const saved = new Map(names.map(name => [name, Deno.env.get(name)]));
   const messages = [{ role: "system", content: "Edit only the supplied source" }, {
     role: "user", content: [
@@ -19,18 +21,15 @@ Deno.test("preserves multimodal image parts on Gemini, OpenAI and managed gatewa
   const sent: Array<{ url: string; body: Record<string, unknown> }> = [];
   try {
     for (const name of names) Deno.env.delete(name);
-    for (const name of ["GEMINI_API_KEY", "OPENAI_API_KEY", "LOVABLE_API_KEY"]) Deno.env.set(name, "test-key");
+    for (const name of ["GEMINI_API_KEY", "LOVABLE_API_KEY"]) Deno.env.set(name, "test-key");
     globalThis.fetch = (async (url, init) => {
       sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
       return new Response('{"choices":[{"message":{"content":"ok"}}]}');
     }) as typeof fetch;
-    for (const model of ["google/gemini-3.8-flash", "openai/gpt-4.1"]) {
-      await createPlannedChatCompletion({ model, messages, max_tokens: 1000 });
-    }
+    await createPlannedChatCompletion({ model: "google/gemini-3.8-flash", messages, max_tokens: 1000 });
     await createLastResortGatewayChatCompletion({ model: "google/gemini-3.8-flash", messages, max_tokens: 1000 });
     assertEquals(sent.map(call => call.url), [
       "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      "https://api.openai.com/v1/chat/completions",
       "https://ai.gateway.lovable.dev/v1/chat/completions",
     ]);
     for (const call of sent) assertEquals(call.body.messages, messages);
@@ -38,65 +37,6 @@ Deno.test("preserves multimodal image parts on Gemini, OpenAI and managed gatewa
     globalThis.fetch = originalFetch;
     for (const [name, value] of saved) {
       if (value === undefined) Deno.env.delete(name); else Deno.env.set(name, value);
-    }
-  }
-});
-
-Deno.test("preserves capable OpenAI models and applies actual model output limits", async () => {
-  const originalFetch = globalThis.fetch;
-  const names = ["OPENAI_API_KEY", "OPENAI_MODEL"];
-  const saved = new Map(names.map((name) => [name, Deno.env.get(name)]));
-  const sent: Array<Record<string, unknown>> = [];
-  Deno.env.set("OPENAI_API_KEY", "test-key");
-  Deno.env.delete("OPENAI_MODEL");
-  globalThis.fetch = (async (_url, init) => {
-    sent.push(JSON.parse(String(init?.body)));
-    return new Response('{"choices":[{"message":{"content":"ok"}}]}');
-  }) as typeof fetch;
-  try {
-    for (const model of ["openai/gpt-4.1", "openai/gpt-5", "openai/gpt-5-mini"]) {
-      await createPlannedChatCompletion({
-        model, messages: [{ role: "user", content: "Edit this page" }],
-        ...(model.includes("gpt-5") ? { max_completion_tokens: 40_000 } : { max_tokens: 40_000 }),
-        reasoning_effort: "medium", tools: [],
-      });
-    }
-    assertEquals(sent.map((body) => body.model), ["gpt-4.1", "gpt-4.1", "gpt-4.1"]);
-    assertEquals(sent[0].max_tokens, 16_384);
-    assertEquals(sent[0].reasoning_effort, undefined);
-    for (const body of sent.slice(1)) {
-      assertEquals(body.max_tokens, 16_384);
-      assertEquals(body.max_completion_tokens, undefined);
-      assertEquals(body.reasoning_effort, undefined);
-      assertEquals(body.tools, []);
-    }
-    Deno.env.set("OPENAI_MODEL", "gpt-5-mini");
-    await createPlannedChatCompletion({
-      model: "openai/gpt-4.1", messages: [{ role: "user", content: "Edit" }],
-      max_tokens: 24_000, reasoning_effort: "low",
-    });
-    assertEquals(sent[3].model, "gpt-4.1");
-    assertEquals(sent[3].max_tokens, 16_384);
-    assertEquals(sent[3].reasoning_effort, undefined);
-    Deno.env.set("OPENAI_MODEL", "gpt-4o-mini");
-    await createPlannedChatCompletion({
-      model: "openai/gpt-5", messages: [{ role: "user", content: "Edit" }],
-      max_completion_tokens: 2_000, reasoning_effort: "low",
-    });
-    assertEquals(sent[4].max_tokens, 2_000);
-    assertEquals(sent[4].reasoning_effort, undefined);
-    await createPlannedChatCompletion({
-      model: "openai/gpt-5", messages: [{ role: "user", content: "Edit" }],
-      max_completion_tokens: 64_000, reasoning_effort: "high",
-    });
-    assertEquals(sent[5].model, "gpt-4o-mini");
-    assertEquals(sent[5].max_tokens, 16_384);
-    assertEquals(sent[5].max_completion_tokens, undefined);
-  } finally {
-    globalThis.fetch = originalFetch;
-    for (const [name, value] of saved) {
-      if (value === undefined) Deno.env.delete(name);
-      else Deno.env.set(name, value);
     }
   }
 });
@@ -125,6 +65,47 @@ Deno.test("allows metered planned calls to disable the transparent rate-limit re
   }
 });
 
+Deno.test('generates images with Gemini and normalizes its inline image response', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = Deno.env.get('GEMINI_API_KEY');
+  let requestUrl = '';
+  let requestHeaders: Headers | undefined;
+  let requestBody: Record<string, unknown> | undefined;
+  Deno.env.set('GEMINI_API_KEY', 'gemini-image-test-key');
+  globalThis.fetch = (async (url, init) => {
+    requestUrl = String(url);
+    requestHeaders = new Headers(init?.headers);
+    requestBody = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [
+      { inlineData: { mimeType: 'image/png', data: 'aGVsbG8=' } },
+    ] } }] }));
+  }) as typeof fetch;
+  try {
+    const response = await createImageGeneration({ prompt: 'A minimal shop illustration', size: '1536x1024' });
+    assertEquals(response.status, 200);
+    assertEquals(requestUrl, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent');
+    assertEquals(requestHeaders?.get('x-goog-api-key'), 'gemini-image-test-key');
+    assertEquals((requestBody?.generationConfig as { responseModalities: string[] }).responseModalities, ['IMAGE']);
+    assertEquals((requestBody?.generationConfig as { imageConfig: { aspectRatio: string } }).imageConfig.aspectRatio, '3:2');
+    assertEquals((await response.json()).data[0].b64_json, 'aGVsbG8=');
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) Deno.env.delete('GEMINI_API_KEY');
+    else Deno.env.set('GEMINI_API_KEY', originalKey);
+  }
+});
+
+Deno.test('an OpenAI key alone does not configure text or image generation', () => {
+  assertEquals(resolveConfiguredProviders(undefined, env({ OPENAI_API_KEY: 'must-not-enable-openai' })), []);
+  const originalGemini = Deno.env.get('GEMINI_API_KEY');
+  Deno.env.delete('GEMINI_API_KEY');
+  try {
+    assertEquals(isImageGenerationConfigured(), false);
+  } finally {
+    if (originalGemini !== undefined) Deno.env.set('GEMINI_API_KEY', originalGemini);
+  }
+});
+
 function env(values: Record<string, string>): (name: string) => string | undefined {
   return (name) => values[name];
 }
@@ -140,29 +121,29 @@ function assertEquals(actual: unknown, expected: unknown): void {
 Deno.test("defaults to Gemini when multiple text providers are configured", () => {
   const providers = resolveConfiguredProviders(undefined, env({
     GEMINI_API_KEY: "gemini-test-key",
-    OPENAI_API_KEY: "openai-test-key",
+    OPENAI_API_KEY: "ignored-openai-key",
     ANTHROPIC_API_KEY: "anthropic-test-key",
   }));
 
-  assertEquals(providers, ["gemini", "openai", "anthropic"]);
+  assertEquals(providers, ["gemini", "anthropic"]);
 });
 
-Deno.test("keeps Gemini first for explicit OpenAI model requests", () => {
+Deno.test("ignores legacy OpenAI model requests when Gemini is configured", () => {
   const providers = resolveConfiguredProviders("openai/gpt-5", env({
     GEMINI_API_KEY: "gemini-test-key",
-    OPENAI_API_KEY: "openai-test-key",
+    OPENAI_API_KEY: "ignored-openai-key",
   }));
 
-  assertEquals(providers, ["gemini", "openai"]);
+  assertEquals(providers, ["gemini"]);
 });
 
 Deno.test("routes explicit Gemini models to Gemini first", () => {
   const providers = resolveConfiguredProviders("google/gemini-3.8-flash", env({
     GEMINI_API_KEY: "gemini-test-key",
-    OPENAI_API_KEY: "openai-test-key",
+    OPENAI_API_KEY: "ignored-openai-key",
   }));
 
-  assertEquals(providers, ["gemini", "openai"]);
+  assertEquals(providers, ["gemini"]);
 });
 
 Deno.test("accepts GOOGLE_API_KEY as the server-side Gemini alias", () => {
@@ -236,14 +217,14 @@ Deno.test("parses a short HTTP-date Retry-After value", () => {
   if (retryMs !== 2000) throw new Error(`Expected 2000ms retry, received ${retryMs}`);
 });
 
-Deno.test("never places the Lovable gateway ahead of direct provider keys", () => {
+Deno.test("places the managed gateway after Gemini without enabling OpenAI", () => {
   const providers = resolveConfiguredProviders("openai/gpt-5-mini", env({
     LOVABLE_API_KEY: "lovable-test-key",
     GEMINI_API_KEY: "gemini-test-key",
-    OPENAI_API_KEY: "openai-test-key",
+    OPENAI_API_KEY: "ignored-openai-key",
   }));
 
-  assertEquals(providers, ["gemini", "openai", "lovable"]);
+  assertEquals(providers, ["gemini", "lovable"]);
 });
 
 Deno.test("current Gemini wire models survive deployment defaults and blank key aliases", async () => {

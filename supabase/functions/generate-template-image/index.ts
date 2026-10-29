@@ -35,10 +35,10 @@ serve(async (req) => {
     }
 
     if (!isImageGenerationConfigured()) {
-      console.warn("OPENAI_API_KEY not configured - image generation unavailable");
+      console.warn("Gemini API key not configured - image generation unavailable");
       return secureJsonResponse(
         {
-          error: "Image generation is not configured. Set OPENAI_API_KEY.",
+          error: "Image generation is not configured. Set GEMINI_API_KEY.",
           isLocalDevelopment: true,
         },
         503,

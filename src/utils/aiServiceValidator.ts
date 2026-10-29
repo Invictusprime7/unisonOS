@@ -8,6 +8,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { DEFAULT_GEMINI_MODEL_ID } from '@/config/aiModels';
 
 export interface AIServiceStatus {
   isConfigured: boolean;
@@ -26,7 +27,7 @@ export async function validateAIService(): Promise<AIServiceStatus> {
       body: {
         messages: [{ role: 'user', content: 'test' }],
         mode: 'creative',
-        model: 'gpt-4o-mini', // Use smaller model for test
+        model: DEFAULT_GEMINI_MODEL_ID,
         maxTokens: 10
       }
     });

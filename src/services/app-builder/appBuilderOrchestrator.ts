@@ -9,6 +9,7 @@ import { materializeRegisteredComponents } from './registeredComponentMaterializ
 import { evaluateDesignQuality } from './design/designQualityClosure';
 import { applyDesignSources } from './design/designSourceMaterializer';
 import { materializeAppBuilderSiteShell } from './design/appBuilderSiteShell';
+import { materializeDeterministicAppBuilderScaffold } from './design/appBuilderScaffold';
 import { buildAppBuilderGenerationContext, reportDesignSourceUsage } from './appBuilderGenerationContext';
 import { findPageStructureIssues, pageStructureRequirement, verifiedPhotosFor } from './design/pageStructureGate';
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
@@ -32,6 +33,7 @@ export async function orchestrateAppBuild(
   input: AppBuildRequest,
   dependencies: AppBuilderOrchestratorDependencies,
 ): Promise<AppBuildResult> {
+  const generationMode = input.generationMode ?? 'ai';
   input.onStatus?.('Preparing App Builder context');
   const pages = input.contract.topology.sitePlan.pages.map((page) => ({
     pageId: page.id,
@@ -47,7 +49,7 @@ export async function orchestrateAppBuild(
   const totalBudgetMs = input.budgetMs ?? 280_000;
   const authoringBudgetMs = Math.max(60_000, totalBudgetMs - CLOSURE_REPAIR_RESERVE_MS);
   let contentTypes: ContentTypeRow[] = [];
-  if (dependencies.loadContentTypes && input.baseRevisionId) {
+  if (generationMode === 'ai' && dependencies.loadContentTypes && input.baseRevisionId) {
     try {
       contentTypes = await dependencies.loadContentTypes({
         businessId: input.contract.identity.businessId,
@@ -95,7 +97,12 @@ export async function orchestrateAppBuild(
     }
     return messages;
   };
-  const authored = await dependencies.authorSite({
+  const authored = generationMode === 'deterministic'
+    ? {
+      files: { ...baseFiles, ...materializeDeterministicAppBuilderScaffold(input.contract) },
+      outcomes: [],
+    }
+    : await dependencies.authorSite({
     pages,
     homePageId: input.contract.topology.sitePlan.homePageId,
     designContext: input.contract.design.resolvedSiteDesignContext,
@@ -122,7 +129,9 @@ export async function orchestrateAppBuild(
     reuseAcceptedPages: input.reuseAcceptedPages ?? true,
     resolveDependencies: false,
   });
-  input.onStatus?.('Checking authored pages, sections and bindings');
+  input.onStatus?.(generationMode === 'deterministic'
+    ? 'Checking deterministic starter pages, sections and bindings'
+    : 'Checking authored pages, sections and bindings');
 
   const compatibilityMode = Boolean(input.acceptPage);
   // A valid baseline is not an authored application. Preserve terminal provider
@@ -138,7 +147,9 @@ export async function orchestrateAppBuild(
       message: `Canonical binding ${bindingId} has no matching generated control in its registered page surface.`,
     }));
     const pageIssues = pages.flatMap((page) =>
-      (input.pageCheck?.(page.filePath, files[page.filePath] ?? '', files) ?? []).map((message) => ({
+      (generationMode === 'deterministic'
+        ? pageCheck(page.filePath, files[page.filePath] ?? '', files)
+        : input.pageCheck?.(page.filePath, files[page.filePath] ?? '', files) ?? []).map((message) => ({
         severity: 'blocker' as const, code: 'page-contract', path: page.filePath, message,
       })));
     return {
@@ -188,7 +199,7 @@ export async function orchestrateAppBuild(
 
   // One site-wide repair attempt sees the complete closure diagnostics and protected-path constraints.
   const closureTimeLeftMs = startedAt + totalBudgetMs - Date.now();
-  if (!compatibilityMode && !terminalAuthoringFailure && !closure.ok && !input.signal?.aborted && closureTimeLeftMs >= MIN_CLOSURE_REPAIR_MS) {
+  if (generationMode === 'ai' && !compatibilityMode && !terminalAuthoringFailure && !closure.ok && !input.signal?.aborted && closureTimeLeftMs >= MIN_CLOSURE_REPAIR_MS) {
     const closureRepairTimeoutMs = Math.min(closureTimeLeftMs, MAX_CLOSURE_REPAIR_MS);
     input.onStatus?.('Repairing final checks (up to 1:30)');
     const home = pages.find((page) => page.pageId === input.contract.topology.sitePlan.homePageId) ?? pages[0];
@@ -256,7 +267,9 @@ export async function orchestrateAppBuild(
   const surfacedDiagnostics = terminalAuthoringFailure
     ? authorDiagnostics
     : [...authorDiagnostics, ...closureDiagnostics];
-  const strategy = compatibilityMode
+  const strategy = generationMode === 'deterministic'
+    ? 'deterministic-scaffold' as const
+    : compatibilityMode
     ? 'legacy-commit-adapter' as const
     : closureRepairAttempts > 0
       ? 'ai-candidate+closure-repair' as const
@@ -282,7 +295,7 @@ export async function orchestrateAppBuild(
       baseRevisionId: input.baseRevisionId ?? null,
       contractSeed: input.contract.design.seed,
       sourceHash: closure.sourceHash,
-      authoredPageIds: pages.map((page) => page.pageId),
+      authoredPageIds: generationMode === 'ai' ? pages.map((page) => page.pageId) : [],
       strategy,
     },
   };

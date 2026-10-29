@@ -12,7 +12,7 @@
 
 import type { AIRuntimeResult } from '@/types/aiTerminalIntegration';
 
-export type ProviderType = 'claude' | 'openai' | 'gemini' | 'local' | 'ollama';
+export type ProviderType = 'claude' | 'gemini' | 'local' | 'ollama';
 export type RoutingStrategy = 'latency' | 'cost' | 'balanced';
 
 interface ProviderMetrics {
@@ -34,7 +34,6 @@ interface ProviderScore {
 const PROVIDER_ENV_CHECKS: Record<ProviderType, boolean> = {
   // Hosted providers are invoked by Edge Functions. Browser code only discovers local options.
   claude: false,
-  openai: false,
   gemini: false,
   local: true,
   ollama: Boolean(import.meta.env.VITE_OLLAMA_BASE_URL),
@@ -56,7 +55,6 @@ export class AIProviderRouter {
   private initializeProviders(): void {
     const defaults: Record<ProviderType, Omit<ProviderMetrics, 'isHealthy'>> = {
       claude: { name: 'claude', latencyMs: 800, costPer1kTokens: 0.003, errorRate: 0, requestCount: 0, avgLatityMs: 800 },
-      openai: { name: 'openai', latencyMs: 600, costPer1kTokens: 0.002, errorRate: 0, requestCount: 0, avgLatityMs: 600 },
       gemini: { name: 'gemini', latencyMs: 700, costPer1kTokens: 0.0005, errorRate: 0, requestCount: 0, avgLatityMs: 700 },
       local: { name: 'local', latencyMs: 100, costPer1kTokens: 0, errorRate: 0, requestCount: 0, avgLatityMs: 100 },
       ollama: { name: 'ollama', latencyMs: 150, costPer1kTokens: 0, errorRate: 0, requestCount: 0, avgLatityMs: 150 },
