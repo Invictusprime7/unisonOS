@@ -89,6 +89,13 @@
 - [x] Replace Babel's Node-only breaking-mode flag without exposing host environment variables
 - [x] Verify Babel initialization without `process` in isolated browser bundles, 22 editor regressions, authority lint, and live Builder startup with zero page errors; saved-project content remains blocked by the authoritative-session issue below
 
+## Active: Canonical page-target binding closure
+- [x] Match existing AI-authored React Router controls by canonical `data-ut-target-page-id` or registered route before label heuristics; stamp the binding ID and CTA marker in place without duplicating the authored link.
+- [x] App Builder integration regression reaches `ready-for-commit` with a canonical `targetPageId` link and no unresolved-binding diagnostic; the existing target path is retained as a hash route.
+- [x] Local Playwright on signed-in Lowtide House: home → `/the-house`, footer → `/rooms`, and back home all rendered; the four Shore footer links resolve to registered `/the-house` metadata. Candidate was not applied and no save/deploy was performed.
+- [ ] Fresh AI generation → canonical commit → reopen on this project; route interaction was verified, but a held source-edit candidate is not generation or persistence evidence.
+- [ ] Clear local browser diagnostics: Home's `cleanup_empty_projects` RPC returns 404, Sandpack telemetry request to `col.csbops.io` timed out, and Motion reports non-animatable transparent background transitions. These did not block the tested preview routes.
+
 ## Active: Selected text editing
 - [x] Preserve nested inline formatting/icons in selected literal text and canonical slot edits; anchor direct edits to clicked text, prefer explicit AI source ownership and refuse ambiguous text matches
 - [x] Run nested-text, inspector, rendering and canonical edit regressions

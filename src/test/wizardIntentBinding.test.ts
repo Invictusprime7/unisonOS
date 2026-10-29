@@ -231,6 +231,34 @@ describe('wizard intent binding', () => {
     expect(result.files['/src/pages/Home.tsx']).toMatch(/data-ut-section-type="hero"[\s\S]*?<a href="#\/shop"/);
   });
 
+  it('uses canonical target-page metadata to bind an AI-authored Link with a different label', () => {
+    const files = {
+      '/src/pages/Home.tsx': 'export default function Home(){return <main><footer><Link to="/the-house" data-ut-target-page-id="the-house">Explore the shoreline</Link></footer></main>} ',
+    };
+    const registry = {
+      pages: {
+        home: { pageId: 'home', title: 'Home', path: '/', filePath: '/src/pages/Home.tsx', isHome: true },
+        'the-house': { pageId: 'the-house', title: 'The House', path: '/the-house', filePath: '/src/pages/TheHouse.tsx' },
+      },
+      funnels: {}, homePageId: 'home', version: 1,
+    } as never;
+
+    const result = normalizeWizardBindingMarkers(files, registry, [{
+      bindingId: 'bind-home-house', pageId: 'home', sourceLabel: 'The House Story',
+      sourceSection: 'footer', sourceSlot: 'page-route', domIntent: 'nav.goto',
+      targetType: 'page', targetId: 'the-house', targetPath: '/the-house', markers: ['cta.nav-link'],
+    }]);
+    const output = result.files['/src/pages/Home.tsx'];
+
+    expect(result.unresolvedBindingIds).toEqual([]);
+    expect(output.match(/<Link\b/g)).toHaveLength(1);
+    expect(output).toContain('data-ut-binding-id="bind-home-house"');
+    expect(output).toContain('data-ut-cta="cta.nav-link"');
+    expect(output).toContain('data-ut-target-page-id="the-house"');
+    expect(output).toContain('to="#/the-house"');
+    expect(output).not.toContain('The House Story</a>');
+  });
+
   it('keeps duplicate icon bindings on distinct controls with their own IDs', () => {
     const files = {
       '/src/pages/Home.tsx': 'export default function Home(){return <><header data-ut-section-id="home:navbar:0" data-ut-section-type="navbar"><button data-ut-cta="icon.cart" aria-label="Cart">Cart</button></header><main /></>} ',

@@ -364,6 +364,56 @@ describe('UnisonAppBuilder facade', () => {
       .toContain('CANONICAL PAGE NODE: persist page ID "home"');
   });
 
+  it('accepts an AI-authored route link using canonical target-page metadata', async () => {
+    const appContract = contract();
+    appContract.topology.pageRegistry.pages = {
+      home: {
+        pageId: 'home', title: 'Home', path: '/', filePath: '/src/pages/Home.tsx',
+        pageType: 'home', pageRole: 'home', isHome: true,
+      } as never,
+      'the-house': {
+        pageId: 'the-house', title: 'The House', path: '/the-house', filePath: '/src/pages/TheHouse.tsx',
+        pageType: 'about', pageRole: 'about', isHome: false,
+      } as never,
+    };
+    appContract.business.intents = ['nav.goto'];
+    appContract.business.bindingGuide = '- Page Home (/), slot hero.primary-cta: label "The House Story", marker data-ut-cta="cta.hero", intent nav.goto, target The House (/the-house)';
+    appContract.business.intentBindings = [{
+      bindingId: 'bind-home-house', pageId: 'home', route: '/', elementKey: 'home.hero.house-story',
+      sourceSection: 'hero', sourceSlot: 'primary-cta', sourceLabel: 'The House Story',
+      coreIntent: 'nav.goto', domIntent: 'nav.goto', ctaMarkers: ['cta.hero'], intentHandler: 'client',
+      targetType: 'page', targetId: 'the-house', requiredCapabilities: [], missingCapabilities: [],
+    }];
+    const authoredHome = `import SiteNav from '@/project-components/site/SiteNav';
+import SiteFooter from '@/project-components/site/SiteFooter';
+import { Link } from 'react-router-dom';
+export default function Home(){return <><SiteNav/><main>
+<section data-ut-section-id="home:hero:0" data-ut-section-type="hero"><h1>Northstar</h1><p>Welcome to our house.</p><Link to="/the-house" data-ut-target-page-id="the-house">Explore the shoreline</Link></section>
+<section><img src="https://images.unsplash.com/photo-1.jpg" alt="Coastal house"/><p>Quiet rooms beside the sea.</p></section>
+<section><h2>Stay a while</h2><p>Three rooms and a long shoreline.</p></section>
+</main><SiteFooter/></>}`;
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: { ...input.files, '/src/pages/Home.tsx': authoredHome },
+      revisionId: input.revisionId,
+      outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
+    }));
+
+    const result = await createTestBuilder({ authorSite }).generate({
+      operationId: 'canonical-page-target-binding', contract: appContract, initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null,
+    });
+    const home = result.candidateFiles['/src/pages/Home.tsx'];
+
+    expect(result.candidate.status, JSON.stringify({ diagnostics: result.candidate.diagnostics, issues: result.candidate.closure?.issues }, null, 2))
+      .toBe('ready-for-commit');
+    expect(result.candidate.closure?.issues.some((issue) => issue.code === 'binding-marker-unresolved')).toBe(false);
+    expect(home.match(/<Link\b/g)).toHaveLength(1);
+    expect(home).toContain('data-ut-binding-id="bind-home-house"');
+    expect(home).toContain('data-ut-target-page-id="the-house"');
+    expect(home).toContain('data-ut-cta="cta.hero"');
+    expect(home).toContain('to="#/the-house"');
+  });
+
   it('normalizes registered section dispatchers before per-page candidate gates run', async () => {
     const appContract = contract();
     const registryContext = buildWizardAggregatedRegistryContext({

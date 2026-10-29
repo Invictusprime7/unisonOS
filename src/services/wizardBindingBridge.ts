@@ -54,6 +54,10 @@ interface JsxCandidate {
   tagName: string;
   bindingId?: string;
   href?: string;
+  to?: string;
+  targetPageId?: string;
+  targetId?: string;
+  targetPath?: string;
   type?: string;
   insideForm: boolean;
 }
@@ -182,6 +186,8 @@ interface BindingMatchTarget {
   sourceSection?: string;
   sourceSlot?: string;
   sourceLabel?: string;
+  targetType?: string;
+  targetId?: string;
   targetPath?: string;
 }
 
@@ -315,6 +321,10 @@ function collectJsxCandidates(
       tagName,
       bindingId: staticJsxAttribute(element, 'data-ut-binding-id'),
       href: staticJsxAttribute(element, 'href'),
+      to: staticJsxAttribute(element, 'to'),
+      targetPageId: staticJsxAttribute(element, 'data-ut-target-page-id'),
+      targetId: staticJsxAttribute(element, 'data-ut-target-id'),
+      targetPath: staticJsxAttribute(element, 'data-ut-path'),
       type: staticJsxAttribute(element, 'type'),
       insideForm: isInsideForm(element),
     });
@@ -538,6 +548,23 @@ function applyBindingByJsxAst(
   const selected: JsxCandidate[] = [];
   const ownedByOtherBinding = (candidate: JsxCandidate) =>
     Boolean(candidate.bindingId && candidate.bindingId !== binding.bindingId);
+  const matchesCanonicalPageTarget = (candidate: JsxCandidate) => {
+    if (binding.targetType !== 'page') return false;
+    const candidatePageId = candidate.targetPageId || candidate.targetId;
+    if (binding.targetId && candidatePageId) return candidatePageId === binding.targetId;
+
+    const targetPath = binding.targetPath ? normalizeRoute(binding.targetPath.replace(/^#/, '')) : undefined;
+    const candidatePath = candidate.targetPath || candidate.to || candidate.href;
+    return Boolean(targetPath && candidatePath
+      && normalizeRoute(candidatePath.trim().replace(/^#/, '')) === targetPath);
+  };
+
+  for (const candidate of labelCandidates) {
+    if (selected.length >= limit) break;
+    if (ownedByOtherBinding(candidate) || !matchesCanonicalPageTarget(candidate)) continue;
+    matched.add(candidate.openTagStart);
+    selected.push(candidate);
+  }
 
   if (label) {
     for (const candidate of labelCandidates) {
@@ -557,7 +584,9 @@ function applyBindingByJsxAst(
     for (const candidate of labelCandidates) {
       if (selected.length >= limit) break;
       if (ownedByOtherBinding(candidate)) continue;
-      if (candidate.href !== targetPath || matched.has(candidate.openTagStart)) continue;
+      if (normalizeRoute((candidate.targetPath || candidate.to || candidate.href || '').replace(/^#/, ''))
+        !== normalizeRoute(targetPath.replace(/^#/, ''))
+        || matched.has(candidate.openTagStart)) continue;
       matched.add(candidate.openTagStart);
       selected.push(candidate);
     }
@@ -730,6 +759,8 @@ export function normalizeWizardBindingMarkers(
       sourceSection: requirement.sourceSection,
       sourceSlot: requirement.sourceSlot,
       sourceLabel: requirement.sourceLabel ?? '',
+      targetType: requirement.targetType,
+      targetId: requirement.targetId,
       targetPath: requirement.targetPath,
     };
     const attrs: Record<string, string> = { 'data-ut-cta': requirement.markers[0] };
