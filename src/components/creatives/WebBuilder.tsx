@@ -130,6 +130,7 @@ import { repairDraftBusinessLink } from "@/services/draftBusinessLinkRepair";
 import {
   buildProjectRuntimeEnvelope,
   loadProjectRuntimeProjection,
+  resolveHydratedBusinessId,
   resolvePersistedEditorIdentity,
   resolveProjectActivePagePath,
 } from '@/services/projectRuntimeEnvelope';
@@ -2860,6 +2861,17 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const legacyHydrationKeyRef = useRef<string | null>(null);
   const hydratedDraftIdentityRef = useRef<string | null>(null);
   const [hydratedRevision, setHydratedRevision] = useState<LoadedRevision | null>(null);
+  useEffect(() => {
+    if (routeBusinessId) return;
+    const persistedBusinessId = resolveHydratedBusinessId(hydratedRevision, {
+      projectId: resolvedProjectId || projectId,
+      draftId: currentDraftId,
+    });
+    if (persistedBusinessId && persistedBusinessId !== recoveredBusinessId) {
+      console.warn('[WebBuilder] businessId missing from route/project state — recovered from accepted revision:', persistedBusinessId);
+      setRecoveredBusinessId(persistedBusinessId);
+    }
+  }, [routeBusinessId, recoveredBusinessId, hydratedRevision, resolvedProjectId, projectId, currentDraftId]);
   const [runtimeProjectionRevisionId, setRuntimeProjectionRevisionId] = useState<string | null>(null);
   const [canonicalHydrationError, setCanonicalHydrationError] = useState<string | null>(null);
   // Automatic owning-business repair: a draft whose business link is missing can

@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
-import { resolvePersistedEditorIdentity, resolveProjectActivePagePath } from '@/services/projectRuntimeEnvelope';
+import { resolveHydratedBusinessId, resolvePersistedEditorIdentity, resolveProjectActivePagePath } from '@/services/projectRuntimeEnvelope';
 import type { ProjectRuntimeProjection } from '@/services/projectRuntimeEnvelope';
 
 const source = ts.createSourceFile(
@@ -25,6 +25,23 @@ function loadHydrationEffect(
   };
   visit(source);
   if (matches.length !== 1) throw new Error('Expected exactly one persisted revision adoption effect');
+  const compiled = ts.transpileModule(matches[0].getText(source), {
+    compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
+  }).outputText;
+  return new Function(...Object.keys(dependencies), compiled).bind(null, ...Object.values(dependencies));
+}
+
+function loadBusinessIdentityEffect(dependencies: Record<string, unknown>): () => void {
+  const matches: ts.CallExpression[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && node.expression.getText(source) === 'useEffect' &&
+      node.arguments[0]?.getText(source).includes('resolveHydratedBusinessId(')) {
+      matches.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  if (matches.length !== 1) throw new Error('Expected exactly one hydrated business identity effect');
   const compiled = ts.transpileModule(matches[0].getText(source), {
     compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
   }).outputText;
@@ -69,6 +86,43 @@ function createDependencies() {
 const projection = { activePublishedRevisionId: 'published-current', activePagePath: '/src/pages/Home.tsx' };
 
 describe('WebBuilder persisted revision adoption effect', () => {
+  it('recovers business identity from the accepted revision when route identity is absent', () => {
+    const hydratedRevision = revision('revive');
+    const setRecoveredBusinessId = vi.fn();
+    renderHook(() => loadBusinessIdentityEffect({
+      useEffect,
+      routeBusinessId: null,
+      recoveredBusinessId: null,
+      hydratedRevision,
+      resolvedProjectId: hydratedRevision.projectId,
+      projectId: null,
+      currentDraftId: hydratedRevision.draftId,
+      resolveHydratedBusinessId,
+      setRecoveredBusinessId,
+      console: { warn: vi.fn() },
+    })());
+
+    expect(setRecoveredBusinessId).toHaveBeenCalledExactlyOnceWith(hydratedRevision.businessId);
+  });
+
+  it('does not adopt a hydrated business ID from a different project', () => {
+    const setRecoveredBusinessId = vi.fn();
+    renderHook(() => loadBusinessIdentityEffect({
+      useEffect,
+      routeBusinessId: null,
+      recoveredBusinessId: null,
+      hydratedRevision: revision('other'),
+      resolvedProjectId: 'project-revive',
+      projectId: null,
+      currentDraftId: 'draft-revive',
+      resolveHydratedBusinessId,
+      setRecoveredBusinessId,
+      console: { warn: vi.fn() },
+    })());
+
+    expect(setRecoveredBusinessId).not.toHaveBeenCalled();
+  });
+
   it('advances Builder state and the preview revision after an accepted AI commit', () => {
     const sourceText = source.getFullText();
     expect(sourceText).toContain('setCurrentRevisionId(outcome.revisionId);');

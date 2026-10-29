@@ -500,6 +500,14 @@ describe('launch business runtime persistence', () => {
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("window.dispatchEvent(new CustomEvent('unison:booking.updated'");
   });
 
+  it('settles booking selectors on missing runtime, read failure, or empty service/availability results', () => {
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("markUnavailable('Booking unavailable'");
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("'No services available'");
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("'No availability available'");
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('Booking is not configured yet: no services are available.');
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('Booking is not available yet: no appointment times are available.');
+  });
+
   it('provisions only stable approved definitions for generated forms', () => {
     const definitions = planLaunchFormDefinitions({
       vfsFiles: { '/src/components/Contact.tsx': '<form data-demo-form="true" />' },

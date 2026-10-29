@@ -312,42 +312,62 @@ function replaceOptions(select: HTMLSelectElement, options: Array<{ value: strin
 }
 
 async function hydrateBookingForm(form: HTMLFormElement) {
-  const runtime = PUBLISHED_RUNTIME_CONFIG;
-  if (!runtime.siteId || !runtime.runtimeEndpoint || !bookingComponent(form)) return;
-  const response = await fetch(runtime.runtimeEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      operation: 'read',
-      runtimeVersion: runtime.runtimeVersion,
-      siteId: runtime.siteId,
-      read: { type: 'booking', sessionId: createSessionId() },
-    }),
-  });
-  const result = await response.json().catch(() => ({})) as Record<string, any>;
-  if (!response.ok || result.success === false) throw new Error(result.error || 'Booking availability is unavailable.');
-  const services = Array.isArray(result.state?.services) ? result.state.services : [];
-  const slots = Array.isArray(result.state?.slots) ? result.state.slots : [];
   const serviceSelect = form.elements.namedItem('serviceId') as HTMLSelectElement | null;
   const slotSelect = form.elements.namedItem('slotId') as HTMLSelectElement | null;
   if (!serviceSelect || !slotSelect) return;
-  replaceOptions(serviceSelect, services.map((service: any) => ({
-    value: String(service.id),
-    label: String(service.name),
-  })), 'Select a service');
-  const renderSlots = () => {
-    const selectedService = serviceSelect.value;
-    replaceOptions(slotSelect, slots
-      .filter((slot: any) => !slot.service_id || slot.service_id === selectedService)
-      .map((slot: any) => ({
-        value: String(slot.id),
-        label: new Date(slot.starts_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
-      })), 'Select a time');
+  const markUnavailable = (label: string, message: string) => {
+    replaceOptions(serviceSelect, [], label);
+    replaceOptions(slotSelect, [], label);
+    showActionStatus(form, message);
   };
-  serviceSelect.addEventListener('change', renderSlots);
-  renderSlots();
-  const latest = Array.isArray(result.state?.bookings) ? result.state.bookings[0] : null;
-  if (latest) showActionStatus(form, String(latest.service_name) + ' is ' + String(latest.status) + '.');
+  const runtime = PUBLISHED_RUNTIME_CONFIG;
+  if (!runtime.siteId || !runtime.runtimeEndpoint || !bookingComponent(form)) {
+    markUnavailable('Booking unavailable', 'Booking is not enabled for this site.');
+    return;
+  }
+  try {
+    const response = await fetch(runtime.runtimeEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'read',
+        runtimeVersion: runtime.runtimeVersion,
+        siteId: runtime.siteId,
+        read: { type: 'booking', sessionId: createSessionId() },
+      }),
+    });
+    const result = await response.json().catch(() => ({})) as Record<string, any>;
+    if (!response.ok || result.success === false) throw new Error(result.error || 'Booking availability is unavailable.');
+    const services = Array.isArray(result.state?.services) ? result.state.services : [];
+    const slots = Array.isArray(result.state?.slots) ? result.state.slots : [];
+    const serviceOptions = services.map((service: any) => ({
+      value: String(service.id),
+      label: String(service.name),
+    }));
+    replaceOptions(serviceSelect, serviceOptions, serviceOptions.length ? 'Select a service' : 'No services available');
+    const renderSlots = () => {
+      const selectedService = serviceSelect.value;
+      const slotOptions = services.length === 0 ? [] : slots
+        .filter((slot: any) => !slot.service_id || slot.service_id === selectedService)
+        .map((slot: any) => ({
+          value: String(slot.id),
+          label: new Date(slot.starts_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
+        }));
+      const emptyLabel = services.length === 0
+        ? 'Add services before booking'
+        : slotOptions.length ? 'Select a time' : 'No availability available';
+      replaceOptions(slotSelect, slotOptions, emptyLabel);
+    };
+    serviceSelect.addEventListener('change', renderSlots);
+    renderSlots();
+    if (services.length === 0) showActionStatus(form, 'Booking is not configured yet: no services are available.');
+    else if (slots.length === 0) showActionStatus(form, 'Booking is not available yet: no appointment times are available.');
+    const latest = Array.isArray(result.state?.bookings) ? result.state.bookings[0] : null;
+    if (latest) showActionStatus(form, String(latest.service_name) + ' is ' + String(latest.status) + '.');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Booking availability is unavailable.';
+    markUnavailable('Booking unavailable', message);
+  }
 }
 
 function focusForm(intent: string): boolean {

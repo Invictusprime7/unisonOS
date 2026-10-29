@@ -34,6 +34,18 @@ export function resolvePersistedEditorIdentity(
   };
 }
 
+/** Use a hydrated revision's tenant identity only when it matches the open project/draft. */
+export function resolveHydratedBusinessId(
+  revision: Pick<LoadedRevision, 'businessId' | 'projectId' | 'draftId'> | null | undefined,
+  expected: { projectId?: string | null; draftId?: string | null },
+): string | null {
+  const businessId = revision?.businessId?.trim();
+  if (!businessId) return null;
+  if (expected.projectId && revision?.projectId !== expected.projectId) return null;
+  if (expected.draftId && revision?.draftId !== expected.draftId) return null;
+  return businessId;
+}
+
 export function projectRuntimeProjectionFromRows(
   project: { active_published_revision_id?: string | null } | null,
   draft: { metadata?: unknown } | null,

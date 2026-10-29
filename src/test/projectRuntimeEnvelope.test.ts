@@ -3,6 +3,7 @@ import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import {
   buildProjectRuntimeEnvelope,
   projectRuntimeProjectionFromRows,
+  resolveHydratedBusinessId,
   resolveProjectActivePagePath,
 } from '@/services/projectRuntimeEnvelope';
 import type { LoadedRevision } from '@/services/vfsCommitService';
@@ -85,6 +86,14 @@ function revision(siteBundleSnapshot = snapshot()): LoadedRevision {
 }
 
 describe('ProjectRuntimeEnvelope', () => {
+  it('recovers business identity only from the matching accepted project and draft revision', () => {
+    const loaded = revision();
+    expect(resolveHydratedBusinessId(loaded, identity)).toBe(identity.businessId);
+    expect(resolveHydratedBusinessId(loaded, { ...identity, projectId: 'other-project' })).toBeNull();
+    expect(resolveHydratedBusinessId(loaded, { ...identity, draftId: 'other-draft' })).toBeNull();
+    expect(resolveHydratedBusinessId(null, identity)).toBeNull();
+  });
+
   it('assembles the durable identity, snapshot revision and capabilities from a persisted revision', () => {
     const envelope = buildProjectRuntimeEnvelope({
       workspaceId: identity.workspaceId,
