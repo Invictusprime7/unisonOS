@@ -99,6 +99,12 @@ describe('Playground canonical finalization', () => {
     const edited = structuredClone(compiled.playground);
     const gallery = Object.values(edited.pageRegistry.pages).find((page) => page.path === '/gallery')!;
     gallery.title = 'Studio Portfolio';
+    const rooms = Object.values(edited.pageRegistry.pages).find((page) => page.path === '/contact')!;
+    rooms.title = 'Choose your room';
+    rooms.path = '/rooms';
+    rooms.filePath = '/src/pages/rooms.tsx';
+    rooms.pageRole = 'custom';
+    rooms.pageType = 'custom';
 
     const result = await commitMutation({
       source: 'playground-edit', identity,
@@ -107,6 +113,7 @@ describe('Playground canonical finalization', () => {
     });
 
     expect(result.status).toBe('committed');
+    expect(result.vfsFiles['/src/pages/rooms.tsx']).toMatch(/export\s+default\b/);
     expect(result.siteBundleSnapshot?.businessName).toBe('Gallery Closure Salon');
     expect(result.siteBundleSnapshot?.industry).toBe('salon');
     expect(result.siteBundleSnapshot?.meta.uiFoundation?.approvedExperienceCapabilities).toEqual(approved);
@@ -123,9 +130,16 @@ describe('Playground canonical finalization', () => {
     expect(JSON.stringify(launched.siteBundleSnapshot)).toBe(before);
     expect(reconcile).toHaveBeenCalledOnce();
     const restored = await loadLatestRevisionForProject(identity.projectId);
+    const persistedSnapshot = JSON.parse(JSON.stringify(result.siteBundleSnapshot));
+    if (persistedSnapshot.meta?.effectiveComposition) {
+      persistedSnapshot.meta.effectiveComposition.revisionId = restored?.id;
+    }
     expect(restored?.vfsFiles).toEqual(result.vfsFiles);
-    expect(restored?.siteBundleSnapshot).toEqual(result.siteBundleSnapshot);
+    expect(restored?.siteBundleSnapshot).toEqual(persistedSnapshot);
     expect(restored?.playground?.pageRegistry.pages[gallery.pageId]).toMatchObject({ title: 'Studio Portfolio', path: '/gallery' });
+    expect(restored?.playground?.pageRegistry.pages[rooms.pageId]).toMatchObject({
+      title: 'Choose your room', path: '/rooms', pageRole: 'services', pageType: 'landing',
+    });
     expect(result.siteBundleSnapshot?.bindings).toEqual(launched.siteBundleSnapshot?.bindings);
     const initialGalleryComposition = collectResolvedCompositions(launched.files)[gallery.filePath!];
     expect(collectResolvedCompositions(result.vfsFiles)[gallery.filePath!])

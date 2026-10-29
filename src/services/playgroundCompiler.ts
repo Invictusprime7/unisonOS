@@ -452,6 +452,7 @@ function inferTopologyRole(page: BuilderPage): PageRole {
   if (raw === 'immersive') return 'immersive';
 
   const path = page.path.toLowerCase();
+  if (/(^|\/)rooms?(\/|$)/.test(path)) return 'services';
   if (path.includes('service')) return 'services';
   if (path.includes('confirmation') || path.includes('thank')) return 'thank_you';
   if (path.includes('contact')) return 'contact';
