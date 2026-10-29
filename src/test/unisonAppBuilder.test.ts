@@ -299,10 +299,20 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
   it('loads only the contract project CMS schemas before page authoring', async () => {
     const loadContentTypes = vi.fn(async () => [{ id: 'article-type', api_key: 'articles', field_schema: { fields: [{ key: 'body', type: 'textarea' }] } }]);
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({ files: input.files, revisionId: input.revisionId, outcomes: [] }));
-    await createUnisonAppBuilder({ authorSite, loadContentTypes }).generate({ operationId: 'scoped-generation', contract: contract(), initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null });
+    await createUnisonAppBuilder({ authorSite, loadContentTypes }).generate({ operationId: 'scoped-generation', contract: contract(), initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: 'accepted-revision-1' });
     expect(loadContentTypes).toHaveBeenCalledWith({ businessId: 'business-1', projectId: 'project-1' });
     expect(authorSite.mock.calls[0]?.[0].runtimeContextForPage?.('home')).toContain('content:articles');
     expect(authorSite.mock.calls[0]?.[0].runtimeContextForPage?.('home')).toContain('body:textarea');
+  });
+  it('skips CMS scope discovery before the first project revision is accepted', async () => {
+    const loadContentTypes = vi.fn(async () => [{ id: 'article-type', api_key: 'articles', field_schema: { fields: [] } }]);
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({ files: input.files, revisionId: input.revisionId, outcomes: [] }));
+    await createUnisonAppBuilder({ authorSite, loadContentTypes }).generate({
+      operationId: 'fresh-launch-no-cms-scope', contract: contract(), initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null,
+    });
+
+    expect(loadContentTypes).not.toHaveBeenCalled();
   });
   it('continues authoring without optional CMS schema hints when scoped discovery fails', async () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({

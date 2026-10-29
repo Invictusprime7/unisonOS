@@ -46,15 +46,15 @@ export async function orchestrateAppBuild(
   const totalBudgetMs = input.budgetMs ?? 280_000;
   const authoringBudgetMs = Math.max(60_000, totalBudgetMs - CLOSURE_REPAIR_RESERVE_MS);
   let contentTypes: ContentTypeRow[] = [];
-  if (dependencies.loadContentTypes) {
+  if (dependencies.loadContentTypes && input.baseRevisionId) {
     try {
       contentTypes = await dependencies.loadContentTypes({
         businessId: input.contract.identity.businessId,
         projectId: input.contract.identity.projectId,
       });
     } catch (error) {
-      // CMS schemas enrich authoring only; fresh-launch project IDs may not be
-      // persisted until owner approval, and CMS writes remain post-commit.
+      // CMS schemas enrich authoring only; the accepted revision proves the
+      // project scope exists before requesting optional schema hints.
       console.warn('[AppBuilder] Content-type context unavailable; continuing without CMS schema hints.', error);
     }
   }

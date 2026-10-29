@@ -192,6 +192,35 @@ function findRootVariantIdentity(
   return matches === 1 ? match : {};
 }
 
+function findRootSectionTypeFromModule(
+  root: ts.JsxElement | ts.JsxSelfClosingElement,
+  sourceFile: ts.SourceFile,
+  implementations: Readonly<Record<string, EligibleImplementation>>,
+): string | undefined {
+  const imports = moduleImports(sourceFile);
+  const sectionTypes = new Set<string>();
+  const moduleTypes = new Map<string, string>();
+  for (const implementation of Object.values(implementations)) {
+    moduleTypes.set(
+      implementation.modulePath.replace(/^\/src\//, '@/').replace(/\.(?:tsx?|jsx?)$/i, ''),
+      implementation.sectionType,
+    );
+  }
+  const visit = (node: ts.Node) => {
+    if (node !== root && (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+      && SECTION_ROOT_TAGS.has(tagName(node.tagName) ?? '')) return;
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const component = tagName(node.tagName);
+      const imported = component ? imports.get(component) : undefined;
+      const sectionType = imported ? moduleTypes.get(imported.modulePath) : undefined;
+      if (sectionType) sectionTypes.add(sectionType);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return sectionTypes.size === 1 ? [...sectionTypes][0] : undefined;
+}
+
 function staticDispatcherProps(element: ts.JsxOpeningLikeElement, sourceFile: ts.SourceFile): Record<string, unknown> | null {
   const props: Record<string, unknown> = {};
   for (const property of element.attributes.properties) {
@@ -331,10 +360,14 @@ function materializeSectionRootIdentity(
           ? findRootVariantIdentity(rootElement, sourceFile, implementations)
           : {};
         const requestedVariantId = readStringAttribute(opening, 'data-ut-variant', sourceFile);
+        const inferredSectionType = rootElement
+          ? findRootSectionTypeFromModule(rootElement, sourceFile, implementations)
+          : undefined;
         const sectionType = readStringAttribute(opening, 'data-ut-section-type', sourceFile)
           ?? (rootName === 'header' || rootName === 'nav' ? 'navbar'
             : rootName === 'footer' ? 'footer'
-              : inferred.sectionType ?? (requestedVariantId ? implementations[requestedVariantId]?.sectionType : undefined));
+              : inferred.sectionType ?? inferredSectionType
+                ?? (requestedVariantId ? implementations[requestedVariantId]?.sectionType : undefined));
         const eligibleVariant = (variantId: string | undefined) => {
           const implementation = variantId ? eligibleImplementations[variantId] : undefined;
           return implementation?.sectionType === sectionType ? variantId : undefined;

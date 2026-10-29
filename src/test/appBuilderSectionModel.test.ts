@@ -22,22 +22,33 @@ describe('App Builder section model', () => {
   it('replaces unavailable variants with the first eligible implementation of the same family', () => {
     const source = `import Navbar from "@/unison/design-sources/Navbar";
 import Services from "@/unison/design-sources/Services";
+import Gallery from "@/unison/design-sources/Gallery";
 import Footer from "@/unison/design-sources/Footer";
-export default function Home(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:unavailable"><Navbar sectionId="site:navbar" variantId="navbar:unavailable" props={{ links: [] }} /></header><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="services:unavailable"><Services sectionId="home:services:0" variantId="services:unavailable" props={{ headline: "Treatments", items: [{ title: "Cut", description: "Tailored" }] }} /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:unavailable"><Footer sectionId="site:footer" variantId="footer:unavailable" props={{ links: [] }} /></footer></>}`;
+export default function Home(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:unavailable"><Navbar sectionId="site:navbar" variantId="navbar:unavailable" props={{ links: [] }} /></header><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="services:unavailable"><Services sectionId="home:services:0" variantId="services:unavailable" props={{ headline: "Treatments", items: [{ title: "Cut", description: "Tailored" }] }} /></section><section data-ut-section-id="home:gallery:0" data-ut-variant="gallery:editorial-mosaic"><Gallery variantId="gallery:editorial-mosaic" props={{ headline: "Work", items: [] }} /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:unavailable"><Footer sectionId="site:footer" variantId="footer:unavailable" props={{ links: [] }} /></footer></>}`;
+    const sectionImplementations = {
+      ...implementations,
+      'gallery:editorial-grid': {
+        modulePath: '/src/unison/design-sources/Gallery.tsx',
+        sectionType: 'gallery',
+      },
+    };
     const files = materializeAppBuilderSectionModels(
       { '/src/pages/Home.tsx': source },
       [{ id: 'home', filePath: '/src/pages/Home.tsx' }],
-      implementations,
-      { home: Object.keys(implementations) },
+      sectionImplementations,
+      { home: Object.keys(sectionImplementations) },
     );
 
     expect(files['/src/pages/Home.tsx']).toContain('data-ut-variant="navbar:standard"');
     expect(files['/src/pages/Home.tsx']).toContain('variantId="navbar:standard"');
     expect(files['/src/pages/Home.tsx']).toContain('data-ut-variant="services:editorial-rows"');
     expect(files['/src/pages/Home.tsx']).toContain('variantId="services:editorial-rows"');
+    expect(files['/src/pages/Home.tsx']).toContain('data-ut-section-type="gallery"');
+    expect(files['/src/pages/Home.tsx']).toContain('data-ut-variant="gallery:editorial-grid"');
+    expect(files['/src/pages/Home.tsx']).toContain('variantId="gallery:editorial-grid"');
     expect(files['/src/pages/Home.tsx']).toContain('data-ut-variant="footer:columns"');
     expect(files['/src/pages/Home.tsx']).toContain('variantId="footer:columns"');
-    expect(inspectAppBuilderPageSectionClosure('/src/pages/Home.tsx', files, implementations).issues).toEqual([]);
+    expect(inspectAppBuilderPageSectionClosure('/src/pages/Home.tsx', files, sectionImplementations).issues).toEqual([]);
     expect(Object.keys(files).some((path) => path.endsWith('/Home.json'))).toBe(true);
   });
 
