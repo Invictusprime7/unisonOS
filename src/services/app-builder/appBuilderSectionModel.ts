@@ -7,7 +7,8 @@ import {
   type ResolvedPageComposition,
 } from '@/platform/core/resolvedComposition';
 import type { ResolvedSection } from '@/platform/core/resolvedComposition';
-import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
+import { getSectionTypesWithVariants } from '@/sections/variants/registry';
+import { collectLocalImportClosure, resolveRelativeModule } from '@/services/laneBCompanionModules';
 
 export interface AppBuilderSectionRecord extends ResolvedSection {
   data: Record<string, unknown>;
@@ -28,6 +29,72 @@ interface EligibleImplementation {
   modulePath: string;
   sectionType: string;
   exportName?: string;
+}
+
+const CUSTOM_VARIANT_ID = /^custom:[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const CUSTOM_COMPONENT_PATH = /^\/src\/(?:project-components|components\/generated)\/.+\.[jt]sx?$/i;
+
+function findCustomSectionImplementations(
+  pagePath: string,
+  files: Readonly<Record<string, string>>,
+  registered: Readonly<Record<string, EligibleImplementation>>,
+): Record<string, EligibleImplementation> {
+  const paths = collectLocalImportClosure(files, pagePath, (path) =>
+    /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/i.test(path),
+  );
+  const existingPaths = new Set(Object.keys(files));
+  const families = new Set<string>(getSectionTypesWithVariants().filter((family) => family !== 'navbar' && family !== 'footer'));
+  const discovered: Record<string, EligibleImplementation> = {};
+  const ambiguous = new Set<string>();
+
+  for (const path of paths) {
+    const sourceFile = ts.createSourceFile(path, files[path] ?? '', ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const imports = moduleImports(sourceFile);
+    const visit = (node: ts.Node) => {
+      if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+        && tagName(node.tagName) === 'section') {
+        const variantId = readStringAttribute(node, 'data-ut-variant', sourceFile);
+        const sectionType = readStringAttribute(node, 'data-ut-section-type', sourceFile);
+        const registeredEntry = variantId ? registered[variantId] : undefined;
+        if (variantId && CUSTOM_VARIANT_ID.test(variantId) && !registeredEntry
+          && sectionType && families.has(sectionType)) {
+          const root = ts.isJsxSelfClosingElement(node)
+            ? node
+            : ts.isJsxElement(node.parent) ? node.parent : undefined;
+          const customModules = new Set<string>();
+          if (root) {
+            const rootOpening = ts.isJsxElement(root) ? root.openingElement : root;
+            const inspectRenderer = (child: ts.Node) => {
+              if (child !== rootOpening && (ts.isJsxOpeningElement(child) || ts.isJsxSelfClosingElement(child))
+                && SECTION_ROOT_TAGS.has(tagName(child.tagName) ?? '')) return;
+              if (ts.isJsxOpeningElement(child) || ts.isJsxSelfClosingElement(child)) {
+                const component = tagName(child.tagName);
+                const imported = component ? imports.get(component) : undefined;
+                const rawPath = imported?.modulePath;
+                if (imported?.importedName === null && rawPath?.startsWith('@/')) {
+                  const modulePath = resolveRelativeModule(path, `/src/${rawPath.slice(2)}`, existingPaths);
+                  if (modulePath && CUSTOM_COMPONENT_PATH.test(modulePath)) customModules.add(modulePath);
+                }
+              }
+              ts.forEachChild(child, inspectRenderer);
+            };
+            inspectRenderer(root);
+          }
+          if (customModules.size === 1) {
+            const [modulePath] = customModules;
+            if (discovered[variantId] && (discovered[variantId].modulePath !== modulePath
+              || discovered[variantId].sectionType !== sectionType)) ambiguous.add(variantId);
+            else discovered[variantId] = { modulePath, sectionType };
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+
+  for (const variantId of ambiguous) delete discovered[variantId];
+  return discovered;
 }
 
 interface StaticResult {
@@ -527,8 +594,14 @@ export function inspectAppBuilderPageSections(
   pagePath: string,
   source: string,
   implementations: Readonly<Record<string, EligibleImplementation>>,
-  options: { allowNamedExports?: boolean; requireChromeRoots?: boolean; allowEmpty?: boolean } = {},
+  options: {
+    allowNamedExports?: boolean;
+    requireChromeRoots?: boolean;
+    allowEmpty?: boolean;
+    customImplementations?: Readonly<Record<string, EligibleImplementation>>;
+  } = {},
 ): AppBuilderSectionInspection {
+  const pageImplementations = { ...implementations, ...options.customImplementations };
   const sourceFile = ts.createSourceFile(pagePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const sections: AppBuilderSectionRecord[] = [];
   const issues: string[] = [];
@@ -555,7 +628,7 @@ export function inspectAppBuilderPageSections(
         issues.push(`${pagePath}: duplicate section id "${sectionId}".`);
       } else {
         ids.add(sectionId);
-        const implementation = implementations[variantId];
+        const implementation = pageImplementations[variantId];
         if (!implementation || implementation.sectionType !== sectionType) {
           issues.push(`${pagePath}: section "${sectionId}" uses unavailable ${sectionType} variant "${variantId}".`);
         } else {
@@ -610,6 +683,10 @@ export function inspectAppBuilderPageSectionClosure(
   implementations: Readonly<Record<string, EligibleImplementation>>,
   options: { allowNamedExports?: boolean } = {},
 ): AppBuilderSectionInspection {
+  const pageImplementations = {
+    ...implementations,
+    ...findCustomSectionImplementations(pagePath, files, implementations),
+  };
   const paths = collectLocalImportClosure(files, pagePath, (path) =>
     /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/i.test(path),
   );
@@ -617,7 +694,7 @@ export function inspectAppBuilderPageSectionClosure(
   const issues: string[] = [];
   const seenIds = new Set<string>();
   for (const path of paths) {
-    const inspection = inspectAppBuilderPageSections(path, files[path] ?? '', implementations, {
+    const inspection = inspectAppBuilderPageSections(path, files[path] ?? '', pageImplementations, {
       ...options,
       requireChromeRoots: false,
       allowEmpty: true,
@@ -653,9 +730,14 @@ export function materializeAppBuilderSectionModels(
   const result = { ...files };
   for (const page of pages) {
     const eligibleIds = eligibleByPage?.[page.id];
+    const customImplementations = findCustomSectionImplementations(page.filePath, result, implementations);
+    const pageImplementations = { ...implementations, ...customImplementations };
     const eligibleImplementations = eligibleIds
       ? Object.fromEntries(eligibleIds.flatMap((id) => implementations[id] ? [[id, implementations[id]]] : []))
-      : implementations;
+      : pageImplementations;
+    for (const [id, implementation] of Object.entries(customImplementations)) {
+      eligibleImplementations[id] = implementation;
+    }
     const sidecarPath = resolvedCompositionPathFor(page.filePath);
     const sourcePaths = collectLocalImportClosure(result, page.filePath, (path) =>
       /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/i.test(path),
@@ -664,13 +746,13 @@ export function materializeAppBuilderSectionModels(
       result[path] = materializeSectionRootIdentity(
         path,
         result[path] ?? '',
-        implementations,
+        pageImplementations,
         eligibleImplementations,
         path === page.filePath ? page.id : undefined,
         path === page.filePath ? page.route : undefined,
       );
     }
-    const inspection = inspectAppBuilderPageSectionClosure(page.filePath, result, implementations, { allowNamedExports: true });
+    const inspection = inspectAppBuilderPageSectionClosure(page.filePath, result, pageImplementations, { allowNamedExports: true });
     if (inspection.issues.length || !inspection.sections.length) continue;
     const variantOverrides = Object.fromEntries(inspection.sections.map((section) => [section.sectionId, section.variantId!]));
     const composition: ResolvedPageComposition = {

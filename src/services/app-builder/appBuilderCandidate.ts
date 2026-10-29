@@ -609,8 +609,12 @@ export async function validateAppBuildCandidate(input: {
 
   const registry = input.contract.topology.pageRegistry;
   if (Object.keys(registry.pages).length > 0) {
+    const sharedShell = [
+      files['/src/project-components/site/SiteNav.tsx'],
+      files['/src/project-components/site/SiteFooter.tsx'],
+    ].filter((source): source is string => typeof source === 'string').join('\n');
     const pageSources = Object.fromEntries(
-      pages.filter((page) => files[page.filePath]).map((page) => [page.filePath, files[page.filePath]]),
+      pages.filter((page) => files[page.filePath]).map((page) => [page.filePath, `${files[page.filePath]}\n${sharedShell}`]),
     );
     const routerSource = files['/src/App.tsx'] ?? '';
     const parsedRoutes = Array.from(routerSource.matchAll(/path=["']([^"']+)["']/g)).map((match) => match[1]);

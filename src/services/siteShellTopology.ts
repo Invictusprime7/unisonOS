@@ -96,7 +96,7 @@ export function buildSiteShellTopology(registry: PageRegistry): SiteShellTopolog
   };
 }
 
-const INTERNAL_HREF = /href=["'](#?\/[^"'#?]*)["']/g;
+const INTERNAL_HREF = /(?:href\s*=\s*|["']href["']\s*:\s*)["'](#?\/[^"'#?]*)["']/g;
 
 function normalizeLinkPath(raw: string | undefined | null): string {
   if (!raw) return '/';

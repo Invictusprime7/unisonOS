@@ -8,6 +8,7 @@ import { findDesignSourceUsageIssues, validateAppBuildCandidate } from './appBui
 import { materializeRegisteredComponents } from './registeredComponentMaterializer';
 import { evaluateDesignQuality } from './design/designQualityClosure';
 import { applyDesignSources } from './design/designSourceMaterializer';
+import { materializeAppBuilderSiteShell } from './design/appBuilderSiteShell';
 import { buildAppBuilderGenerationContext, reportDesignSourceUsage } from './appBuilderGenerationContext';
 import { findPageStructureIssues, pageStructureRequirement, verifiedPhotosFor } from './design/pageStructureGate';
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
@@ -59,7 +60,15 @@ export async function orchestrateAppBuild(
     }
   }
   const generation = buildAppBuilderGenerationContext(input.contract, contentTypes);
-  const baseFiles = applyDesignSources(input.initialFiles, generation.materialization);
+  const baseFiles = {
+    ...applyDesignSources(input.initialFiles, generation.materialization),
+    ...materializeAppBuilderSiteShell({
+      registry: input.contract.topology.pageRegistry,
+      businessName: input.contract.business.businessName,
+      bundle: generation.designSources,
+      materialization: generation.materialization,
+    }),
+  };
   const manifestSource = baseFiles['/.unison/design-source-manifest.json'];
   const contractPages = input.contract.design.resolvedSiteDesignContext.contract.pages;
   const roleByPath = new Map(pages.map((page) => [page.filePath, page.role]));

@@ -163,6 +163,7 @@ describe('AppBuildContract', () => {
       expect(modelContext).toContain('contact-form');
       expect(modelContext).toContain('newsletter-signup');
       expect(modelContext).toContain('PERSISTABLE SECTION CONTRACT');
+      expect(modelContext).toContain('custom:<kebab-slug>');
   });
 
   it('fails closed instead of dropping an unknown registered component slug', () => {

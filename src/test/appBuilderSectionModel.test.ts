@@ -179,6 +179,60 @@ export default function Treatments(){return <main><section data-ut-section-id="t
     expect(result.sections[0].data).toEqual({ headline: 'Treatments', items: [{ title: 'Facial', description: 'Care' }] });
   });
 
+  it('accepts a custom body section from an authored local component and materializes its sidecar', () => {
+    const files = {
+      '/src/pages/Home.tsx': `import Navbar from "@/unison/design-sources/Navbar";
+import Footer from "@/unison/design-sources/Footer";
+import FeaturePanel from "@/project-components/FeaturePanel";
+export default function Home(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{links:[]}} /></header><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="custom:service-panel"><FeaturePanel title="Care, made personal" /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer></>}`,
+      '/src/project-components/FeaturePanel.tsx': `export default function FeaturePanel({title}:{title:string}){return <article>{title}</article>}`,
+    };
+    const normalized = materializeAppBuilderSectionModels(
+      files,
+      [{ id: 'home', filePath: '/src/pages/Home.tsx' }],
+      implementations,
+      { home: Object.keys(implementations) },
+    );
+    const inspection = inspectAppBuilderPageSectionClosure('/src/pages/Home.tsx', normalized, implementations);
+    const sidecar = JSON.parse(normalized['/.unison/compositions/pages/Home.json']);
+
+    expect(normalized['/src/pages/Home.tsx']).toContain('variantId="custom:service-panel"');
+    expect(normalized['/src/pages/Home.tsx']).toContain('props={{"title":"Care, made personal"}}');
+    expect(inspection.issues).toEqual([]);
+    expect(inspection.sections.find((section) => section.sectionId === 'home:services:0')).toMatchObject({
+      semanticType: 'services',
+      variantId: 'custom:service-panel',
+      sourceModulePath: '/src/project-components/FeaturePanel.tsx',
+      data: { title: 'Care, made personal' },
+    });
+    expect(sidecar.sections.find((section: { sectionId: string }) => section.sectionId === 'home:services:0'))
+      .toMatchObject({ variantId: 'custom:service-panel', data: { title: 'Care, made personal' } });
+  });
+
+  it('rejects custom sections without exactly one authorized local component import', () => {
+    const shell = `import Navbar from "@/unison/design-sources/Navbar";
+import Footer from "@/unison/design-sources/Footer";
+export function Shell(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{links:[]}} /></header><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer></>}`;
+    const unauthorized = {
+      '/src/pages/Unauthorized.tsx': `import Services from "@/unison/design-sources/Services";
+${shell}
+export default function Unauthorized(){return <><Shell/><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="custom:service-panel"><Services /></section></main></>}`,
+    };
+    const ambiguous = {
+      '/src/pages/Ambiguous.tsx': `import FeaturePanel from "@/project-components/FeaturePanel";
+import OtherPanel from "@/project-components/OtherPanel";
+${shell}
+export default function Ambiguous(){return <><Shell/><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="custom:service-panel"><><FeaturePanel /><OtherPanel /></></section></main></>}`,
+      '/src/project-components/FeaturePanel.tsx': 'export default function FeaturePanel(){return <article/>}',
+      '/src/project-components/OtherPanel.tsx': 'export default function OtherPanel(){return <article/>}',
+    };
+
+    expect(inspectAppBuilderPageSectionClosure('/src/pages/Unauthorized.tsx', unauthorized, implementations).issues)
+      .toContainEqual(expect.stringContaining('uses unavailable services variant "custom:service-panel"'));
+    expect(inspectAppBuilderPageSectionClosure('/src/pages/Ambiguous.tsx', ambiguous, implementations).issues)
+      .toContainEqual(expect.stringContaining('uses unavailable services variant "custom:service-panel"'));
+  });
+
   it('normalizes registered roots in shared SiteNav and SiteFooter modules', () => {
     const marketplaceImplementations = {
       ...implementations,

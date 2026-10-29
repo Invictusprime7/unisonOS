@@ -1,8 +1,8 @@
 /**
  * Structural floor every App Builder page must clear before it is accepted:
  * shared site chrome (nav + footer), a real body composition, and imagery on
- * media-led pages. It inspects the page and the local components it renders
- * (one level deep), so chrome and sections authored as project components count.
+ * media-led pages. Shared chrome must come from the compiler-owned site shell;
+ * page-local landmarks are not substitutes.
  */
 
 import { CONTEXTUAL_IMAGES } from '@/utils/sandpackFilePrep';
@@ -87,6 +87,10 @@ function rendered(source: string, name: string): boolean {
   return new RegExp(`<${name}(?=[\\s/>])`).test(source);
 }
 
+function renderCount(source: string, name: string): number {
+  return [...source.matchAll(new RegExp(`<${name}(?=[\\s/>])`, 'g'))].length;
+}
+
 export function findPageStructureIssues(
   path: string,
   source: string,
@@ -96,14 +100,24 @@ export function findPageStructureIssues(
   const issues: string[] = [];
   const used = importedComponents(path, source, files).filter((c) => rendered(source, c.name));
   const usedSources = used.map((c) => (c.path ? files[c.path] ?? '' : ''));
+  const navIndex = source.indexOf('<SiteNav');
+  const mainIndex = source.search(/<main\b/);
+  const mainCloseIndex = source.lastIndexOf('</main>');
+  const footerIndex = source.indexOf('<SiteFooter');
 
-  const hasNav = /<(?:nav|header)\b/.test(source) || used.some((c) => NAV_NAME.test(c.name));
-  const hasFooter = /<footer\b/.test(source) || used.some((c) => FOOTER_NAME.test(c.name));
+  const hasNav = used.some((component) => component.name === 'SiteNav'
+    && component.path === '/src/project-components/site/SiteNav.tsx')
+    && renderCount(source, 'SiteNav') === 1
+    && mainIndex >= 0 && navIndex >= 0 && navIndex < mainIndex;
+  const hasFooter = used.some((component) => component.name === 'SiteFooter'
+    && component.path === '/src/project-components/site/SiteFooter.tsx')
+    && renderCount(source, 'SiteFooter') === 1
+    && mainCloseIndex >= 0 && footerIndex > mainCloseIndex;
   if (!hasNav) {
-    issues.push(`${path} renders no site navigation. Render the shared site nav at the top of the page (one shared component, e.g. SiteNav in /src/project-components/site/, linking to every route) — chrome is NOT added automatically.`);
+    issues.push(`${path} renders no site navigation from the canonical shared SiteNav at @/project-components/site/SiteNav exactly once before <main>.`);
   }
   if (!hasFooter) {
-    issues.push(`${path} renders no site footer. Render the shared site footer at the bottom of the page (one shared component, e.g. SiteFooter in /src/project-components/site/).`);
+    issues.push(`${path} renders no site footer from the canonical shared SiteFooter at @/project-components/site/SiteFooter exactly once after </main>.`);
   }
 
   const bodyComponents = used.filter((c) => !NAV_NAME.test(c.name) && !FOOTER_NAME.test(c.name) && !/\/(?:components|unison)\/ui(?:\/|$)|\/lib\//.test(c.specifier));

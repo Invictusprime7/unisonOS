@@ -66,6 +66,20 @@ describe('site shell topology', () => {
     ).toEqual([]);
   });
 
+  it('validates canonical routes serialized in shared dispatcher props', () => {
+    const topology = buildSiteShellTopology(registry());
+    const page = `import { SiteNav } from "@/project-components/site/SiteNav";
+import { SiteFooter } from "@/project-components/site/SiteFooter";
+export default function Home(){return <><SiteNav/><main><section/></main><SiteFooter/></>}`;
+    const sharedShell = `export function SiteNav(){return <header><Navbar props={{"links":[{"label":"About","href":"#/about"},{"label":"Contact","href":"#/contact"}]}} /></header>}
+export function SiteFooter(){return <footer><Footer props={{"columns":[{"links":[{"label":"About","href":"#/about"},{"label":"Contact","href":"#/contact"}]}]}} /></footer>}`;
+
+    expect(assertSiteShellClosure(topology, {
+      pageSources: { '/src/pages/Home.tsx': `${page}\n${sharedShell}` },
+      routerRoutes: ['/', '/about', '/contact', '/checkout'],
+    })).toEqual([]);
+  });
+
   it('flags stale links, missing nav routes and duplicated chrome', () => {
     const topology = buildSiteShellTopology(registry());
     const source = `

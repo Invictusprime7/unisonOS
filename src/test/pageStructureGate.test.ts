@@ -16,6 +16,29 @@ describe('page structure gate', () => {
     expect(issues.join(' ')).toMatch(/no photography/);
   });
 
+  it('rejects page-local header and footer markup without canonical shared wrappers', () => {
+    const source = `export default function Home(){return <><header><nav>Home</nav></header><main><section><img src="https://images.unsplash.com/photo-1" alt="" /></section><section/><section/></main><footer>Contact</footer></>}`;
+    const issues = findPageStructureIssues('/src/pages/Home.tsx', source, { '/src/pages/Home.tsx': source }, pageStructureRequirement('home', 3));
+
+    expect(issues.join(' ')).toMatch(/no site navigation from the canonical shared SiteNav/);
+    expect(issues.join(' ')).toMatch(/no site footer from the canonical shared SiteFooter/);
+  });
+
+  it('requires each canonical wrapper exactly once outside the main content', () => {
+    const page = `import { SiteNav } from "@/project-components/site/SiteNav";
+import { SiteFooter } from "@/project-components/site/SiteFooter";
+export default function Home(){return <><main><SiteNav/><section/><section/><SiteFooter/></main><SiteNav/></>}`;
+    const files = {
+      '/src/pages/Home.tsx': page,
+      '/src/project-components/site/SiteNav.tsx': 'export function SiteNav(){return <header/>}',
+      '/src/project-components/site/SiteFooter.tsx': 'export function SiteFooter(){return <footer/>}',
+    };
+    const issues = findPageStructureIssues('/src/pages/Home.tsx', page, files, pageStructureRequirement('contact', 2));
+
+    expect(issues.join(' ')).toMatch(/SiteNav.*exactly once before <main>/);
+    expect(issues.join(' ')).toMatch(/SiteFooter.*exactly once after <\/main>/);
+  });
+
   it('accepts a composed page whose chrome, sections and imagery live in shared components', () => {
     const files = {
       '/src/pages/Home.tsx': `import { SiteNav } from '../project-components/site/SiteNav';
