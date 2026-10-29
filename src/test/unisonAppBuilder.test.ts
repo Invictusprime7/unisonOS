@@ -97,7 +97,9 @@ describe('UnisonAppBuilder facade', () => {
     });
     expect(result.candidate.status).toBe('rejected');
     expect(result.stopReason).toBe('provider-error');
-    expect(result.candidate.diagnostics).toContain('AI request failed (credits): Payment required. Please add credits to your OpenAI account.');
+    expect(result.candidate.diagnostics).toEqual([
+      'AI request failed (credits): Payment required. Please add credits to your OpenAI account.',
+    ]);
     expect(runComposer).not.toHaveBeenCalled();
   });
 

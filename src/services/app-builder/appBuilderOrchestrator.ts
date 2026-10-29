@@ -244,6 +244,9 @@ export async function orchestrateAppBuild(
   const closureDiagnostics = closure.issues
     .filter((issue) => issue.severity === 'blocker')
     .map((issue) => issue.message);
+  const surfacedDiagnostics = terminalAuthoringFailure
+    ? authorDiagnostics
+    : [...authorDiagnostics, ...closureDiagnostics];
   const strategy = compatibilityMode
     ? 'legacy-commit-adapter' as const
     : closureRepairAttempts > 0
@@ -261,7 +264,7 @@ export async function orchestrateAppBuild(
     files: candidateFiles,
     entryPoint: input.entryPoint,
     attempts: authored.outcomes.reduce((total, outcome) => total + outcome.attempts, 0) + closureRepairAttempts,
-    diagnostics: [...authorDiagnostics, ...closureDiagnostics],
+    diagnostics: surfacedDiagnostics,
     closure,
     graph,
     provenance: {
