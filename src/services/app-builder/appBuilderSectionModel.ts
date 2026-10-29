@@ -35,6 +35,12 @@ interface StaticResult {
   value?: unknown;
 }
 
+interface SourceEdit {
+  position: number;
+  end?: number;
+  text: string;
+}
+
 function staticValue(
   expression: ts.Expression,
   sourceFile?: ts.SourceFile,
@@ -227,7 +233,7 @@ function insertOpeningAttributes(
   source: string,
   element: ts.JsxOpeningLikeElement,
   attributes: string[],
-  edits: Array<{ position: number; text: string }>,
+  edits: SourceEdit[],
 ): void {
   if (!attributes.length) return;
   const tagEnd = element.getEnd();
@@ -242,7 +248,7 @@ function normalizeRegisteredDispatcher(
   sectionId: string,
   variantId: string,
   source: string,
-  edits: Array<{ position: number; text: string }>,
+  edits: SourceEdit[],
 ): void {
   const expectedImport = implementation.modulePath.replace(/^\/src\//, '@/').replace(/\.(?:tsx?|jsx?)$/i, '');
   const imports = moduleImports(sourceFile);
@@ -268,7 +274,11 @@ function normalizeRegisteredDispatcher(
     if (existing === value) continue;
     const attribute = findAttribute(dispatcher, name);
     if (attribute?.initializer) {
-      edits.push({ position: attribute.initializer.getStart(sourceFile), text: JSON.stringify(value) });
+      edits.push({
+        position: attribute.initializer.getStart(sourceFile),
+        end: attribute.initializer.getEnd(),
+        text: JSON.stringify(value),
+      });
     } else if (attribute) {
       edits.push({ position: attribute.name.getEnd(), text: `=${JSON.stringify(value)}` });
     } else {
@@ -289,11 +299,12 @@ function materializeSectionRootIdentity(
   filePath: string,
   source: string,
   implementations: Readonly<Record<string, EligibleImplementation>>,
+  eligibleImplementations: Readonly<Record<string, EligibleImplementation>>,
   pageId?: string,
   pageRoute?: string,
 ): string {
   const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const edits: Array<{ position: number; text: string }> = [];
+  const edits: SourceEdit[] = [];
   const identityCounts = new Map<string, number>();
   const visit = (node: ts.Node) => {
     if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
@@ -319,11 +330,18 @@ function materializeSectionRootIdentity(
         const inferred = rootElement
           ? findRootVariantIdentity(rootElement, sourceFile, implementations)
           : {};
-        const variantId = readStringAttribute(opening, 'data-ut-variant', sourceFile) ?? inferred.variantId;
+        const requestedVariantId = readStringAttribute(opening, 'data-ut-variant', sourceFile);
         const sectionType = readStringAttribute(opening, 'data-ut-section-type', sourceFile)
           ?? (rootName === 'header' || rootName === 'nav' ? 'navbar'
             : rootName === 'footer' ? 'footer'
-              : inferred.sectionType ?? (variantId ? implementations[variantId]?.sectionType : undefined));
+              : inferred.sectionType ?? (requestedVariantId ? implementations[requestedVariantId]?.sectionType : undefined));
+        const eligibleVariant = (variantId: string | undefined) => {
+          const implementation = variantId ? eligibleImplementations[variantId] : undefined;
+          return implementation?.sectionType === sectionType ? variantId : undefined;
+        };
+        const variantId = eligibleVariant(inferred.variantId)
+          ?? eligibleVariant(requestedVariantId)
+          ?? Object.keys(eligibleImplementations).find((candidate) => eligibleImplementations[candidate].sectionType === sectionType);
         const existingId = readStringAttribute(opening, 'data-ut-section-id', sourceFile);
         const implementation = variantId ? implementations[variantId] : undefined;
         if (sectionType && variantId && implementation?.sectionType === sectionType) {
@@ -337,7 +355,7 @@ function materializeSectionRootIdentity(
           const attributes: Array<[string, string | undefined]> = [
             ['data-ut-section-id', existingId ?? sectionId],
             ['data-ut-section-type', readStringAttribute(opening, 'data-ut-section-type', sourceFile) ?? sectionType],
-            ['data-ut-variant', readStringAttribute(opening, 'data-ut-variant', sourceFile) ?? variantId],
+            ['data-ut-variant', variantId],
             ['data-ut-entity-id', entityId],
             ...(pageId ? [['data-ut-page-id', pageId] as [string, string]] : []),
             ...(pageRoute ? [['data-ut-page-path', pageRoute] as [string, string]] : []),
@@ -347,6 +365,21 @@ function materializeSectionRootIdentity(
             .map(([name, value]) => ` ${name}=${JSON.stringify(value)}`)
             .join('');
           if (missing) edits.push({ position: opening.end - 1, text: missing });
+          const variantAttribute = findAttribute(opening, 'data-ut-variant');
+          if (variantAttribute && readStringAttribute(opening, 'data-ut-variant', sourceFile) !== variantId) {
+            if (!variantAttribute.initializer) {
+              edits.push({ position: variantAttribute.name.getEnd(), text: `=${JSON.stringify(variantId)}` });
+            } else {
+              const valueNode = ts.isJsxExpression(variantAttribute.initializer)
+                ? variantAttribute.initializer.expression
+                : variantAttribute.initializer;
+              if (valueNode) edits.push({
+                position: valueNode.getStart(sourceFile),
+                end: valueNode.getEnd(),
+                text: JSON.stringify(variantId),
+              });
+            }
+          }
           if (rootElement) {
             normalizeRegisteredDispatcher(rootElement, sourceFile, implementation, sectionId, variantId, source, edits);
           }
@@ -358,7 +391,7 @@ function materializeSectionRootIdentity(
   visit(sourceFile);
   let next = source;
   for (const edit of edits.sort((a, b) => b.position - a.position)) {
-    next = `${next.slice(0, edit.position)}${edit.text}${next.slice(edit.position)}`;
+    next = `${next.slice(0, edit.position)}${edit.text}${next.slice(edit.end ?? edit.position)}`;
   }
   return next;
 }
@@ -582,9 +615,14 @@ export function materializeAppBuilderSectionModels(
   files: Readonly<Record<string, string>>,
   pages: readonly AppBuilderPageTarget[],
   implementations: Readonly<Record<string, EligibleImplementation>>,
+  eligibleByPage?: Readonly<Record<string, readonly string[]>>,
 ): Record<string, string> {
   const result = { ...files };
   for (const page of pages) {
+    const eligibleIds = eligibleByPage?.[page.id];
+    const eligibleImplementations = eligibleIds
+      ? Object.fromEntries(eligibleIds.flatMap((id) => implementations[id] ? [[id, implementations[id]]] : []))
+      : implementations;
     const sidecarPath = resolvedCompositionPathFor(page.filePath);
     const sourcePaths = collectLocalImportClosure(result, page.filePath, (path) =>
       /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/i.test(path),
@@ -594,6 +632,7 @@ export function materializeAppBuilderSectionModels(
         path,
         result[path] ?? '',
         implementations,
+        eligibleImplementations,
         path === page.filePath ? page.id : undefined,
         path === page.filePath ? page.route : undefined,
       );

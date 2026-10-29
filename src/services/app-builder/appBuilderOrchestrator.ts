@@ -74,6 +74,7 @@ export async function orchestrateAppBuild(
         { ...(files ?? {}), [path]: source },
         [{ id: page?.pageId ?? path, filePath: path, route: page?.route }],
         sectionImplementations,
+        generation.designSources.eligibleByPage,
       );
       messages.push(...inspectAppBuilderPageSectionClosure(path, normalizedFiles, sectionImplementations).issues);
     }
@@ -168,7 +169,7 @@ export async function orchestrateAppBuild(
       id: page.pageId,
       filePath: page.filePath,
       route: page.route,
-    })), sectionImplementations);
+    })), sectionImplementations, generation.designSources.eligibleByPage);
   };
   let candidateFiles = { ...authored.files };
   if (!compatibilityMode && input.preflight) candidateFiles = input.preflight(candidateFiles);
