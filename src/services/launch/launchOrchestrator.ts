@@ -288,6 +288,7 @@ async function runReservedLaunchPipeline(
       systemIndustry: SYSTEM_TO_INDUSTRY_OVERLAY[input.systemId],
     });
     const compositionMeta = getCompositionMeta(generationCategory);
+    const launchContract = resolveVerticalLaunchContract(input.systemId);
     const businessLaunchPlan = resolveBusinessLaunchPlan({
       industry: industryProfile?.industry || input.template.industry,
       primaryGoal: input.primaryGoal,
@@ -301,6 +302,12 @@ async function runReservedLaunchPipeline(
     }
     const launchCapabilities = businessLaunchPlan.operationalCapabilities;
     const requestedIntentSet = new Set(businessLaunchPlan.requestedIntents);
+    const forcedIntentSet = new Set<string>([
+      ...(launchContract.forcedNeeds.booking ? ['booking.create'] : []),
+      ...(launchContract.forcedNeeds.leadCapture ? ['lead.capture', 'contact.submit'] : []),
+      ...(launchContract.forcedNeeds.products ? ['cart.add', 'cart.checkout'] : []),
+    ]);
+    const activeIntentSet = new Set([...requestedIntentSet, ...forcedIntentSet]);
     const userSelectableIntents = new Set([
       'booking.create', 'newsletter.subscribe', 'cart.add', 'cart.checkout',
       'donation.start', 'quote.request', 'lead.capture', 'contact.submit', 'contact.call',
@@ -310,7 +317,7 @@ async function runReservedLaunchPipeline(
         ? getAllowedIntents(launchCapabilities)
         : system.intents),
       ...(compositionMeta?.intents || []),
-    ]).filter((intent) => !userSelectableIntents.has(intent) || requestedIntentSet.has(intent));
+    ]).filter((intent) => !userSelectableIntents.has(intent) || activeIntentSet.has(intent));
 
     // Reserve stable IDs; reviewed launches register them only after acceptance.
     const requestedIds = createConfirmedLaunchIds(input.existingBusinessId || undefined);
@@ -338,7 +345,6 @@ async function runReservedLaunchPipeline(
     const plannedBusinessId = confirmed.businessId;
 
     const preselect = LAUNCHER_PRESELECTS[input.systemId];
-    const launchContract = resolveVerticalLaunchContract(input.systemId);
     const primaryGoal: PrimaryGoal =
       input.primaryGoal || preselect?.primaryGoal || "collect_leads";
     const customerNeeds = uniqueValues<CustomerNeed>(input.customerNeeds);
@@ -377,7 +383,7 @@ async function runReservedLaunchPipeline(
       primaryGoal,
       secondaryGoals: customerNeeds as string[],
       needsBooking:
-        requestedIntentSet.has('booking.create'),
+        launchContract.forcedNeeds.booking || requestedIntentSet.has('booking.create'),
       sellsProducts:
         launchContract.forcedNeeds.products ||
         !!goalNeeds.sellsProducts ||
