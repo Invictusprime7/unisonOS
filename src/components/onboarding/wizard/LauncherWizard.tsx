@@ -219,6 +219,7 @@ export const LauncherWizard = ({
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [launchFailure, setLaunchFailure] =
     useState<LaunchFailureReport | null>(null);
+  const [lastGenerationMode, setLastGenerationMode] = useState<AppBuildGenerationMode>('ai');
   const [progress, setProgress] = useState<LaunchRunSnapshot | null>(null);
   const latestProgressRef = useRef<LaunchRunSnapshot | null>(null);
   const [review, setReview] = useState<{ files: Record<string, string>; entryPoint: string } | null>(null);
@@ -294,6 +295,7 @@ export const LauncherWizard = ({
     setLaunchStatus("");
     setLaunchError(null);
     setLaunchFailure(null);
+    setLastGenerationMode('ai');
     setProgress(null);
     latestProgressRef.current = null;
   }, []);
@@ -513,6 +515,7 @@ export const LauncherWizard = ({
       setLaunchError("Please enter your business name.");
       return;
     }
+    setLastGenerationMode(generationMode);
     setIsLaunching(true);
     reviewDecision.current?.(false);
     reviewDecision.current = null;
@@ -609,7 +612,7 @@ export const LauncherWizard = ({
       persistLaunchFailureReport(report);
       setLaunchFailure(report);
       setLaunchError(
-        `[${report.code}] ${report.message} Your selections are preserved — press Generate to try again.`,
+        `[${report.code}] ${report.message} Your selections are preserved.${report.stage === 'app-build' && generationMode === 'ai' ? ' Build without AI creates a clearly labeled deterministic starter.' : ' You can try again.'}`,
       );
       console.error('[LauncherWizard] Generate Site failed', report, error);
       toast.error(`Generate Site failed in ${report.stage}`, {
@@ -805,7 +808,7 @@ export const LauncherWizard = ({
                   </section>}
                 </div>
 
-                {launchError && <div role="alert" className="mt-6 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{launchError}{launchFailure && <details className="mt-2"><summary className="cursor-pointer text-xs font-medium">Technical details</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[10px]">{JSON.stringify(launchFailure, null, 2)}</pre></details>}</div>}
+                {launchError && <div role="alert" className="mt-6 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{launchError}{launchFailure && <details className="mt-2"><summary className="cursor-pointer text-xs font-medium">Technical details</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[10px]">{JSON.stringify(launchFailure, null, 2)}</pre></details>}{launchFailure?.stage === 'app-build' && lastGenerationMode === 'ai' && <Button variant="outline" disabled={isLaunching} onClick={() => handleGenerate('deterministic')} className="mt-3"><PanelsTopLeft />Build without AI</Button>}</div>}
 
                 <footer className="mt-8 flex items-center justify-between border-t border-border pt-5">
                   {step === "industry" ? <span /> : <Button variant="ghost" onClick={goBack}><ArrowLeft />Back</Button>}

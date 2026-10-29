@@ -24,16 +24,16 @@ function safeRouteHref(path: string | undefined): string {
 }
 
 function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
-  const seen = new Set<string>();
   return contract.business.intentBindings
     .filter((binding) => binding.pageId === pageId
       && binding.missingCapabilities.length === 0
       && binding.ctaMarkers.length > 0)
     .flatMap((binding) => {
-      const marker = binding.ctaMarkers.find((value) => value.startsWith('cta.'));
-      if (!marker || seen.has(marker)) return [];
-      seen.add(marker);
-      const label = binding.sourceLabel.trim() || 'Continue';
+      const marker = binding.ctaMarkers.find((value) => value.startsWith('cta.') || value.startsWith('icon.'));
+      if (!marker) return [];
+      const label = binding.sourceLabel?.trim() || marker.slice(marker.indexOf('.') + 1).replace(/[-.]/g, ' ');
+      const jsxLabel = `{${JSON.stringify(label)}}`;
+      const accessibleName = marker.startsWith('icon.') ? ` aria-label=${JSON.stringify(label)}` : '';
       const isNavigation = binding.domIntent === 'nav.goto';
       const targetPage = binding.targetType === 'page'
         ? contract.topology.pageRegistry.pages[binding.targetId]
@@ -42,8 +42,8 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
         ? binding.targetId
         : safeRouteHref(targetPage?.path ?? (binding.targetId.startsWith('/') ? binding.targetId : undefined));
       return [isNavigation
-        ? `<a href=${JSON.stringify(href)} data-ut-cta=${JSON.stringify(marker)} className="inline-flex min-h-11 items-center rounded-md border px-5 py-3 font-medium">${label}</a>`
-        : `<button type="button" data-ut-cta=${JSON.stringify(marker)} className="inline-flex min-h-11 items-center rounded-md bg-primary px-5 py-3 font-medium text-primary-foreground">${label}</button>`];
+        ? `<a href=${JSON.stringify(href)}${accessibleName} data-ut-cta=${JSON.stringify(marker)} className="inline-flex min-h-11 items-center rounded-md border px-5 py-3 font-medium">${jsxLabel}</a>`
+        : `<button type="button"${accessibleName} data-ut-cta=${JSON.stringify(marker)} className="inline-flex min-h-11 items-center rounded-md bg-primary px-5 py-3 font-medium text-primary-foreground">${jsxLabel}</button>`];
     });
 }
 

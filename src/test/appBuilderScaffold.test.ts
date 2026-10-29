@@ -48,6 +48,31 @@ describe('deterministic App Builder scaffold', () => {
             sourceSlot: 'checkout-cta', ctaMarkers: ['cta.checkout'], missingCapabilities: [],
             targetType: 'url', targetId: 'cart-overlay',
           },
+          {
+            pageId: 'home', domIntent: 'cart.view', sourceLabel: 'View cart',
+            sourceSlot: 'icon-cart', ctaMarkers: ['icon.cart'], missingCapabilities: [],
+            targetType: 'popup', targetId: 'cart-overlay',
+          },
+          {
+            pageId: 'home', domIntent: 'search.open', sourceLabel: 'Search',
+            sourceSlot: 'icon-search', ctaMarkers: ['icon.search'], missingCapabilities: [],
+            targetType: 'popup', targetId: 'search-overlay',
+          },
+          {
+            pageId: 'shop', domIntent: 'favorite.toggle', sourceLabel: 'Save favorite',
+            sourceSlot: 'icon-favorite', ctaMarkers: ['icon.favorite'], missingCapabilities: [],
+            targetType: 'product', targetId: 'product-1',
+          },
+          {
+            pageId: 'shop', domIntent: 'catalog.filter', sourceLabel: 'Filter products',
+            sourceSlot: 'icon-filter', ctaMarkers: ['icon.filter'], missingCapabilities: [],
+            targetType: 'popup', targetId: 'filters',
+          },
+          {
+            pageId: 'shop', domIntent: 'catalog.sort', sourceLabel: 'Sort products',
+            sourceSlot: 'icon-sort', ctaMarkers: ['icon.sort'], missingCapabilities: [],
+            targetType: 'popup', targetId: 'sort-options',
+          },
         ],
       },
       design: { resolvedSiteDesignContext: { contract: { industry: 'ecommerce' } } },
@@ -65,6 +90,11 @@ describe('deterministic App Builder scaffold', () => {
     }
     expect(files['/src/pages/Checkout.tsx']).toContain('href="#/shop" data-ut-cta="cta.nav-link"');
     expect(files['/src/pages/Shop.tsx']).toContain('type="button" data-ut-cta="cta.checkout"');
+    expect(files['/src/pages/Home.tsx']).toContain('aria-label="View cart" data-ut-cta="icon.cart"');
+    expect(files['/src/pages/Home.tsx']).toContain('aria-label="Search" data-ut-cta="icon.search"');
+    expect(files['/src/pages/Shop.tsx']).toContain('aria-label="Save favorite" data-ut-cta="icon.favorite"');
+    expect(files['/src/pages/Shop.tsx']).toContain('aria-label="Filter products" data-ut-cta="icon.filter"');
+    expect(files['/src/pages/Shop.tsx']).toContain('aria-label="Sort products" data-ut-cta="icon.sort"');
     expect(files['/src/project-components/AppBuilderScaffoldSection.tsx']).toContain('<img src={props.imageUrl}');
     expect(files['/src/pages/Home.tsx']).not.toContain('data-ut-intent=');
   });

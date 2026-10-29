@@ -154,22 +154,73 @@ describe('UnisonAppBuilder facade', () => {
     const authorSite = vi.fn();
     const runComposer = vi.fn();
     const pages = ecommerceContract().topology.sitePlan.pages;
+    const appBuildContract = ecommerceContract();
+    appBuildContract.runtime.protectedPaths = ['/.unison/compositions/pages/About.json'];
+    appBuildContract.business.intents = ['nav.goto', 'cart.checkout', 'cart.view', 'favorite.toggle'];
+    appBuildContract.business.bindingGuide = [
+      appBuildContract.business.bindingGuide,
+      '- Page Home (/), slot navbar.icon-cart: label "Open cart", marker data-ut-cta="icon.cart", intent cart.view, target cart-overlay',
+      '- Page Home (/), slot hero.cart-trigger: label "Open cart summary", marker data-ut-cta="icon.cart", intent cart.view, target cart-overlay',
+      '- Page Home (/), slot navbar.icon-search: label "Search", marker data-ut-cta="icon.search", intent nav.goto, target Shop (/shop)',
+      '- Page Shop (/shop), slot toolbar.icon-favorite: label "Save favorite", marker data-ut-cta="icon.favorite", intent favorite.toggle, target product-1',
+      '- Page Shop (/shop), slot toolbar.icon-filter: label "Filter products", marker data-ut-cta="icon.filter", intent nav.goto, target Shop (/shop)',
+      '- Page Shop (/shop), slot toolbar.icon-sort: label "Sort products", marker data-ut-cta="icon.sort", intent nav.goto, target Shop (/shop)',
+    ].join('\n');
+    appBuildContract.business.intentBindings.push(
+      {
+        bindingId: 'bind-home-cart', pageId: 'home', route: '/', elementKey: 'home.navbar.cart',
+        sourceSection: 'navbar', sourceSlot: 'icon-cart', sourceLabel: 'Open cart', coreIntent: 'cart.view', domIntent: 'cart.view',
+        ctaMarkers: ['icon.cart'], intentHandler: 'client', targetType: 'popup', targetId: 'cart-overlay',
+        requiredCapabilities: [], missingCapabilities: [],
+      },
+      {
+        bindingId: 'bind-home-cart-compact', pageId: 'home', route: '/', elementKey: 'home.hero.cart',
+        sourceSection: 'hero', sourceSlot: 'cart-trigger', sourceLabel: 'Open cart summary', coreIntent: 'cart.view', domIntent: 'cart.view',
+        ctaMarkers: ['icon.cart'], intentHandler: 'client', targetType: 'popup', targetId: 'cart-overlay',
+        requiredCapabilities: [], missingCapabilities: [],
+      },
+      {
+        bindingId: 'bind-home-search', pageId: 'home', route: '/', elementKey: 'home.navbar.search',
+        sourceSection: 'navbar', sourceSlot: 'icon-search', sourceLabel: 'Search', coreIntent: 'nav.goto', domIntent: 'nav.goto',
+        ctaMarkers: ['icon.search'], intentHandler: 'client', targetType: 'page', targetId: 'shop',
+        requiredCapabilities: [], missingCapabilities: [],
+      },
+      {
+        bindingId: 'bind-shop-favorite', pageId: 'shop', route: '/shop', elementKey: 'shop.toolbar.favorite',
+        sourceSection: 'toolbar', sourceSlot: 'icon-favorite', sourceLabel: 'Save favorite', coreIntent: 'favorite.toggle', domIntent: 'favorite.toggle',
+        ctaMarkers: ['icon.favorite'], intentHandler: 'client', targetType: 'product', targetId: 'product-1',
+        requiredCapabilities: [], missingCapabilities: [],
+      },
+      {
+        bindingId: 'bind-shop-filter', pageId: 'shop', route: '/shop', elementKey: 'shop.toolbar.filter',
+        sourceSection: 'toolbar', sourceSlot: 'icon-filter', sourceLabel: 'Filter products', coreIntent: 'nav.goto', domIntent: 'nav.goto',
+        ctaMarkers: ['icon.filter'], intentHandler: 'client', targetType: 'page', targetId: 'shop',
+        requiredCapabilities: [], missingCapabilities: [],
+      },
+      {
+        bindingId: 'bind-shop-sort', pageId: 'shop', route: '/shop', elementKey: 'shop.toolbar.sort',
+        sourceSection: 'toolbar', sourceSlot: 'icon-sort', sourceLabel: 'Sort products', coreIntent: 'nav.goto', domIntent: 'nav.goto',
+        ctaMarkers: ['icon.sort'], intentHandler: 'client', targetType: 'page', targetId: 'shop',
+        requiredCapabilities: [], missingCapabilities: [],
+      },
+    );
     const navLinks = pages.filter((page) => page.visibleInNav).map((page) => `<a href="#${page.route}">${page.title}</a>`).join('');
     const initialFiles = {
       ...baseFiles,
+      '/.unison/compositions/pages/About.json': '{"pageId":"about","source":"canonical"}',
       '/src/App.tsx': 'export default function App(){return <></>}',
       '/src/project-components/site/SiteNav.tsx': `export function SiteNav(){return <header><nav>${navLinks}</nav></header>}`,
       '/src/project-components/site/SiteFooter.tsx': `export function SiteFooter(){return <footer>${navLinks}</footer>}`,
     };
 
     const result = await createTestBuilder({ authorSite, runComposer }).generate({
-      operationId: 'deterministic-ecommerce', contract: ecommerceContract(), initialFiles,
+      operationId: 'deterministic-ecommerce', contract: appBuildContract, initialFiles,
       entryPoint: '/src/App.tsx', baseRevisionId: null, generationMode: 'deterministic',
     });
 
     expect(authorSite).not.toHaveBeenCalled();
     expect(runComposer).not.toHaveBeenCalled();
-    expect(result.stopReason).toBe('complete');
+    expect(result.stopReason, result.candidate.diagnostics.join('\n')).toBe('complete');
     expect(result.candidate.status).toBe('ready-for-commit');
     expect(result.candidate.closure?.ok).toBe(true);
     expect(result.candidate.provenance).toMatchObject({ strategy: 'deterministic-scaffold', authoredPageIds: [] });
@@ -179,6 +230,12 @@ describe('UnisonAppBuilder facade', () => {
     expect(result.candidateFiles['/src/pages/Checkout.tsx']).toContain('data-ut-path="/shop"');
     expect(result.candidateFiles['/src/pages/Shop.tsx']).toContain('data-ut-cta="cta.checkout"');
     expect(result.candidateFiles['/src/pages/Shop.tsx']).toContain('data-ut-intent="cart.checkout"');
+    expect(result.candidateFiles['/src/pages/Home.tsx'].match(/data-ut-cta="icon\.cart"/g)).toHaveLength(2);
+    expect(result.candidateFiles['/src/pages/Home.tsx']).toContain('data-ut-cta="icon.search"');
+    expect(result.candidateFiles['/src/pages/Shop.tsx']).toContain('data-ut-cta="icon.favorite"');
+    expect(result.candidateFiles['/src/pages/Shop.tsx']).toContain('data-ut-cta="icon.filter"');
+    expect(result.candidateFiles['/src/pages/Shop.tsx']).toContain('data-ut-cta="icon.sort"');
+    expect(result.candidateFiles['/.unison/compositions/pages/About.json']).toBe(initialFiles['/.unison/compositions/pages/About.json']);
     for (const page of pages) expect(result.candidateFiles[page.filePath]).toContain('<SiteNav />');
   });
 

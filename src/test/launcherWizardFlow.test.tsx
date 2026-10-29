@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { LauncherWizard } from "@/components/onboarding/wizard/LauncherWizard";
 import { runLaunchPipeline } from "@/services/launch/launchOrchestrator";
+import { LaunchFatalError } from '@/services/launch/launchRun';
 import { saveLaunchInterviewDraft } from '@/services/launch/interviewDraftService';
 
 vi.mock("@/services/launch/launchOrchestrator", () => ({ runLaunchPipeline: vi.fn() }));
@@ -17,6 +18,26 @@ vi.mock("@/components/onboarding/wizard/DesignContractInspector", () => ({ Desig
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
 
 describe("Launcher Wizard guided flow", () => {
+  it('offers the deterministic starter after AI App Builder fails', async () => {
+    vi.mocked(runLaunchPipeline)
+      .mockRejectedValueOnce(new LaunchFatalError('AI provider timed out.', { stage: 'app-build', code: 'app-build.failed' }))
+      .mockRejectedValueOnce(new LaunchFatalError('Starter check failed.', { stage: 'app-build', code: 'app-build.failed' }));
+    render(<MemoryRouter><LauncherWizard open onOpenChange={vi.fn()} /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: /Salon & Spa/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: /Book Appointments/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(screen.getByLabelText('Business name'), { target: { value: 'Studio Glow' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create site' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Build without AI' }));
+
+    await waitFor(() => expect(runLaunchPipeline).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(runLaunchPipeline).mock.calls[1][0].generationMode).toBe('deterministic');
+  });
+
   it('restores structured owner answers instead of replaying conflicting chat defaults', async () => {
     saveLaunchInterviewDraft('shared-user', {
       selections: {
