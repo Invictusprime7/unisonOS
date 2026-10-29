@@ -91,6 +91,8 @@ export interface DeploymentResponse {
     evaluatedAt?: string;
     publishGateOk?: boolean;
     fingerprint?: string;
+    revisionId?: string;
+    vfsHash?: string;
     code?: string;
     details?: unknown;
   };
@@ -226,6 +228,13 @@ export async function deployToProvider(
   };
 
   try {
+    if (!request.projectId) {
+      return {
+        status: 'error',
+        provider: request.provider,
+        error: 'Publish blocked: choose a project with an accepted, publish-ready revision before deploying.',
+      };
+    }
     // Move D — refuse to publish unless the latest commit was marked
     // publish_ready=true in the durable revision ledger. When a projectId is
     // supplied we use the ledger as the source of truth for files and
@@ -257,6 +266,13 @@ export async function deployToProvider(
         };
         onProgress?.({ isDeploying: false, progress: 0, message: 'Publish blocked — latest saved version is not publish-ready.', result: errorResponse });
         return errorResponse;
+      }
+      if (!publishedRevision.vfsHash) {
+        return {
+          status: 'error',
+          provider: request.provider,
+          error: 'Publish blocked: the saved revision has no canonical source hash. Save a new revision before publishing.',
+        };
       }
       // Use the durable ledger payload, not whatever the caller passed in.
       request = {
@@ -389,6 +405,14 @@ export async function deployToProvider(
         siteName: request.siteName || `unison-site-${Date.now()}`,
         customDomain: request.customDomain,
         files: normalizedFiles,
+        ...(publishedRevision ? {
+          projectId: publishedRevision.projectId,
+          canonicalRevision: {
+            projectId: publishedRevision.projectId,
+            revisionId: publishedRevision.id,
+            vfsHash: publishedRevision.vfsHash,
+          },
+        } : {}),
         publishAttestation,
       },
     });

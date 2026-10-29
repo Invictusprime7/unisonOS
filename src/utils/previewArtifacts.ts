@@ -6,6 +6,8 @@ import { runPrepareSandpackFilesOffThread } from '@/services/strictImportContrac
 import { SANDPACK_PREVIEW_CORE_DEPENDENCIES } from '@/utils/sandpackDependencies';
 import { applyUnisonCanonicals } from '@/services/unisonCanonicalRegistry';
 import { runPreflightRepair } from '@/services/aiSitePreflightRepair';
+import { supabase } from '@/integrations/supabase/client';
+import { readProjectMedia, refreshProjectMediaUrls } from '@/services/assets/projectMedia';
 import {
   assertNoMinimalFallbackPreview,
   assertSnapshotPreviewFileCoverage,
@@ -25,6 +27,35 @@ export interface PreviewArtifactsOptions {
 export interface PreviewArtifactsResult {
   sandpackFiles: Record<string, string>;
   dependencies: Record<string, string>;
+}
+
+const PREVIEW_MEDIA_URL_TTL_MS = 55 * 60 * 1000;
+const previewMediaUrlCache = new Map<string, { url: string; expiresAt: number }>();
+
+async function refreshPreviewProjectMedia(files: Record<string, string>, signal?: AbortSignal): Promise<Record<string, string>> {
+  const media = readProjectMedia(files).assets.filter((asset) => asset.usedBy.length > 0);
+  if (media.length === 0) return files;
+  if (signal?.aborted) throw signal.reason ?? new Error('Preview compile was aborted.');
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new Error('Sign in again to preview your uploaded project media.');
+
+  return refreshProjectMediaUrls(files, {
+    userId: user.id,
+    createSignedUrl: async (bucket, storagePath) => {
+      const cacheKey = `${user.id}:${bucket}:${storagePath}`;
+      const cached = previewMediaUrlCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) return cached.url;
+      const { data, error: signingError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(storagePath, 60 * 60);
+      if (signingError || !data?.signedUrl) {
+        throw new Error(`Could not refresh the preview URL for ${storagePath}.`);
+      }
+      previewMediaUrlCache.set(cacheKey, { url: data.signedUrl, expiresAt: Date.now() + PREVIEW_MEDIA_URL_TTL_MS });
+      return data.signedUrl;
+    },
+  });
 }
 
 function readThemePresetIdFromSourceFiles(sourceFiles: Record<string, string>): string | null {
@@ -94,7 +125,9 @@ export async function buildPreviewArtifactsAsync(
     pendingSourceConflictPolicy = 'block',
   } = options;
 
-  const pre = prepareForCompile(rawSourceFiles, launchState, pendingSourceConflictPolicy);
+  const prepared = prepareForCompile(rawSourceFiles, launchState, pendingSourceConflictPolicy);
+  const previewSourceFiles = await refreshPreviewProjectMedia(prepared.sourceFiles, runtimeOptions.signal);
+  const pre = { ...prepared, sourceFiles: previewSourceFiles };
   const rawSandpackFiles = pre.launchStateWithRecoveredTheme
     ? await launchStateToSandpackFilesAsync({
         launchState: pre.launchStateWithRecoveredTheme,

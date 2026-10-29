@@ -6,9 +6,15 @@ declare const Deno: {
   serve(handler: (req: Request) => Response | Promise<Response>): void;
 };
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
-import { verifyAuth, authError } from "../_shared/auth.ts";
+import { getServiceRoleClient, verifyAuth, authError } from "../_shared/auth.ts";
 import { safeParseBody, sanitizeString, isNonEmptyString } from "../_shared/validate.ts";
 import { verifyPublishAttestation } from "../_shared/publishAttestation.ts";
+import {
+  verifyCanonicalPublishSource,
+  type CanonicalPublishRevisionIdentity,
+  type CanonicalPublishRevisionRow,
+} from "../_shared/canonicalPublishRevision.ts";
+import { materializeCanonicalProjectMedia } from "../_shared/canonicalPublishMedia.ts";
 
 type PublishProvider = "netlify" | "vercel";
 
@@ -17,6 +23,8 @@ interface PublishRequestBody {
   siteName?: string;
   customDomain?: string;
   files?: Record<string, string>;
+  projectId?: string;
+  canonicalRevision?: CanonicalPublishRevisionIdentity;
   /**
    * Track 5 — server-proven publish contract. When supplied the edge function
    * re-verifies PublishGate verdict + file fingerprint server-side before
@@ -40,6 +48,8 @@ type PublishResponse = Record<string, unknown> & {
     evaluatedAt?: string;
     publishGateOk?: boolean;
     fingerprint?: string;
+    revisionId?: string;
+    vfsHash?: string;
   };
 };
 
@@ -179,7 +189,98 @@ Deno.serve(async (req) => {
     const rawSiteName = sanitizeString(body.siteName || "my-site", 80);
     const siteName = sanitizeSiteName(rawSiteName);
     const customDomain = sanitizeString(body.customDomain || "", 255).toLowerCase();
-    const files = withPoweredByUnisonAttribution(body.files || {});
+    const submittedFiles = body.files || {};
+    let canonicalPublishRevision: CanonicalPublishRevisionRow | null = null;
+
+    const identity = body.canonicalRevision;
+    if (typeof body.projectId !== 'string' || !identity
+      || typeof identity.projectId !== 'string' || identity.projectId !== body.projectId
+      || typeof identity.revisionId !== 'string' || !identity.revisionId
+      || typeof identity.vfsHash !== 'string' || !identity.vfsHash) {
+      return errorResponse("Canonical project and revision identity are required for publishing.", 412, corsHeaders, {
+        status: "error", provider: body.provider ?? "unknown",
+        attestation: { enforced: true, code: "canonical-revision-required" },
+      });
+    }
+    {
+      const identity = body.canonicalRevision!;
+      const admin = getServiceRoleClient();
+      const { data: isMember, error: membershipError } = await admin.rpc("is_project_member", {
+        _user_id: auth.user.id,
+        _project_id: identity.projectId,
+      });
+      if (membershipError || isMember !== true) {
+        return errorResponse("You do not have access to publish this project.", 403, corsHeaders, {
+          status: "error", provider: body.provider ?? "unknown",
+          attestation: { enforced: true, code: "project-access-denied" },
+        });
+      }
+      const { data: latestRevision, error: latestRevisionError } = await admin
+        .from("site_revisions")
+        .select("id")
+        .eq("project_id", identity.projectId)
+        .eq("status", "committed")
+        .eq("publish_ready", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestRevisionError || latestRevision?.id !== identity.revisionId) {
+        return errorResponse("The project has a newer publish-ready revision. Reload the project and publish again.", 412, corsHeaders, {
+          status: "error", provider: body.provider ?? "unknown",
+          attestation: { enforced: true, code: "canonical-revision-stale" },
+        });
+      }
+      const { data: revision, error: revisionError } = await admin
+        .from("site_revisions")
+        .select("id, project_id, status, publish_ready, vfs_hash, vfs_files")
+        .eq("id", identity.revisionId)
+        .eq("project_id", identity.projectId)
+        .maybeSingle();
+      if (revisionError || !revision) {
+        return errorResponse("The accepted publish revision could not be verified.", 412, corsHeaders, {
+          status: "error", provider: body.provider ?? "unknown",
+          attestation: { enforced: true, code: "canonical-revision-not-found" },
+        });
+      }
+      const revisionRow = revision as Record<string, unknown>;
+      const revisionFiles = revisionRow.vfs_files;
+      if (typeof revisionRow.id !== 'string' || typeof revisionRow.project_id !== 'string'
+        || typeof revisionRow.status !== 'string' || typeof revisionRow.publish_ready !== 'boolean'
+        || (revisionRow.vfs_hash !== null && typeof revisionRow.vfs_hash !== 'string')
+        || !revisionFiles || typeof revisionFiles !== 'object' || Array.isArray(revisionFiles)
+        || Object.values(revisionFiles as Record<string, unknown>).some((content) => typeof content !== 'string')) {
+        return errorResponse("The accepted publish revision has an invalid source record.", 412, corsHeaders, {
+          status: "error", provider: body.provider ?? "unknown",
+          attestation: { enforced: true, code: "canonical-revision-malformed" },
+        });
+      }
+      const canonicalRevisionRow = {
+        id: revisionRow.id,
+        project_id: revisionRow.project_id,
+        status: revisionRow.status,
+        publish_ready: revisionRow.publish_ready,
+        vfs_hash: revisionRow.vfs_hash,
+        vfs_files: revisionFiles as Record<string, string>,
+      } as CanonicalPublishRevisionRow;
+      canonicalPublishRevision = canonicalRevisionRow;
+      const expectedPublishedFiles = withPoweredByUnisonAttribution(
+        Object.fromEntries(Object.entries(canonicalRevisionRow.vfs_files).map(([path, content]) => [path.replace(/^\/+/, ""), content])),
+      );
+      const sourceVerdict = await verifyCanonicalPublishSource({
+        identity,
+        revision: canonicalRevisionRow,
+        submittedFiles,
+        expectedPublishedFiles,
+      });
+      if (!sourceVerdict.ok) {
+        return errorResponse(sourceVerdict.message, 412, corsHeaders, {
+          status: "error", provider: body.provider ?? "unknown",
+          attestation: { enforced: true, code: sourceVerdict.code, details: sourceVerdict.details },
+        });
+      }
+    }
+
+    let files = withPoweredByUnisonAttribution(submittedFiles);
 
     if (provider !== "netlify" && provider !== "vercel") {
       return errorResponse("Unsupported provider", 400, corsHeaders);
@@ -189,13 +290,14 @@ Deno.serve(async (req) => {
       return errorResponse("Invalid customDomain", 400, corsHeaders);
     }
 
-    const fileError = validateFiles(files);
-    if (fileError) {
-      return errorResponse(fileError, 400, corsHeaders);
-    }
-
     // Track 5 — server-proven publish contract.
-    let attestationMeta: PublishResponse["attestation"] = { enforced: false };
+    let attestationMeta: PublishResponse["attestation"] = {
+      enforced: false,
+      ...(body.canonicalRevision ? {
+        revisionId: body.canonicalRevision.revisionId,
+        vfsHash: body.canonicalRevision.vfsHash,
+      } : {}),
+    };
     if (body.publishAttestation !== undefined && body.publishAttestation !== null) {
       const verdict = await verifyPublishAttestation(body.publishAttestation, files);
       if (verdict.ok !== true) {
@@ -217,6 +319,10 @@ Deno.serve(async (req) => {
         evaluatedAt: verdict.attestation.evaluatedAt,
         publishGateOk: verdict.attestation.gates.publish.ok,
         fingerprint: verdict.attestation.filesFingerprint,
+        ...(body.canonicalRevision ? {
+          revisionId: body.canonicalRevision.revisionId,
+          vfsHash: body.canonicalRevision.vfsHash,
+        } : {}),
       };
       console.log(
         "[publish-site] attestation verified user=%s fingerprint=%s evaluatedAt=%s",
@@ -231,6 +337,38 @@ Deno.serve(async (req) => {
         corsHeaders,
         { status: "error", provider: provider ?? "unknown", attestation: { enforced: true, code: "attestation-required" } },
       );
+    }
+
+    if (canonicalPublishRevision) {
+      try {
+        const admin = getServiceRoleClient();
+        const materialized = await materializeCanonicalProjectMedia({
+          files,
+          manifestFiles: canonicalPublishRevision.vfs_files,
+          userId: auth.user.id,
+          storageOrigin: Deno.env.get("SUPABASE_URL")!,
+          download: async (bucket, storagePath) => {
+            const { data, error } = await admin.storage.from(bucket).download(storagePath);
+            if (error || !data) throw new Error(error?.message || "Storage returned no file data.");
+            return new Uint8Array(await data.arrayBuffer());
+          },
+        });
+        files = materialized.files;
+        if (materialized.mediaCount > 0) {
+          console.log("[publish-site] materialized %s project media asset(s) for portable publish", materialized.mediaCount);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to resolve project media.";
+        return errorResponse(`Publish blocked: ${message}`, 412, corsHeaders, {
+          status: "error", provider: provider ?? "unknown",
+          attestation: { enforced: true, code: "project-media-unresolved" },
+        });
+      }
+    }
+
+    const fileError = validateFiles(files);
+    if (fileError) {
+      return errorResponse(fileError, 400, corsHeaders);
     }
 
     const NETLIFY_AUTH_TOKEN = Deno.env.get("NETLIFY_AUTH_TOKEN");

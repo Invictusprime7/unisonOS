@@ -53,6 +53,46 @@ export function unusedProjectMedia(files: Record<string, string>): ProjectMediaA
   return readProjectMedia(files).assets.filter((a) => usage(files, a.storagePath).length === 0);
 }
 
+/** Refresh signed preview URLs from stable manifest identities without changing accepted source files. */
+export async function refreshProjectMediaUrls(
+  files: Record<string, string>,
+  input: {
+    userId: string;
+    createSignedUrl: (bucket: string, storagePath: string) => Promise<string>;
+  },
+): Promise<Record<string, string>> {
+  const manifest = readProjectMedia(files);
+  const assets = manifest.assets.filter((asset) => asset.usedBy.length > 0);
+  if (assets.length === 0) return files;
+
+  const refreshed = { ...files };
+  const refreshedAssets = new Map<string, ProjectMediaAsset>();
+  for (const asset of assets) {
+    if (asset.bucket !== 'user-files' || !asset.storagePath.startsWith(`${input.userId}/`)) {
+      throw new Error('Project media asset is outside the signed-in user storage scope.');
+    }
+    const url = await input.createSignedUrl(asset.bucket, asset.storagePath);
+    if (!url.startsWith('https://')) throw new Error('Storage returned an invalid preview URL.');
+    for (const sourcePath of asset.usedBy) {
+      const normalizedPath = sourcePath.replace(/^\/+/, '');
+      if (!normalizedPath || normalizedPath.includes('\\')
+        || normalizedPath.split('/').some((part) => !part || part === '.' || part === '..')) {
+        throw new Error('Project media manifest contains an invalid source path.');
+      }
+      const source = refreshed[sourcePath];
+      if (typeof source !== 'string' || !source.includes(asset.url)) {
+        throw new Error(`Project media reference is missing from ${sourcePath}.`);
+      }
+      refreshed[sourcePath] = source.split(asset.url).join(url);
+    }
+    refreshedAssets.set(asset.storagePath, { ...asset, url });
+  }
+
+  const allAssets = manifest.assets.map((asset) => refreshedAssets.get(asset.storagePath) ?? asset);
+  refreshed[PROJECT_MEDIA_MANIFEST] = `${JSON.stringify({ version: 1, assets: allAssets }, null, 2)}\n`;
+  return refreshed;
+}
+
 const UPLOAD_URL = /https?:\/\/[^"'`\s)]+\/storage\/v1\/object\/(?:sign|public)\/(user-files)\/([^"'`\s)?]+)(?:\?[^"'`\s)]*)?/g;
 
 function kindFor(name: string): { kind: string; mimeType: string } {

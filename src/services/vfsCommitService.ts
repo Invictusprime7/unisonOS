@@ -112,6 +112,7 @@ import {
   stampSnapshotAuthority,
 } from '@/services/authorshipAuthority';
 import { canDirectlyAuthorVfsPath, classifyVfsProtection } from '@/services/vfsProtectionMatrix';
+import { PROJECT_MEDIA_MANIFEST, syncProjectMedia } from '@/services/assets/projectMedia';
 
 
 
@@ -1051,6 +1052,13 @@ async function commitMutationInner(
     workingFiles[resolvedCompositionPathFor(customizerPagePath)] = serializeResolvedComposition(updated.composition);
     refreshEditedCompositionOwnership(input.current.vfsFiles, workingFiles);
   }
+  const projectMediaManifest = syncProjectMedia(workingFiles);
+  if (projectMediaManifest !== null) workingFiles[PROJECT_MEDIA_MANIFEST] = projectMediaManifest;
+  const preserveProjectMediaManifest = (candidateFiles: Record<string, string>) => projectMediaManifest === null
+    ? candidateFiles
+    : { ...candidateFiles, [PROJECT_MEDIA_MANIFEST]: projectMediaManifest };
+  const projectMediaManifestContent = workingFiles[PROJECT_MEDIA_MANIFEST];
+
   // Everything that intentionally changed before acceptance is the candidate.
   // Downstream projection, validation and readiness stages may inspect these
   // bytes, but may not silently author additional user-source changes.
@@ -1067,6 +1075,9 @@ async function commitMutationInner(
   // preservation guard checks against what the gates actually validated.
   const adoptCanonicalNormalization = () => {
     if (sourcePreservationBaseline) {
+      if (typeof projectMediaManifestContent === 'string') {
+        files[PROJECT_MEDIA_MANIFEST] = projectMediaManifestContent;
+      }
       sourcePreservationOperations = sourceOperationsBetween(sourcePreservationBaseline, files);
     }
   };
@@ -1320,9 +1331,9 @@ async function commitMutationInner(
     // Commit may verify it, but must never become a second source-writing stage.
     mode: 'acceptance',
   });
-  files = reviewedArtifact && !reviewedComposition && !restoredRevision
+  files = preserveProjectMediaManifest(reviewedArtifact && !reviewedComposition && !restoredRevision
     ? preserveWizardMetadataFiles(preflight.files, workingFiles)
-    : preflight.files;
+    : preflight.files);
   if (input.source === 'wizard-launch') {
     snapshotForPersistence = mergeWizardLaunchSnapshot(
       (snapshotForPersistence as SiteBundleSnapshot | null) ?? null,
@@ -1359,7 +1370,7 @@ async function commitMutationInner(
       allowQuarantine: false,
     });
     if (repair.stages.earlyRepair !== 'failed' && repair.stages.finalRepair !== 'failed') {
-      files = repair.files;
+      files = preserveProjectMediaManifest(repair.files);
       adoptCanonicalNormalization();
       if (snapshotForPersistence) snapshotForPersistence = mergeWizardLaunchSnapshot(snapshotForPersistence as SiteBundleSnapshot, files);
       preflight = runFullPreflight(files, {
@@ -1515,9 +1526,9 @@ async function commitMutationInner(
           mode: 'acceptance',
         });
       }
-      files = reviewedArtifact && !reviewedComposition && !restoredRevision
+      files = preserveProjectMediaManifest(reviewedArtifact && !reviewedComposition && !restoredRevision
         ? preserveWizardMetadataFiles(preflight.files, workingFiles)
-        : preflight.files;
+        : preflight.files);
       adoptCanonicalNormalization();
     } catch (err) {
       log('repair', 'error', 'auto-repair threw', String(err));

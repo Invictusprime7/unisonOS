@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PROJECT_MEDIA_MANIFEST, readProjectMedia, recordProjectMedia, unusedProjectMedia } from '@/services/assets/projectMedia';
+import { PROJECT_MEDIA_MANIFEST, readProjectMedia, recordProjectMedia, refreshProjectMediaUrls, unusedProjectMedia } from '@/services/assets/projectMedia';
 
 const path = 'u1/site-uploads/p1/abc-photo.png';
 const upload = { name: 'photo.png', kind: 'image', mimeType: 'image/png', url: `https://x/sign/user-files/${path}?token=t`, bucket: 'user-files', storagePath: path };
@@ -34,5 +34,35 @@ describe('project media sync from saved source', () => {
   it('writes nothing for a site with no uploads', async () => {
     const { syncProjectMedia } = await import('@/services/assets/projectMedia');
     expect(syncProjectMedia({ '/src/pages/Home.tsx': '<img src="/a.png" />' })).toBeNull();
+  });
+});
+
+describe('project media preview URL refresh', () => {
+  it('reissues signed URLs from stable storage paths without changing accepted files', async () => {
+    const files = {
+      '/src/pages/Home.tsx': `<img src="${upload.url}" />`,
+      [PROJECT_MEDIA_MANIFEST]: recordProjectMedia({ '/src/pages/Home.tsx': `<img src="${upload.url}" />` }, [upload]),
+    };
+    const refreshedUrl = 'https://x/storage/v1/object/sign/user-files/u1/site-uploads/p1/abc-photo.png?token=fresh';
+    const createSignedUrl = vi.fn(async () => refreshedUrl);
+
+    const previewFiles = await refreshProjectMediaUrls(files, { userId: 'u1', createSignedUrl });
+
+    expect(createSignedUrl).toHaveBeenCalledWith('user-files', path);
+    expect(previewFiles['/src/pages/Home.tsx']).toContain(refreshedUrl);
+    expect(readProjectMedia(previewFiles).assets[0].url).toBe(refreshedUrl);
+    expect(files['/src/pages/Home.tsx']).toContain(upload.url);
+  });
+
+  it('does not sign paths owned by another user', async () => {
+    const files = {
+      '/src/pages/Home.tsx': `<img src="${upload.url}" />`,
+      [PROJECT_MEDIA_MANIFEST]: recordProjectMedia({ '/src/pages/Home.tsx': `<img src="${upload.url}" />` }, [upload]),
+    };
+    const createSignedUrl = vi.fn(async () => 'https://x/fresh');
+
+    await expect(refreshProjectMediaUrls(files, { userId: 'other-user', createSignedUrl }))
+      .rejects.toThrow(/outside the signed-in user storage scope/i);
+    expect(createSignedUrl).not.toHaveBeenCalled();
   });
 });

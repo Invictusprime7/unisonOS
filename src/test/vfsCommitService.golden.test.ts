@@ -2003,4 +2003,28 @@ describe('P0 rejection fixtures', () => {
     expect(codes(err)).toContain('LOCKED_INTENT_OR_DATA_FIELD');
     expect(revisionStore).toHaveLength(0);
   });
+
+  it('records uploaded project media in the same canonical candidate as the source reference', async () => {
+    const page = '/src/pages/Home.tsx';
+    const url = 'https://storage.example.test/storage/v1/object/sign/user-files/user-1/site-uploads/project-1/11111111-1111-4111-8111-111111111111-hero.webp?token=temporary';
+    const files = {
+      '/src/App.tsx': app,
+      [page]: `export default function Home(){return <main><img src="${url}" alt="Hero" /></main>}`,
+    };
+    mockPipeline(files); mockPreflight(files); mockIntents();
+
+    const result = await commitMutation({
+      source: 'ai-builder', identity: IDENTITY,
+      current: { vfsFiles: { '/src/App.tsx': app } },
+      patch: legacyFilesToPatchPlan({ [page]: files[page] }),
+      options: { dryRun: true, requireReadinessPass: false },
+    });
+
+    const manifest = JSON.parse(result.vfsFiles['/public/media/manifest.json']);
+    expect(manifest.assets).toEqual([expect.objectContaining({
+      bucket: 'user-files',
+      storagePath: 'user-1/site-uploads/project-1/11111111-1111-4111-8111-111111111111-hero.webp',
+      usedBy: [page],
+    })]);
+  });
 });

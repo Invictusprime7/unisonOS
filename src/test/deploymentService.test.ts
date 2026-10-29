@@ -80,7 +80,12 @@ describe('deployToProvider publication projection', () => {
 
     expect(result.status).toBe('success');
     expect(mocks.rpc).not.toHaveBeenCalled();
-    expect(mocks.invoke).toHaveBeenCalledWith('publish-site', expect.anything());
+    expect(mocks.invoke).toHaveBeenCalledWith('publish-site', expect.objectContaining({
+      body: expect.objectContaining({
+        projectId: 'project-1',
+        canonicalRevision: { projectId: 'project-1', revisionId: 'revision-1', vfsHash: 'hash-1' },
+      }),
+    }));
   });
 
   it('sets the project active published revision after deployment', async () => {
@@ -136,6 +141,13 @@ describe('deployToProvider publication projection', () => {
     const result = await deployToProvider({ provider: 'vercel', projectId: 'project-1', expectedRevisionId: 'revision-2', files: {} });
     expect(result.status).toBe('error');
     expect(result.error).toMatch(/older version/);
+    expect(mocks.invoke).not.toHaveBeenCalledWith('publish-site', expect.anything());
+  });
+
+  it('refuses to publish without a canonical project identity', async () => {
+    const result = await deployToProvider({ provider: 'vercel', files: { '/index.html': '<html></html>' } });
+
+    expect(result).toMatchObject({ status: 'error', error: expect.stringContaining('accepted, publish-ready revision') });
     expect(mocks.invoke).not.toHaveBeenCalledWith('publish-site', expect.anything());
   });
 
