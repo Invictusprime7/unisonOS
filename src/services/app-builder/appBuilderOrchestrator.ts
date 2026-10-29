@@ -13,6 +13,7 @@ import { findPageStructureIssues, pageStructureRequirement, verifiedPhotosFor } 
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
 import { normalizeWizardBindingMarkers } from '@/services/wizardBindingBridge';
 import { inspectAppBuilderPageSectionClosure, materializeAppBuilderSectionModels } from './appBuilderSectionModel';
+import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 
 export interface AppBuilderOrchestratorDependencies {
   authorSite: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
@@ -71,7 +72,7 @@ export async function orchestrateAppBuild(
       const page = pages.find((candidate) => candidate.filePath === path);
       const normalizedFiles = materializeAppBuilderSectionModels(
         { ...(files ?? {}), [path]: source },
-        [{ id: page?.pageId ?? path, filePath: path }],
+        [{ id: page?.pageId ?? path, filePath: path, route: page?.route }],
         sectionImplementations,
       );
       messages.push(...inspectAppBuilderPageSectionClosure(path, normalizedFiles, sectionImplementations).issues);
@@ -166,6 +167,7 @@ export async function orchestrateAppBuild(
     return materializeAppBuilderSectionModels(markerNormalization.files, pages.map((page) => ({
       id: page.pageId,
       filePath: page.filePath,
+      route: page.route,
     })), sectionImplementations);
   };
   let candidateFiles = { ...authored.files };
@@ -246,6 +248,12 @@ export async function orchestrateAppBuild(
     : closureRepairAttempts > 0
       ? 'ai-candidate+closure-repair' as const
       : 'ai-candidate' as const;
+  const graph = buildSystemGraph({
+    files: candidateFiles,
+    pageIdentities: input.contract.topology.sitePlan.pages.map((page) => ({
+      id: page.id, path: page.route, filePath: page.filePath, title: page.title, role: page.role,
+    })),
+  });
   const candidate = {
     candidateId: `${input.operationId}:candidate:${closure.sourceHash.replace(':', '_')}`,
     status: cancelled ? 'cancelled' as const : ready ? 'ready-for-commit' as const : 'rejected' as const,
@@ -254,6 +262,7 @@ export async function orchestrateAppBuild(
     attempts: authored.outcomes.reduce((total, outcome) => total + outcome.attempts, 0) + closureRepairAttempts,
     diagnostics: [...authorDiagnostics, ...closureDiagnostics],
     closure,
+    graph,
     provenance: {
       protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
       operationId: input.operationId,

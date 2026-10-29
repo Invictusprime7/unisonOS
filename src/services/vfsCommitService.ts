@@ -1312,10 +1312,8 @@ async function commitMutationInner(
   }
 
   const requirePreview = input.options?.requirePreviewPass !== false;
-  // Readiness is advisory for saves: a broken business connection is saved
-  // with an explicit warning (see below) instead of rejecting the save.
-  const requireReadinessRequested = input.options?.requireReadinessPass !== false;
-  const requireReadiness = false;
+  const requireReadinessRequested = input.options?.requireReadinessPass === true;
+  const requireReadiness = requireReadinessRequested;
 
   // User-driven Builder edits are validated, never grown: required industry
   // surfaces are closed at launch, not injected into a later style/copy edit.
@@ -1474,8 +1472,8 @@ async function commitMutationInner(
     (!previewVerdict || previewVerdict.ok) &&
     intentPreviewBlocked === 0 &&
     elementPreviewBlocked === 0;
-  // Business-connection / capability readiness never blocks a save; it is
-  // reported as an explicit warning so the user sees exactly what is missing.
+  // Business-connection / capability readiness is advisory for draft saves;
+  // explicit strict-readiness callers still enforce it below.
   if (!readinessOk) {
     log('readiness', 'warn', 'Saved with business connection warnings: ' + [
       gate && !gate.previewReady ? 'a required business capability is not connected' : null,
@@ -2540,28 +2538,16 @@ async function finalize(args: {
     dryRun,
   });
 
-  const revisionBoundSnapshot = snapshotForRevision && persistedRevisionId && snapshotForRevision.meta.effectiveComposition
-    ? {
-        ...snapshotForRevision,
-        meta: {
-          ...snapshotForRevision.meta,
-          effectiveComposition: {
-            ...snapshotForRevision.meta.effectiveComposition,
-            revisionId: persistedRevisionId,
-          },
-        },
-      }
-    : snapshotForRevision;
-  const acceptedAuthority = revisionBoundSnapshot && status === 'committed'
+  const acceptedAuthority = snapshotForRevision && status === 'committed'
     ? authorityAfterAcceptedCommit(
-        deriveAuthorshipAuthority({ snapshot: revisionBoundSnapshot, acceptedRevisionId: parentRevisionId }),
+        deriveAuthorshipAuthority({ snapshot: snapshotForRevision, acceptedRevisionId: parentRevisionId }),
         input.source,
         input.source === 'wizard-launch' ? persistedRevisionId : undefined,
       )
     : null;
-  const returnedSnapshot = revisionBoundSnapshot && acceptedAuthority
-    ? stampSnapshotAuthority(revisionBoundSnapshot, acceptedAuthority)
-    : revisionBoundSnapshot;
+  const returnedSnapshot = snapshotForRevision && acceptedAuthority
+    ? stampSnapshotAuthority(snapshotForRevision, acceptedAuthority)
+    : snapshotForRevision;
   const result: CommitMutationResult = {
 
     status,

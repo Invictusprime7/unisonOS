@@ -20,6 +20,7 @@ export interface StrictImportContractWorkerRequest {
   files: Record<string, string>;
   entryPoint?: string;
   themePresetId?: string | null;
+  sourceRevisionId?: string | null;
 }
 
 export type StrictImportContractWorkerResponse =
@@ -55,12 +56,14 @@ export interface RunPrepareSandpackFilesOffThreadOptions {
   files: Record<string, string>;
   entryPoint?: string;
   themePresetId?: string | null;
+  sourceRevisionId?: string | null;
   signal?: AbortSignal;
   workerFactory?: () => StrictImportContractWorkerLike;
   fallbackCompute?: (
     files: Record<string, string>,
     entryPoint?: string,
     themePresetId?: string | null,
+    sourceRevisionId?: string | null,
   ) => Record<string, string>;
   /** A side-effect-only validation fallback has no compiled artifact to cache. */
   cacheFallbackResult?: boolean;
@@ -154,8 +157,8 @@ function hashFilesRecord(files: Record<string, string>): string {
   return (h >>> 0).toString(36);
 }
 
-function cacheKeyFor(files: Record<string, string>, entryPoint: string | undefined, themePresetId: string | null | undefined): string {
-  return `${hashFilesRecord(files)}::${entryPoint || ''}::${themePresetId || ''}`;
+function cacheKeyFor(files: Record<string, string>, entryPoint: string | undefined, themePresetId: string | null | undefined, sourceRevisionId: string | null | undefined): string {
+  return `${hashFilesRecord(files)}::${entryPoint || ''}::${themePresetId || ''}::${sourceRevisionId || ''}`;
 }
 
 function storeInCache(key: string, files: Record<string, string>): void {
@@ -318,6 +321,7 @@ export async function runPrepareSandpackFilesOffThread({
   files,
   entryPoint,
   themePresetId,
+  sourceRevisionId,
   signal,
   workerFactory = defaultWorkerFactory,
   cacheFallbackResult = true,
@@ -327,7 +331,7 @@ export async function runPrepareSandpackFilesOffThread({
   }),
 }: RunPrepareSandpackFilesOffThreadOptions): Promise<Record<string, string>> {
   if (signal?.aborted) throw toAbortError(signal);
-  const cacheKey = cacheKeyFor(files, entryPoint, themePresetId);
+  const cacheKey = cacheKeyFor(files, entryPoint, themePresetId, sourceRevisionId);
   const cached = preparedFilesCache.get(cacheKey);
   if (cached) return { ...cached };
   let job = preparedFilesInFlight.get(cacheKey);
@@ -345,6 +349,7 @@ export async function runPrepareSandpackFilesOffThread({
           files,
           entryPoint,
           themePresetId,
+          sourceRevisionId,
         }, controller.signal, (checkpoint) => { currentJob.checkpoint = checkpoint; });
         storeInCache(cacheKey, result);
         return result;
@@ -356,7 +361,7 @@ export async function runPrepareSandpackFilesOffThread({
         });
       }
 
-      const result = fallbackCompute(files, entryPoint, themePresetId);
+      const result = fallbackCompute(files, entryPoint, themePresetId, sourceRevisionId);
       if (cacheFallbackResult) storeInCache(cacheKey, result);
       return result;
     })().finally(() => {

@@ -1811,7 +1811,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 sectionType: selectedTarget.scopeAncestors?.sectionType,
                 componentType: selectedTarget.scopeAncestors?.componentType,
                 componentInstanceId: selectedTarget.scopeAncestors?.componentInstanceId,
-                artifactId: selectedTarget.scopeAncestors?.artifactId,
+                  registryKey: selectedTarget.scopeAncestors?.artifactId,
                 elementId: selectedTarget.scopeAncestors?.elementId,
                 clickedTag: selectedTarget.tagName,
                 sourceTable: selectedTarget.provenance?.sourceTable,

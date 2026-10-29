@@ -1,3 +1,4 @@
+import { resolveTopologyPageRoleAlias, roleToPageType } from '@/platform/core/siteTopologyPlanner';
 /**
  * Playground Compiler - compiles PlaygroundState into runtime artifacts.
  *
@@ -19,7 +20,6 @@ import { getCompositionById } from '@/sections/templates';
 import type { LayoutCategory } from '@/data/templates/types';
 import type { BuilderPage } from '@/types/pageRegistry';
 import type { GeneratedSitePlan, PageRole, PageRouteNode } from '@/platform/core/siteTopologyPlanner';
-import { roleToPageType } from '@/platform/core/siteTopologyPlanner';
 import type { WizardDesignIntervention } from '@/services/wizardDesignIntervention';
 import { collectResolvedCompositions, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import { collectReachableFiles } from '@/utils/dependencyExtractor';
@@ -437,21 +437,12 @@ function buildScaffoldPlan(
 
 function inferTopologyRole(page: BuilderPage): PageRole {
   const raw = (page.pageRole || page.pageType || '').toString();
-  if (raw === 'service' || raw === 'landing') return 'services';
-  if (raw === 'thankyou' || raw === 'thank_you') return 'thank_you';
-  if (raw === 'home') return 'home';
-  if (raw === 'about') return 'about';
-  if (raw === 'contact') return 'contact';
-  if (raw === 'pricing') return 'pricing';
-  if (raw === 'gallery') return 'gallery';
-  if (raw === 'faq') return 'faq';
-  if (raw === 'booking') return 'booking';
-  if (raw === 'checkout') return 'checkout';
-  if (raw === 'blog') return 'blog';
-  if (raw === 'shop') return 'shop';
-  if (raw === 'immersive') return 'immersive';
+  const role = resolveTopologyPageRoleAlias(raw);
+  if (role && role !== 'custom') return role;
 
   const path = page.path.toLowerCase();
+  const pathRole = resolveTopologyPageRoleAlias(path);
+  if (pathRole && pathRole !== 'custom') return pathRole;
   if (/(^|\/)rooms?(\/|$)/.test(path)) return 'services';
   if (path.includes('service')) return 'services';
   if (path.includes('confirmation') || path.includes('thank')) return 'thank_you';

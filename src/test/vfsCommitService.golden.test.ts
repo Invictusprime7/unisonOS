@@ -284,9 +284,10 @@ function mockPipeline(files: Record<string, string>) {
   });
 }
 
-function mockPreflight(files: Record<string, string>) {
+function mockPreflight(files: Record<string, string>, violations: string[] = []) {
   (runFullPreflight as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
     files,
+    violations,
     stages: {
       earlyRepair: 'ok', finalRepair: 'ok',
       runtimeCompatibility: {
@@ -479,7 +480,6 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
       currentHash: expect.any(String),
     });
     expect(result.siteBundleSnapshot?.meta.effectiveComposition).toMatchObject({
-      revisionId: result.persistedRevisionId,
       baseRevisionId,
       vfsHash: result.vfsHash,
       pages: {
@@ -491,6 +491,7 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
         },
       },
     });
+    expect(result.siteBundleSnapshot?.meta.effectiveComposition?.revisionId).toBeUndefined();
     expect(result.siteBundleSnapshot?.meta.effectiveComposition?.pages.home.registryEvidence)
       .toEqual(expect.arrayContaining([
         expect.objectContaining({
@@ -1534,26 +1535,25 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     expect(intentReadiness?.summary.previewBlocked).toBe(0);
   });
 
-  it('hard-rejects when intent preview blockers remain after auto-repair', async () => {
+  it('saves drafts with intent blockers but keeps them unpublishable', async () => {
     const files = { '/src/App.tsx': 'x' };
     mockPipeline(files);
     mockPreflight(files);
     mockIntents(3, 3);
 
-    await expect(
-      commitMutation({
-        source: 'ai-builder',
-        identity: IDENTITY,
-        current: { vfsFiles: files, playground: { pages: [] } as never },
-        patch: legacyFilesToPatchPlan(files, 'broken edit'),
-      }),
-    ).rejects.toThrow(/rejected/i);
+    const result = await commitMutation({
+      source: 'ai-builder',
+      identity: IDENTITY,
+      current: { vfsFiles: files, playground: { pages: [] } as never },
+      patch: legacyFilesToPatchPlan(files, 'unfinished booking setup'),
+    });
 
-    // Rejected revisions are still persisted for forensics.
-    expect(revisionStore[revisionStore.length - 1]?.status).toBe('rejected');
-    expect(revisionStore[revisionStore.length - 1]?.diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'LOCKED_INTENT_OR_DATA_FIELD' }),
+    expect(result.status).toBe('committed');
+    expect(result.publishReady).toBe(false);
+    expect(result.publishBlockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: 'intentReadiness', code: 'intent-publish-blocked' }),
     ]));
+    expect(revisionStore[revisionStore.length - 1]?.status).toBe('committed');
   });
 
   it('records an actionable rejection code and unresolved module for import failures', async () => {
@@ -1608,8 +1608,8 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
   it('does not execute backend operations when pre-execution gates reject the commit', async () => {
     const files = { '/src/App.tsx': 'x' };
     mockPipeline(files);
-    mockPreflight(files);
-    mockIntents(3, 3);
+    mockPreflight(files, ['preview compilation failed']);
+    mockIntents();
     const patch = emptyPatchPlan('rejected booking install');
     patch.backendOps.push({ type: 'requireCapability', capability: 'booking' });
 

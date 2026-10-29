@@ -1,6 +1,8 @@
 import type { EditableEntity, EditableEntityKind, EditablePropertyOwner, EditableMutationLane } from './editableEntity';
 import type { SystemGraph } from './systemGraph';
 import { getCatalogSurfaceByTable } from '@/platform/core/catalogSurfaceRegistry';
+import { resolveArtifact } from '@/platform/core/artifactRegistry';
+import { getCanonicalComponentDefinition, inferCanonicalComponentSlug } from '@/services/canonicalComponentRegistry';
 import { parseResourceProvenance } from '@/services/resources/resourceRuntime';
 
 export interface EditableSelection {
@@ -13,6 +15,7 @@ export interface EditableSelection {
   componentType?: string | null;
   componentInstanceId?: string | null;
   artifactId?: string | null;
+  registryKey?: string | null;
   bindingId?: string | null;
   bindingKey?: string | null;
   sourceTable?: string | null;
@@ -44,8 +47,45 @@ export interface ResolveEditableEntityInput {
   catalogBindings?: readonly CatalogBindingReference[];
 }
 
-function ownerId(parts: Array<string | null | undefined>): string {
-  return parts.filter((part): part is string => Boolean(part)).join(':') || 'unknown';
+function canonicalEntityId(
+  selected: EditableSelection,
+  sourceTable: string | undefined,
+  componentType: string | undefined,
+  resource: ReturnType<typeof parseResourceProvenance>,
+): string {
+  const page = selected.pageId ?? selected.pagePath ?? selected.componentPath;
+  const identity = resource
+    ? ['resource', resource.resourceKey, resource.recordId, resource.field]
+    : sourceTable && selected.rowId
+      ? ['resource', sourceTable, selected.rowId, selected.field]
+      : selected.elementId
+        ? ['element', page, selected.elementId]
+        : selected.componentInstanceId
+          ? ['component', page, componentType, selected.componentInstanceId]
+          : selected.bindingId
+            ? ['binding', selected.bindingId]
+            : selected.bindingKey
+              ? ['slot', page, selected.bindingKey]
+              : selected.primaryIntent
+                ? ['intent', page, selected.primaryIntent]
+                : selected.targetPath
+                  ? ['route', page, selected.targetPath]
+                  : selected.sectionId
+                    ? ['section', page, selected.sectionId]
+                    : selected.selector && (selected.componentPath || selected.pagePath)
+                      ? ['source', selected.componentPath ?? selected.pagePath, selected.selector]
+                      : selected.pageId
+                        ? ['page', selected.pageId]
+                        : selected.pagePath
+                          ? ['page', selected.pagePath]
+                          : selected.componentPath
+                            ? ['file', selected.componentPath]
+                            : null;
+
+  if (!identity) {
+    throw new Error('Selected entity has no canonical identity. Re-select it with stable page, component, or resource provenance before editing.');
+  }
+  return `entity:${identity.filter((part): part is string => Boolean(part)).map(encodeURIComponent).join(':')}`;
 }
 
 function classification(selected: EditableSelection, intents: string[]): { kind: EditableEntityKind; lanes: EditableMutationLane[] } {
@@ -70,10 +110,23 @@ export function resolveEditableEntity(input: ResolveEditableEntityInput): Editab
     throw new Error(`Selected catalog source "${selected.sourceTable}" is not registered for editable data operations.`);
   }
   const sourceTable = catalogSurface?.sourceTable ?? selected.sourceTable ?? undefined;
+  const resourceRef = parseResourceProvenance(selected.resourceMark);
+  const registryKey = selected.registryKey ?? selected.artifactId ?? undefined;
+  const artifact = [registryKey, selected.componentType, selected.sectionType]
+    .filter((spelling): spelling is string => Boolean(spelling))
+    .map((spelling) => resolveArtifact(spelling))
+    .find((resolvedArtifact) => resolvedArtifact !== null);
+  const canonicalComponentSlug = selected.componentType
+    ? inferCanonicalComponentSlug(selected.componentType)
+    : null;
+  const canonicalComponent = canonicalComponentSlug
+    ? getCanonicalComponentDefinition(canonicalComponentSlug)
+    : null;
+  const componentType = canonicalComponent?.componentType ?? selected.componentType ?? undefined;
   const intents = Array.from(new Set([...(selected.intents ?? []), ...(selected.primaryIntent ? [selected.primaryIntent] : [])]));
   const resolved = classification(selected, intents);
   const entity: EditableEntity = {
-    id: `entity:${ownerId([sourceTable, selected.rowId, selected.elementId, selected.bindingKey, selected.sectionId, selected.pagePath])}`,
+    id: canonicalEntityId(selected, sourceTable, componentType, resourceRef),
     revisionId: input.graph.revision.id,
     projectId: selected.projectId ?? undefined,
     kind: resolved.kind,
@@ -82,19 +135,18 @@ export function resolveEditableEntity(input: ResolveEditableEntityInput): Editab
     sectionId: selected.sectionId ?? undefined,
     sectionType: selected.sectionType ?? undefined,
     componentInstanceId: selected.componentInstanceId ?? undefined,
-    componentType: selected.componentType ?? undefined,
-    artifactId: selected.artifactId ?? undefined,
+    componentType,
+    artifactId: artifact?.artifactId,
     elementId: selected.elementId ?? undefined,
     elementRole: selected.clickedTag ?? undefined,
     selector: selected.selector ?? undefined,
     intents,
     permissions: { readable: true, writable: true, destructive: resolved.kind === 'catalog' },
     allowedMutationLanes: resolved.lanes,
-    provenance: { catalogSurface: catalogSurface?.surfaceId, bindingId: selected.bindingId ?? undefined, registryKey: selected.artifactId ?? undefined },
+    provenance: { catalogSurface: catalogSurface?.surfaceId, bindingId: selected.bindingId ?? undefined, registryKey },
     owners: {},
   };
 
-  const resourceRef = parseResourceProvenance(selected.resourceMark);
   if (resourceRef) {
     entity.resource = resourceRef;
     entity.owners[resourceRef.field ?? 'value'] = { kind: 'resource-field', resource: resourceRef, field: resourceRef.field };

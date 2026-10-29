@@ -21,6 +21,7 @@ export interface AppBuilderSectionInspection {
 export interface AppBuilderPageTarget {
   id: string;
   filePath: string;
+  route?: string;
 }
 
 interface EligibleImplementation {
@@ -288,6 +289,8 @@ function materializeSectionRootIdentity(
   filePath: string,
   source: string,
   implementations: Readonly<Record<string, EligibleImplementation>>,
+  pageId?: string,
+  pageRoute?: string,
 ): string {
   const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const edits: Array<{ position: number; text: string }> = [];
@@ -327,12 +330,17 @@ function materializeSectionRootIdentity(
           const sharedId = sectionType === 'navbar' ? 'site:navbar' : sectionType === 'footer' ? 'site:footer' : undefined;
           const count = identityCounts.get(sectionType) ?? 0;
           identityCounts.set(sectionType, count + 1);
-          const pageName = filePath.split('/').pop()?.replace(/\.(?:tsx?|jsx?)$/i, '').toLowerCase() || 'page';
-          const sectionId = existingId ?? inferred.sectionId ?? sharedId ?? `${pageName}:${sectionType}:${count}`;
+          const pageIdentity = pageId ?? filePath.split('/').pop()?.replace(/\.(?:tsx?|jsx?)$/i, '').toLowerCase() ?? 'page';
+          const sectionId = existingId ?? inferred.sectionId ?? sharedId ?? `${pageIdentity}:${sectionType}:${count}`;
+          const entityId = readStringAttribute(opening, 'data-ut-entity-id', sourceFile)
+            ?? `section:${pageIdentity}:${sectionId}`;
           const attributes: Array<[string, string | undefined]> = [
             ['data-ut-section-id', existingId ?? sectionId],
             ['data-ut-section-type', readStringAttribute(opening, 'data-ut-section-type', sourceFile) ?? sectionType],
             ['data-ut-variant', readStringAttribute(opening, 'data-ut-variant', sourceFile) ?? variantId],
+            ['data-ut-entity-id', entityId],
+            ...(pageId ? [['data-ut-page-id', pageId] as [string, string]] : []),
+            ...(pageRoute ? [['data-ut-page-path', pageRoute] as [string, string]] : []),
           ];
           const missing = attributes
             .filter(([name]) => !findAttribute(opening, name))
@@ -582,7 +590,13 @@ export function materializeAppBuilderSectionModels(
       /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/i.test(path),
     );
     for (const path of sourcePaths) {
-      result[path] = materializeSectionRootIdentity(path, result[path] ?? '', implementations);
+      result[path] = materializeSectionRootIdentity(
+        path,
+        result[path] ?? '',
+        implementations,
+        path === page.filePath ? page.id : undefined,
+        path === page.filePath ? page.route : undefined,
+      );
     }
     const inspection = inspectAppBuilderPageSectionClosure(page.filePath, result, implementations, { allowNamedExports: true });
     if (inspection.issues.length || !inspection.sections.length) continue;

@@ -12,7 +12,7 @@ import { parseResourceProvenance } from '@/services/resources/resourceRuntime';
 import type { CatalogKind } from '@/platform/core/catalogSurfaceRegistry';
 import type { EditorTarget } from './editorCommandTypes';
 
-export const OBJECT_ID_VERSION = 'v1';
+export const OBJECT_ID_VERSION = 'v2';
 
 /** What the preview reports about a clicked element (serialisable). */
 export interface SelectionSnapshot {
@@ -26,6 +26,10 @@ export interface SelectionSnapshot {
   tag?: string | null;
   text?: string | null;
   projectId?: string | null;
+  revisionId?: string | null;
+  sourceHash?: string | null;
+  astIdentity?: string | null;
+  sourceRevisionId?: string | null;
 }
 
 export interface EditableObjectDescriptor {
@@ -39,12 +43,23 @@ export interface EditableObjectDescriptor {
   field: string | null;
   sourceLocator: string | null;
   instanceId: number | null;
+  revisionId: string | null;
+  sourceHash: string | null;
+  astIdentity: string | null;
+  sourceRevisionId: string | null;
   /** Why identity is uncertain, when ownerKind is 'unbound'. */
   reason?: string;
 }
 
 export function describeSelection(s: SelectionSnapshot): EditableObjectDescriptor {
-  const base = { pagePath: s.pagePath, sectionId: s.sectionId ?? null };
+  const base = {
+    pagePath: s.pagePath,
+    sectionId: s.sectionId ?? null,
+    revisionId: s.revisionId ?? null,
+    sourceHash: s.sourceHash ?? null,
+    astIdentity: s.astIdentity ?? null,
+    sourceRevisionId: s.sourceRevisionId ?? null,
+  };
   const ref = parseResourceProvenance(s.resourceMark);
   if (ref) {
     return {
@@ -59,7 +74,7 @@ export function describeSelection(s: SelectionSnapshot): EditableObjectDescripto
     const i = s.instanceIndex ?? 0;
     return {
       ...base,
-      objectId: `${OBJECT_ID_VERSION}:src:${s.pagePath}|${s.sourceLocator}|${i}`,
+      objectId: `${OBJECT_ID_VERSION}:src:${s.pagePath}|${s.sourceLocator}|${i}|${s.sourceHash ?? ''}|${s.astIdentity ?? ''}|${s.revisionId ?? ''}`,
       ownerKind: 'source', resourceKey: null, catalogKind: null, recordId: null, field: null,
       sourceLocator: s.sourceLocator, instanceId: i,
     };
@@ -95,6 +110,8 @@ export function descriptorToTarget(d: EditableObjectDescriptor, extra: Partial<E
     objectId: d.objectId, ownerKind: d.ownerKind,
     resourceKey: d.resourceKey, catalogKind: d.catalogKind, recordId: d.recordId, field: d.field,
     instanceId: d.instanceId, sourceLocator: d.sourceLocator,
+    revisionId: d.revisionId, sourceHash: d.sourceHash, astIdentity: d.astIdentity,
+    sourceRevisionId: d.sourceRevisionId,
     resourceMark: d.resourceKey && d.recordId
       ? `${d.resourceKey}#${d.recordId}${d.field ? `.${d.field}` : ''}`
       : extra.resourceMark ?? null,

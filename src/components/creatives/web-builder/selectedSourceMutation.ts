@@ -7,7 +7,14 @@ export type SelectionBoundsFinder = typeof findElementBoundsInJSX;
 export interface SourceSelection {
   tagName?: string;
   html?: string;
-  descriptor?: { sourceLocator?: string | null; instanceId?: number | null };
+  descriptor?: {
+    sourceLocator?: string | null;
+    instanceId?: number | null;
+    sourceHash?: string | null;
+    astIdentity?: string | null;
+    sourceRevisionId?: string | null;
+    revisionId?: string | null;
+  };
 }
 
 /** Exact source coordinates win over DOM positions; stale/protected locators never guess. */
@@ -18,9 +25,14 @@ export function selectedSourceFinder(selection?: SourceSelection | null): Select
     if (!parsed) return null;
     const resolved = resolvePreviewSource({
       locator, files: { [parsed.path]: source }, instanceIndex: selection?.descriptor?.instanceId,
+      sourceHash: selection?.descriptor?.sourceHash,
+      astIdentity: selection?.descriptor?.astIdentity,
+      sourceRevisionId: selection?.descriptor?.sourceRevisionId,
+      acceptedRevisionId: selection?.descriptor?.revisionId,
     });
     if (!resolved.span || resolved.protection?.directMutation === 'denied'
       || resolved.reason === 'repeated-instance-unknown'
+      || resolved.reason === 'repeated-source-template'
       || (selection?.tagName && resolved.tagName?.toLowerCase() !== selection.tagName.toLowerCase())) return null;
     // Dynamic children forbid literal text rewriting in mutateJSXText, not changing the container's style.
     return resolved.span;

@@ -30,6 +30,9 @@ export interface EditorTarget {
   instanceId?: number | null;
   /** Stable source locator, e.g. "/src/pages/Home.tsx:42:6". */
   sourceLocator?: string | null;
+  sourceHash?: string | null;
+  astIdentity?: string | null;
+  sourceRevisionId?: string | null;
   projectId?: string | null;
 }
 

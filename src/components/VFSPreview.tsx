@@ -581,6 +581,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         const result = await buildPreviewArtifactsAsync({
           sourceFiles: request.files,
           launchState: request.launchState,
+          acceptedRevisionId: revisionId,
           pendingSourceConflictPolicy: request.pendingSourceConflictPolicy,
         }, { signal: compileController.signal });
 

@@ -62,6 +62,36 @@ const PAGE_ROLE_SPECS: Partial<Record<PageRole, PageSpec>> = {
   shop:     { title: 'Shop',     path: '/shop',     purpose: 'shop', expectedSections: [] },
   immersive:{ title: 'Experience', path: '/experience', purpose: 'immersive', expectedSections: [] },
 };
+const PAGE_ROLE_ALIASES: Record<string, PageRole> = {
+  index: 'home', landing: 'services', service: 'services', room: 'services', rooms: 'services',
+  accommodation: 'services', accommodations: 'services', stay: 'services', stays: 'services',
+  portfolio: 'gallery', work: 'gallery', listings: 'gallery',
+  book: 'booking', 'book-now': 'booking', reserve: 'booking', reservations: 'booking',
+  thankyou: 'thank_you', 'thank-you': 'thank_you', 'booking-confirmation': 'thank_you', booking_confirmation: 'thank_you',
+  experience: 'immersive',
+};
+
+/** Resolve legacy route/page-type spellings to the topology's canonical role. */
+export function resolveTopologyPageRoleAlias(value: string): PageRole | null {
+  const key = value.trim().toLowerCase().replace(/\\/g, '/')
+    .replace(/\.(?:tsx?|jsx?)$/, '').split('/').filter(Boolean).pop()
+    ?.replace(/[\s_]+/g, '-') ?? '';
+  if (!key) return null;
+  const alias = PAGE_ROLE_ALIASES[key];
+  if (alias) return alias;
+  const normalized = key.replace(/-/g, '_') as PageRole;
+  return normalized in PAGE_ROLE_SPECS || normalized === 'home' || normalized === 'custom'
+    ? normalized
+    : null;
+}
+
+export function listTopologyPageRoleAliases(value: string): string[] {
+  const canonical = resolveTopologyPageRoleAlias(value);
+  if (!canonical) return [];
+  return [canonical, ...Object.entries(PAGE_ROLE_ALIASES)
+    .filter(([, target]) => target === canonical)
+    .map(([alias]) => alias)];
+}
 
 export function resolvePageSpecsForRoles(
   roles: readonly string[],
@@ -69,15 +99,16 @@ export function resolvePageSpecsForRoles(
 ): PageSpec[] {
   const profile = industryKey ? getIndustryProfile(industryKey) : undefined;
   return roles.flatMap((role) => {
+    const canonicalRole = resolveTopologyPageRoleAlias(role) ?? role as PageRole;
     // Preserve the selected semantic role while recovering the industry's
     // authored page identity. Example: contractor `gallery` => Projects
     // (/projects), real-estate `gallery` => Listings (/listings), restaurant
     // `services` => Menu (/menu). Falling back to PAGE_ROLE_SPECS keeps this
     // API safe for callers that intentionally operate without an industry.
     const industrySpec = profile?.defaultPages.find(
-      (candidate) => PURPOSE_TO_ROLE[candidate.purpose] === role,
+      (candidate) => PURPOSE_TO_ROLE[candidate.purpose] === canonicalRole,
     );
-    const spec = industrySpec ?? PAGE_ROLE_SPECS[role as PageRole];
+    const spec = industrySpec ?? PAGE_ROLE_SPECS[canonicalRole];
     return spec ? [{ ...spec, expectedSections: [...spec.expectedSections] }] : [];
   });
 }

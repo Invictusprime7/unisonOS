@@ -1,3 +1,4 @@
+import { resolveTopologyPageRoleAlias } from '@/platform/core/siteTopologyPlanner';
 /**
  * Universal industry composition registry — data only.
  * Adding an industry means adding profiles here; the planner never changes.
@@ -227,7 +228,7 @@ const ROLE_ALIASES: Record<string, string> = {
 
 export function normalizePageRole(role: string): string {
   const key = role.toLowerCase().trim().replace(/^\//, '').replace(/\s+/g, '-');
-  return ROLE_ALIASES[key] ?? (key || 'home');
+  return ROLE_ALIASES[key] ?? resolveTopologyPageRoleAlias(role) ?? (key || 'home');
 }
 
 export function listIndustryProfiles(industryId: string): IndustryPageCompositionProfile[] {

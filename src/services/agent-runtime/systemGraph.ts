@@ -5,6 +5,15 @@
  */
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import type { RuntimeManifest } from '@/types/runtimeManifest';
+import { listTopologyPageRoleAliases } from '@/platform/core/siteTopologyPlanner';
+
+export interface SystemGraphPageIdentity {
+  id: string;
+  path: string;
+  filePath?: string;
+  title?: string;
+  role?: string;
+}
 
 export interface GraphRevisionIdentity {
   id: string;
@@ -30,7 +39,7 @@ export interface GraphPage {
   componentIds: string[];
 }
 export interface GraphRoute { id: string; path: string; pageId: string | null; requiresAuth: boolean }
-export interface GraphComponent { id: string; name: string; sourcePath: string | null; usedByPageIds: string[] }
+export interface GraphComponent { id: string; name: string; aliases: string[]; sourcePath: string | null; usedByPageIds: string[] }
 export interface GraphBinding { id: string; intentId: string; pageId: string | null; target: string | null }
 export interface GraphCapability { id: string; capability: string; status: string | null }
 export interface GraphBackendAction {
@@ -86,6 +95,8 @@ export interface SystemGraphBackendActionInput {
 }
 export interface SystemGraphInput {
   files: Record<string, string>;
+  /** Canonical page identities supplied by an in-flight App Builder candidate. */
+  pageIdentities?: readonly SystemGraphPageIdentity[];
   revisionId?: string | null;
   snapshot?: Pick<SiteBundleSnapshot, 'snapshotId' | 'pageRegistry' | 'bindings' | 'businessSystem'> | null;
   runtimeManifest?: Pick<RuntimeManifest, 'routes' | 'dependencies'> | null;
@@ -108,11 +119,13 @@ export interface SystemGraph {
   diagnostics: GraphDiagnostic[];
   entities: GraphEditableEntity[];
   edges: GraphEdge[];
+  /** Alternate addresses mapped to canonical graph node IDs. */
+  aliases: Record<string, string>;
   /** Compatibility summary for existing UI consumers. */
   intentCount: number;
 }
 
-const SECTION_RE = /<section\b([^>]*)>/g;
+const SECTION_RE = /<(section|nav|header|footer)\b([^>]*)>/g;
 const INTENT_RE = /<([A-Za-z][\w.]*)\b([^<>]*?data-ut-intent=["']([^"']+)["'][^<>]*?)>([^<]{0,80})/g;
 const TARGET_RE = /data-ut-(?:target-page-id|path|target)=["']([^"']+)["']|\bhref=["']([^"']+)["']|\bto=["']([^"']+)["']/;
 const IMPORT_RE = /import\s+(?:([\w$]+)|\{([^}]+)\})\s+from\s+["']([^"']+)["']/g;
@@ -140,7 +153,7 @@ function fallbackRoute(path: string): string {
 }
 
 function pageIdForPath(
-  pages: Array<{ id: string; path: string; filePath?: string }>,
+  pages: readonly { id: string; path: string; filePath?: string }[],
   filePath: string,
 ): string {
   return pages.find((page) => page.filePath === filePath)?.id ?? `page:${filePath}`;
@@ -161,22 +174,60 @@ function intentsIn(source: string): GraphIntent[] {
   return intents;
 }
 
-function componentImports(source: string): Array<{ name: string; sourcePath: string | null }> {
-  const imports: Array<{ name: string; sourcePath: string | null }> = [];
+function resolveImportedFile(importerPath: string, specifier: string, files: Record<string, string>): string | null {
+  const rawBase = specifier.startsWith('@/')
+    ? `/src/${specifier.slice(2)}`
+    : specifier.startsWith('.')
+      ? [...importerPath.split('/').slice(0, -1), ...specifier.split('/')].reduce<string[]>((parts, segment) => {
+          if (!segment || segment === '.') return parts;
+          if (segment === '..') parts.pop();
+          else parts.push(segment);
+          return parts;
+        }, []).join('/')
+      : '';
+  if (!rawBase) return null;
+  const base = rawBase.startsWith('/') ? rawBase : `/${rawBase}`;
+  const candidates = [base, ...['.tsx', '.ts', '.jsx', '.js'].map((extension) => `${base}${extension}`),
+    ...['index.tsx', 'index.ts', 'index.jsx', 'index.js'].map((name) => `${base}/${name}`)];
+  return candidates.find((candidate) => candidate in files) ?? null;
+}
+
+function componentImports(source: string, importerPath: string, files: Record<string, string>): Array<{ name: string; aliases: string[]; sourcePath: string | null }> {
+  const imports: Array<{ name: string; aliases: string[]; sourcePath: string | null }> = [];
   for (const match of source.matchAll(IMPORT_RE)) {
     const specifier = match[3];
     if (!specifier.startsWith('.') && !specifier.startsWith('@/')) continue;
-    const names = match[1]
-      ? [match[1]]
-      : (match[2] ?? '').split(',').map((name) => name.trim().split(/\s+as\s+/i).pop() ?? '').filter(Boolean);
-    for (const name of names) imports.push({ name, sourcePath: specifier });
+    const sourcePath = resolveImportedFile(importerPath, specifier, files);
+    const moduleName = specifier.split('/').pop()?.replace(/\.(?:t|j)sx?$/, '') ?? '';
+    if (match[1]) {
+      imports.push({ name: moduleName || match[1], aliases: moduleName && moduleName !== match[1] ? [match[1]] : [], sourcePath });
+      continue;
+    }
+    for (const entry of (match[2] ?? '').split(',').map((name) => name.trim()).filter(Boolean)) {
+      const [name, alias] = entry.split(/\s+as\s+/i).map((part) => part.trim());
+      imports.push({ name, aliases: alias && alias !== name ? [alias] : [], sourcePath });
+    }
   }
   return imports;
 }
 
-function snapshotPages(snapshot: SystemGraphInput['snapshot']): Array<{ id: string; path: string; filePath?: string }> {
+function fallbackEditableEntityId(
+  path: string,
+  tagName: string,
+  identityParts: Array<string | null>,
+  occurrence: number,
+): string {
+  const stableParts = identityParts.filter((part): part is string => Boolean(part));
+  const identity = stableParts.length ? stableParts.join('\0') : tagName;
+  return `entity:${encodeURIComponent(path)}:${fnv1a(`${tagName}\0${identity}`)}:${occurrence}`;
+}
+
+function snapshotPages(snapshot: SystemGraphInput['snapshot']): SystemGraphPageIdentity[] {
   const pages = snapshot?.pageRegistry?.pages ?? {};
-  return Object.values(pages).map((page) => ({ id: String(page.pageId), path: String(page.path || '/'), filePath: page.filePath }));
+  return Object.values(pages).map((page) => ({
+    id: String(page.pageId), path: String(page.path || '/'), filePath: page.filePath,
+    title: page.title, role: page.pageRole ?? page.pageType,
+  }));
 }
 
 function packageDependencies(files: Record<string, string>): Record<string, string> {
@@ -190,7 +241,9 @@ function packageDependencies(files: Record<string, string>): Record<string, stri
 export function buildSystemGraph(input: Record<string, string> | SystemGraphInput): SystemGraph {
   const context = asInput(input);
   const files = context.files;
-  const snapshotPageRecords = snapshotPages(context.snapshot);
+  const snapshotPageRecords = context.pageIdentities?.length
+    ? context.pageIdentities
+    : snapshotPages(context.snapshot);
   const routeByFile = new Map(snapshotPageRecords.filter((page) => page.filePath).map((page) => [page.filePath!, page.path]));
   const pages: GraphPage[] = [];
   const components = new Map<string, GraphComponent>();
@@ -200,6 +253,7 @@ export function buildSystemGraph(input: Record<string, string> | SystemGraphInpu
   for (const path of Object.keys(files).sort()) {
     if (!/^\/src\/pages\/.+\.(t|j)sx$/.test(path)) continue;
     const source = files[path] ?? '';
+    const entityOccurrences = new Map<string, number>();
     for (const match of source.matchAll(EDITABLE_ENTITY_RE)) {
       const attrs = match[2];
       const table = ATTR(attrs, 'data-ut-source-table') ?? null;
@@ -214,8 +268,12 @@ export function buildSystemGraph(input: Record<string, string> | SystemGraphInpu
       const elementRole = ATTR(attrs, 'data-ut-role') ?? null;
       const intent = ATTR(attrs, 'data-ut-intent') ?? null;
       const targetPath = ATTR(attrs, 'data-ut-path') ?? ATTR(attrs, 'href') ?? ATTR(attrs, 'to') ?? null;
+      const entityIdentity = [table, rowId, field, bindingId, sectionId, componentType, componentInstanceId, registryKey, elementRole, intent, targetPath];
+      const fallbackKey = `${match[1]}\0${entityIdentity.filter(Boolean).join('\0')}`;
+      const occurrence = entityOccurrences.get(fallbackKey) ?? 0;
+      entityOccurrences.set(fallbackKey, occurrence + 1);
       entities.push({
-        id: explicitId ?? `entity:${path}:${match.index ?? 0}`,
+        id: explicitId ?? fallbackEditableEntityId(path, match[1], entityIdentity, occurrence),
         path, tagName: match[1], table, rowId, field, bindingId, sectionId,
         componentType, componentInstanceId, registryKey, elementRole, intent, targetPath,
       });
@@ -223,15 +281,17 @@ export function buildSystemGraph(input: Record<string, string> | SystemGraphInpu
     const starts = [...source.matchAll(SECTION_RE)];
     const sections = starts.map((match, index) => {
       const end = starts[index + 1]?.index ?? source.length;
-      const localId = ATTR(match[1], 'data-ut-section-id') ?? ATTR(match[1], 'id') ?? ATTR(match[1], 'aria-label') ?? `section-${index + 1}`;
+      const localId = ATTR(match[2], 'data-ut-section-id') ?? ATTR(match[2], 'id') ?? ATTR(match[2], 'aria-label') ?? `section-${index + 1}`;
       return { id: localId, nodeId: `section:${pageIdForPath(snapshotPageRecords, path)}:${localId}`, intents: intentsIn(source.slice(match.index ?? 0, end)) };
     });
     const intents = intentsIn(source);
     intents.forEach((intent) => allIntents.set(intent.id, intent));
     const pageId = pageIdForPath(snapshotPageRecords, path);
-    const componentIds = componentImports(source).map(({ name, sourcePath }) => {
+    const componentIds = componentImports(source, path, files).map(({ name, aliases, sourcePath }) => {
       const id = `component:${name}`;
-      const existing = components.get(id) ?? { id, name, sourcePath, usedByPageIds: [] };
+      const existing = components.get(id) ?? { id, name, aliases: [], sourcePath, usedByPageIds: [] };
+      existing.aliases = [...new Set([...existing.aliases, ...aliases])];
+      existing.sourcePath = existing.sourcePath ?? sourcePath;
       if (!existing.usedByPageIds.includes(pageId)) existing.usedByPageIds.push(pageId);
       components.set(id, existing);
       return id;
@@ -280,6 +340,39 @@ export function buildSystemGraph(input: Record<string, string> | SystemGraphInpu
   })).sort((left, right) => left.id.localeCompare(right.id));
   const dependencies = Object.entries({ ...packageDependencies(files), ...(context.runtimeManifest?.dependencies ?? {}) }).map(([name, version]) => ({ id: `dependency:${name}`, name, version: version || null })).sort((left, right) => left.id.localeCompare(right.id));
 
+  const aliases: Record<string, string> = {};
+  const registerAlias = (alias: string, canonicalId: string) => {
+    if (alias && alias !== canonicalId && !(alias in aliases)) aliases[alias] = canonicalId;
+  };
+  pages.forEach((page) => {
+    registerAlias(`page:${page.route}`, page.id);
+    registerAlias(`page:${page.name}`, page.id);
+    const pageIdentity = snapshotPageRecords.find((record) => record.id === page.id);
+    const role = pageIdentity?.role;
+    const title = pageIdentity?.title;
+    for (const value of [role, title]) {
+      if (!value) continue;
+      const aliasesForRole = listTopologyPageRoleAliases(value);
+      for (const alias of aliasesForRole) registerAlias(`page:${alias}`, page.id);
+      registerAlias(`page:${value}`, page.id);
+    }
+    for (const section of page.sections) {
+      registerAlias(`section:${page.route}#${section.id}`, section.nodeId);
+      registerAlias(`section:${page.id}#${section.id}`, section.nodeId);
+    }
+    for (const intent of page.intents) {
+      registerAlias(`button:${page.route}#${intent.intent}`, intent.id);
+      if (intent.label) registerAlias(`button:${page.route}#${intent.label}`, intent.id);
+    }
+  });
+  components.forEach((component) => {
+    for (const alias of component.aliases) registerAlias(`component:${alias}`, component.id);
+    if (component.sourcePath) {
+      const moduleName = component.sourcePath.split('/').pop()?.replace(/\.(?:t|j)sx?$/i, '');
+      if (moduleName) registerAlias(`component:${moduleName}`, component.id);
+    }
+  });
+
   const edges: GraphEdge[] = [];
   pages.forEach((page) => {
     const route = routes.find((candidate) => candidate.pageId === page.id);
@@ -299,6 +392,7 @@ export function buildSystemGraph(input: Record<string, string> | SystemGraphInpu
       const existing = components.get(componentId) ?? {
         id: componentId,
         name: entity.componentType,
+        aliases: [],
         sourcePath: null,
         usedByPageIds: [],
       };
@@ -343,6 +437,7 @@ export function buildSystemGraph(input: Record<string, string> | SystemGraphInpu
     diagnostics: [...(context.diagnostics ?? [])].sort((left, right) => left.id.localeCompare(right.id)),
     entities: entities.sort((left, right) => left.id.localeCompare(right.id)),
     edges,
+    aliases,
     intentCount: pages.reduce((count, page) => count + page.intents.length, 0),
   };
 }

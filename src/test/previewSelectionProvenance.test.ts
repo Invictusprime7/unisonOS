@@ -11,7 +11,8 @@ describe('preview selection provenance bridge', () => {
     const bridge = read('src/utils/sandpackFilePrep.ts');
     for (const attribute of [
       'data-ut-source-table', 'data-ut-row-id', 'data-ut-field',
-      'data-ut-component-id', 'data-ut-component-instance-id',
+      'data-ut-component-id', 'data-ut-component-instance-id', 'data-ut-source-ast',
+      'data-ut-source-hash', 'data-ut-source-revision',
       'data-ut-registry-key', 'data-ut-role', 'data-ut-entity', 'data-ut-source-locator',
     ]) {
       expect(bridge).toContain(attribute);

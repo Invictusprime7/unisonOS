@@ -792,6 +792,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       resourceMark: attrs['data-ut-resource'] || ancestors.resource || null,
       sourceLocator: ancestors.sourceLocator ?? null,
       instanceIndex: ancestors.repeatIndex ?? null,
+      revisionId: el.revisionId ?? null,
+      sourceHash: ancestors.sourceHash ?? null,
+      astIdentity: ancestors.astIdentity ?? null,
+      sourceRevisionId: ancestors.sourceRevisionId ?? null,
     });
     setSelectedHTMLElement({
       tagName: el.tagName,

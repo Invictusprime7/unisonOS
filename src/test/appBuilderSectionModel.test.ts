@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { inspectAppBuilderPageSectionClosure, inspectAppBuilderPageSections, materializeAppBuilderSectionModels } from '@/services/app-builder/appBuilderSectionModel';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
+import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 
 const implementations = {
   'navbar:standard': {
@@ -63,15 +64,24 @@ import Footer from "@/unison/design-sources/Footer";
 export default function Treatments(){return <><header><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{ links: [] }} /></header><main><section><Services sectionId="treatments:services:0" variantId="services:editorial-rows" props={{ headline: "Treatments", items: [{ title: "Facial", description: "Care" }] }} /></section></main><footer><Footer sectionId="site:footer" variantId="footer:columns" props={{ links: [] }} /></footer></>}`;
     const files = materializeAppBuilderSectionModels(
       { '/src/pages/treatments.tsx': source },
-      [{ id: 'treatments', filePath: '/src/pages/treatments.tsx' }],
+      [{ id: 'treatments', filePath: '/src/pages/treatments.tsx', route: '/treatments' }],
       implementations,
     );
     const page = files['/src/pages/treatments.tsx'];
 
-    expect(page).toContain('<header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard">');
-    expect(page).toContain('<section data-ut-section-id="treatments:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows">');
-    expect(page).toContain('<footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns">');
+    expect(page).toContain('<header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard" data-ut-entity-id="section:treatments:site:navbar" data-ut-page-id="treatments" data-ut-page-path="/treatments">');
+    expect(page).toContain('<section data-ut-section-id="treatments:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows" data-ut-entity-id="section:treatments:treatments:services:0" data-ut-page-id="treatments" data-ut-page-path="/treatments">');
+    expect(page).toContain('<footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns" data-ut-entity-id="section:treatments:site:footer" data-ut-page-id="treatments" data-ut-page-path="/treatments">');
     expect(inspectAppBuilderPageSectionClosure('/src/pages/treatments.tsx', files, implementations).issues).toEqual([]);
+    const graph = buildSystemGraph({
+      files,
+      pageIdentities: [{ id: 'treatments', path: '/treatments', filePath: '/src/pages/treatments.tsx', title: 'Treatments', role: 'services' }],
+    });
+    const servicesNode = graph.sections.find((section) => section.id === 'treatments:services:0');
+    expect(servicesNode?.nodeId).toBe('section:treatments:treatments:services:0');
+    expect(graph.entities.some((entity) => entity.id === servicesNode?.nodeId)).toBe(true);
+    expect(graph.aliases['section:/treatments#treatments:services:0']).toBe(servicesNode?.nodeId);
+    expect(graph.aliases['page:services']).toBe('treatments');
 
     const repaired = materializeAppBuilderSectionModels({
       ...files,

@@ -39,13 +39,15 @@ import { isLiveEditedVfsPath, resolveSnapshot } from '@/services/snapshotProject
 import { UNISON_VFS_STYLE_BRIDGE } from '@/utils/unisonVfsStyleBridge';
 import { buildGeneratedUiFoundation, normalizeFoundationLocalImports } from '@/platform/core/generatedUiFoundation';
 import { repairThemeFontImportLine } from '@/components/onboarding/themeFonts';
+import { createAstIdentityFromSignature, hashSourceIdentity } from '@/services/editor/sourceIdentity';
 
 const UI_MANIFEST_PATH = '/.unison/ui-manifest.json';
 
-function injectPreviewSourceLocators(source: string, filePath: string): string {
+function injectPreviewSourceLocators(source: string, filePath: string, sourceRevisionId?: string | null): string {
   if (source.length > 200_000) return source;
   const packages = (Babel as any).packages;
   const edits: Array<{ position: number; attribute: string }> = [];
+  const sourceHash = hashSourceIdentity(filePath, source);
   try {
     const ast = packages.parser.parse(source, { sourceType: 'unambiguous', plugins: ['jsx', 'typescript'] });
     packages.traverse.default(ast, {
@@ -57,10 +59,27 @@ function injectPreviewSourceLocators(source: string, filePath: string): string {
           attribute.type === 'JSXAttribute' && attribute.name?.name === 'data-ut-source-locator'
         ));
         const start = node.loc?.start;
-        if (hasLocator || !start || typeof node.end !== 'number') return;
+        if (!start || typeof node.end !== 'number' || typeof node.start !== 'number') return;
         const position = node.end - (node.selfClosing ? 2 : 1);
         const locator = `${filePath}:${start.line}:${start.column + 1}`;
-        edits.push({ position, attribute: ` data-ut-source-locator="${locator}"` });
+        const stableAttributes = node.attributes.flatMap((attribute: any): Array<readonly [string, string]> => {
+          if (attribute.type !== 'JSXAttribute' || typeof attribute.name?.name !== 'string') return [];
+          const value = attribute.value;
+          if (value?.type === 'StringLiteral') return [[attribute.name.name, value.value]];
+          if (value?.type === 'JSXExpressionContainer' && value.expression?.type === 'StringLiteral') {
+            return [[attribute.name.name, value.expression.value]];
+          }
+          return [];
+        });
+        const astIdentity = createAstIdentityFromSignature(filePath, tagName, stableAttributes);
+        const locatorAttribute = hasLocator ? '' : ` data-ut-source-locator="${locator}"`;
+        const revisionAttribute = sourceRevisionId
+          ? ` data-ut-source-revision="${sourceRevisionId}"`
+          : '';
+        edits.push({
+          position,
+          attribute: `${locatorAttribute} data-ut-source-ast="${astIdentity}" data-ut-source-hash="${sourceHash}"${revisionAttribute}`,
+        });
       },
     });
   } catch {
@@ -933,6 +952,9 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     surfaceId: string | null;
     componentType: string | null;
     componentInstanceId: string | null;
+    sourceHash: string | null;
+    astIdentity: string | null;
+    sourceRevisionId: string | null;
     artifactId: string | null;
     elementRole: string | null;
     entityKind: string | null;
@@ -958,6 +980,9 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
     let surfaceId: string | null = null;
     let componentType: string | null = null;
     let componentInstanceId: string | null = null;
+    let sourceHash: string | null = null;
+    let astIdentity: string | null = null;
+    let sourceRevisionId: string | null = null;
     let artifactId: string | null = null;
     let elementRole: string | null = null;
     let entityKind: string | null = null;
@@ -989,6 +1014,9 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
       if (!surfaceId) surfaceId = cur.getAttribute('data-ut-surface');
       if (!componentType) componentType = cur.getAttribute('data-ut-component-type') || cur.getAttribute('data-component');
       if (!componentInstanceId) componentInstanceId = cur.getAttribute('data-ut-component-id') || cur.getAttribute('data-ut-component-instance-id');
+      if (!sourceHash) sourceHash = cur.getAttribute('data-ut-source-hash');
+      if (!astIdentity) astIdentity = cur.getAttribute('data-ut-source-ast');
+      if (!sourceRevisionId) sourceRevisionId = cur.getAttribute('data-ut-source-revision');
       if (!artifactId) artifactId = cur.getAttribute('data-ut-registry-key');
       if (!elementRole) elementRole = cur.getAttribute('data-ut-role');
       if (!entityKind) entityKind = cur.getAttribute('data-ut-entity');
@@ -1035,6 +1063,9 @@ const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() 
       repeatIndex,
       structuralPath,
       sourceLocator,
+      sourceHash,
+      astIdentity,
+      sourceRevisionId,
       elementId,
       slotId,
       blockId,
@@ -4689,12 +4720,12 @@ function hashFilesRecord(files: Record<string, string>): string {
 
 export function prepareSandpackFiles(
   files: Record<string, string>,
-  options?: { strict?: boolean; entryPoint?: string; aesthetic?: string; themePresetId?: string | null; onProgress?: (phase: string, path?: string) => void }
+  options?: { strict?: boolean; entryPoint?: string; aesthetic?: string; themePresetId?: string | null; sourceRevisionId?: string | null; onProgress?: (phase: string, path?: string) => void }
 ): Record<string, string> {
   options?.onProgress?.('projecting runtime');
   const effectiveAesthetic = options?.themePresetId ? null : (options?.aesthetic || null);
   const preparedCacheKey =
-    `${hashFilesRecord(files)}::${options?.entryPoint || ''}::${options?.themePresetId || ''}::${effectiveAesthetic || ''}`;
+    `${hashFilesRecord(files)}::${options?.entryPoint || ''}::${options?.themePresetId || ''}::${effectiveAesthetic || ''}::${options?.sourceRevisionId || ''}`;
   const cachedPrepared = preparedFilesCache.get(preparedCacheKey);
   if (cachedPrepared) return { ...cachedPrepared };
   const inputSnapshotResolution = resolveSnapshot(files, null);
@@ -4823,7 +4854,7 @@ export function prepareSandpackFiles(
 
     // Fix imports in content to match flattened paths
     let processedContent = /\.(tsx|jsx)$/i.test(path) && !path.startsWith('/src/unison/')
-      ? injectPreviewSourceLocators(content, path)
+      ? injectPreviewSourceLocators(content, path, options?.sourceRevisionId)
       : content;
 
     // Repair legacy/generated payloads that serialized THEME as undefined/null.

@@ -27,6 +27,7 @@ import { createEmptyCreatorData } from '@/types/creatorData';
 import {
   planSiteTopology,
   populateRegistryFromTopology,
+  resolveTopologyPageRoleAlias,
   resolvePageSpecsForRoles,
   type GeneratedSitePlan,
 } from '@/platform/core/siteTopologyPlanner';
@@ -796,17 +797,15 @@ export function materializePlayground(
 // Helpers
 // ============================================================================
 
-/**
- * Role alias map: PlaygroundPageRole → topology PageRole
- * The capability resolver uses PlaygroundPageRole (e.g., 'thankyou', 'booking_confirmation')
- * while the topology planner uses PageRole (e.g., 'thank_you').
- * This map normalizes both directions for reliable lookups.
- */
-const ROLE_ALIASES: Record<string, string[]> = {
-  thankyou: ['thank_you'],
-  thank_you: ['thankyou'],
-  booking_confirmation: ['thank_you', 'thankyou'],
-};
+const LEGACY_ROLE_SPELLINGS = ['thankyou', 'booking_confirmation'];
+
+function roleAliasesFor(role: string): string[] {
+  const canonical = resolveTopologyPageRoleAlias(role);
+  if (!canonical) return [];
+  return [canonical, ...LEGACY_ROLE_SPELLINGS.filter(
+    (alias) => resolveTopologyPageRoleAlias(alias) === canonical,
+  )];
+}
 
 function buildRoleToPageIdMap(
   registry: PageRegistry,
@@ -829,16 +828,10 @@ function buildRoleToPageIdMap(
     }
   }
 
-  // Apply aliases: ensure both naming conventions resolve
-  for (const [alias, targets] of Object.entries(ROLE_ALIASES)) {
-    if (!map[alias]) {
-      for (const target of targets) {
-        if (map[target]) {
-          map[alias] = map[target];
-          break;
-        }
-      }
-    }
+  // Keep legacy role spellings pointed at the planner's canonical role ID.
+  for (const alias of LEGACY_ROLE_SPELLINGS) {
+    const canonical = resolveTopologyPageRoleAlias(alias);
+    if (canonical && map[canonical] && !map[alias]) map[alias] = map[canonical];
   }
 
   return map;
@@ -865,9 +858,8 @@ function ensureRequiredPages(
   }
 
   // Also consider aliases
-  for (const role of existingRoles) {
-    const aliases = ROLE_ALIASES[role];
-    if (aliases) aliases.forEach(a => existingRoles.add(a));
+  for (const role of [...existingRoles]) {
+    roleAliasesFor(role).forEach((alias) => existingRoles.add(alias));
   }
 
   // Page role → route/title/filePath defaults
@@ -891,8 +883,9 @@ function ensureRequiredPages(
   let addedCount = 0;
 
   for (const role of requiredPages) {
+    const canonicalRole = resolveTopologyPageRoleAlias(role) ?? role;
     if (role === 'home' || role === 'custom') continue; // home always exists
-    if (existingRoles.has(role)) continue;
+    if (existingRoles.has(role) || existingRoles.has(canonicalRole)) continue;
 
     const defaults = PAGE_DEFAULTS[role];
     if (!defaults) continue;
@@ -905,7 +898,7 @@ function ensureRequiredPages(
       title: defaults.title,
       path: defaults.route,
       pageType: defaults.pageType as any,
-      pageRole: role === 'services' ? 'service' : role === 'thankyou' || role === 'booking_confirmation' ? 'thank_you' : inferPageRoleFromType(defaults.pageType as any),
+      pageRole: canonicalRole === 'services' ? 'service' : canonicalRole === 'thank_you' ? 'thank_you' : inferPageRoleFromType(defaults.pageType as any),
       routeState: 'generated',
       publishedStatus: 'unpublished',
       setupStatus: 'not_started',
@@ -930,9 +923,7 @@ function ensureRequiredPages(
     };
 
     // Track for alias resolution
-    existingRoles.add(role);
-    const aliases = ROLE_ALIASES[role];
-    if (aliases) aliases.forEach(a => existingRoles.add(a));
+    roleAliasesFor(role).forEach((alias) => existingRoles.add(alias));
 
     // Also add to sitePlan.pages so buildRoleToPageIdMap can find it
     sitePlan.pages.push({
@@ -940,7 +931,7 @@ function ensureRequiredPages(
       name: defaults.title,
       title: defaults.title,
       route: defaults.route,
-      role: (role === 'thankyou' ? 'thank_you' : role === 'booking_confirmation' ? 'thank_you' : role) as any,
+      role: canonicalRole as any,
       filePath: defaults.filePath,
       visibleInNav: defaults.showInNav,
       isHome: false,

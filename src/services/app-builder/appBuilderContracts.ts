@@ -571,6 +571,8 @@ export interface AppBuildCandidate {
   provenance?: AppBuildCandidateProvenance;
   closure?: AppBuildCandidateClosureReport;
   designReport?: import('./appBuilderGenerationContext').DesignSourceUsageReport;
+  /** Derived read-only graph for the exact accepted candidate source. */
+  graph?: import('@/services/agent-runtime/systemGraph').SystemGraph;
 }
 
 export interface AppBuildCandidateProvenance {

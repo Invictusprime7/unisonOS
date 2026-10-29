@@ -20,6 +20,7 @@ import {
 export interface PreviewArtifactsOptions {
   sourceFiles: Record<string, string>;
   launchState?: LaunchState | null;
+  acceptedRevisionId?: string | null;
   baseDependencies?: Record<string, string>;
   pendingSourceConflictPolicy?: PendingSourceConflictPolicy;
 }
@@ -92,17 +93,18 @@ export function buildPreviewArtifacts(
   const {
     sourceFiles: rawSourceFiles,
     launchState = null,
+    acceptedRevisionId,
     baseDependencies = SANDPACK_PREVIEW_CORE_DEPENDENCIES,
     pendingSourceConflictPolicy = 'block',
   } = options;
 
-  const pre = prepareForCompile(rawSourceFiles, launchState, pendingSourceConflictPolicy);
+  const pre = prepareForCompile(rawSourceFiles, launchState, pendingSourceConflictPolicy, acceptedRevisionId);
   const rawSandpackFiles = pre.launchStateWithRecoveredTheme
     ? launchStateToSandpackFiles({
         launchState: pre.launchStateWithRecoveredTheme,
         vfsFiles: pre.sourceFiles,
       })
-    : prepareSandpackFiles(pre.sourceFiles, { themePresetId: pre.themePresetId });
+    : prepareSandpackFiles(pre.sourceFiles, { themePresetId: pre.themePresetId, sourceRevisionId: pre.acceptedRevisionId });
 
   return finishPreviewArtifacts(rawSandpackFiles, pre, baseDependencies);
 }
@@ -121,11 +123,12 @@ export async function buildPreviewArtifactsAsync(
   const {
     sourceFiles: rawSourceFiles,
     launchState = null,
+    acceptedRevisionId,
     baseDependencies = SANDPACK_PREVIEW_CORE_DEPENDENCIES,
     pendingSourceConflictPolicy = 'block',
   } = options;
 
-  const prepared = prepareForCompile(rawSourceFiles, launchState, pendingSourceConflictPolicy);
+  const prepared = prepareForCompile(rawSourceFiles, launchState, pendingSourceConflictPolicy, acceptedRevisionId);
   const previewSourceFiles = await refreshPreviewProjectMedia(prepared.sourceFiles, runtimeOptions.signal);
   const pre = { ...prepared, sourceFiles: previewSourceFiles };
   const rawSandpackFiles = pre.launchStateWithRecoveredTheme
@@ -136,8 +139,9 @@ export async function buildPreviewArtifactsAsync(
     : await runPrepareSandpackFilesOffThread({
         files: pre.sourceFiles,
         themePresetId: pre.themePresetId,
+        sourceRevisionId: pre.acceptedRevisionId,
         signal: runtimeOptions.signal,
-        fallbackCompute: (files, entryPoint, themePresetId) => prepareSandpackFiles(files, { entryPoint, themePresetId }),
+        fallbackCompute: (files, entryPoint, themePresetId, sourceRevisionId) => prepareSandpackFiles(files, { entryPoint, themePresetId, sourceRevisionId }),
       });
 
   return finishPreviewArtifacts(rawSandpackFiles, pre, baseDependencies);
@@ -147,6 +151,7 @@ function prepareForCompile(
   rawSourceFiles: Record<string, string>,
   launchState: LaunchState | null,
   pendingSourceConflictPolicy: PendingSourceConflictPolicy,
+  acceptedRevisionId?: string | null,
 ) {
   const initialResolution = resolveSnapshot(rawSourceFiles, launchState);
   const sourceFiles = projectSnapshotVfsFiles(rawSourceFiles, initialResolution, { pendingSourceConflictPolicy });
@@ -161,7 +166,13 @@ function prepareForCompile(
     ? { ...launchState, themePresetId }
     : launchState;
 
-  return { initialResolution, sourceFiles, themePresetId, launchStateWithRecoveredTheme };
+  return {
+    initialResolution,
+    sourceFiles,
+    themePresetId,
+    launchStateWithRecoveredTheme,
+    acceptedRevisionId: acceptedRevisionId ?? launchState?.revisionId ?? initialResolution.acceptedRevisionId ?? null,
+  };
 }
 
 function finishPreviewArtifacts(

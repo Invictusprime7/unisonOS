@@ -20,6 +20,15 @@ describe('editScopeResolver artifact wiring (Stage 1)', () => {
     expect(scope.scopeType).toBe('section');
   });
 
+  it('resolves a captured registry key to its canonical artifact id', () => {
+    const scope = resolveEditScope({
+      ancestors: { artifactId: 'HeroSection', sectionId: 'hero-1' },
+      selectedScope: 'section',
+    });
+    expect(scope.artifactId).toBe('hero');
+    expect(scope.aiEditScope).toBe('full');
+  });
+
   it('supports explicit page and site scopes with stable topology identities', () => {
     const pageScope = resolveEditScope({
       ancestors: { pageId: 'page-services', pagePath: '/services', sectionId: 'services' },
@@ -37,6 +46,11 @@ describe('editScopeResolver artifact wiring (Stage 1)', () => {
     expect(siteScope.targetId).toBe('site-1');
     expect(siteScope.riskLevel).toBe('high');
     expect(buildScopedPromptPrefix(siteScope)).toContain('Site scope may coordinate multiple routes');
+  });
+
+  it('does not emit placeholder IDs for selections without identity provenance', () => {
+    expect(() => resolveEditScope({ ancestors: {}, selectedScope: 'element' }))
+      .toThrow('has no canonical identity');
   });
 
   it('downgrades site scope without stable site identity and still caps content-only artifacts', () => {
@@ -86,6 +100,7 @@ describe('editScopeResolver artifact wiring (Stage 1)', () => {
     const ancestors: ScopeAncestors = {
       sectionId: 'custom-1',
       sectionType: 'some-future-section',
+      pagePath: '/custom',
       clickedTag: 'div',
     };
     const scope = resolveEditScope({ ancestors, selectedScope: 'page' });

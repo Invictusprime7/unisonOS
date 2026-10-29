@@ -200,6 +200,12 @@ describe('UnisonAppBuilder facade', () => {
     expect(result.candidate.status).toBe('ready-for-commit');
     expect(result.candidateFiles['/src/pages/Home.tsx']).toContain('data-ut-cta="icon.search"');
     expect(result.candidate.closure?.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
+    expect(result.candidate.graph?.pages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'home', route: '/' }),
+    ]));
+    expect(result.candidate.graph?.aliases['page:/']).toBe('home');
+    expect(authorSite.mock.calls[0]?.[0].runtimeContextForPage('home'))
+      .toContain('CANONICAL PAGE NODE: persist page ID "home"');
   });
 
   it('normalizes registered section dispatchers before per-page candidate gates run', async () => {

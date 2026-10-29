@@ -1,3 +1,4 @@
+import { resolveTopologyPageRoleAlias } from '@/platform/core/siteTopologyPlanner';
 import { describe, expect, it } from 'vitest';
 import { commitToPipeline } from '@/platform/core/commitToPipeline';
 import { compilePlayground } from '@/services/playgroundCompiler';
@@ -24,6 +25,13 @@ function launch(industryOverlay: 'real_estate', templateId: string) {
 }
 
 describe('immersive page role wiring (all industries)', () => {
+    it('normalizes route and legacy role aliases to canonical topology roles', () => {
+      expect(resolveTopologyPageRoleAlias('/rooms')).toBe('services');
+      expect(resolveTopologyPageRoleAlias('accommodation')).toBe('services');
+      expect(resolveTopologyPageRoleAlias('booking_confirmation')).toBe('thank_you');
+      expect(resolveTopologyPageRoleAlias('/experience')).toBe('immersive');
+    });
+
   it('registers the immersive page with a classified role at launch', () => {
     const launched = launch('real_estate', 'real-estate-premium');
     const pages = Object.values(launched.playground.pageRegistry.pages);

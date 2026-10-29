@@ -133,8 +133,9 @@ export function resolveEditScope(input: ResolveEditScopeInput): EditScope {
   let scopeType: EditScopeType = selectedScope || defaultScopeFor(ancestors);
 
   // Resolve the clicked artifact from whichever identity the DOM captured.
-  // First writer wins, most specific first: componentType > sectionType > surfaceId.
-  const resolved = [ancestors.componentType, ancestors.sectionType, ancestors.surfaceId]
+  // Registry keys are canonical aliases captured by the preview; fall back to
+  // component and section spellings for older generated markup.
+  const resolved = [ancestors.artifactId, ancestors.componentType, ancestors.sectionType, ancestors.surfaceId]
     .filter((spelling): spelling is string => Boolean(spelling))
     .map((spelling) => resolveArtifact(spelling))
     .find((artifact) => artifact !== null) ?? null;
@@ -151,21 +152,25 @@ export function resolveEditScope(input: ResolveEditScopeInput): EditScope {
   }
 
   let targetId = '';
+  const requireTarget = (value: string | null | undefined, kind: EditScopeType): string => {
+    if (value) return value;
+    throw new Error(`Selected ${kind} has no canonical identity. Re-select it with page or source provenance before editing.`);
+  };
   switch (scopeType) {
     case 'element':
-      targetId = ancestors.elementId || ancestors.slotId || ancestors.blockId || ancestors.sectionId || 'unknown-element';
+      targetId = requireTarget(ancestors.elementId || ancestors.slotId || ancestors.blockId || ancestors.sectionId || ancestors.sourceLocator || ancestors.pageId || ancestors.pagePath, scopeType);
       break;
     case 'block':
-      targetId = ancestors.blockId || ancestors.slotId || ancestors.sectionId || 'unknown-block';
+      targetId = requireTarget(ancestors.blockId || ancestors.slotId || ancestors.sectionId || ancestors.sourceLocator || ancestors.pageId || ancestors.pagePath, scopeType);
       break;
     case 'section':
-      targetId = ancestors.sectionId || ancestors.pageId || 'unknown-section';
+      targetId = requireTarget(ancestors.sectionId || ancestors.pageId || ancestors.pagePath || ancestors.sourceLocator, scopeType);
       break;
     case 'page':
-      targetId = ancestors.pageId || ancestors.pagePath || 'unknown-page';
+      targetId = requireTarget(ancestors.pageId || ancestors.pagePath || ancestors.sourceLocator, scopeType);
       break;
     case 'site':
-      targetId = ancestors.siteId || 'unknown-site';
+      targetId = requireTarget(ancestors.siteId || ancestors.pageId || ancestors.pagePath || ancestors.sourceLocator, scopeType);
       break;
   }
 

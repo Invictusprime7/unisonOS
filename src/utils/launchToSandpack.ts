@@ -130,6 +130,7 @@ export function launchStateToSandpackFiles(
     entryPoint,
     aesthetic: launchState.aesthetic,
     themePresetId: resolution.themePresetId,
+    sourceRevisionId: launchState.revisionId,
   });
   assertNoMinimalFallbackPreview(previewFiles, resolution, 'Launch preview compiler');
 
@@ -156,11 +157,13 @@ export async function launchStateToSandpackFilesAsync(
     files,
     entryPoint,
     themePresetId: resolution.themePresetId,
+    sourceRevisionId: launchState.revisionId,
     signal: options.signal,
-    fallbackCompute: (fallbackFiles, fallbackEntryPoint, fallbackThemePresetId) => prepareSandpackFiles(fallbackFiles, {
+    fallbackCompute: (fallbackFiles, fallbackEntryPoint, fallbackThemePresetId, sourceRevisionId) => prepareSandpackFiles(fallbackFiles, {
       entryPoint: fallbackEntryPoint,
       aesthetic: launchState.aesthetic,
       themePresetId: fallbackThemePresetId,
+      sourceRevisionId,
     }),
   });
   assertNoMinimalFallbackPreview(previewFiles, resolution, 'Launch preview compiler');

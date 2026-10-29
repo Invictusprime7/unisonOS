@@ -7,6 +7,7 @@ import { materializeDesignSources, type DesignSourceMaterialization } from './de
 import { getAllIndustries, getIndustryProfile } from '@/platform/core/industryMatrix';
 import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
 import { listResources, type ContentTypeRow } from '@/services/resources/resourceRegistry';
+import { listTopologyPageRoleAliases } from '@/platform/core/siteTopologyPlanner';
 
 export interface AppBuilderGenerationContext {
   contract: AppBuildContract;
@@ -190,7 +191,17 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
         'Complete every selected commerce page and preserve the registered checkout CTA and pay.checkout intent. Do not invent provider credentials or claim transactions are enabled until payment setup is complete.',
       ].join('\n')
     : '';
-  const compose = (modules: string) => [
+  const pageIdentityContext = (pageId: string): string => {
+    const page = contract.topology.sitePlan.pages.find((candidate) => candidate.id === pageId);
+    if (!page) return '';
+    const roleAliases = listTopologyPageRoleAliases(page.role);
+    return [
+      `CANONICAL PAGE NODE: persist page ID "${page.id}"; route "${page.route}" and role aliases ${roleAliases.join(', ') || page.role} resolve to this same node.`,
+      `For each certified root section, use section ID stable across copy/layout edits; emit data-ut-entity-id="section:${page.id}:<sectionId>", data-ut-page-id="${page.id}", and data-ut-page-path="${page.route}". Never use titles, array indexes, or source offsets as persisted IDs.`,
+    ].join('\n');
+  };
+  const compose = (modules: string, pageId?: string) => [
+    pageId ? pageIdentityContext(pageId) : '',
     business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '',
     'PERSISTABLE SECTION CONTRACT: every page-level body <section>, shared <header> navbar, and shared <footer> must carry literal stable data-ut-section-id, data-ut-section-type, and data-ut-variant values. Use site:navbar and site:footer as the shared chrome IDs across pages. Import the default family dispatcher from its certified @/unison/design-sources/<Family> module and render exactly one per root with sectionId equal to the root data-ut-section-id, variantId equal to the root data-ut-variant, and a JSON-serializable props={{...}} object. Keep existing data-ut-intent, data-ut-cta, data-ut-resource, slot, and registered component markers inside the root; never replace or regenerate those bindings when changing visual layout.',
     registeredComponentContext,
@@ -215,7 +226,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     designSources,
     materialization,
     runtimeContext: compose(renderDesignSourceModules(materialization)),
-    runtimeContextForPage: (pageId) => compose(renderDesignSourceModules(materialization, new Set(designSources.eligibleByPage[pageId] ?? []))),
+    runtimeContextForPage: (pageId) => compose(renderDesignSourceModules(materialization, new Set(designSources.eligibleByPage[pageId] ?? [])), pageId),
   };
 }
 

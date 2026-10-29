@@ -57,10 +57,34 @@ describe('canonical editable entity runtime', () => {
 
   it('classifies topology, behavior, presentation, and content selections into their permitted lanes', () => {
     const graph = buildSystemGraph({ '/src/pages/Home.tsx': 'export default function Home(){ return <main /> }' });
-    expect(resolveEditableEntity({ graph, selectedElement: { clickedTag: 'a', targetPath: '/' } }).kind).toBe('topology');
-    expect(resolveEditableEntity({ graph, selectedElement: { primaryIntent: 'booking.create' } }).allowedMutationLanes).toEqual(['bindingOps']);
-    expect(resolveEditableEntity({ graph, selectedElement: { clickedTag: 'img' } }).allowedMutationLanes).toEqual(['presentationOps', 'fileOps']);
-    expect(resolveEditableEntity({ graph, selectedElement: { clickedTag: 'h1' } }).kind).toBe('content');
+    expect(resolveEditableEntity({ graph, selectedElement: { clickedTag: 'a', targetPath: '/', pagePath: '/src/pages/Home.tsx' } }).kind).toBe('topology');
+    expect(resolveEditableEntity({ graph, selectedElement: { primaryIntent: 'booking.create', pagePath: '/src/pages/Home.tsx' } }).allowedMutationLanes).toEqual(['bindingOps']);
+    expect(resolveEditableEntity({ graph, selectedElement: { clickedTag: 'img', pagePath: '/src/pages/Home.tsx', selector: 'img' } }).allowedMutationLanes).toEqual(['presentationOps', 'fileOps']);
+    expect(resolveEditableEntity({ graph, selectedElement: { clickedTag: 'h1', pagePath: '/src/pages/Home.tsx', selector: 'h1' } }).kind).toBe('content');
+  });
+
+  it('creates canonical IDs and resolves component and registry aliases', () => {
+    const graph = buildSystemGraph({ '/src/pages/Contact.tsx': 'export default function Contact(){ return <main /> }' });
+    const entity = resolveEditableEntity({
+      graph,
+      selectedElement: {
+        pagePath: '/src/pages/Contact.tsx',
+        sectionId: 'contact-form',
+        componentType: 'intent-contact-form',
+        componentInstanceId: 'contact-1',
+        registryKey: 'ContactForm',
+      },
+    });
+    expect(entity.id).toBe('entity:component:%2Fsrc%2Fpages%2FContact.tsx:contact-form:contact-1');
+    expect(entity.componentType).toBe('contact-form');
+    expect(entity.artifactId).toBe('contact');
+    expect(entity.provenance.registryKey).toBe('ContactForm');
+  });
+
+  it('does not create an entity with a fabricated unknown ID', () => {
+    const graph = buildSystemGraph({ '/src/pages/Home.tsx': 'export default function Home(){ return <main /> }' });
+    expect(() => resolveEditableEntity({ graph, selectedElement: { clickedTag: 'h1' } }))
+      .toThrow('has no canonical identity');
   });
 
   it('rejects a stale selected entity rather than targeting a newer revision', () => {
@@ -78,6 +102,17 @@ describe('canonical editable entity runtime', () => {
       expect.objectContaining({ from: 'product-card', to: 'table:products', kind: 'data_from' }),
       expect.objectContaining({ from: 'product-card', to: 'column:products.name', kind: 'field_from' }),
     ]));
+  });
+
+  it('derives stable graph entity IDs for legacy markup without explicit IDs', () => {
+    const first = buildSystemGraph({
+      '/src/pages/Home.tsx': '<button data-ut-intent="booking.create" data-ut-role="primary-action">Book</button>',
+    });
+    const shifted = buildSystemGraph({
+      '/src/pages/Home.tsx': '<!-- layout change -->\n<button data-ut-intent="booking.create" data-ut-role="primary-action">Book</button>',
+    });
+    expect(first.entities[0].id).toBe(shifted.entities[0].id);
+    expect(first.entities[0].id).not.toContain('unknown');
   });
 
   it('projects component, registry, navigation, and intent ownership for a rendered action', () => {

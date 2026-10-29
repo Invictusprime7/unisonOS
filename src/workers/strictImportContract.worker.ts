@@ -38,6 +38,7 @@ workerScope.onmessage = async (event) => {
     const files = prepareSandpackFiles(request.files, {
       entryPoint: request.entryPoint,
       themePresetId: request.themePresetId,
+      sourceRevisionId: request.sourceRevisionId,
       strict: true,
       onProgress: progress,
     });
