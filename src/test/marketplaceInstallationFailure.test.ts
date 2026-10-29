@@ -21,7 +21,7 @@ describe('marketplace installation failure classification', () => {
     });
     expect(message).toContain('Gemini did not finish');
     expect(message).toContain('AI provider reported insufficient credits');
-    expect(message).toContain('backup is not set up');
+    expect(message).toContain('No direct Lovable AI gateway key is configured');
     expect(message).not.toContain('section model');
   });
   it('names depleted Google AI Studio prepaid credits on the Gemini key', () => {
@@ -47,14 +47,14 @@ describe('marketplace installation failure classification', () => {
     expect(message.split('Missing section identity')).toHaveLength(2);
   });
 });
-describe('installationFailureMessage backup password mismatch', () => {
-  it('names the rejected backup password instead of only blaming Gemini credits', () => {
+describe('installationFailureMessage direct gateway authentication', () => {
+  it('names the rejected direct gateway key instead of only blaming Gemini credits', () => {
     const message = installationFailureMessage({
       stopReason: 'provider-error',
       candidate: { diagnostics: [] },
       outcomes: [{ status: 'failed', reason: 'credits', errors: ['gemini-3.8-flash: 402 prepayment credits are depleted | Managed gateway fallback: 401 {"error":"Unauthorized"}'] }],
     });
-    expect(message).toMatch(/refused the backend password/);
+    expect(message).toMatch(/LOVABLE_API_KEY/);
     expect(message).toMatch(/run out of prepaid credits/);
   });
 });

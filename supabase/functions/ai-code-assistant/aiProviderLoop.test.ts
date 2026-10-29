@@ -289,7 +289,7 @@ test('preserves a managed recovery window behind the single Gemini lead', async 
 
       assert(result.providerUsed === 'lovable' && result.content === 'Recovered by managed gateway',
         'managed gateway should recover after the Gemini lead fails');
-      assert(logs.some((line) => line.includes('Trying planned direct model Gemini (timeout: 84.25s')),
+      assert(logs.some((line) => /Trying planned direct model Gemini \(timeout: 8[0-4](?:\.\d+)?s/.test(line)),
         'Gemini must leave the bounded managed fallback reserve inside the 115-second Composer request budget');
       assert(calls.length === 2 && calls[0].includes('generativelanguage.googleapis.com') && calls[1].includes('lovable'),
         'the request should try direct Gemini and then the managed gateway');

@@ -18,14 +18,10 @@ type EnvReader = (name: string) => string | undefined;
 import { DEFAULT_GEMINI_GATEWAY_MODEL, configuredGeminiModel } from '../geminiModel.ts';
 
 const LOVABLE_GATEWAY_CHAT_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-// Backends without their own LOVABLE_API_KEY (UNISON) reach the managed
-// gateway through the Lovable Cloud `managed-ai-relay`, authenticated by a
-// shared MANAGED_AI_RELAY_SECRET.
-const DEFAULT_MANAGED_AI_RELAY_URL = "https://oruwtgdjurstvhgqcvbv.supabase.co/functions/v1/managed-ai-relay";
 
-/** True when the managed gateway is reachable directly or via the relay. */
-export function hasManagedGatewayAccess(): boolean {
-  return Boolean(Deno.env.get("LOVABLE_API_KEY") || Deno.env.get("MANAGED_AI_RELAY_SECRET"));
+/** True when this project has its own direct Lovable gateway credential. */
+export function hasLovableGatewayAccess(): boolean {
+  return Boolean(Deno.env.get("LOVABLE_API_KEY"));
 }
 const GEMINI_CHAT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image';
@@ -201,10 +197,7 @@ async function callChatCompletionTransport(
   signal?: AbortSignal,
   retryRateLimits = true,
 ): Promise<Response> {
-  const apiKey = provider === "lovable"
-      ? (Deno.env.get("LOVABLE_API_KEY") || Deno.env.get("MANAGED_AI_RELAY_SECRET"))
-      : readGeminiApiKey();
-  const viaRelay = provider === "lovable" && !Deno.env.get("LOVABLE_API_KEY");
+  const apiKey = provider === "lovable" ? Deno.env.get("LOVABLE_API_KEY") : readGeminiApiKey();
   if (!apiKey) throw new Error(`${provider} is not configured`);
 
   const model = modelFor(provider, request.model);
@@ -216,16 +209,12 @@ async function callChatCompletionTransport(
     body.reasoning_effort = "low";
   }
   // Apply limits to the actual wire model, including deployment overrides.
-  const url = viaRelay
-    ? (Deno.env.get("MANAGED_AI_RELAY_URL") || DEFAULT_MANAGED_AI_RELAY_URL)
-    : provider === "lovable"
+  const url = provider === "lovable"
     ? LOVABLE_GATEWAY_CHAT_URL
       : GEMINI_CHAT_URL;
-  const headers: Record<string, string> = viaRelay
-    ? { "x-managed-ai-relay-secret": apiKey, "Content-Type": "application/json" }
-    : provider === "lovable"
-      ? { "Lovable-API-Key": apiKey, "Content-Type": "application/json" }
-      : { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+  const headers: Record<string, string> = provider === "lovable"
+    ? { "Lovable-API-Key": apiKey, "Content-Type": "application/json" }
+    : { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
 
   const requestInit: RequestInit = {
     method: "POST",
@@ -385,7 +374,7 @@ export async function createLastResortGatewayChatCompletion(
   request: ChatCompletionRequest,
   signal?: AbortSignal,
 ): Promise<Response> {
-  if (!hasManagedGatewayAccess()) {
+  if (!hasLovableGatewayAccess()) {
     throw new Error("Managed AI gateway is not configured");
   }
   return callChatCompletionTransport("lovable", request, signal);

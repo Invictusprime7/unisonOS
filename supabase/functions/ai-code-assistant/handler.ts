@@ -261,10 +261,10 @@ export async function handleAssistant(req: Request, pageGenerationOnly = false):
           { errorType: "credits", details: message.slice(0, 600) },
         );
       } else if (configuredNone) {
-        userMessage = "AI providers are not configured on the backend. Please verify the managed AI gateway secret is available.";
+        userMessage = "AI providers are not configured on the backend. Configure a supported provider API key and try again.";
         errorType = "provider_not_configured";
       } else if (hasAuthFailure) {
-        userMessage = "Managed AI gateway authentication failed. The backend key is unavailable or stale; rotate the managed gateway key and redeploy the AI functions.";
+        userMessage = "Configured AI provider authentication failed. Verify the provider API key and try again.";
         errorType = "provider_auth";
       } else {
         userMessage = details

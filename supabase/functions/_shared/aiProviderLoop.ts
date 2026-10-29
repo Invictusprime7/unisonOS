@@ -7,7 +7,7 @@ import { isGeminiExclusiveProviderMode, type ProviderPlan } from "./providerRout
 import { extractThinkingTags } from "./responseNormalizer.ts";
 import {
   createLastResortGatewayChatCompletion,
-  hasManagedGatewayAccess,
+  hasLovableGatewayAccess,
   createPlannedChatCompletion,
   toAnthropicMessages,
 } from "../_shared/ai/providerClient.ts";
@@ -220,7 +220,7 @@ export async function runProviderLoop(opts: {
   const hasDirectGemini = allowDirectFallbacks && !directOnCooldown() && Boolean(Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('UNISONGEMINI_API_KEY'));
   const hasDirectAnthropic = !guestOnly && !geminiOnlyTurn && allowDirectFallbacks && Boolean(Deno.env.get('ANTHROPIC_API_KEY'));
   // Guest actions use only models with a configured, enforceable price schedule.
-  const hasLastResortGateway = !guestOnly && allowDirectFallbacks && hasManagedGatewayAccess();
+  const hasLastResortGateway = !guestOnly && allowDirectFallbacks && hasLovableGatewayAccess();
   // The managed gateway is the final safety net; a 20 s slice is not enough for
   // a real generation, so reserve a usable window for it.
   const lastResortReserveMs = hasLastResortGateway ? 30_000 : 0;
