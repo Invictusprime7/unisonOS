@@ -248,6 +248,15 @@ describe('persisted publish parity (M1 exit condition)', () => {
 
     expect(result.status).toBe('success');
     const submitted = publishedPayload();
+    const publishRequest = mocks.invoke.mock.calls.find(([name]) => name === 'publish-site')?.[1] as {
+      body: { projectId: string; canonicalRevision: { projectId: string; revisionId: string; vfsHash: string } };
+    };
+    expect(publishRequest.body).toMatchObject({
+      projectId: 'project-1',
+      canonicalRevision: {
+        projectId: 'project-1', revisionId: 'revision-ai-authored', vfsHash: 'accepted-vfs-hash',
+      },
+    });
     expect(submitted['src/pages/Home.tsx']).toBe(accepted['/src/pages/Home.tsx']);
     expect(submitted['src/components/EditorialHero.tsx']).toBe(accepted['/src/components/EditorialHero.tsx']);
     expect(submitted['src/pages/Home.tsx']).not.toContain('uncommitted caller layout');
