@@ -55,7 +55,7 @@ test('Composer image references survive provider fallback and format repair end 
   });
 });
 
-test('Gemini-primary App Builder turns fall back to Lovable when available', async () => {
+test('Gemini-primary App Builder turns use OpenAI then Lovable fallbacks', async () => {
   await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test', OPENAI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
     const calls: string[] = [];
     let geminiCalls = 0;
@@ -100,13 +100,13 @@ test('Gemini-primary App Builder turns fall back to Lovable when available', asy
     });
 
     assert(providerPlan.primaryProvider === 'gemini', 'Gemini must remain primary');
-    assert(providerPlan.geminiOnly === true, 'App Builder must exclude other direct providers');
+    assert(providerPlan.geminiOnly === false, 'Gemini-primary mode must retain configured fallbacks');
     assert(result.providerUsed === 'lovable' && result.content === 'Recovered page', 'Lovable should recover the failed Gemini request');
     assert(result.modelUsed === 'google/gemini-3.8-flash', 'managed backup must also use Gemini');
-    assert(calls.length === 2
+    assert(calls.length === 3
       && calls[0].includes('generativelanguage.googleapis.com')
-      && calls[1].includes('lovable'), 'direct Gemini then managed Gemini only');
-    assert(!calls.some(url => ['api.openai.com', 'api.anthropic.com'].includes(new URL(url).hostname)), 'other provider keys must not be used');
+      && calls[1].includes('api.openai.com')
+      && calls[2].includes('lovable'), 'direct Gemini, OpenAI fallback, then managed gateway');
 
     calls.length = 0;
     const nextResult = await runProviderLoop({
@@ -160,7 +160,7 @@ test('preserves tool-only fallback success after billing exhaustion and a model 
     assert(result.modelUsed === 'openai/gpt-4o-mini', 'successful fallback must be returned');
     assert(result.toolCalls?.[0].id === 'call_test', 'tool call must survive');
     assert(calls[0] === 'gemini-3.8-flash' && calls.length === 3, 'Gemini first, then no further providers after tool-only success: ' + calls.join(','));
-    const body = buildResponseBody(result);
+    const body = buildResponseBody({ ...result, generatedImageUrl: '' });
     assert(Array.isArray(body.tool_calls) && body.tool_calls.length === 1, 'HTTP response must forward the tool call');
   } finally {
     globalThis.fetch = originalFetch;
@@ -233,7 +233,6 @@ test('guest metering pins generation to priced Gemini and reconciles returned us
       tools: [{ type: 'function', function: { name: 'updateCatalogRow', parameters: { type: 'object' } } }],
       providerPlan: {
         ...hybridPlan,
-        gatewayLeads: true,
         raceGateway: true,
       },
       guestUsageMeter: {

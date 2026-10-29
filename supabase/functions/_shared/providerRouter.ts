@@ -425,14 +425,19 @@ export function buildProviderPlan(
     && Boolean(readEnv('GEMINI_API_KEY') || readEnv('GOOGLE_API_KEY') || readEnv('UNISONGEMINI_API_KEY'));
   const isComposerTask = task.type === "site_page_author" || task.type === "site_page_repair" || task.type === "builder_source_edit";
   if (isComposerTask) {
-    // Owner policy: authored pages and source repairs use the owner's Gemini
-    // key, even when older tabs retain an OpenAI model selection. The loop's
-    // managed Gemini backup stays enabled independently of direct providers.
+    // Keep Gemini first for authored pages, but preserve configured OpenAI and
+    // the managed gateway as fallbacks unless deployment policy is exclusive.
     const geminiModel = m(composerGeminiModel(readEnv), Math.min(48_000, overrides?.maxTokens ?? 48_000));
-    plan.gatewayModels = [geminiModel];
+    const openAiFallbackAvailable = !isGeminiExclusiveProviderMode(readEnv)
+      && Boolean(readEnv('OPENAI_API_KEY'));
+    plan.gatewayModels = [
+      geminiModel,
+      ...(openAiFallbackAvailable ? [m(MODELS.gpt41, Math.min(16_384, overrides?.maxTokens ?? 16_384))] : []),
+    ];
     plan.primaryProvider = 'gemini';
-    plan.geminiOnly = true;
+    plan.geminiOnly = isGeminiExclusiveProviderMode(readEnv);
     plan.raceGateway = false;
+    if (openAiFallbackAvailable) plan.fallbackReserveMs = 30_000;
   } else if (!hasExplicitModel) {
     plan.primaryProvider = wizardGeminiConfigured
       ? 'gemini'
