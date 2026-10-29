@@ -87,7 +87,7 @@
 
 ## Active: Web Builder browser startup
 - [x] Replace Babel's Node-only breaking-mode flag without exposing host environment variables
-- [x] Verify Babel initialization without `process` in isolated browser bundles, 22 editor regressions, authority lint, and live Builder startup with zero page errors; saved-project content remains blocked by the authoritative-session issue below
+- [x] Verify Babel initialization without `process` in isolated browser bundles, 22 editor regressions, authority lint, live Builder startup, and signed-in Lowtide House draft hydration; fresh generation and durable save/reopen acceptance remain open below
 
 ## Active: Canonical page-target binding closure
 - [x] Match existing AI-authored React Router controls by canonical `data-ut-target-page-id` or registered route before label heuristics; stamp the binding ID and CTA marker in place without duplicating the authored link.
