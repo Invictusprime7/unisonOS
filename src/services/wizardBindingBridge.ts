@@ -123,7 +123,7 @@ function resolveBindingFilePath(files: Record<string, string>, page: BuilderPage
 function getSlotMarkers(binding: PlaygroundBinding): string[] {
   const section = binding.sourceSection as string | undefined;
   const slot = binding.sourceSlot as string | undefined;
-  const intent = resolvePlaygroundBindingDomIntent(binding);
+  const intent = getDomIntent(binding);
 
   if (intent === 'nav.goto') return ['cta.nav-link'];
   if (intent === 'cart.checkout') return ['cta.checkout'];
