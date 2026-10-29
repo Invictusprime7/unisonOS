@@ -17,7 +17,7 @@ import { AI_AUTHORED_MARKER } from '@/contracts/aiComposerContract';
 import type { ResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import { projectSiteDesignContract } from '@/services/launch/siteDesignContract';
 import type { AIComposerRequest } from '@/contracts/aiComposerContract';
-import { runComposerRepairLoop, MIN_REPAIR_WINDOW_MS, type ComposerInvoke, type ComposerLoopResult, type ComposerLoopResume, type ComposerStopReason } from '@/services/builder/aiRepairLoop';
+import { runComposerRepairLoop, type ComposerInvoke, type ComposerLoopResult, type ComposerStopReason } from '@/services/builder/aiRepairLoop';
 import { buildAICandidateChangeSet, type AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
@@ -249,9 +249,17 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
   const outcomeSlots: Array<PageAuthoringOutcome | undefined> = new Array(ordered.length);
   // Commits are serialized so each page lands on the latest committed files.
   let commitChain: Promise<void> = Promise.resolve();
+  let stopTriggeredByPageIndex: number | undefined;
+  const authoringController = new AbortController();
+  const abortAuthoring = () => {
+    paused = paused ?? 'aborted';
+    if (!authoringController.signal.aborted) authoringController.abort(input.signal?.reason);
+  };
+  if (input.signal?.aborted) abortAuthoring();
+  else input.signal?.addEventListener('abort', abortAuthoring, { once: true });
 
   const authorOne = async (page: AuthoringPage, index: number): Promise<void> => {
-    if (paused || input.signal?.aborted) {
+    if (paused || authoringController.signal.aborted) {
       outcomeSlots[index] = { page, status: 'skipped', reason: 'paused', attempts: 0, errors: [] };
       return;
     }
@@ -307,13 +315,12 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
     // window only produces a guaranteed timeout. Later pages past the overall
     // budget keep their baseline instead.
     const pageDeadline = Math.min(deadline, now() + Math.min(150_000, Math.max(120_000, (deadline - now()) / waves)));
-    const runLoop = (request: AIComposerRequest, resume?: ComposerLoopResume) => runComposerRepairLoop({
+    const runLoop = (request: AIComposerRequest) => runComposerRepairLoop({
       request,
-      resume,
       baseFiles,
       baseRevisionId: revisionId ?? undefined,
       preflight: input.preflight,
-      signal: input.signal,
+      signal: authoringController.signal,
       timeoutMs: Math.max(1, pageDeadline - now()),
       invoke: input.invoke,
       gatewayOptions: input.gatewayOptions,
@@ -352,32 +359,17 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       };
     } else {
       loop = await runLoop(firstRequest);
-      // A timeout consumes the whole page window but is often transient
-      // provider latency. Retry once in a fresh invocation (fresh server
-      // budget) when the overall deadline still has room; credits, denials
-      // and rate limits never recover on retry.
-      const timedOut = !loop.ok && !input.signal?.aborted && (
-        (loop.reason === 'provider' && loop.errors.some((e) => /timeout|timed out|took too long/i.test(e)))
-        || (loop.reason === 'aborted' && loop.errors.some((e) => /too long|timed out|timeout/i.test(e)))
-      );
-      // A fix round that was cut off resumes from its paid-for draft in a
-      // fresh window; only a page with no draft at all is authored again.
-      const interrupted = !loop.ok && !input.signal?.aborted && Boolean(loop.resume)
-        && (loop.reason === 'provider' || loop.reason === 'aborted' || loop.reason === 'gates_exhausted');
-      if ((timedOut || interrupted) && !paused && deadline - now() >= (loop.resume ? MIN_REPAIR_WINDOW_MS + 5_000 : 125_000)) {
-        input.onProgress?.({ page, index, total: ordered.length, phase: 'authoring' });
-        const retryLoop = loop.resume
-          ? await runLoop(firstRequest, loop.resume)
-          : await runLoop(await buildRequest(null));
-        loop = {
-          ...retryLoop,
-          attempts: loop.resume ? Math.max(loop.attempts, retryLoop.attempts) : loop.attempts + retryLoop.attempts,
-          errors: retryLoop.ok ? retryLoop.errors : [...new Set([...loop.errors, ...retryLoop.errors])],
-          resume: retryLoop.resume ?? loop.resume,
-        };
-      }
     }
     // Redundancy check: one targeted recomposition when this page repeats another page's topology.
+    const terminalPageFailure = ['credits', 'denied', 'rate_limited', 'provider', 'invalid_response'].includes(loop.reason)
+      || (loop.reason === 'aborted' && !authoringController.signal.aborted);
+    if (terminalPageFailure) {
+      paused = paused ?? loop.reason;
+      stopTriggeredByPageIndex = index;
+      if (!authoringController.signal.aborted) {
+        authoringController.abort(new DOMException(`Page authoring stopped after ${loop.reason}.`, 'AbortError'));
+      }
+    }
     if (!cached && loop.ok && loop.prepared && now() < deadline) {
       const issue = findRedundancy(page.pageId, extractCompositionSignature(loop.prepared.nextFiles[page.filePath]), visualMemory.entries());
       if (issue) {
@@ -385,11 +377,16 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
         if (retry.ok && retry.prepared) loop = retry;
       }
     }
-    if (loop.reason === 'credits' || loop.reason === 'denied') paused = loop.reason;
-
     if (!loop.ok || !loop.prepared) {
+      const siblingStopped = loop.reason === 'aborted'
+        && authoringController.signal.aborted
+        && index !== stopTriggeredByPageIndex;
       outcomeSlots[index] = {
-        page, status: 'kept-baseline', reason: loop.reason, attempts: loop.attempts, errors: loop.errors,
+        page,
+        status: siblingStopped ? 'skipped' : 'kept-baseline',
+        reason: siblingStopped ? 'paused' : loop.reason,
+        attempts: loop.attempts,
+        errors: loop.errors,
         draftProduced: Boolean(loop.resume || loop.response),
       };
       input.onProgress?.({ page, index, total: ordered.length, phase: 'kept-baseline' });
@@ -461,15 +458,19 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
 
   // Home first (it establishes the site's visual language), then the rest
   // in parallel with bounded concurrency.
-  if (ordered.length > 0) await authorOne(ordered[0], 0);
-  let cursor = 1;
-  const worker = async () => {
-    while (cursor < ordered.length) {
-      const index = cursor++;
-      await authorOne(ordered[index], index);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(0, ordered.length - 1)) }, worker));
+  try {
+    if (ordered.length > 0) await authorOne(ordered[0], 0);
+    let cursor = 1;
+    const worker = async () => {
+      while (cursor < ordered.length) {
+        const index = cursor++;
+        await authorOne(ordered[index], index);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(0, ordered.length - 1)) }, worker));
+  } finally {
+    input.signal?.removeEventListener('abort', abortAuthoring);
+  }
   outcomes.push(...outcomeSlots.filter((o): o is PageAuthoringOutcome => Boolean(o)));
   return { files, revisionId, outcomes };
 }

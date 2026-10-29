@@ -145,6 +145,20 @@ function contactCrmContract(): AppBuildContract {
 const contactCrmPage = '<section data-ut-component-slug="contact-form"><form data-intent-form="contact.submit"><input name="name" /><input name="email" /><button type="submit" data-ut-cta="cta.form-submit">Send</button></form></section>';
 
 describe('App Builder candidate closure', () => {
+  it('reports missing page bodies without cascading source-dependent binding blockers', async () => {
+    const missingPageSources = contract();
+    missingPageSources.business.bindingGuide = '- Page Home (/), slot hero.primary-cta: label "Contact", marker data-ut-cta="cta.hero", intent contact.submit, target /contact';
+    const report = await validateAppBuildCandidate({
+      contract: missingPageSources,
+      files: { '/src/main.tsx': initialFiles['/src/main.tsx'] },
+      initialFiles,
+    });
+
+    expect(report.issues.filter((issue) => issue.code === 'page-body-missing').map((issue) => issue.path))
+      .toEqual(['/src/pages/Home.tsx', '/src/pages/Contact.tsx']);
+    expect(report.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
+  });
+
   it('materializes registered booking forms on assigned pages before candidate closure', () => {
     const booking = bookingContract();
     const files = {

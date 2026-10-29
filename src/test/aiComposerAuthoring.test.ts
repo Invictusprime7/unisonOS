@@ -29,15 +29,14 @@ describe('AI composer repair loop', () => {
     expect(result.outcomes).toHaveLength(5);
     expect(result.outcomes.every(outcome => outcome.status === 'authored')).toBe(true);
   });
-  it('retries a timed-out page once in a fresh invocation when budget remains', async () => {
+  it('does not automatically retry a timed-out page after the provider may have billed it', async () => {
     const pages = [{ pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' }];
     const timeoutResult = { data: null, error: { message: 'Edge function returned 500: gemini-3.8-flash: timeout. No managed AI gateway fallback is configured.', context: { status: 500 } } };
-    const invoke = vi.fn()
-      .mockResolvedValueOnce(timeoutResult)
-      .mockResolvedValueOnce(good('/src/pages/Home.tsx', 'Recovered'));
+    const invoke = vi.fn().mockResolvedValue(timeoutResult);
     const result = await authorSitePages({ pages, homePageId: 'home', designContext: null, businessName: 'Retry test', files: base, concurrency: 1, budgetMs: 300_000, now: () => 100_000, invoke: invoke as never, commitPage: async files => ({ files }) });
-    expect(invoke).toHaveBeenCalledTimes(2);
-    expect(result.outcomes[0].status).toBe('authored');
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(result.outcomes[0].status).toBe('kept-baseline');
+    expect(result.outcomes[0].reason).toBe('provider');
   });
   it('does not retry a timed-out page when the remaining budget cannot fit a fresh attempt', async () => {
     const pages = [{ pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' }];
@@ -47,18 +46,18 @@ describe('AI composer repair loop', () => {
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(result.outcomes[0].status).toBe('kept-baseline');
   });
-  it('resumes a timed-out fix round from the paid draft instead of authoring the page again', async () => {
+  it('does not automatically resume a timed-out paid repair round', async () => {
     const pages = [{ pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' }];
     const timeoutResult = { data: null, error: { message: 'Edge function returned 500: gemini-3.8-flash: timeout.', context: { status: 500 } } };
     const invoke = vi.fn()
       .mockResolvedValueOnce(bad('/src/pages/Home.tsx'))
-      .mockResolvedValueOnce(timeoutResult)
-      .mockResolvedValueOnce(good('/src/pages/Home.tsx', 'Fixed'));
+      .mockResolvedValueOnce(timeoutResult);
     const result = await authorSitePages({ pages, homePageId: 'home', designContext: null, businessName: 'Resume test', files: base, concurrency: 1, budgetMs: 300_000, now: () => 100_000, invoke: invoke as never, commitPage: async files => ({ files }) });
-    expect(invoke).toHaveBeenCalledTimes(3);
+    expect(invoke).toHaveBeenCalledTimes(2);
     const tasks = invoke.mock.calls.map(([input]) => JSON.parse(input.messages[0].content).task);
-    expect(tasks).toEqual(['site_page_author', 'site_page_repair', 'site_page_repair']);
-    expect(result.outcomes[0].status).toBe('authored');
+    expect(tasks).toEqual(['site_page_author', 'site_page_repair']);
+    expect(result.outcomes[0].status).toBe('kept-baseline');
+    expect(result.outcomes[0].draftProduced).toBe(true);
   }, 20000);
   it('sends fix rounds the candidate once, not again inside the previous response', async () => {
     const invoke = vi.fn().mockResolvedValueOnce(bad('/src/pages/Home.tsx')).mockResolvedValueOnce(good('/src/pages/Home.tsx', 'Fixed'));
@@ -388,6 +387,64 @@ describe('site authoring orchestrator', () => {
     const r = await authorSitePages({ pages, designContext: null, businessName: 'B', files: base, commitPage: vi.fn(), invoke: invoke as never });
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(r.outcomes.map((o) => o.status)).toEqual(['kept-baseline', 'skipped']);
+  });
+
+  it.each([
+    [402, 'credits'],
+    [403, 'denied'],
+    [429, 'rate_limited'],
+    [500, 'provider'],
+  ] as const)('aborts in-flight sibling pages after terminal provider status %s', async (status, reason) => {
+    const parallelPages = [
+      { pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' },
+      { pageId: 'about', title: 'About', route: '/about', filePath: '/src/pages/About.tsx', role: 'about' },
+      { pageId: 'contact', title: 'Contact', route: '/contact', filePath: '/src/pages/Contact.tsx', role: 'contact' },
+    ];
+    let releaseCreditFailure!: () => void;
+    const siblingStarted = new Promise<void>((resolve) => { releaseCreditFailure = resolve; });
+    const siblingAborted = vi.fn();
+    const invoke = vi.fn(async (
+      input: { messages: Array<{ content: string }> },
+      options: { signal?: AbortSignal },
+    ) => {
+      const request = JSON.parse(input.messages[0].content);
+      if (request.page.filePath === '/src/pages/Home.tsx') return good(request.page.filePath, 'Home');
+      if (request.page.filePath === '/src/pages/About.tsx') {
+        await siblingStarted;
+        return { data: null, error: { context: { status }, message: `Provider failure ${status}` } };
+      }
+      releaseCreditFailure();
+      return await new Promise((resolve) => {
+        const signal = options.signal;
+        if (signal?.aborted) {
+          siblingAborted();
+          resolve({ data: null, error: Object.assign(new Error('aborted'), { name: 'AbortError' }) });
+          return;
+        }
+        signal?.addEventListener('abort', () => {
+          siblingAborted();
+          resolve({ data: null, error: Object.assign(new Error('aborted'), { name: 'AbortError' }) });
+        }, { once: true });
+      });
+    });
+    const commitPage = vi.fn(async (files: Record<string, string>) => ({ files }));
+
+    const result = await authorSitePages({
+      pages: parallelPages,
+      homePageId: 'home',
+      designContext: null,
+      businessName: 'Credit stop test',
+      files: base,
+      concurrency: 2,
+      commitPage,
+      invoke: invoke as never,
+    });
+
+    expect(invoke).toHaveBeenCalledTimes(3);
+    expect(siblingAborted).toHaveBeenCalledOnce();
+    expect(commitPage).toHaveBeenCalledOnce();
+    expect(result.outcomes.map((outcome) => outcome.status)).toEqual(['authored', 'kept-baseline', 'skipped']);
+    expect(result.outcomes[1].reason).toBe(reason);
   });
 
   it('uses the same mandatory knowledge policy for a Builder repair request', async () => {

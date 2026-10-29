@@ -370,6 +370,7 @@ export async function validateAppBuildCandidate(input: {
 
   for (const requirement of guideRequirements) {
     const page = pages.find((candidate) => candidate.route === requirement.route);
+    if (page && !files[page.filePath]?.trim()) continue;
     // A page's surface includes the authored components it renders (shared
     // nav, footer, newsletter band); the binder stamps markers there too.
     const surface = page?.filePath && files[page.filePath]
@@ -388,11 +389,14 @@ export async function validateAppBuildCandidate(input: {
 
   for (const binding of canonicalBindings) {
     if (binding.missingCapabilities.length > 0) continue;
-    if (!guideRequirements.some((requirement) => requirement.route === binding.route && requirement.intent === binding.domIntent)) {
+    const bindingPage = pages.find((page) => page.id === binding.pageId);
+    const bindingPageMissingSource = Boolean(bindingPage && !files[bindingPage.filePath]?.trim());
+    if (!bindingPageMissingSource
+      && !guideRequirements.some((requirement) => requirement.route === binding.route && requirement.intent === binding.domIntent)) {
       issues.push({
         severity: 'blocker',
         code: 'intent-binding-guide-missing',
-        path: pages.find((page) => page.id === binding.pageId)?.filePath,
+        path: bindingPage?.filePath,
         message: `Canonical intent binding ${binding.bindingId} (${binding.coreIntent} -> ${binding.domIntent}) has no matching authored marker requirement.`,
       });
     }
@@ -470,10 +474,11 @@ export async function validateAppBuildCandidate(input: {
         .map((binding) => pages.find((page) => page.route === binding.route)).filter((page) => !!page),
     ];
     const uniquePages = [...new Map(componentPages.map((page) => [page!.id, page!])).values()];
-    const componentSources = uniquePages.map((page) => {
+    const componentSources = uniquePages.filter((page) => files[page!.filePath]?.trim()).map((page) => {
       const surface = collectLocalImportClosure(files, page.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path));
       return { page, source: surface.map((path) => files[path] ?? '').join('\n') };
     });
+    if (componentSources.length === 0) continue;
     const escapedSlug = component.runtime.componentSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const escapedId = component.runtime.instanceId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const hasRegisteredHost = componentSources.some(({ source }) => new RegExp(
