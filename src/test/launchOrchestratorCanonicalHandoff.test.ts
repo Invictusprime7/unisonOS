@@ -86,14 +86,14 @@ describe('launch orchestrator canonical handoff', () => {
     expect(source).toContain('const businessProfilePaymentProvider = getProfilePaymentProvider(loadedBusinessProfile);');
     expect(source).toContain('paymentProvider: plan.selections.businessParameters?.paymentProvider?.trim()');
     expect(source).toContain('const ownerParameters = plan.selections.businessParameters ?? {};');
-    expect(source).toContain("launchCapabilities.includes('booking') ||");
+    expect(source).toContain("requestedIntentSet.has('booking.create')");
     expect(source).toContain('notificationEmail: ownerParameters.notificationEmail?.trim()');
     expect(source).toContain('if (input.existingBusinessId && !loadedBusinessProfile)');
     expect(source).toContain('businessRuntime,');
     expect(source).toContain('projectId: plan.confirmed.projectId');
     expect(source).toContain('siteId: plan.confirmed.siteId');
     expect(source).toContain('requestedCapabilities: plan.businessLaunchPlan.businessCapabilities');
-    expect(source).toContain("launchCapabilities.includes('booking') ||");
+    expect(source).toContain("requestedIntentSet.has('booking.create')");
     expect(source).toContain('const dataBindingsReady = plannedDataBindings.length === 0;');
     expect(source).toContain('bindingsReady: dataBindingsReady');
     expect(source).toContain('const bindingPersistenceReceipt = await autoEmitSectionBindings({');

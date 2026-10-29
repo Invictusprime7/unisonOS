@@ -292,6 +292,7 @@ async function runReservedLaunchPipeline(
       industry: industryProfile?.industry || input.template.industry,
       primaryGoal: input.primaryGoal,
       customerNeeds: input.customerNeeds,
+      selectedPages: input.selectedPages,
     });
     // Only an unknown industry is fatal; choices the industry can't support
     // (e.g. quotes for SaaS) are dropped from the plan instead of failing launch.
@@ -299,12 +300,17 @@ async function runReservedLaunchPipeline(
       throw new LaunchFatalError('This launch requests an industry Unison does not support yet.');
     }
     const launchCapabilities = businessLaunchPlan.operationalCapabilities;
+    const requestedIntentSet = new Set(businessLaunchPlan.requestedIntents);
+    const userSelectableIntents = new Set([
+      'booking.create', 'newsletter.subscribe', 'cart.add', 'cart.checkout',
+      'donation.start', 'quote.request', 'lead.capture', 'contact.submit', 'contact.call',
+    ]);
     const canonicalIntents = uniqueValues<string>([
       ...(industryProfile
         ? getAllowedIntents(launchCapabilities)
         : system.intents),
       ...(compositionMeta?.intents || []),
-    ]);
+    ]).filter((intent) => !userSelectableIntents.has(intent) || requestedIntentSet.has(intent));
 
     // Reserve stable IDs; reviewed launches register them only after acceptance.
     const requestedIds = createConfirmedLaunchIds(input.existingBusinessId || undefined);
@@ -371,10 +377,7 @@ async function runReservedLaunchPipeline(
       primaryGoal,
       secondaryGoals: customerNeeds as string[],
       needsBooking:
-        launchCapabilities.includes('booking') ||
-        launchContract.forcedNeeds.booking ||
-        !!goalNeeds.needsBooking ||
-        customerNeeds.includes("book_service"),
+        requestedIntentSet.has('booking.create'),
       sellsProducts:
         launchContract.forcedNeeds.products ||
         !!goalNeeds.sellsProducts ||
@@ -388,7 +391,7 @@ async function runReservedLaunchPipeline(
       themeId: input.theme.id,
       themePresetId: input.theme.id,
       themeTokens,
-      primaryIntent: industryProfile?.primaryIntent,
+      primaryIntent: businessLaunchPlan.primaryIntent ?? undefined,
       requestedPages,
       scaffoldMode: "selected-pages",
       nativePublishReady: launchContract.nativePublishCapable && Boolean(ownerEmail),

@@ -1,7 +1,7 @@
 import { getCapability, type CapabilityId } from '@/platform/core/capabilityRegistry';
 import type { BusinessCapability } from '@/platform/core/capabilityPacks';
 import { getIndustryProfile, normalizeIndustryKey } from '@/platform/core/industryMatrix';
-import type { CustomerNeed, PrimaryGoal } from '@/components/onboarding/wizard/wizardCatalog';
+import type { CustomerNeed, PageChoice, PrimaryGoal } from '@/components/onboarding/wizard/wizardCatalog';
 
 export const BUSINESS_LAUNCH_PLAN_VERSION = 'unison-business-launch-plan/1' as const;
 
@@ -11,6 +11,7 @@ export interface BusinessLaunchPlan {
   journeyId: string;
   primaryGoal: PrimaryGoal | null;
   customerNeeds: CustomerNeed[];
+  requestedIntents: string[];
   primaryIntent: string | null;
   automationPack: string | null;
   operationalCapabilities: CapabilityId[];
@@ -32,7 +33,29 @@ const NEED_CAPABILITIES: Partial<Record<CustomerNeed, CapabilityId>> = {
   book_service: 'booking',
   buy_offer: 'commerce',
   fill_form: 'lead-capture',
-  browse_services: 'booking',
+};
+
+const GOAL_INTENTS: Partial<Record<PrimaryGoal, readonly string[]>> = {
+  collect_leads: ['lead.capture', 'contact.submit'],
+  book_appointments: ['booking.create'],
+  sell_offers: ['cart.add', 'cart.checkout'],
+  drive_calls: ['contact.call', 'contact.submit'],
+  grow_email_list: ['newsletter.subscribe'],
+  donate: ['donation.start'],
+};
+
+const NEED_INTENTS: Partial<Record<CustomerNeed, readonly string[]>> = {
+  request_quote: ['quote.request'],
+  book_service: ['booking.create'],
+  buy_offer: ['cart.add'],
+  fill_form: ['contact.submit'],
+};
+
+const PAGE_INTENTS: Partial<Record<PageChoice, readonly string[]>> = {
+  contact: ['contact.submit'],
+  booking: ['booking.create'],
+  shop: ['cart.add'],
+  checkout: ['cart.checkout'],
 };
 
 export function resolveLaunchBusinessCapabilities(
@@ -114,6 +137,7 @@ export function resolveBusinessLaunchPlan(input: {
   industry: string;
   primaryGoal?: PrimaryGoal | null;
   customerNeeds?: readonly CustomerNeed[];
+  selectedPages?: readonly PageChoice[];
 }): BusinessLaunchPlan {
   const profile = getIndustryProfile(input.industry);
   const canonicalIndustryId = profile?.industry ?? null;
@@ -146,6 +170,12 @@ export function resolveBusinessLaunchPlan(input: {
       return !capability || !blockedSet.has(capability);
     }),
   };
+  const requestedIntents = new Set<string>([
+    ...(supportedIntent.primaryGoal ? GOAL_INTENTS[supportedIntent.primaryGoal] ?? [] : []),
+    ...supportedIntent.customerNeeds.flatMap((need) => NEED_INTENTS[need] ?? []),
+    ...(input.selectedPages ?? []).flatMap((page) => PAGE_INTENTS[page] ?? []),
+  ]);
+  const requestedIntentList = [...requestedIntents];
   const businessCapabilities = profile
     ? resolveLaunchBusinessCapabilities(supportedIntent)
     : ['business_profile' as const];
@@ -156,7 +186,8 @@ export function resolveBusinessLaunchPlan(input: {
     journeyId: `${canonicalIndustryId ?? normalizeIndustryKey(input.industry)}:${primaryGoal ?? 'unspecified'}`,
     primaryGoal,
     customerNeeds,
-    primaryIntent: profile?.primaryIntent ?? null,
+    requestedIntents: requestedIntentList,
+    primaryIntent: requestedIntentList[0] ?? null,
     automationPack: profile?.automationPack ?? null,
     operationalCapabilities,
     businessCapabilities,

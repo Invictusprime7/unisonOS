@@ -240,7 +240,6 @@ describe('industry-aware generation context', () => {
       { request: { customerNeeds: ['book_service'] as const }, capability: 'booking' as const },
       { request: { customerNeeds: ['buy_offer'] as const }, capability: 'commerce' as const },
       { request: { customerNeeds: ['fill_form'] as const }, capability: 'lead-capture' as const },
-      { request: { customerNeeds: ['browse_services'] as const }, capability: 'booking' as const },
     ];
 
     for (const industry of getAllIndustries()) {
@@ -270,6 +269,35 @@ describe('industry-aware generation context', () => {
       expect(first.businessCapabilities, industry.industry).toContain('business_profile');
       expect(first.blockedRequests, industry.industry).toEqual([]);
     }
+  });
+
+  it('keeps salon booking and newsletter bindings opt-in when the goal is lead capture', () => {
+    const plan = resolveBusinessLaunchPlan({
+      industry: 'salon',
+      primaryGoal: 'collect_leads',
+      customerNeeds: ['fill_form', 'browse_services'],
+      selectedPages: ['contact'],
+    });
+
+    expect(plan.requestedIntents).toEqual(expect.arrayContaining(['lead.capture', 'contact.submit']));
+    expect(plan.primaryIntent).toBe('lead.capture');
+    expect(plan.requestedIntents).not.toContain('booking.create');
+    expect(plan.requestedIntents).not.toContain('newsletter.subscribe');
+  });
+
+  it('requests booking bindings when the goal, action, or page explicitly requests booking', () => {
+    expect(resolveBusinessLaunchPlan({ industry: 'salon', primaryGoal: 'book_appointments' }).requestedIntents)
+      .toContain('booking.create');
+    expect(resolveBusinessLaunchPlan({ industry: 'salon', customerNeeds: ['book_service'] }).requestedIntents)
+      .toContain('booking.create');
+    expect(resolveBusinessLaunchPlan({ industry: 'salon', selectedPages: ['booking'] }).requestedIntents)
+      .toContain('booking.create');
+  });
+
+  it('does not request the booking capability just to browse services', () => {
+    expect(resolveLaunchCapabilities([], 'saas', { customerNeeds: ['browse_services'] })).toEqual([]);
+    expect(resolveBusinessLaunchPlan({ industry: 'salon', customerNeeds: ['browse_services'] }).requestedIntents)
+      .not.toContain('booking.create');
   });
 
   it('resolves capability packs and compiler support through canonical industry aliases', () => {
