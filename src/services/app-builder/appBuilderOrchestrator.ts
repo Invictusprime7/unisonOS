@@ -107,7 +107,7 @@ export async function orchestrateAppBuild(
     })),
     compositionPlan: input.contract.design.compositionPlan,
     registryContext: input.contract.design.registryContext,
-    runtimeContext: [input.runtimeContext, generation.runtimeContext].filter(Boolean).join('\n'),
+    runtimeContext: input.runtimeContext ?? '',
     runtimeContextForPage: (pageId) => [input.runtimeContext, generation.runtimeContextForPage(pageId)].filter(Boolean).join('\n'),
     pageCheck,
     reuseAcceptedPages: input.reuseAcceptedPages ?? true,

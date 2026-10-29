@@ -66,6 +66,24 @@ const createTestBuilder = (dependencies: Parameters<typeof createUnisonAppBuilde
   createUnisonAppBuilder({ loadContentTypes: async () => [], ...dependencies });
 
 describe('UnisonAppBuilder facade', () => {
+  it('keeps the union design context out of page authoring turns', async () => {
+    let globalContext = 'not captured';
+    let pageContext = '';
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => {
+      globalContext = input.runtimeContext ?? '';
+      pageContext = input.runtimeContextForPage?.('home') ?? '';
+      return { files: input.files, outcomes: [] };
+    });
+    await createTestBuilder({ authorSite, runComposer: vi.fn() }).generate({
+      operationId: 'page-scoped-design-context', contract: contract(), initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null, budgetMs: 1,
+    });
+
+    expect(globalContext).toBe('');
+    expect(pageContext).toContain('PERSISTABLE SECTION CONTRACT');
+    expect(authorSite).toHaveBeenCalledOnce();
+  });
+
   it('reports exhausted provider credits instead of accepting unchanged preview material', async () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
       files: input.files,
@@ -283,8 +301,8 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({ files: input.files, revisionId: input.revisionId, outcomes: [] }));
     await createUnisonAppBuilder({ authorSite, loadContentTypes }).generate({ operationId: 'scoped-generation', contract: contract(), initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null });
     expect(loadContentTypes).toHaveBeenCalledWith({ businessId: 'business-1', projectId: 'project-1' });
-    expect(authorSite.mock.calls[0]?.[0].runtimeContext).toContain('content:articles');
-    expect(authorSite.mock.calls[0]?.[0].runtimeContext).toContain('body:textarea');
+    expect(authorSite.mock.calls[0]?.[0].runtimeContextForPage?.('home')).toContain('content:articles');
+    expect(authorSite.mock.calls[0]?.[0].runtimeContextForPage?.('home')).toContain('body:textarea');
   });
   it('continues authoring without optional CMS schema hints when scoped discovery fails', async () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
