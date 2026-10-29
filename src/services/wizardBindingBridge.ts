@@ -125,8 +125,7 @@ function getSlotMarkers(binding: PlaygroundBinding): string[] {
   const slot = binding.sourceSlot as string | undefined;
   const intent = getDomIntent(binding);
 
-  if (intent === 'nav.goto') return ['cta.nav-link'];
-  if (intent === 'cart.checkout') return ['cta.checkout'];
+  if (intent === 'nav.goto' && slot === 'checkout-cta') return ['cta.nav-link'];
 
   if (!section || !slot) return [];
 
