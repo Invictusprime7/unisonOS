@@ -140,6 +140,15 @@ vi.mock('@/integrations/supabase/client', () => {
             }),
           };
         if (table === 'projects') return {
+          update: (_payload: Record<string, unknown>) => ({
+            eq: (_projectColumn: string, _projectId: unknown) => ({
+              eq: (_businessColumn: string, _businessId: unknown) => ({
+                select: (_columns: string) => ({
+                  maybeSingle: async () => ({ data: { id: IDENTITY.projectId }, error: null }),
+                }),
+              }),
+            }),
+          }),
           select: (_columns: string) => ({
             eq: (_projectColumn: string, _projectId: unknown) => ({
               eq: (_businessColumn: string, _businessId: unknown) => ({
@@ -251,6 +260,8 @@ import { executeBackendOps } from '@/services/backendOpExecutor';
 import type { BuilderIdentity } from '@/types/builderIdentity';
 import { emptyPatchPlan, legacyFilesToPatchPlan } from '@/types/patchPlan';
 import { compilerOwnershipHash, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
+import { deployToProvider } from '@/services/deploymentService';
+import { materializeCanonicalProjectMedia } from '../../supabase/functions/_shared/canonicalPublishMedia';
 
 const IDENTITY: BuilderIdentity = {
   userId: '11111111-1111-1111-1111-111111111111',
@@ -1893,6 +1904,81 @@ describe('Move D — publish-ready ledger', () => {
     const ready = await loadLatestPublishReadyRevisionForProject(IDENTITY.projectId);
     expect(ready?.id).toBe(result.persistedRevisionId);
     expect(ready?.publishReady).toBe(true);
+  });
+
+  it('commits, reloads and publishes accepted custom design and project media as one revision', async () => {
+    const pagePath = '/src/pages/Home.tsx';
+    const storagePath = `${IDENTITY.userId}/site-uploads/project-1/11111111-1111-4111-8111-111111111111-hero.webp`;
+    const imageUrl = `https://storage.example.test/storage/v1/object/sign/user-files/${storagePath}?token=temporary`;
+    const originalPage = 'export default function Home(){return <main><h1>Old design</h1></main>}';
+    const authoredPage = `import { motion } from 'framer-motion';\nexport default function Home(){return <main><motion.section initial={{opacity:0}} animate={{opacity:1}}><h1>Salt House</h1><img src="${imageUrl}" alt="Tide line at dawn" /></motion.section></main>}`;
+    const beforeFiles = {
+      '/src/App.tsx': "import Home from './pages/Home'; export default function App(){return <Home/>}",
+      [pagePath]: originalPage,
+      '/index.html': '<!doctype html><html><body><div id="root"></div></body></html>',
+    };
+    const acceptedFiles = { ...beforeFiles, [pagePath]: authoredPage };
+    mockPipeline(acceptedFiles);
+    mockPreflight(acceptedFiles);
+    mockIntents();
+    vi.mocked(buildCanonicalLaunchArtifacts).mockImplementationOnce((input) => ({
+      files: input.generatedFiles,
+      siteBundleSnapshot: input.siteBundleSnapshot,
+      runtimeManifest: { version: 1, backendRequired: false },
+      generatedSiteRuntimeManifest: { siteId: '55555555-5555-4555-8555-555555555555', agents: [] },
+    } as unknown as ReturnType<typeof buildCanonicalLaunchArtifacts>));
+
+    const saved = await commitMutation({
+      source: 'ai-builder',
+      identity: IDENTITY,
+      current: { vfsFiles: beforeFiles, playground: { pages: [] } as never },
+      patch: legacyFilesToPatchPlan({ [pagePath]: authoredPage }, 'original editorial redesign with motion and new photography'),
+    });
+
+    expect(saved.status).toBe('committed');
+    expect(saved.publishReady).toBe(true);
+    const persistedRow = revisionStore.find((row) => row.id === saved.persistedRevisionId)!;
+    persistedRow.vfs_files = saved.vfsFiles;
+    const reloaded = await loadLatestPublishReadyRevisionForProject(IDENTITY.projectId);
+    expect(reloaded?.id).toBe(saved.persistedRevisionId);
+    expect(reloaded?.vfsFiles[pagePath]).toBe(authoredPage);
+    expect(reloaded?.vfsFiles['/public/media/manifest.json']).toContain(storagePath);
+
+    runtimeReconcileInvoke.mockImplementation(async (...args: unknown[]) => args[0] === 'publish-site'
+      ? { data: { status: 'success', provider: 'vercel', url: 'https://published.test' }, error: null }
+      : { data: { success: true }, error: null });
+    const deployment = await deployToProvider({
+      provider: 'vercel',
+      projectId: IDENTITY.projectId,
+      expectedRevisionId: saved.persistedRevisionId,
+      files: { [pagePath]: 'stale caller source' },
+    });
+
+    expect(deployment.status, deployment.error).toBe('success');
+    const publishCalls = runtimeReconcileInvoke.mock.calls as unknown as Array<[
+      string,
+      { body?: { files?: Record<string, string>; canonicalRevision?: { revisionId: string; vfsHash: string } } },
+    ]>;
+    const publishCall = publishCalls.find(([name]) => name === 'publish-site');
+    expect(publishCall?.[1].body?.canonicalRevision).toEqual({
+      projectId: IDENTITY.projectId,
+      revisionId: saved.persistedRevisionId,
+      vfsHash: saved.vfsHash,
+    });
+    const submittedFiles = publishCall?.[1].body?.files ?? {};
+    expect(submittedFiles['src/pages/Home.tsx']).toBe(authoredPage);
+    expect(submittedFiles['src/pages/Home.tsx']).not.toContain('stale caller source');
+
+    const portable = await materializeCanonicalProjectMedia({
+      files: submittedFiles,
+      manifestFiles: reloaded!.vfsFiles,
+      userId: IDENTITY.userId,
+      storageOrigin: 'https://storage.example.test',
+      download: async () => new Uint8Array([0x52, 0x49, 0x46, 0x46]),
+    });
+    expect(portable.mediaCount).toBe(1);
+    expect(portable.files['src/pages/Home.tsx']).toContain('data:image/webp;base64,UklGRg==');
+    expect(portable.files).not.toHaveProperty('public/media/manifest.json');
   });
 
   it('preserves the committed revision but blocks publish when generated runtime reconciliation fails', async () => {
