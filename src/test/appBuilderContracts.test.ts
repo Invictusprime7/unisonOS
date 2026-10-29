@@ -223,6 +223,28 @@ describe('AppBuildContract', () => {
     expect(contactContext).not.toContain(booking!.instanceId);
   });
 
+  it('projects canonical icon CoreIntent into the App Builder contract despite a legacy UI intent', () => {
+    const input = makeInput();
+    input.canonicalBindings = [{
+      bindingId: 'binding-search', sourcePageId: 'page-home', sourceLabel: 'Search',
+      intent: 'nav.goto_page', targetId: 'search-panel', targetType: 'popup',
+      confidence: 1, source: 'wizard', isValid: true, sourceSection: 'navbar', sourceSlot: 'icon-search',
+      coreIntent: 'search.open', requiredCapabilities: [],
+    }];
+
+    const contract = buildAppBuildContract(input);
+    const generationContext = buildAppBuilderGenerationContext(contract).runtimeContextForPage('page-home');
+
+    expect(contract.business.intentBindings[0]).toMatchObject({
+      bindingId: 'binding-search', coreIntent: 'search.open', domIntent: 'search.open',
+      targetType: 'popup', targetId: 'search-panel',
+    });
+    const bindingLine = generationContext.split('\n').find((line) => line.includes('binding-search'));
+    expect(bindingLine).toContain('DOM intent search.open');
+    expect(bindingLine).toContain('target popup:search-panel');
+    expect(bindingLine).not.toContain('DOM intent nav.goto');
+  });
+
   it('keeps payment setup readiness from blocking checkout authoring', () => {
     const input = makeInput();
     const checkout = createCanonicalComponentInstance('checkout-cta', {

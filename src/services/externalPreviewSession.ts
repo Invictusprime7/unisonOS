@@ -7,7 +7,25 @@ export interface ExternalPreviewSession {
   createdAt: number;
 }
 
+export type ExternalPreviewChannelMessage =
+  | { type: 'request' }
+  | { type: 'files'; files: Record<string, string> };
+
 const getStorageKey = (previewKey: string) => `${STORAGE_PREFIX}${previewKey}`;
+
+export function createExternalPreviewChannel(previewKey: string): BroadcastChannel | null {
+  if (typeof BroadcastChannel === 'undefined') return null;
+  return new BroadcastChannel(`${getStorageKey(previewKey)}:live`);
+}
+
+export function isExternalPreviewFilesMessage(value: unknown): value is Extract<ExternalPreviewChannelMessage, { type: 'files' }> {
+  if (!value || typeof value !== 'object') return false;
+  const message = value as { type?: unknown; files?: unknown };
+  return message.type === 'files'
+    && typeof message.files === 'object'
+    && message.files !== null
+    && Object.values(message.files).every((content) => typeof content === 'string');
+}
 
 function isQuotaExceededError(error: unknown): boolean {
   return error instanceof DOMException
@@ -16,12 +34,16 @@ function isQuotaExceededError(error: unknown): boolean {
 
 /** Drop every stored session, expired or not — they're all ephemeral/recreatable. */
 function clearAllExternalPreviewSessions(): void {
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(STORAGE_PREFIX)) keysToRemove.push(key);
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(STORAGE_PREFIX)) keysToRemove.push(key);
+    }
+    for (const key of keysToRemove) localStorage.removeItem(key);
+  } catch {
+    // Storage may be unavailable; the live channel can still bootstrap preview files.
   }
-  for (const key of keysToRemove) localStorage.removeItem(key);
 }
 
 export function createExternalPreviewSession(
@@ -40,7 +62,10 @@ export function createExternalPreviewSession(
     localStorage.setItem(getStorageKey(previewKey), serialized);
     return previewKey;
   } catch (error) {
-    if (!isQuotaExceededError(error)) throw error;
+    if (!isQuotaExceededError(error)) {
+      if (typeof BroadcastChannel !== 'undefined') return previewKey;
+      throw error;
+    }
   }
 
   // Full generated sites (all pages + UI foundation modules) can exceed
@@ -53,14 +78,34 @@ export function createExternalPreviewSession(
     localStorage.setItem(getStorageKey(previewKey), serialized);
     return previewKey;
   } catch (error) {
-    if (!isQuotaExceededError(error)) throw error;
-    throw new Error('This site is too large to open in a new preview tab (browser storage limit). Preview it from the Web Builder instead.');
+    if (!isQuotaExceededError(error)) {
+      if (typeof BroadcastChannel !== 'undefined') return previewKey;
+      throw error;
+    }
   }
+
+  // The opener streams the full VFS over BroadcastChannel. Keep only the
+  // bootstrap metadata in storage when the source itself exceeds its quota.
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      localStorage.setItem(getStorageKey(previewKey), JSON.stringify({ ...session, files: {} }));
+      return previewKey;
+    } catch {
+      return previewKey;
+    }
+  }
+
+  throw new Error('This site is too large to open in a new preview tab (browser storage limit). Preview it from the Web Builder instead.');
 }
 
 export function readExternalPreviewSession(previewKey: string): ExternalPreviewSession | null {
   const storageKey = getStorageKey(previewKey);
-  const serializedSession = localStorage.getItem(storageKey);
+  let serializedSession: string | null;
+  try {
+    serializedSession = localStorage.getItem(storageKey);
+  } catch {
+    return null;
+  }
   if (!serializedSession) return null;
 
   try {
@@ -73,13 +118,13 @@ export function readExternalPreviewSession(previewKey: string): ExternalPreviewS
       || session.files === null
       || Date.now() - session.createdAt > SESSION_TTL_MS
     ) {
-      localStorage.removeItem(storageKey);
+      try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
       return null;
     }
 
     return session;
   } catch {
-    localStorage.removeItem(storageKey);
+    try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
     return null;
   }
 }

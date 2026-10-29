@@ -33,7 +33,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { SandpackProvider, SandpackPreview, SandpackLayout, useSandpack, useSandpackPreviewProgress } from '@codesandbox/sandpack-react';
 import { usePreviewService } from '@/hooks/usePreviewService';
-import { createExternalPreviewSession } from '@/services/externalPreviewSession';
+import { createExternalPreviewChannel, createExternalPreviewSession } from '@/services/externalPreviewSession';
 import { usePreviewAI } from '@/hooks/usePreviewAI';
 import { getGlobalAITerminalBridge } from '@/services/aiTerminalBridge';
 import { buildPreviewArtifactsAsync } from '@/utils/previewArtifacts';
@@ -381,6 +381,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   const vfsContext = useVFSSafe();
   // State - default to 'sandpack' — no HTML fallback
   const [backend, setBackend] = useState<PreviewBackend>('sandpack');
+  const [externalPreviewKey, setExternalPreviewKey] = useState<string | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [sandpackKey, setSandpackKey] = useState(0);
@@ -445,6 +446,35 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     stableFilesRef.current = { signature: filesSignature, files: rawFiles };
   }
   const files = stableFilesRef.current.files;
+
+  const externalPreviewChannelRef = useRef<BroadcastChannel | null>(null);
+  const externalPreviewFilesRef = useRef(files);
+  externalPreviewFilesRef.current = files;
+
+  useEffect(() => {
+    if (!externalPreviewKey) return;
+    const channel = createExternalPreviewChannel(externalPreviewKey);
+    if (!channel) return;
+
+    externalPreviewChannelRef.current = channel;
+    channel.onmessage = (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type === 'request') {
+        channel.postMessage({ type: 'files', files: externalPreviewFilesRef.current });
+      }
+    };
+    channel.postMessage({ type: 'files', files: externalPreviewFilesRef.current });
+
+    return () => {
+      channel.close();
+      if (externalPreviewChannelRef.current === channel) {
+        externalPreviewChannelRef.current = null;
+      }
+    };
+  }, [externalPreviewKey]);
+
+  useEffect(() => {
+    externalPreviewChannelRef.current?.postMessage({ type: 'files', files });
+  }, [filesSignature, files]);
 
 
   useEffect(() => {
@@ -1338,28 +1368,19 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       window.open(LOCAL_PREVIEW_URL, '_blank', 'noopener,noreferrer');
       return;
     }
-    // Sandpack: persist the canonical files and open a stable same-origin route.
+    // The external preview renders from the canonical files, not the Sandpack iframe.
     try {
-      const root = previewContainerRef.current;
-      if (!root) {
-        onError?.('Preview is still starting — try again in a moment.');
-        return;
-      }
-      const spIframe = root.querySelector('iframe.sp-preview-iframe, iframe[title*="Sandpack"], iframe[src*="csb.app"], iframe[src*="codesandbox"]') as HTMLIFrameElement | null;
-      const src = spIframe?.src;
-      if (src) {
-        const previewTitle = document.title
-          .replace(/\s*[|–—-]\s*Unison.*$/i, '')
-          .trim() || 'Site preview';
-        const previewKey = createExternalPreviewSession(files, previewTitle);
-        const previewUrl = new URL(`/preview/${previewKey}`, window.location.origin);
-        window.open(previewUrl, '_blank', 'noopener,noreferrer');
-        return;
-      }
-      onError?.('Preview is still starting — try again in a moment.');
+      const previewTitle = document.title
+        .replace(/\s*[|–—-]\s*Unison.*$/i, '')
+        .trim() || 'Site preview';
+      const previewKey = createExternalPreviewSession(files, previewTitle);
+      setExternalPreviewKey(previewKey);
+      const previewUrl = new URL(`/preview/${previewKey}`, window.location.origin);
+      previewUrl.searchParams.set('title', previewTitle);
+      window.open(previewUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
       console.error('[VFSPreview] openInNewTab failed:', err);
-      onError?.('Failed to open preview in new tab.');
+      onError?.(err instanceof Error ? err.message : 'Failed to open preview in new tab.');
     }
   }, [backend, dockerService.session, files, onError]);
 

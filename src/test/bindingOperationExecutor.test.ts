@@ -53,6 +53,27 @@ describe('canonical binding operations', () => {
     }])).toThrow('incompatible');
   });
 
+  it('can preserve a canonical search intent while migrating a legacy navigation binding', () => {
+    const state = playground();
+    state.bindings['bind-search'] = {
+      ...binding,
+      bindingId: 'bind-search',
+      sourceSlot: 'icon-search',
+      intent: 'nav.goto_page',
+      targetType: 'popup',
+      targetId: 'search-panel',
+      coreIntent: 'search.open',
+    };
+
+    const result = applyBindingOperations(state, [{
+      type: 'bindIntent', elementId: 'bind-search', intent: 'search.open',
+    }]);
+
+    expect(result.playground.bindings['bind-search']).toMatchObject({
+      intent: 'nav.goto_page', coreIntent: 'search.open', targetId: 'search-panel',
+    });
+  });
+
   it('removes only the old binding attributes for an unbound control', () => {
     const result = applyBindingOperations(playground(), [{ type: 'unbindIntent', elementId: 'bind-hero-book' }]);
     const files = stripUnboundBindingAttributes({

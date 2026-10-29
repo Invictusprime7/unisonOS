@@ -1,16 +1,41 @@
 import { VFSPreview } from '@/components/VFSPreview';
-import { readExternalPreviewSession } from '@/services/externalPreviewSession';
+import {
+  createExternalPreviewChannel,
+  isExternalPreviewFilesMessage,
+  readExternalPreviewSession,
+} from '@/services/externalPreviewSession';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 export default function ExternalPreviewPage() {
   const { previewKey = '' } = useParams();
-  const [session] = useState(() => readExternalPreviewSession(previewKey));
+  const [session] = useState(() => {
+    const storedSession = readExternalPreviewSession(previewKey);
+    if (storedSession) return storedSession;
+
+    const title = new URLSearchParams(window.location.search).get('title');
+    if (!title || typeof BroadcastChannel === 'undefined') return null;
+    return { files: {}, title, createdAt: Date.now() };
+  });
+  const [files, setFiles] = useState(() => session?.files ?? {});
 
   useEffect(() => {
     if (!session) return;
     document.title = `${session.title} | Preview`;
   }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    const channel = createExternalPreviewChannel(previewKey);
+    if (!channel) return;
+
+    channel.onmessage = (event: MessageEvent<unknown>) => {
+      if (isExternalPreviewFilesMessage(event.data)) setFiles(event.data.files);
+    };
+    channel.postMessage({ type: 'request' });
+
+    return () => channel.close();
+  }, [previewKey, session]);
 
   if (!session) {
     return (
@@ -29,7 +54,7 @@ export default function ExternalPreviewPage() {
     <main className="h-dvh w-full overflow-hidden bg-white">
       <VFSPreview
         nodes={[]}
-        files={session.files}
+        files={files}
         className="!h-full !w-full !rounded-none !border-0"
         showToolbar={false}
         autoStart={false}

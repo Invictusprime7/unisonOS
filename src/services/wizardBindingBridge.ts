@@ -52,6 +52,7 @@ interface JsxCandidate {
   openTagStart: number;
   text: string;
   tagName: string;
+  bindingId?: string;
   href?: string;
   type?: string;
   insideForm: boolean;
@@ -67,6 +68,10 @@ function escapeAttr(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+function escapeText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function buildTagPattern(tags: readonly string[]): string {
@@ -173,6 +178,8 @@ function normalizeText(value: string): string {
 }
 
 interface BindingMatchTarget {
+  bindingId?: string;
+  sourceSection?: string;
   sourceSlot?: string;
   sourceLabel?: string;
   targetPath?: string;
@@ -306,6 +313,7 @@ function collectJsxCandidates(
       openTagStart: rawStart,
       text: normalizeText(text),
       tagName,
+      bindingId: staticJsxAttribute(element, 'data-ut-binding-id'),
       href: staticJsxAttribute(element, 'href'),
       type: staticJsxAttribute(element, 'type'),
       insideForm: isInsideForm(element),
@@ -415,6 +423,21 @@ function upsertAttrs(tag: string, attrs: Record<string, string>): string {
   // Never modify a closing tag — it has no attributes.
   if (/^<\//.test(tag.trimStart())) return tag;
   let next = tag;
+  if (attrs['data-ut-intent'] === 'nav.goto' && attrs['data-ut-path']) {
+    const tagName = /^<([A-Za-z][\w.]*)/.exec(next.trimStart())?.[1];
+    const prop = tagName === 'Link' || tagName === 'NavLink' ? 'to' : tagName === 'a' ? 'href' : undefined;
+    const target = attrs['data-ut-target-type'] === 'page'
+      ? `#${normalizeRoute(attrs['data-ut-path'])}`
+      : attrs['data-ut-url'] ?? attrs['data-ut-path'];
+    if (prop && target) {
+      const propPattern = new RegExp(`\\s${prop}\\s*=\\s*(?:"[^"]*"|'[^']*'|\\{[^{}]*\\})`);
+      if (propPattern.test(next)) {
+        next = next.replace(propPattern, ` ${prop}=${JSON.stringify(target)}`);
+      } else if (!new RegExp(`\\s${prop}\\s*=`).test(next)) {
+        next = next.replace(/\s*\/?\s*>$/, (closing) => ` ${prop}=${JSON.stringify(target)}${closing}`);
+      }
+    }
+  }
   for (const [attr, value] of Object.entries(attrs)) {
     const attrPattern = new RegExp(`\\s${escapeRegex(attr)}=(["']).*?\\1`, 'i');
     next = next.replace(attrPattern, '');
@@ -475,6 +498,8 @@ function applyBindingByLabel(
 
   const next = content.replace(elementRegex, (match, tagName, attrChunk = '', innerContent = '') => {
     if (matchCount >= limit) return match;
+    const assignedBinding = /\bdata-ut-binding-id\s*=\s*(["'])(.*?)\1/.exec(String(attrChunk))?.[2];
+    if (assignedBinding && assignedBinding !== binding.bindingId) return match;
 
     const normalizedInner = normalizeText(String(innerContent));
     const labelMatches =
@@ -511,10 +536,13 @@ function applyBindingByJsxAst(
   const keywords = getIconKeywords(binding);
   const matched = new Set<number>();
   const selected: JsxCandidate[] = [];
+  const ownedByOtherBinding = (candidate: JsxCandidate) =>
+    Boolean(candidate.bindingId && candidate.bindingId !== binding.bindingId);
 
   if (label) {
     for (const candidate of labelCandidates) {
       if (selected.length >= limit) break;
+      if (ownedByOtherBinding(candidate)) continue;
       const text = candidate.text;
       const labelMatches = text && (text === label || text.includes(label) || label.includes(text));
       if (!labelMatches) continue;
@@ -528,6 +556,7 @@ function applyBindingByJsxAst(
     const targetPath = binding.targetPath.trim();
     for (const candidate of labelCandidates) {
       if (selected.length >= limit) break;
+      if (ownedByOtherBinding(candidate)) continue;
       if (candidate.href !== targetPath || matched.has(candidate.openTagStart)) continue;
       matched.add(candidate.openTagStart);
       selected.push(candidate);
@@ -546,6 +575,7 @@ function applyBindingByJsxAst(
   if (selected.length < limit && keywords.length > 0) {
     for (const candidate of iconCandidates) {
       if (selected.length >= limit) break;
+      if (ownedByOtherBinding(candidate)) continue;
       if (matched.has(candidate.openTagStart)) continue;
       if (!keywords.some((keyword) => candidate.haystack.includes(normalizeText(keyword)))) {
         continue;
@@ -590,6 +620,8 @@ function applyBindingByIconAffinity(
 
   const next = content.replace(openTagRegex, (match, tagName, attrChunk = '') => {
     if (appliedCount >= limit) return match;
+    const assignedBinding = /\bdata-ut-binding-id\s*=\s*(["'])(.*?)\1/.exec(String(attrChunk))?.[2];
+    if (assignedBinding && assignedBinding !== attrs['data-ut-binding-id']) return match;
 
     const haystack = normalizeText(String(attrChunk));
     if (!haystack) return match;
@@ -602,6 +634,77 @@ function applyBindingByIconAffinity(
   });
 
   return { content: next, applied: appliedCount > 0 };
+}
+
+function staticAttribute(tag: string, name: string): string | undefined {
+  const match = new RegExp(`\\b${escapeRegex(name)}\\s*=\\s*(["'])(.*?)\\1`).exec(tag);
+  return match?.[2];
+}
+
+function matchingElementClose(content: string, tagName: string, openTagEnd: number): number | undefined {
+  const tags = new RegExp(`<\\/?${escapeRegex(tagName)}\\b[^>]*>`, 'gi');
+  tags.lastIndex = openTagEnd;
+  let depth = 1;
+  for (let match = tags.exec(content); match; match = tags.exec(content)) {
+    if (/^<\//.test(match[0])) depth -= 1;
+    else if (!/\/\s*>$/.test(match[0])) depth += 1;
+    if (depth === 0) return match.index;
+  }
+  return undefined;
+}
+
+/** Preserve the AI's layout, but supply a canonical control when its intended slot is absent. */
+function addCanonicalBindingControl(
+  content: string,
+  binding: BindingMatchTarget,
+  attrs: Record<string, string>,
+): { content: string; applied: boolean } {
+  const section = binding.sourceSection?.trim();
+  const marker = attrs['data-ut-cta'];
+  if (!section || !marker) return { content, applied: false };
+
+  const sectionIdNeedle = `:${section}:`;
+  const roots = /<[A-Za-z][\w:.-]*\b[^>]*>/g;
+  let container: { tagName: string; end: number } | undefined;
+  for (let match = roots.exec(content); match; match = roots.exec(content)) {
+    const tag = match[0];
+    const sectionType = staticAttribute(tag, 'data-ut-section-type');
+    const sectionRole = staticAttribute(tag, 'data-ut-section-role');
+    const sectionId = staticAttribute(tag, 'data-ut-section-id');
+    const matchesSection = sectionType === section || sectionRole === section
+      || sectionId === `site:${section}` || Boolean(sectionId?.includes(sectionIdNeedle));
+    if (!matchesSection || /\/\s*>$/.test(tag)) continue;
+    const tagName = /^<([A-Za-z][\w:.-]*)/.exec(tag)?.[1];
+    const end = tagName ? matchingElementClose(content, tagName, match.index + tag.length) : undefined;
+    if (end !== undefined) {
+      container = { tagName: tagName!, end };
+      break;
+    }
+  }
+  // Keep the action on the rendered page even if the AI omitted the requested section root.
+  if (!container) {
+    for (const match of content.matchAll(/<main\b[^>]*>/gi)) {
+      const end = matchingElementClose(content, 'main', match.index! + match[0].length);
+      if (end !== undefined) {
+        container = { tagName: 'main', end };
+        break;
+      }
+    }
+  }
+  if (!container) return { content, applied: false };
+
+  const label = binding.sourceLabel?.trim() || marker.slice(marker.indexOf('.') + 1).replace(/[-.]/g, ' ');
+  const navigation = attrs['data-ut-intent'] === 'nav.goto' || attrs['data-ut-intent'] === 'nav.external';
+  const href = attrs['data-ut-path']
+    ? `#${normalizeRoute(attrs['data-ut-path'])}`
+    : attrs['data-ut-url'] ?? attrs['data-ut-target-id'] ?? '#';
+  const opening = navigation ? `<a href=${JSON.stringify(href)}>` : '<button type="button">';
+  const controlAttrs = marker.startsWith('icon.') ? { ...attrs, 'aria-label': label } : attrs;
+  const control = `${upsertAttrs(opening, controlAttrs)}${escapeText(label)}${navigation ? '</a>' : '</button>'}`;
+  return {
+    content: `${content.slice(0, container.end)}${control}${content.slice(container.end)}`,
+    applied: true,
+  };
 }
 
 /** Restore deterministic CTA markers before App Builder closure validation. */
@@ -623,6 +726,8 @@ export function normalizeWizardBindingMarkers(
 
     const surface = collectLocalImportClosure(nextFiles, filePath, (path) => SHARED_SURFACE_PATH.test(path));
     const target: BindingMatchTarget = {
+      bindingId: requirement.bindingId,
+      sourceSection: requirement.sourceSection,
       sourceSlot: requirement.sourceSlot,
       sourceLabel: requirement.sourceLabel ?? '',
       targetPath: requirement.targetPath,
@@ -653,8 +758,9 @@ export function normalizeWizardBindingMarkers(
       const result = labelResult.applied
         ? labelResult
         : applyBindingByIconAffinity(source, target, attrs);
-      if (!result.applied) continue;
-      nextFiles[candidatePath] = result.content;
+      const completed = result.applied ? result : addCanonicalBindingControl(source, target, attrs);
+      if (!completed.applied) continue;
+      nextFiles[candidatePath] = completed.content;
       applied = true;
       break;
     }

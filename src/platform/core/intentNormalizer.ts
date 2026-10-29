@@ -33,6 +33,14 @@ const PLAYGROUND_TO_CORE: Record<PlaygroundBindingIntent, CoreIntent | ((targetT
   'checkout.start':   'pay.checkout',
   'product.view':     'product.view',
   'cart.view':        'cart.view',
+  'account.open':     'account.open',
+  'menu.open':        'menu.open',
+  'search.open':      'search.open',
+  'filter.open':      'filter.open',
+  'sort.open':        'sort.open',
+  'favorite.toggle':  'favorite.toggle',
+  'share.open':       'share.open',
+  'chat.open':        'chat.open',
   'external.open':    'nav.external',
 };
 
@@ -82,6 +90,16 @@ export function inferUIAction(intent: PlaygroundBindingIntent): UIAction {
     case 'popup.open':
     case 'form.open':
       return 'overlay';
+    case 'account.open':
+    case 'menu.open':
+    case 'share.open':
+    case 'chat.open':
+      return 'overlay';
+    case 'search.open':
+    case 'filter.open':
+    case 'sort.open':
+    case 'favorite.toggle':
+      return 'state';
     case 'checkout.start':
       return 'navigate';
     default:

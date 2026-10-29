@@ -16,6 +16,7 @@ import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
 import { normalizeWizardBindingMarkers } from '@/services/wizardBindingBridge';
 import { inspectAppBuilderPageSectionClosure, materializeAppBuilderSectionModels } from './appBuilderSectionModel';
 import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
+import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 
 export interface AppBuilderOrchestratorDependencies {
   authorSite: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
@@ -77,6 +78,7 @@ export async function orchestrateAppBuild(
   const sectionImplementations = generation.materialization.manifest.implementations;
   const photoUrls = verifiedPhotosFor(input.contract.design.resolvedSiteDesignContext?.contract.industry ?? input.contract.business.industry);
   let unresolvedMarkerBindingIds: string[] = [];
+  let systemMaterializedCompositionFiles: Record<string, string> = {};
   const pageCheck = (path: string, source: string, files?: Readonly<Record<string, string>>) => {
     const messages = findDesignSourceUsageIssues(manifestSource, source).map((issue) => issue.message);
     if (Object.keys(sectionImplementations).length > 0) {
@@ -139,7 +141,12 @@ export async function orchestrateAppBuild(
   const terminalAuthoringFailure = authored.outcomes.some((outcome) =>
     outcome.status !== 'authored' && ['credits', 'denied', 'provider', 'rate_limited', 'invalid_response', 'aborted'].includes(outcome.reason));
   const validateClosure = async (files: Record<string, string>) => {
-    const report = await validateAppBuildCandidate({ contract: input.contract, files, initialFiles: baseFiles });
+    const report = await validateAppBuildCandidate({
+      contract: input.contract,
+      files,
+      initialFiles: baseFiles,
+      systemMaterializedCompositionFiles,
+    });
     const bindingIssues = unresolvedMarkerBindingIds.map((bindingId) => ({
       severity: 'blocker' as const,
       code: 'binding-marker-unresolved',
@@ -185,11 +192,22 @@ export async function orchestrateAppBuild(
       markerRequirements,
     );
     unresolvedMarkerBindingIds = markerNormalization.unresolvedBindingIds;
-    return materializeAppBuilderSectionModels(markerNormalization.files, pages.map((page) => ({
+    const beforeSectionMaterialization = markerNormalization.files;
+    const materializedFiles = materializeAppBuilderSectionModels(beforeSectionMaterialization, pages.map((page) => ({
       id: page.pageId,
       filePath: page.filePath,
       route: page.route,
     })), sectionImplementations, generation.designSources.eligibleByPage);
+    const generatedSidecars: Record<string, string> = {};
+    for (const page of pages) {
+      const path = resolvedCompositionPathFor(page.filePath);
+      const sidecar = materializedFiles[path];
+      if (typeof sidecar !== 'string' || sidecar === baseFiles[path]) continue;
+      const unchangedSystemOutput = systemMaterializedCompositionFiles[path] === beforeSectionMaterialization[path];
+      if (sidecar !== beforeSectionMaterialization[path] || unchangedSystemOutput) generatedSidecars[path] = sidecar;
+    }
+    systemMaterializedCompositionFiles = generatedSidecars;
+    return materializedFiles;
   };
   let candidateFiles = { ...authored.files };
   if (!compatibilityMode && input.preflight) candidateFiles = input.preflight(candidateFiles);

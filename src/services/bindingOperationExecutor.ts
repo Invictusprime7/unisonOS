@@ -49,12 +49,24 @@ const COMPATIBLE_CORE_INTENTS: Record<PlaygroundBinding['intent'], readonly stri
   'checkout.start': ['cart.add', 'cart.checkout', 'pay.checkout', 'donation.start'],
   'product.view': ['product.view'],
   'cart.view': ['cart.view'],
+  'account.open': ['account.open', 'auth.login', 'auth.register'],
+  'menu.open': ['menu.open', 'nav.goto', 'nav.anchor'],
+  'search.open': ['search.open'],
+  'filter.open': ['filter.open'],
+  'sort.open': ['sort.open'],
+  'favorite.toggle': ['favorite.toggle'],
+  'share.open': ['share.open'],
+  'chat.open': ['chat.open'],
   'external.open': ['nav.external'],
 };
 
 function assertIntentTargetCompatibility(binding: PlaygroundBinding, intent: string): void {
-  const compatible = COMPATIBLE_CORE_INTENTS[binding.intent] ?? [];
-  if (!compatible.includes(intent)) {
+  const canonicalBindingIntent = binding.coreIntent ? resolveIntentName(binding.coreIntent) : null;
+  const compatible = new Set([
+    ...(COMPATIBLE_CORE_INTENTS[binding.intent] ?? []),
+    ...(canonicalBindingIntent ? [canonicalBindingIntent] : []),
+  ]);
+  if (!compatible.has(intent)) {
     throw new Error(
       `[BindingOperation] Intent "${intent}" is incompatible with the selected ${binding.targetType} target. ` +
       `Create or select a compatible target before changing this behavior.`,

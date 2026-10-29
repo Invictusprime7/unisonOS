@@ -14,7 +14,7 @@ import {
 import { enforceSiteDesignContract } from '@/services/launch/homepageFirstContract';
 import { assertSiteShellClosure, buildSiteShellTopology } from '@/services/siteShellTopology';
 import { CANONICAL_COMPONENT_DEFINITIONS } from '@/services/canonicalComponentRegistry';
-import { RESOLVED_COMPOSITION_ROOT, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
+import { collectResolvedCompositions, RESOLVED_COMPOSITION_ROOT, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import { inspectAppBuilderPageSectionClosure } from './appBuilderSectionModel';
 import type {
   AppBuildCandidateClosureIssue,
@@ -328,6 +328,8 @@ export async function validateAppBuildCandidate(input: {
   contract: AppBuildContract;
   files: Readonly<Record<string, string>>;
   initialFiles: Readonly<Record<string, string>>;
+  /** Exact resolved-composition sidecars freshly emitted by the App Builder materializer. */
+  systemMaterializedCompositionFiles?: Readonly<Record<string, string>>;
 }): Promise<AppBuildCandidateClosureReport> {
   const files = { ...input.files };
   const issues: AppBuildCandidateClosureIssue[] = [];
@@ -530,6 +532,13 @@ export async function validateAppBuildCandidate(input: {
   for (const path of allPaths) {
     if (!isProtected(path, input.contract.runtime.protectedPaths)) continue;
     if (input.initialFiles[path] !== files[path]) {
+      const materialized = input.systemMaterializedCompositionFiles?.[path];
+      const page = pages.find((candidate) => resolvedCompositionPathFor(candidate.filePath) === path);
+      const appBuilderOwned = typeof materialized === 'string'
+        && files[path] === materialized
+        && !!page
+        && collectResolvedCompositions({ [path]: materialized })[page.filePath]?.compiledBy === 'app-builder';
+      if (appBuilderOwned) continue;
       issues.push({
         severity: 'blocker',
         code: 'protected-source-changed',

@@ -1,3 +1,4 @@
+import { getIntentDef } from './intentSurfaceRegistry';
 /**
  * Playground Types — Structured application model for site generation.
  * 
@@ -344,6 +345,14 @@ export type PlaygroundBindingIntent =
   | 'checkout.start'
   | 'product.view'
   | 'cart.view'
+  | 'account.open'
+  | 'menu.open'
+  | 'search.open'
+  | 'filter.open'
+  | 'sort.open'
+  | 'favorite.toggle'
+  | 'share.open'
+  | 'chat.open'
   | 'external.open';
 
 export interface PlaygroundBinding {
@@ -394,6 +403,8 @@ export interface PlaygroundBinding {
 
 /** Runtime DOM intent emitted by the canonical binding bridge for a Playground intent. */
 export function resolvePlaygroundBindingDomIntent(binding: PlaygroundBinding): string {
+  const canonicalIntent = binding.coreIntent ? getIntentDef(binding.coreIntent) : null;
+  if (canonicalIntent?.triggerType === 'user-action') return canonicalIntent.name;
   if (binding.coreIntent === 'nav.anchor') return 'nav.anchor';
   switch (binding.intent) {
     case 'nav.goto_page':

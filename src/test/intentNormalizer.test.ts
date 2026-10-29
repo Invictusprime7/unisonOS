@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { normalizePlaygroundIntent } from '@/platform/core/intentNormalizer';
+import { inferUIAction, normalizePlaygroundIntent } from '@/platform/core/intentNormalizer';
 
 describe('normalizePlaygroundIntent', () => {
   it('maps navigation intents to nav.goto', () => {
@@ -46,6 +46,15 @@ describe('normalizePlaygroundIntent', () => {
   it('maps external/anchor intents', () => {
     expect(normalizePlaygroundIntent('external.open')).toBe('nav.external');
     expect(normalizePlaygroundIntent('popup.open')).toBe('nav.anchor');
+  });
+
+  it('preserves canonical icon intents and classifies their UI actions', () => {
+    for (const intent of ['account.open', 'menu.open', 'search.open', 'filter.open', 'sort.open', 'favorite.toggle', 'share.open', 'chat.open'] as const) {
+      expect(normalizePlaygroundIntent(intent)).toBe(intent);
+    }
+    expect(inferUIAction('search.open')).toBe('state');
+    expect(inferUIAction('favorite.toggle')).toBe('state');
+    expect(inferUIAction('menu.open')).toBe('overlay');
   });
 
   it('falls back to nav.goto for unknown intents', () => {

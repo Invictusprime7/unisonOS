@@ -345,6 +345,43 @@ describe('App Builder candidate closure', () => {
     ]));
   });
 
+  it('allows only the exact App Builder-materialized composition sidecar under protected .unison paths', async () => {
+    const compositionPath = '/.unison/compositions/pages/Home.json';
+    const originalComposition = JSON.stringify({
+      version: '1.0', compiledBy: 'stage-4b', pageFilePath: '/src/pages/Home.tsx', sections: [],
+    });
+    const materializedComposition = JSON.stringify({
+      version: '1.0', compiledBy: 'app-builder', pageFilePath: '/src/pages/Home.tsx', sections: [],
+    });
+    const baseline = {
+      ...initialFiles,
+      [compositionPath]: originalComposition,
+    };
+    const files = {
+      ...baseline,
+      '/src/pages/Home.tsx': 'export default function Home(){return <main>Authored</main>}',
+      '/src/main.tsx': 'unauthorized entry edit',
+      [compositionPath]: materializedComposition,
+      '/.unison/ui-manifest.json': '{"changed":true}',
+    };
+    const appContract = contract();
+    appContract.runtime.protectedPaths = ['/src/main.tsx', '/.unison'];
+
+    const report = await validateAppBuildCandidate({
+      contract: appContract,
+      files,
+      initialFiles: baseline,
+      systemMaterializedCompositionFiles: { [compositionPath]: materializedComposition },
+    });
+    const protectedIssues = report.issues.filter((issue) => issue.code === 'protected-source-changed');
+
+    expect(protectedIssues.map((issue) => issue.path)).toEqual(expect.arrayContaining([
+      '/src/main.tsx',
+      '/.unison/ui-manifest.json',
+    ]));
+    expect(protectedIssues.some((issue) => issue.path === compositionPath)).toBe(false);
+  });
+
   it('blocks a candidate that omits a wizard-selected binding marker', async () => {
     const withBindingGuide = contract();
     withBindingGuide.business.bindingGuide = [
