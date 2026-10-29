@@ -46,6 +46,10 @@ function findPage(graph: SystemGraph, route: string): GraphPage | undefined {
     ?? graph.pages.find((p) => p.name.toLowerCase() === norm.replace(/^\//, '').toLowerCase());
 }
 
+function isAmbiguousAlias(graph: SystemGraph, alias: string): boolean {
+  return graph.ambiguousAliases?.includes(alias) === true;
+}
+
 function normalizeComponentAddress(value: string): string {
   return value.replace(/^component:/i, '').toLowerCase().replace(/[\s_-]+/g, '');
 }
@@ -64,15 +68,25 @@ export function resolveMutableNode(
       : { ok: false, address, error: `File not found: ${address.path}` };
   }
   if (address.kind === 'component') {
+    const aliasKey = `component:${address.path}`;
+    if (isAmbiguousAlias(graph, aliasKey)) {
+      return { ok: false, address, error: `Ambiguous component alias: ${address.path}; use its canonical component name or file path.` };
+    }
     const sought = normalizeComponentAddress(address.path);
-    const aliasTarget = graph.aliases[`component:${address.path}`];
-    const c = graph.components.find((component) =>
+    const aliasTarget = graph.aliases[aliasKey];
+    const matches = graph.components.filter((component) =>
       component.id === aliasTarget
       || [component.name, component.id, ...(component.aliases ?? []), component.sourcePath ?? '']
         .some((candidate) => normalizeComponentAddress(candidate) === sought),
     );
+    if (matches.length > 1) return { ok: false, address, error: `Ambiguous component address: ${address.path}; use its canonical component name or file path.` };
+    const c = matches[0];
     if (!c?.sourcePath) return { ok: false, address, error: `Component not found: ${address.path}` };
     return { ok: true, address, canonicalId: c.id, ownerPath: c.sourcePath, label: c.name, node: c };
+  }
+  const pageAlias = `page:${address.path === '' ? '/' : address.path}`;
+  if (isAmbiguousAlias(graph, pageAlias)) {
+    return { ok: false, address, error: `Ambiguous page alias: ${address.path}; use a canonical route.` };
   }
   const page = findPage(graph, address.path);
   if (!page) return { ok: false, address, error: `No page at ${address.path}` };

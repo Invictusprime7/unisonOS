@@ -121,6 +121,8 @@ export interface SystemGraph {
   edges: GraphEdge[];
   /** Alternate addresses mapped to canonical graph node IDs. */
   aliases: Record<string, string>;
+  /** Addresses that were claimed by more than one canonical node. */
+  ambiguousAliases?: string[];
   /** Compatibility summary for existing UI consumers. */
   intentCount: number;
 }
@@ -341,8 +343,15 @@ export function buildSystemGraph(input: Record<string, string> | SystemGraphInpu
   const dependencies = Object.entries({ ...packageDependencies(files), ...(context.runtimeManifest?.dependencies ?? {}) }).map(([name, version]) => ({ id: `dependency:${name}`, name, version: version || null })).sort((left, right) => left.id.localeCompare(right.id));
 
   const aliases: Record<string, string> = {};
+  const ambiguousAliases = new Set<string>();
   const registerAlias = (alias: string, canonicalId: string) => {
-    if (alias && alias !== canonicalId && !(alias in aliases)) aliases[alias] = canonicalId;
+    if (!alias || alias === canonicalId || ambiguousAliases.has(alias)) return;
+    const existing = aliases[alias];
+    if (existing === undefined) aliases[alias] = canonicalId;
+    else if (existing !== canonicalId) {
+      delete aliases[alias];
+      ambiguousAliases.add(alias);
+    }
   };
   pages.forEach((page) => {
     registerAlias(`page:${page.route}`, page.id);
@@ -438,6 +447,7 @@ export function buildSystemGraph(input: Record<string, string> | SystemGraphInpu
     entities: entities.sort((left, right) => left.id.localeCompare(right.id)),
     edges,
     aliases,
+    ambiguousAliases: [...ambiguousAliases].sort(),
     intentCount: pages.reduce((count, page) => count + page.intents.length, 0),
   };
 }
