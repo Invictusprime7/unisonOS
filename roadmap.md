@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Uploaded Gemini timeout follow-up
+- [ ] Replace the full-page timeout replay with bounded, sequential page-section requests before final candidate validation.
+- [ ] Verify section accumulation, provider-stop behavior, and existing authoring regressions.
+- [ ] Verify live generation → save → reopen; requires an authoritative UNISON session and a successful real provider response.
+
 ## Active: Marketplace install failure follow-up
 - [x] Align marketplace installation with App Builder owner AI preferences through the shared facade, including page authoring and closure repair; 23 client regressions pass and Gemini provider/backup tests pass. No server credential or provider-policy changes; live installation still awaits canonical deployment and authoritative sign-in below.
 - [x] Enforce the owner's Gemini key for App Builder and marketplace authoring, with no OpenAI/Anthropic attempts or stale-model bypass; preserve managed Gemini backup. All 120 edge tests pass, including direct timeout → managed Gemini and owner-key-alias routing.
