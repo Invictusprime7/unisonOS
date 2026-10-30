@@ -1,5 +1,6 @@
 import type { AppBuildContract } from './appBuilderContracts';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
+import { missingNativeFormFields, selectedNativeFormTemplate } from './nativeFormContract';
 
 const APP_BUILDER_SOURCE_PATH = /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/;
 
@@ -73,10 +74,7 @@ function nativeFormSatisfiesContract(form: string, component: AppBuildContract['
   const escapedIntent = intent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   if (!new RegExp(`<form\\b(?=[^>]*data-intent-form\\s*=\\s*["']${escapedIntent}["'])`, 'i').test(form)
     || /\bonSubmit\s*=/.test(form)) return false;
-  return (component.requiredNativeFormFields ?? []).every((field) => {
-    const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`name\\s*=\\s*["']${escapedField}["']`, 'i').test(form);
-  });
+  return missingNativeFormFields(form, component).length === 0;
 }
 
 function repairNativeFormWithinHost(
@@ -84,7 +82,7 @@ function repairNativeFormWithinHost(
   component: AppBuildContract['business']['registeredComponents'][number],
   contract: AppBuildContract,
 ): string | null {
-  const templateForm = component.nativeComponentTemplate?.match(/<form\b[\s\S]*?<\/form>/i)?.[0];
+  const templateForm = selectedNativeFormTemplate(component)?.match(/<form\b[\s\S]*?<\/form>/i)?.[0];
   if (!templateForm) return null;
   const tags = /<([A-Za-z][\w:.-]*)\b[^>]*>/gs;
   for (let match = tags.exec(source); match; match = tags.exec(source)) {
@@ -138,7 +136,7 @@ export function materializeRegisteredComponents(
       continue;
     }
     const instanceId = component.runtime.instanceId;
-    const template = component.nativeComponentTemplate;
+    const template = selectedNativeFormTemplate(component);
     if (!template) continue;
 
     for (const pageId of componentPageIds(contract, instanceId, component.runtime.usedOnPages)) {
