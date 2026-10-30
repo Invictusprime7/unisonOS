@@ -340,7 +340,7 @@ describe('UnisonAppBuilder facade', () => {
     expect(result.candidate.diagnostics).toContain('Home binding did not pass.');
   });
 
-  it('checks applicable Home binding coverage before forwarding its sidecar', async () => {
+  it('materializes applicable Home binding coverage before forwarding its sidecar', async () => {
     const appContract = contract();
     const homeBinding = { ...ecommerceContract().business.intentBindings[0], pageId: 'home',
       bindingId: 'bind-home-return', route: '/', sourceLabel: 'View our story',
@@ -350,11 +350,9 @@ describe('UnisonAppBuilder facade', () => {
       const home = input.pages[0];
       const withoutBinding = { ...appContract, business: { ...appContract.business, intentBindings: [] } };
       const drafted = scaffoldAuthoredPages(withoutBinding, {}, input.files);
-      expect(input.pageCheck?.(home.filePath, drafted[home.filePath], drafted)?.join(' ')).toContain('bind-home-return');
-      const wired = { ...drafted, [home.filePath]: drafted[home.filePath].replace('</main>',
-        '<a href="#/" data-ut-cta="cta.home-story">View our story</a></main>') };
-      expect(input.pageCheck?.(home.filePath, wired[home.filePath], wired)).toEqual([]);
-      const projected = input.preparePage?.(wired, home) ?? wired;
+      expect(drafted[home.filePath]).not.toContain('data-ut-binding-id="bind-home-return"');
+      expect(input.pageCheck?.(home.filePath, drafted[home.filePath], drafted)).toEqual([]);
+      const projected = input.preparePage?.(drafted, home) ?? drafted;
       expect(projected[home.filePath]).toContain('data-ut-binding-id="bind-home-return"');
       expect(projected[resolvedCompositionPathFor(home.filePath)]).toBeDefined();
       return { files: projected, outcomes: [] };
