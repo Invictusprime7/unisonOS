@@ -1,7 +1,7 @@
 import { aiComposerRouteOpSchema, type AIComposerRequest, type AIComposerTask } from '@/contracts/aiComposerContract';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { designKnowledgeManifest, selectDesignKnowledge } from '@/services/knowledge/designKnowledge';
-import { scopeForInstruction, selectSourceKnowledgeWithReport } from './sourceKnowledgeContext';
+import { scopeForInstruction, selectSourceKnowledgeWithReport, type SourceKnowledgeScope } from './sourceKnowledgeContext';
 import { boundRegistryContext, collectValidImportPaths } from '@/services/builderRegistryContext';
 import type { WizardAggregatedRegistryContext } from '@/services/launch/wizardRegistryAggregation';
 import { INTENT_REGISTRY } from '@/platform/core/intentSurfaceRegistry';
@@ -69,6 +69,8 @@ export interface CanonicalAuthoringRequestInput {
   attachmentContext?: string;
   images?: AIComposerRequest['images'];
   sourceTargets?: string[];
+  /** Caller-owned repair reads may omit unrelated chrome and transitive implementations. */
+  sourceScope?: SourceKnowledgeScope;
   approvedRouteOps?: readonly TopologyChange[];
 }
 
@@ -222,7 +224,7 @@ export async function assembleCanonicalAuthoringRequest(input: CanonicalAuthorin
   evidence: CanonicalAuthorshipEvidence;
 }> {
   const targets = input.sourceTargets?.length ? input.sourceTargets : [input.page.filePath];
-  const scope = input.task === 'builder_source_edit' ? scopeForInstruction(input.instruction) : {};
+  const scope = input.sourceScope ?? (input.task === 'builder_source_edit' ? scopeForInstruction(input.instruction) : {});
   // Edit policy: the files being edited must always reach the Composer. Edit
   // requests get a larger transport budget, and if optional context (theme,
   // imports, experience facades) still crowds a target out, retry with a

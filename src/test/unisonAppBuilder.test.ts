@@ -972,27 +972,66 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
       fileOps: [{ type: 'create' as const, path: '/src/project-components/Card.tsx', content: repairedFiles['/src/project-components/Card.tsx'] }],
       routeOps: [], targetPages: ['home'], attempt: 1,
     };
-    const runComposer = vi.fn(async (): Promise<ComposerLoopResult> => ({
-      ok: true, reason: 'accepted', attempts: 1, errors: [],
-      prepared: {
-        ok: true,
-        build: { changeSet, candidateFiles: repairedFiles, refused: [] },
-        gates: { passed: true, failures: [], advisories: [] },
-        nextFiles: repairedFiles,
-        errors: [],
-      },
-    }));
+    const runComposer = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['runComposer']>>[0]): Promise<ComposerLoopResult> => {
+      const nextFiles = { ...input.baseFiles, '/src/project-components/Card.tsx': repairedFiles['/src/project-components/Card.tsx'] };
+      return {
+        ok: true, reason: 'accepted', attempts: 1, errors: [],
+        prepared: {
+          ok: true,
+          build: { changeSet, candidateFiles: nextFiles, refused: [] },
+          gates: { passed: true, failures: [], advisories: [] },
+          nextFiles,
+          errors: [],
+        },
+      };
+    });
     const result = await createTestBuilder({ authorSite, runComposer }).generate({
       operationId: 'operation-closure', contract: contract(), initialFiles: baseFiles,
       entryPoint: '/src/main.tsx', baseRevisionId: null,
     });
 
     expect(runComposer).toHaveBeenCalledOnce();
-    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidate.status, result.candidate.diagnostics.join('\n')).toBe('ready-for-commit');
     expect(result.candidateFiles['/src/project-components/Card.tsx']).toContain('Card');
     expect(result.candidate.closure?.ok).toBe(true);
     expect(result.candidate.provenance?.strategy).toBe('ai-candidate+closure-repair');
     expect(result.revisionId).toBeNull();
+  });
+
+  it.each([false, true])('repairs page owners separately and preserves completed work (later timeout: %s)', async (laterTimeout) => {
+    const appContract = contract('salon', ['home', 'about']);
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: scaffoldAuthoredPages(appContract, {
+        '/src/pages/Home.tsx': { body: '<span>needs-layout-fix</span>' },
+        '/src/pages/About.tsx': { body: '<span>needs-layout-fix</span>' },
+      }, input.files),
+      outcomes: input.pages.map(page => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
+    }));
+    const runComposer = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['runComposer']>>[0]): Promise<ComposerLoopResult> => {
+      const path = input.request.page.filePath;
+      const otherPage = path.endsWith('Home.tsx') ? '/src/pages/About.tsx' : '/src/pages/Home.tsx';
+      expect(input.request.files[otherPage]).toBeUndefined();
+      expect(input.request.files[path]).toBe(input.baseFiles[path]);
+      if (path.endsWith('About.tsx')) expect(input.baseFiles['/src/pages/Home.tsx']).not.toContain('needs-layout-fix');
+      if (laterTimeout && path.endsWith('About.tsx')) return {
+        ok: false, reason: 'provider', attempts: 1, errors: ['Gemini timed out during the second layout fix.'],
+      };
+      const nextFiles = { ...input.baseFiles, [path]: input.baseFiles[path].replace('needs-layout-fix', 'fixed') };
+      return { ok: true, reason: 'accepted', attempts: 1, errors: [], prepared: {
+        ok: true, nextFiles, errors: [], gates: { passed: true, failures: [], advisories: [] },
+        build: { changeSet: { id: 'scoped-fix', fileOps: [], routeOps: [], targetPages: [], attempt: 1,
+          provenance: { origin: 'repair', knowledgeVersion: 'test' } }, candidateFiles: nextFiles, refused: [] },
+      } };
+    });
+    const result = await createTestBuilder({ authorSite, runComposer }).generate({
+      operationId: 'separate-layout-fixes', contract: appContract, initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', pageCheck: (_path, source) => source.includes('needs-layout-fix') ? ['Layout check failed.'] : [],
+    });
+    expect(runComposer).toHaveBeenCalledTimes(2);
+    expect(result.candidate.status).toBe(laterTimeout ? 'rejected' : 'ready-for-commit');
+    expect(result.candidateFiles['/src/pages/Home.tsx']).toContain('fixed');
+    expect(result.candidateFiles['/src/pages/About.tsx']).toContain(laterTimeout ? 'needs-layout-fix' : 'fixed');
+    if (laterTimeout) expect(result.stopReason).toBe('provider-error');
   });
 
   it('bounds and reports the site-wide closure repair phase', async () => {
