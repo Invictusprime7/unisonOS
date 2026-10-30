@@ -1,8 +1,9 @@
 # Roadmap
 
 ## Active: Marketplace final-check timeout
-- [ ] Replace all-page repair fallback with diagnostic-owned, bounded requests; preserve completed pages and canonical acceptance.
-- [ ] Test targeted page/shared-component repair and terminal timeout behavior; verify live install when authoritative session is available.
+- [x] Replace all-page repair fallback with diagnostic-owned requests using complete target source and direct imports, page-specific context and EDIT guidance; validate after each provisional fix and refuse unrelated source changes. Unknown/protected owners never trigger an all-site rewrite. Provider timeouts stop without replay; completed provisional fixes remain in the candidate, not an accepted revision.
+- [x] Test targeted page/shared-component repair, separate multi-page fixes, prior-fix preservation on later timeout, and existing marketplace acceptance: 103 checks across six suites pass; both authority lints and preview build OK.
+- [ ] Verify live install and backup availability; blocked by authoritative UNISON session/deployment access. No gateway key was configured on a different backend, and no paid live request was replayed. This change does not recover the already-failed install across reload.
 
 ## Active: Home sidecar wiring and downstream context
 - [x] Project each provisional page through existing canonical component, binding and composition materializers before handing it forward. Home source and its composition sidecar reach subsequent requests with value-safe canonical object/binding/capability references; Home remains read-only and later pages keep their own roles and permissions. Home failure prevents secondary requests; skipped/budget/projection-failed pages cannot count as a complete application. No partial revision is accepted.
