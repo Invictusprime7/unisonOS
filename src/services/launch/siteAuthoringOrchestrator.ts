@@ -119,6 +119,18 @@ export interface AcceptedPageEntry {
 /** Accepted-page cache: a retry with an identical page contract reuses the page instead of re-authoring. */
 const acceptedPages = new Map<string, AcceptedPageEntry>();
 const MAX_ACCEPTED_PAGES = 64;
+/** A split follow-up request needs a full fresh server window to be worth sending. */
+export const PAGE_SPLIT_MIN_WINDOW_MS = 125_000;
+const LEAN_PAGE_DIRECTIVE = 'SIZE LIMIT (previous attempt timed out): keep the same section order, but write a compact page — at most 3 items per repeated list, one or two short sentences per description, no inline data arrays longer than 4 entries, and no comments.';
+
+/** A smaller version of a page request so Gemini can finish inside one server window. */
+export function leanRequest(request: AIComposerRequest): AIComposerRequest {
+  return {
+    ...request,
+    brief: `${LEAN_PAGE_DIRECTIVE}\n${request.brief ?? ''}`.slice(0, 8000),
+    runtimeContext: request.runtimeContext?.slice(0, 4000),
+  };
+}
 
 function hashKey(value: string): string {
   let h = 5381;
