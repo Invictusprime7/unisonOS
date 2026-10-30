@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Home sidecar wiring and downstream context
+- [ ] Project Home's canonical object, data, intent and capability sidecars before subsequent page authoring; carry read-only Home source and shared contracts into every later page without changing its page role.
+- [ ] Verify Home wiring, downstream inheritance and failure isolation with focused regressions.
+- [ ] Verify a real multi-page launch and saved reload; requires an authoritative UNISON session and usable deployed Gemini service.
+
 ## Active: Wizard launch progress
 - [x] Show actual launch stages, page/batch updates and a bounded public Affinity activity feed during designing, without internal reasoning or simulated completion; reset progress for each launch and ignore stale callbacks.
 - [x] Verify the display with controlled browser progress events and 48 progress/batch/authoring checks; preview build OK. The broader launchRun suite has two Node-only storage failures, and jsdom is unavailable because native canvas is missing.
