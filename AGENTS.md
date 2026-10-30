@@ -7,7 +7,7 @@
 - `UnisonAppBuilder` is the sole fresh-launch application author; `generate-page` reuses Composer and saved Home design. Why: no parallel writer.
 - The canonical platform owns topology/routes, capabilities/intents/bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation; never generate competing pages after App Builder authorship.
 - `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
-- Saved projects hydrate accepted revisions; parsers/Playground hydration are read-only. Candidates stay unsanitized/unsplit; uploads lead context and images survive Composer repairs. Why: preserve source; signed-in acceptance remains required.
+- Saved revisions hydrate read-only; role recovery uses explicit role/type before shared route aliases (Visit → contact), preserving source. Candidates stay unsanitized/unsplit; uploads/images survive repairs. Why: preserve saved work and valid page types.
 - Composer contracts mirror `supabase/functions/_shared/aiComposerContract.ts` and `src/contracts/aiComposerContract.ts`; enforce targets/routes/import reads/intents; prefer hunks, accept replaces. Why: vocabulary is not readiness.
 - Composer modes stay in `ai-code-assistant/composerLane.ts`. Why: no parallel author/repair/edit pipelines.
 - Page composition intelligence lives in `src/services/composition/` (one universal planner + data-only industry profiles, consumed under App Builder orchestration); why: industries differ by data, never by engine.
