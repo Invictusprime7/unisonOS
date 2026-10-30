@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: App Builder authoring reliability
+- [ ] Enforce complete-source file operations and transactional batch validation; safely retain completed batches and resume only failed work.
+- [ ] Separate bounded provider calls from multi-batch page budgets; test deterministic Home section-model acceptance independently.
+- [ ] Run focused reliability regressions and record the eight production checks separately from fixture results.
+- [ ] Verify deployed Gemini, configured fallback, five-page launch and saved reload; requires canonical deployment and an authoritative UNISON session.
+
 ## Active: Gemini install preflight
 - [x] Add an authenticated, bounded direct-Gemini check before any release claim, project creation or page authoring; report credit, connectivity and permission failures without starting installation.
 - [x] Run preflight and installation regressions: 21 client checks and all 125 edge checks pass (ambient provider keys removed for fixture isolation); preview build OK.
