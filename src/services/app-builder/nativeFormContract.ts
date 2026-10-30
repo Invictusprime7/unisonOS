@@ -13,8 +13,9 @@ export function missingNativeFormFields(form: string, component: AppBuildRegiste
   return [...fields].filter(([name, required]) => {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const tag = new RegExp(`<(?:input|textarea|select)\\b(?=[^>]*\\bname\\s*=\\s*["']${escaped}["'])[^>]*>`, 'i').exec(form)?.[0];
-    return !tag || (required && !/\brequired(?:\s|=|\/?>)/i.test(tag))
-      || (name === 'email' && !/\btype\s*=\s*["']email["']/i.test(tag));
+    const contact = component.runtime.writeIntent === 'contact.submit';
+    return !tag || (required && contact && !/\brequired(?:\s|=|\/?>)/i.test(tag))
+      || (contact && name === 'email' && !/\btype\s*=\s*["']email["']/i.test(tag));
   }).map(([name]) => name);
 }
 

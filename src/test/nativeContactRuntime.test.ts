@@ -12,14 +12,16 @@ async function submitContact(result: Record<string, unknown>, valid = true) {
     getAttribute: (key: string) => attributes.get(key), setAttribute: (key: string, value: string) => attributes.set(key, value),
     removeAttribute: (key: string) => attributes.delete(key), querySelector: () => status,
   };
-  const fetch = vi.fn(async () => ({ ok: true, json: async () => result }));
+  const fetch = vi.fn(async (_endpoint: string, _request: { body: string }) => ({ ok: true, json: async () => result }));
   const source = ts.transpileModule(PUBLISHED_ACTION_RUNTIME_MODULE.replace(/^import .*;$/gm, ''), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText;
   const exports: Record<string, () => void> = {};
+  const window = { location: { pathname: '/contact' }, addEventListener: () => {}, sessionStorage: { getItem: () => null, setItem: () => {} }, parent: undefined as unknown };
+  window.parent = window;
   runInNewContext(source, { exports, useEffect: (callback: () => void) => callback(),
     PUBLISHED_RUNTIME_CONFIG: { siteId: 'site', businessId: 'business', controllerEndpoints: { 'intent-exec': '/intent-exec' } },
     GENERATED_SITE_RUNTIME_MANIFEST: { controllers: [{ functionName: 'intent-exec', transport: 'supabase-function', intents: ['contact.submit'] }], components: [{ instanceId: 'cmp-contact', writeIntent: 'contact.submit' }] },
-    document: { querySelectorAll: () => [], addEventListener: (type: string, handler: (event: unknown) => void) => { handlers[type] = handler; }, documentElement: {}, },
-    window: { location: { pathname: '/contact' }, addEventListener: () => {}, localStorage: { getItem: () => null, setItem: () => {} } },
+    document: { getElementById: () => status, querySelectorAll: () => [], addEventListener: (type: string, handler: (event: unknown) => void) => { handlers[type] = handler; }, documentElement: {}, },
+    window,
     localStorage: { getItem: () => null, setItem: () => {} }, MutationObserver: class { observe() {} disconnect() {} },
     FormData: class { entries() { return [['name', 'Alex'], ['email', 'alex@example.test'], ['message', 'Hello'], ['field-budget', '500']][Symbol.iterator](); } },
     fetch, crypto: { randomUUID: () => 'request-id' }, console, URL, Map, CustomEvent: class {},

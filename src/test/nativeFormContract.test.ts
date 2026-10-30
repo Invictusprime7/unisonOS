@@ -23,7 +23,8 @@ describe('selected native contact form contract', () => {
   it.each(['name', 'email', 'message'])('rejects optional %s when the registered field is required', (name) => {
     const contact = component();
     const source = selectedNativeFormTemplate(contact) ?? '';
-    expect(missingNativeFormFields(source.replace(`name="${name}" required`, `name="${name}"`), contact)).toContain(name);
+    const optional = source.replace(new RegExp(`(<(?:input|textarea)[^>]*name="${name}"[^>]*?)\\srequired`), '$1');
+    expect(missingNativeFormFields(optional, contact)).toContain(name);
   });
   it('rejects a text email field', () => {
     const contact = component();
