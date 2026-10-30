@@ -988,7 +988,7 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     });
 
     expect(runComposer).toHaveBeenCalledOnce();
-    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidate.status, result.candidate.diagnostics.join('\n')).toBe('ready-for-commit');
     expect(result.candidateFiles['/src/project-components/Card.tsx']).toContain('Card');
     expect(result.candidate.closure?.ok).toBe(true);
     expect(result.candidate.provenance?.strategy).toBe('ai-candidate+closure-repair');
