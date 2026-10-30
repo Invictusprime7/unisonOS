@@ -340,6 +340,31 @@ describe('UnisonAppBuilder facade', () => {
     expect(result.candidate.diagnostics).toContain('Home binding did not pass.');
   });
 
+  it('checks applicable Home binding coverage before forwarding its sidecar', async () => {
+    const appContract = contract();
+    const homeBinding = { ...ecommerceContract().business.intentBindings[0], pageId: 'home',
+      bindingId: 'bind-home-return', route: '/', sourceLabel: 'View our story',
+      targetId: 'home', ctaMarkers: ['cta.home-story'] };
+    appContract.business.intentBindings = [homeBinding];
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => {
+      const home = input.pages[0];
+      const drafted = scaffoldAuthoredPages(appContract, {}, input.files);
+      expect(input.pageCheck?.(home.filePath, drafted[home.filePath], drafted)?.join(' ')).toContain('bind-home-return');
+      const wired = { ...drafted, [home.filePath]: drafted[home.filePath].replace('</main>',
+        '<a href="#/" data-ut-cta="cta.home-story">View our story</a></main>') };
+      expect(input.pageCheck?.(home.filePath, wired[home.filePath], wired)).toEqual([]);
+      const projected = input.preparePage?.(wired, home) ?? wired;
+      expect(projected[home.filePath]).toContain('data-ut-binding-id="bind-home-return"');
+      expect(projected[resolvedCompositionPathFor(home.filePath)]).toBeDefined();
+      return { files: projected, outcomes: [] };
+    });
+    await createTestBuilder({ authorSite, runComposer: vi.fn() }).generate({
+      operationId: 'home-binding-coverage', contract: appContract, initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', budgetMs: 1,
+    });
+    expect(authorSite).toHaveBeenCalledOnce();
+  });
+
   it('reports exhausted provider credits instead of accepting unchanged preview material', async () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
       files: input.files,
