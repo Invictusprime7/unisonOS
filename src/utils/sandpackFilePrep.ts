@@ -527,6 +527,8 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
   document.addEventListener('submit', function (event) {
     const form = event.target as HTMLFormElement;
     if (!form || form.tagName !== 'FORM') return;
+    // Native registered forms are owned by the canonical action runtime.
+    if (form.hasAttribute('data-intent-form')) return;
     const formIntent = form.getAttribute('data-ut-intent');
     if (!formIntent) return;
     event.preventDefault();
@@ -534,8 +536,7 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
     const payload: Record<string, unknown> = {};
     formData.forEach((value, key) => { payload[key] = value.toString(); });
     payload.source = 'preview-form';
-    // Show immediate in-preview confirmation
-    __showPreviewFeedback('Submitted \u2713', '#2563eb');
+    // Parent acknowledgment owns success; dispatch alone is not a saved submission.
     window.parent.postMessage({
       type: 'INTENT_TRIGGER',
       intent: formIntent,

@@ -277,6 +277,7 @@ export interface AppBuildIntentBinding {
   componentSlug?: string;
   componentWriteIntent?: string;
   formFields?: CreatorFormField[];
+  businessFieldBindings?: Array<{ field: string; source: 'business-profile' | 'business-profile.customValues'; configured: boolean }>;
 }
 
 export interface AppBuildRegisteredComponent {
@@ -331,6 +332,8 @@ function deriveIntentBindings(
   pageRegistry: PageRegistry,
   components: readonly AppBuildRegisteredComponent[],
   enabledCapabilities: readonly string[],
+  businessParameters?: WizardBusinessParameters,
+  businessProfile?: CreatorBusinessInfo,
 ): AppBuildIntentBinding[] {
   return bindings
     .filter((binding) => binding.sourceSection && binding.sourceSlot && binding.coreIntent)
@@ -370,6 +373,17 @@ function deriveIntentBindings(
         componentSlug: component?.runtime.componentSlug,
         componentWriteIntent: component?.runtime.writeIntent ?? undefined,
         formFields: component?.formFields,
+        businessFieldBindings: [
+          ...(component?.requiredBusinessFields ?? []).map((field) => ({
+            field, source: 'business-profile' as const,
+            configured: configuredBusinessFields(businessParameters, businessProfile).includes(field),
+          })),
+          ...Object.keys({ ...businessProfile?.customValues, ...businessParameters?.industry }).sort()
+            .filter((field) => !PRIVATE_ROUTING_PARAMETER_KEYS.some((key) => key === field))
+            .map((field) => ({ field, source: 'business-profile.customValues' as const,
+              configured: hasConfiguredBusinessValue(businessParameters?.industry?.[field] ?? businessProfile?.customValues?.[field]),
+            })),
+        ],
       };
     })
     .sort((left, right) => left.bindingId.localeCompare(right.bindingId));
@@ -704,6 +718,8 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
     input.pageRegistry,
     registeredComponents,
     input.capabilities,
+    input.businessParameters,
+    input.businessProfile,
   );
   const compositionPlan = planSiteComposition(
     input.industry,

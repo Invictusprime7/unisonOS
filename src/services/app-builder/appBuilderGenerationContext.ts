@@ -190,6 +190,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     return [
       `${pageId ? 'PAGE ' : ''}CANONICAL INTENT BINDINGS: ${bindings.length ? bindings.map((binding) => `${binding.bindingId}: page ${binding.pageId} ${binding.route} ${binding.sourceSection}.${binding.sourceSlot} -> core intent ${binding.coreIntent}, DOM intent ${binding.domIntent}, required marker ${binding.ctaMarkers.map((marker) => `data-ut-cta="${marker}"`).join(' or ') || 'none'}, handler ${binding.intentHandler}, target ${binding.targetType}:${binding.targetId}${binding.componentSlug ? `, registered ${binding.componentSlug} instance ${binding.componentInstanceId} (write intent ${binding.componentWriteIntent ?? 'none'})` : ''}${binding.missingCapabilities.length ? `, INACTIVE missing capabilities ${binding.missingCapabilities.join(', ')}; omit this interaction` : ''}`).join('\n') : 'none.'}`,
       'Use these supplied IDs only; do not invent binding, target, or component-instance IDs. The platform stamps the canonical intent and component-instance ID after candidate validation from the exact CTA marker and registered component slug.',
+      ...bindings.filter((binding) => binding.businessFieldBindings?.length).map((binding) => `${binding.bindingId} business field bindings: ${JSON.stringify(binding.businessFieldBindings)}. Resolve these from the canonical scoped business profile; never copy private destinations or business answers into visitor form values.`),
     ].join('\n');
   };
   const businessParameterContext = [
