@@ -4,7 +4,7 @@
 - [x] Enforce complete-source file operations and transactional batch validation; safely retain completed batches and resume only failed work. Checkpoints live only in bounded tab memory for 15 minutes, keyed by exact request/source/plan/settings; refresh clears provisional progress, and no partial revision is committed.
 - [x] Separate bounded provider calls from multi-batch page/site budgets; derive Wizard watchdog and marketplace budget from sealed section counts. Verify deterministic Home independently through canonical planning → App Builder → section-model closure, without AI calls.
 - [x] Run focused reliability regressions: 123 client checks plus the independent deterministic Home test and all 125 edge checks pass; both authority lints pass. Node test environment avoids unavailable native canvas. Provider fixtures require ambient provider keys removed.
-- [ ] Resolve the three pre-existing broad App Builder fixture failures: Landing hero and Contact services/stats have no page-eligible implementation for their sealed composition. Do not silently drop sections or broaden registry eligibility; needs coherent composition/registry contract resolution in a separately scoped fix.
+- [ ] Continue targeted composition/registry contract resolution for the three broad App Builder failures; reproduce Landing hero and Contact services/stats mismatches, repair role/profile identity before sealing, and rerun canonical industry and Home coverage without dropping sealed sections or widening registry eligibility.
 - [ ] Verify deployed Gemini, configured fallback, five-page launch and saved reload; requires canonical deployment and an authoritative UNISON session.
 
 ### Production checklist: 0 / 8 verified live
