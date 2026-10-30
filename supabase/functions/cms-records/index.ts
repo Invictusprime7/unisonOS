@@ -57,11 +57,17 @@ function jsonError(message: string, status: number, corsHeaders: Record<string, 
 }
 
 /** Safe, actionable write-failure text: Postgres class + column name only, never row values. */
+export function missingColumnName(error: { message?: string } | null): string | undefined {
+  // Postgres: column "x" ... ; PostgREST PGRST204: Could not find the 'x' column of 't' in the schema cache
+  return error?.message?.match(/column "([a-z_0-9]+)"/i)?.[1] ?? error?.message?.match(/'([a-z_0-9]+)' column/i)?.[1];
+}
+
 function describeWriteFailure(verb: string, resource: string, error: { code?: string; message?: string } | null): string {
   const base = `Could not ${verb} ${resource} record`;
-  const column = error?.message?.match(/column "([a-z_]+)"/i)?.[1];
+  const column = missingColumnName(error);
   switch (error?.code) {
-    case "42703": return `${base}: the backend is missing column "${column ?? "unknown"}" (run the latest database migration).`;
+    case "42703":
+    case "PGRST204": return `${base}: the backend is missing column "${column ?? "unknown"}" (run the latest database migration).`;
     case "23502": return `${base}: required field "${column ?? "unknown"}" was empty.`;
     case "22P02": return `${base}: a value had the wrong type${column ? ` for "${column}"` : ""}.`;
     case "23505": return `${base}: a matching record already exists.`;
@@ -527,17 +533,25 @@ serve(async (req) => {
   if ("error" in validation) return jsonError(validation.error, 400, corsHeaders);
 
   if (body.action === "create") {
-    const { data, error } = await admin
-      .from(resource.sourceTable)
-      .insert({ ...validation.values, business_id: body.businessId, project_id: projectId ?? null })
-      .select("*")
-      .single();
+    const row: Record<string, unknown> = { ...validation.values, business_id: body.businessId, project_id: projectId ?? null };
+    const protectedColumns = new Set(["business_id", ...resource.requiredFields]);
+    const skippedColumns: string[] = [];
+    let { data, error } = await admin.from(resource.sourceTable).insert(row).select("*").single();
+    // Backend schema lags the contract: drop optional columns it doesn't have, never required/ownership ones.
+    for (let attempt = 0; attempt < 6 && error && (error.code === "PGRST204" || error.code === "42703"); attempt++) {
+      const missing = missingColumnName(error);
+      if (!missing || !(missing in row) || protectedColumns.has(missing)) break;
+      delete row[missing];
+      skippedColumns.push(missing);
+      ({ data, error } = await admin.from(resource.sourceTable).insert(row).select("*").single());
+    }
     if (error || !data) {
       console.error("[cms-records] create failed", resource.resource, error?.code, error?.message, error?.details);
       return jsonError(describeWriteFailure("create", resource.resource, error), error?.code === "23505" ? 409 : 500, corsHeaders);
     }
+    if (skippedColumns.length) console.warn("[cms-records] backend schema is missing optional columns; saved without them", resource.resource, skippedColumns);
     await audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, siteId: body.siteId, resource: resource.resource, action: body.action, recordId: String(data.id) });
-    return secureJsonResponse({ success: true, resource: resource.resource, record: data }, 201, corsHeaders);
+    return secureJsonResponse({ success: true, resource: resource.resource, record: data, skippedColumns }, 201, corsHeaders);
   }
 
   if (body.action === "update") {

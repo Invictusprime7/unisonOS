@@ -155,6 +155,13 @@
       "when": 1792148165778,
       "tag": "0021_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793341309405,
+      "tag": "0022_ensure_catalog_cms_columns",
+      "breakpoints": true
     }
   ]
 }
