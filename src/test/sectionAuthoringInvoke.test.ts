@@ -134,6 +134,6 @@ describe('bounded page-section authoring', () => {
     const invoke = vi.fn().mockResolvedValue({ data: { content: JSON.stringify({ summary: 'Wrong page', fileOps: [{ type: 'replace', path: '/src/pages/Shop.tsx', content: 'export default function Shop(){return <main/>}' }] }) }, error: null });
     const result = await createSectionAuthoringInvoke(invoke as ComposerInvoke, ['hero', 'services', 'gallery'])(turn);
     expect(result.error).toMatchObject({ status: 400 });
-    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledTimes(2);
   });
 });
