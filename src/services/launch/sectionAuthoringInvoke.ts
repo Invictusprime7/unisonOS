@@ -119,38 +119,52 @@ export function createSectionAuthoringInvoke(
         'FILE create/replace blocks must contain COMPLETE exported modules, not fragments or patch text. EDIT blocks are structured SEARCH/REPLACE instructions applied by Composer before fileOps are returned; never put unapplied patches in fileOps.content.',
         'The full design brief is reference for the completed page, NOT a request to write other batches now. Partial section counts are intentional; final page checks run after all batches. Do not change routes or other pages. Preserve all planned content quantities; do not shorten lists to fit.',
       ].join('\n');
-      const chunkRequest: AIComposerRequest = {
-        ...request,
-        files,
-        brief: request.brief,
-        instruction: `${scope}\n${request.instruction ?? ''}`,
-      };
-      const configuredTimeout = (input.gatewayOptions as { timeoutMs?: number } | undefined)?.timeoutMs;
-      const timeoutMs = Math.min(SECTION_PROVIDER_TIMEOUT_MS, configuredTimeout ?? SECTION_PROVIDER_TIMEOUT_MS, remaining - SECTION_TRANSPORT_RESERVE_MS);
-      const result = await invoke({
-        ...input,
-        messages: [{ role: 'user', content: JSON.stringify(chunkRequest) }],
-        gatewayOptions: { ...(input.gatewayOptions as Record<string, unknown> | undefined), timeoutMs },
-      }, { ...options, timeoutMs: timeoutMs + 5_000 });
-      // Unknown outcomes are not replayed: stop instead of billing another whole page.
-      if (result.error || !result.data) return result;
-      const response = decodeComposerResponse(result.data);
-      if (!response) return { data: null, error: { status: 400, message: 'AI returned an invalid page-section response.' } };
-      const violations = [...composerProposalViolations(chunkRequest, response), ...batchSourceViolations(chunkRequest, response, index > 0)];
-      for (const op of response.fileOps) {
-        if (op.type === 'delete' || (op.path.startsWith('/src/pages/') && op.path !== request.page.filePath)) {
-          violations.push(`${op.path}: section work cannot delete source or change another page`);
+      let instruction = `${scope}\n${request.instruction ?? ''}`;
+      let accepted: AIComposerResponse | null = null;
+      let violations: string[] = [];
+      // One corrective retry per batch: a rejected draft is feedback, not a lost page.
+      for (let attempt = 0; attempt < 2 && !accepted; attempt++) {
+        const chunkRequest: AIComposerRequest = { ...request, files, brief: request.brief, instruction };
+        const configuredTimeout = (input.gatewayOptions as { timeoutMs?: number } | undefined)?.timeoutMs;
+        const timeoutMs = Math.min(SECTION_PROVIDER_TIMEOUT_MS, configuredTimeout ?? SECTION_PROVIDER_TIMEOUT_MS, deadline - Date.now() - SECTION_TRANSPORT_RESERVE_MS);
+        const result = await invoke({
+          ...input,
+          messages: [{ role: 'user', content: JSON.stringify(chunkRequest) }],
+          gatewayOptions: { ...(input.gatewayOptions as Record<string, unknown> | undefined), timeoutMs },
+        }, { ...options, timeoutMs: timeoutMs + 5_000 });
+        // Unknown outcomes are not replayed: stop instead of billing another whole page.
+        if (result.error || !result.data) return result;
+        const decoded = decodeComposerResponse(result.data);
+        if (!decoded) return { data: null, error: { status: 400, message: 'AI returned an invalid page-section response.' } };
+        // The create/replace label is bookkeeping against supplied source; the complete-source
+        // and section-preservation checks below are what protect paid work.
+        decoded.fileOps = decoded.fileOps.map(op => op.type === 'delete' ? op
+          : chunkRequest.files[op.path] === undefined
+            ? { ...op, type: 'create' as const }
+            : { ...op, type: 'replace' as const });
+        violations = [...composerProposalViolations(chunkRequest, decoded), ...batchSourceViolations(chunkRequest, decoded, index > 0)];
+        for (const op of decoded.fileOps) {
+          if (op.type === 'delete' || (op.path.startsWith('/src/pages/') && op.path !== request.page.filePath)) {
+            violations.push(`${op.path}: section work cannot delete source or change another page`);
+          }
+        }
+        if (decoded.routeOps?.length) violations.push('Section work cannot change routes.');
+        if (!violations.length) {
+          accepted = decoded;
+          if (typeof result.data === 'object') lastData = { ...result.data };
+          break;
+        }
+        if (attempt === 0 && deadline - Date.now() > SECTION_PROVIDER_TIMEOUT_MS + SECTION_TRANSPORT_RESERVE_MS) {
+          instruction = `CORRECTION: the previous batch was rejected: ${violations.join('; ')}. Return complete corrected source for the same sections only.\n${instruction}`;
         }
       }
-      if (response.routeOps?.length) violations.push('Section work cannot change routes.');
-      if (violations.length) return { data: null, error: { status: 400, message: violations.join('; ') } };
-      for (const op of response.fileOps) {
+      if (!accepted) return { data: null, error: { status: 400, message: violations.join('; ') } };
+      for (const op of accepted.fileOps) {
         if (op.type === 'delete') continue;
         files[op.path] = op.content;
         operations.set(op.path, { ...op, type: request.files[op.path] === undefined ? 'create' : 'replace' });
       }
-      responses.push(response);
-      if (typeof result.data === 'object') lastData = { ...result.data };
+      responses.push(accepted);
       // Publish a checkpoint only after the entire batch passes; failed batches cannot poison paid source.
       const checkpoint = { files: { ...files }, responses: [...responses], lastData: { ...lastData }, savedAt: Date.now() };
       checkpoints.set(key, checkpoint);

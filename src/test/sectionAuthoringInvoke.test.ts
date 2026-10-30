@@ -41,22 +41,46 @@ describe('bounded page-section authoring', () => {
     await createSectionAuthoringInvoke(invoke as ComposerInvoke, order)(changed);
     expect(JSON.parse(invoke.mock.calls[2][0].messages[0].content).instruction).toContain('1/2');
   });
-  it.each(['<section>fragment</section>', '<<<<<<< SEARCH\nold\n=======\nnew\n>>>>>>> REPLACE', 'export default function Home(){return <main>'])('rejects incomplete or unapplied source: %s', async source => {
+  it.each(['<section>fragment</section>', '<<<<<<< SEARCH\nold\n=======\nnew\n>>>>>>> REPLACE', 'export default function Home(){return <main>'])('rejects incomplete or unapplied source after one correction: %s', async source => {
     const invoke = vi.fn().mockResolvedValue(reply(source));
     const result = await createSectionAuthoringInvoke(invoke as ComposerInvoke, ['hero', 'services', 'contact'])(turn);
     expect(result.error).toMatchObject({ status: 400 });
-    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(invoke.mock.calls[1][0].messages[0].content).instruction).toContain('CORRECTION');
+  });
+  it('normalizes a replace label when the page has no prior source', async () => {
+    const fresh = { ...turn, messages: [{ role: 'user', content: JSON.stringify({ ...request, files: {} }) }] };
+    const first = 'export default function Home(){return <main><section>Hero</section></main>}';
+    const final = first.replace('</main>', '<section>Contact</section></main>');
+    const invoke = vi.fn().mockResolvedValueOnce(reply(first)).mockResolvedValueOnce(reply(final));
+    const result = await createSectionAuthoringInvoke(invoke as ComposerInvoke, ['hero', 'services', 'gallery', 'contact'])(fresh);
+    expect(result.error).toBeNull();
+    expect(JSON.parse(result.data?.content as string).fileOps[0]).toMatchObject({ type: 'create', path });
+  });
+  it('retries a rejected batch once with correction feedback and keeps paid sections', async () => {
+    const first = 'export default function Home(){return <main><section>Hero</section></main>}';
+    const final = first.replace('</main>', '<section>Contact</section></main>');
+    const invoke = vi.fn()
+      .mockResolvedValueOnce(reply(first))
+      .mockResolvedValueOnce(reply('<section>fragment</section>'))
+      .mockResolvedValueOnce(reply(final));
+    const result = await createSectionAuthoringInvoke(invoke as ComposerInvoke, ['hero', 'services', 'gallery', 'contact'])(turn);
+    expect(result.error).toBeNull();
+    expect(invoke).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(invoke.mock.calls[2][0].messages[0].content).instruction).toContain('CORRECTION');
+    expect(JSON.parse(result.data?.content as string).fileOps[0].content).toBe(final);
   });
   it('keeps completed sections immutable and leaves failed batch out of the checkpoint', async () => {
     const first = 'export default function Home(){return <main><section>Five products</section></main>}';
     const corrupt = first.replace('Five products', 'One product');
     const final = first.replace('</main>', '<section>Gallery</section></main>');
-    const invoke = vi.fn().mockResolvedValueOnce(reply(first)).mockResolvedValueOnce(reply(corrupt)).mockResolvedValueOnce(reply(final));
+    const invoke = vi.fn().mockResolvedValueOnce(reply(first)).mockResolvedValueOnce(reply(corrupt)).mockResolvedValueOnce(reply(corrupt)).mockResolvedValueOnce(reply(final));
     const order = ['hero', 'services', 'gallery', 'contact'];
     const result = await createSectionAuthoringInvoke(invoke as ComposerInvoke, order)(turn);
     expect(result.error).toMatchObject({ status: 400, message: expect.stringContaining('completed section') });
-    await createSectionAuthoringInvoke(invoke as ComposerInvoke, order)(turn);
-    expect(JSON.parse(invoke.mock.calls[2][0].messages[0].content).files[path]).toBe(first);
+    const recovered = await createSectionAuthoringInvoke(invoke as ComposerInvoke, order)(turn);
+    expect(JSON.parse(invoke.mock.calls[3][0].messages[0].content).files[path]).toBe(first);
+    expect(recovered.error).toBeNull();
   });
   it('finishes three bounded batches beyond the old 150-second page cap', async () => {
     let clock = 0;
@@ -110,6 +134,6 @@ describe('bounded page-section authoring', () => {
     const invoke = vi.fn().mockResolvedValue({ data: { content: JSON.stringify({ summary: 'Wrong page', fileOps: [{ type: 'replace', path: '/src/pages/Shop.tsx', content: 'export default function Shop(){return <main/>}' }] }) }, error: null });
     const result = await createSectionAuthoringInvoke(invoke as ComposerInvoke, ['hero', 'services', 'gallery'])(turn);
     expect(result.error).toMatchObject({ status: 400 });
-    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledTimes(2);
   });
 });
