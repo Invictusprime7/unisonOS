@@ -22,6 +22,7 @@ import {
 import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import { sectionSiteBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
+import { closureRepairTargets } from './closureRepairTargets';
 
 export interface AppBuilderOrchestratorDependencies {
   authorSite: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
@@ -31,8 +32,7 @@ export interface AppBuilderOrchestratorDependencies {
 
 const CLOSURE_REPAIR_RESERVE_MS = 75_000;
 const MAX_CLOSURE_REPAIR_MS = 90_000;
-// A site-wide repair resends every page (~160k chars); the AI needs well over
-// 20s for that. With less time left the request can only time out, so skip it.
+// Each source-owner repair gets a usable provider window, never all site pages.
 const MIN_CLOSURE_REPAIR_MS = 60_000;
 
 export async function orchestrateAppBuild(
@@ -269,43 +269,34 @@ export async function orchestrateAppBuild(
   let closure = await validateClosure(candidateFiles);
   let closureRepairAttempts = 0;
 
-  // One site-wide repair attempt sees the complete closure diagnostics and protected-path constraints.
-  const closureTimeLeftMs = startedAt + totalBudgetMs - Date.now();
-  if (generationMode === 'ai' && !compatibilityMode && !terminalAuthoringFailure && !closure.ok && !input.signal?.aborted && closureTimeLeftMs >= MIN_CLOSURE_REPAIR_MS) {
-    const closureRepairTimeoutMs = Math.min(closureTimeLeftMs, MAX_CLOSURE_REPAIR_MS);
-    input.onStatus?.('Repairing final checks (up to 1:30)');
-    const home = pages.find((page) => page.pageId === input.contract.topology.sitePlan.homePageId) ?? pages[0];
-    if (home) {
-      const diagnostics = closure.issues
-        .filter((issue) => issue.severity === 'blocker')
-        .map((issue) => `${issue.code}${issue.path ? ` (${issue.path})` : ''}: ${issue.message}`)
-        .slice(0, 30);
-
-      // Enhanced repair instruction for protected-path violations
-      const hasProtectedPathViolation = diagnostics.some(d => d.includes('protected-source-changed'));
-      const repairInstruction = hasProtectedPathViolation
-        ? 'Resolve every supplied closure diagnostic across the candidate application. IMPORTANT: Do not modify package.json, tsconfig.json, or .unison/* files — these are canonical infrastructure. Reuse available runtime dependencies where they fit; you may import another valid browser npm package and the shared resolver will add and verify it. If that install or build fails, report the precise technical error. Never import Node builtins, server-only packages, or bypass capability facades.'
-        : 'Resolve every supplied closure diagnostic across the candidate application.';
-
+  if (generationMode === 'ai' && !compatibilityMode && !terminalAuthoringFailure && !incompleteAuthoring) {
+    const attemptedTargets = new Set<string>();
+    while (!closure.ok && !input.signal?.aborted && !closureRepairFailure) {
+      const closureTimeLeftMs = startedAt + totalBudgetMs - Date.now();
+      if (closureTimeLeftMs < MIN_CLOSURE_REPAIR_MS) break;
+      const group = closureRepairTargets(candidateFiles, pages, closure.issues)
+        .find(group => !attemptedTargets.has(group.target));
+      if (!group) break;
+      attemptedTargets.add(group.target);
+      const closureRepairTimeoutMs = Math.min(closureTimeLeftMs, MAX_CLOSURE_REPAIR_MS);
+      input.onStatus?.('Repairing final checks (up to 1:30)');
+      const repairInstruction = `Fix only the supplied diagnostics owned by ${group.target}. Preserve all completed pages, section identities, content, images and intent bindings. Prefer <<<EDIT SEARCH/REPLACE hunks copied exactly from FILES for existing files; the server applies them into complete source. Do not rewrite the whole page for a small layout fix. Other supplied files are read-only. You may create a missing project-local module required by these diagnostics. Never change routes, canonical infrastructure or capability permissions.`;
       const assembled = await assembleCanonicalAuthoringRequest({
         task: 'site_page_repair',
-        page: home,
-        brief: 'Repair site-wide application closure without changing canonical infrastructure or the sealed design identity.',
-        knowledgeQuery: `${input.contract.business.industry} site-wide module route design closure`,
+        page: group.page,
+        brief: 'Repair the reported source-owner checks without changing the sealed design identity or other completed pages.',
+        knowledgeQuery: `${input.contract.business.industry} ${group.page.role} module design closure`,
         instruction: repairInstruction,
         baseFiles: candidateFiles,
         baseRevisionId: input.baseRevisionId,
-        // Send only the pages the diagnostics name: resending every page (~150k
-        // chars) made the repair time out and the launch fail on one page.
-        sourceTargets: (() => {
-          const failing = pages.filter((page) => diagnostics.some((d) => d.includes(page.filePath) || d.includes(page.filePath.replace('/src/', './'))));
-          return (failing.length ? failing : pages).map((page) => page.filePath);
-        })(),
+        sourceTargets: [group.target],
+        sourceScope: { scoped: true },
         routes: pages.map((page) => ({ title: page.title, route: page.route })),
         registryContext: input.contract.design.registryContext,
-        runtimeContext: [input.runtimeContext, generation.runtimeContext].filter(Boolean).join('\n').slice(0, 12000),
-        diagnostics,
+        runtimeContext: [input.runtimeContext, generation.runtimeContextForPage(group.page.pageId)].filter(Boolean).join('\n').slice(0, 12000),
+        diagnostics: group.diagnostics.slice(0, 30),
       });
+      if (!assembled.evidence.sourceContextComplete) break;
       const repaired = await dependencies.runComposer({
         request: assembled.request,
         baseFiles: candidateFiles,
@@ -320,11 +311,18 @@ export async function orchestrateAppBuild(
         pageCheck,
         resolveDependencies: false,
       });
-      closureRepairAttempts = repaired.attempts;
-      if (!repaired.ok && ['credits', 'denied', 'rate_limited', 'provider', 'invalid_response'].includes(repaired.reason)) {
+      closureRepairAttempts += repaired.attempts;
+      if (!repaired.ok && ['credits', 'denied', 'rate_limited', 'provider', 'invalid_response', 'aborted'].includes(repaired.reason)) {
         closureRepairFailure = { reason: repaired.reason, errors: repaired.errors };
       }
       if (repaired.ok && repaired.prepared) {
+        const unrelatedChanges = Object.keys({ ...candidateFiles, ...repaired.prepared.nextFiles }).filter(path =>
+          path !== group.target && candidateFiles[path] !== undefined
+          && candidateFiles[path] !== repaired.prepared?.nextFiles[path]);
+        if (unrelatedChanges.length) {
+          closureRepairFailure = { reason: 'invalid_response', errors: [`Final-check repair changed read-only source: ${unrelatedChanges.join(', ')}`] };
+          break;
+        }
         candidateFiles = repaired.prepared.nextFiles;
         if (input.preflight) candidateFiles = input.preflight(candidateFiles);
         candidateFiles = normalizeCandidateFiles(candidateFiles);
