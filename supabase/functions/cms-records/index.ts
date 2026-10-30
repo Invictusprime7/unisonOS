@@ -56,6 +56,21 @@ function jsonError(message: string, status: number, corsHeaders: Record<string, 
   return errorResponse(message, status, corsHeaders);
 }
 
+/** Safe, actionable write-failure text: Postgres class + column name only, never row values. */
+function describeWriteFailure(verb: string, resource: string, error: { code?: string; message?: string } | null): string {
+  const base = `Could not ${verb} ${resource} record`;
+  const column = error?.message?.match(/column "([a-z_]+)"/i)?.[1];
+  switch (error?.code) {
+    case "42703": return `${base}: the backend is missing column "${column ?? "unknown"}" (run the latest database migration).`;
+    case "23502": return `${base}: required field "${column ?? "unknown"}" was empty.`;
+    case "22P02": return `${base}: a value had the wrong type${column ? ` for "${column}"` : ""}.`;
+    case "23505": return `${base}: a matching record already exists.`;
+    case "42501": return `${base}: the backend refused permission for this table.`;
+    case undefined: return `${base}: no record was returned.`;
+    default: return `${base} (database error ${error.code}).`;
+  }
+}
+
 function validateValues(
   values: Record<string, unknown> | undefined,
   fields: Record<string, CmsFieldType>,
@@ -81,7 +96,8 @@ function validateValues(
       const rating = value as number;
       if (rating < 0 || rating > 5) return { error: `Field "${key}" must be between 0 and 5` };
     }
-    cleaned[key] = value;
+    // "number"/"money-cents" columns are Postgres integers; fractional seeds (e.g. 1.5) would fail the insert.
+    cleaned[key] = type === "number" || type === "money-cents" ? Math.round(value as number) : value;
   }
   if (Object.keys(cleaned).length === 0) return { error: "At least one editable value is required" };
   if (action === "create") {
@@ -516,7 +532,10 @@ serve(async (req) => {
       .insert({ ...validation.values, business_id: body.businessId, project_id: projectId ?? null })
       .select("*")
       .single();
-    if (error || !data) return jsonError("Could not create CMS record", 500, corsHeaders);
+    if (error || !data) {
+      console.error("[cms-records] create failed", resource.resource, error?.code, error?.message, error?.details);
+      return jsonError(describeWriteFailure("create", resource.resource, error), error?.code === "23505" ? 409 : 500, corsHeaders);
+    }
     await audit(admin, { userId: userResult.user.id, businessId: body.businessId, projectId: scope.projectId, siteId: body.siteId, resource: resource.resource, action: body.action, recordId: String(data.id) });
     return secureJsonResponse({ success: true, resource: resource.resource, record: data }, 201, corsHeaders);
   }
