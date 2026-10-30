@@ -15,6 +15,30 @@ const pages = roles.map((role) => ({ pageId: `p-${role}`, role }));
 const key = (t: { hero: string; geometry: string; sectionOrder: string[] }) => `${t.hero}|${t.geometry}|${t.sectionOrder.join('>')}`;
 
 describe('siteCompositionPlanner', () => {
+  it.each([
+    ['pricing', ['hero', 'pricing', 'faq', 'cta']],
+    ['checkout', ['contact', 'faq']],
+    ['blog', ['hero', 'blog-preview']],
+    ['shop', ['hero', 'services', 'gallery', 'cta']],
+    ['faq', ['hero', 'faq', 'cta']],
+    ['gallery', ['gallery', 'before-after', 'cta']],
+  ])('preserves the %s page responsibility rather than inheriting About', (role, sectionOrder) => {
+    const plan = planSiteComposition('ecommerce', [{ pageId: role as string, role: role as string }], 'role-jobs');
+    expect(plan.pages[0].profile.pageRole).toBe(role);
+    expect(plan.pages[0].target.sectionOrder).toEqual(sectionOrder);
+  });
+
+  it('keeps every booking candidate free of unsupported testimonial sections', () => {
+    for (const industry of ['salon', 'restaurant', 'ecommerce']) {
+      const profile = resolvePageCompositionProfile(industry, 'booking');
+      for (const order of profile.sectionOrderCandidates ?? []) {
+        expect(order).not.toContain('testimonials');
+        expect(order).toContain('contact');
+        expect(order).toContain('faq');
+      }
+    }
+  });
+
   it('inherits generic profiles by role rather than their position in the industry list', () => {
     for (const role of roles) {
       const generic = resolvePageCompositionProfile('ecommerce', role);
