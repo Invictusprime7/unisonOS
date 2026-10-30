@@ -59,6 +59,10 @@ export interface LaunchStageTimelineProps {
   generationMode?: 'ai' | 'deterministic';
 }
 
+export function completedLaunchSteps(snapshot: LaunchRunSnapshot): number {
+  return snapshot.stages.filter(stage => stage.status === 'done' || stage.status === 'degraded').length;
+}
+
 export const LaunchStageTimeline = ({
   snapshot,
   statusText,
@@ -81,7 +85,7 @@ export const LaunchStageTimeline = ({
   const finished = snapshot.stages.length > 0 && snapshot.stages.every(
     (stage) => stage.status === "done" || stage.status === "degraded",
   );
-  const completed = snapshot.stages.filter(stage => stage.status === 'done' || stage.status === 'degraded').length;
+  const completed = completedLaunchSteps(snapshot);
   return (
     <div className={cn("launch-progress", className)} aria-busy={!failedStage && !finished}>
       <div className="launch-progress-header">
