@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Wizard business fields and native contact submissions
+- [ ] Carry canonical selected form fields into App Builder component and intent contracts, preserving required name/email/message and selected extra fields.
+- [ ] Verify native contact ownership, no local success handlers, preserved selections and explicit deterministic starter behavior.
+- [ ] Run focused contract/materialization/launch regressions; report authenticated live submission access separately.
+
 ## Active: App Builder authoring reliability
 - [x] Enforce complete-source file operations and transactional batch validation; safely retain completed batches and resume only failed work. Checkpoints live only in bounded tab memory for 15 minutes, keyed by exact request/source/plan/settings; refresh clears provisional progress, and no partial revision is committed.
 - [x] Separate bounded provider calls from multi-batch page/site budgets; derive Wizard watchdog and marketplace budget from sealed section counts. Verify deterministic Home independently through canonical planning → App Builder → section-model closure, without AI calls.
