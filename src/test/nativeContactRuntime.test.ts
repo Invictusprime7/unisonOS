@@ -19,7 +19,7 @@ async function submitContact(result: Record<string, unknown>, valid = true) {
   window.parent = window;
   runInNewContext(source, { exports, useEffect: (callback: () => void) => callback(),
     PUBLISHED_RUNTIME_CONFIG: { siteId: 'site', businessId: 'business', controllerEndpoints: { 'intent-exec': '/intent-exec' } },
-    GENERATED_SITE_RUNTIME_MANIFEST: { controllers: [{ functionName: 'intent-exec', transport: 'supabase-function', intents: ['contact.submit'] }], components: [{ instanceId: 'cmp-contact', writeIntent: 'contact.submit' }] },
+    GENERATED_SITE_RUNTIME_MANIFEST: { enabledCapabilities: ['contact'], controllers: [{ functionName: 'intent-exec', transport: 'supabase-function', intents: ['contact.submit'] }], components: [{ instanceId: 'cmp-contact', writeIntent: 'contact.submit' }] },
     document: { getElementById: () => status, querySelectorAll: () => [], addEventListener: (type: string, handler: (event: unknown) => void) => { handlers[type] = handler; }, documentElement: {}, },
     window,
     localStorage: { getItem: () => null, setItem: () => {} }, MutationObserver: class { observe() {} disconnect() {} },
