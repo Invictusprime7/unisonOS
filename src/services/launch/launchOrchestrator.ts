@@ -1,4 +1,5 @@
 import { validateTwentyFirstGenerationCoverage, summarizeCoverageReport } from '@/services/launch/twentyFirstCoverageGate';
+import { sectionSiteBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 /**
  * Launch Orchestrator — Wizard intent → canonical plan → App Builder → Builder.
  *
@@ -574,6 +575,9 @@ async function runReservedLaunchPipeline(
 
   // ── Stage: app-build (one isolated, whole-site candidate) ─────────────────
   status(input.generationMode === 'deterministic' ? 'Building a deterministic starter…' : 'Designing your application…');
+  const authoringBudgetMs = sectionSiteBudgetMs([...appBuildContract.topology.sitePlan.pages]
+    .sort((a, b) => Number(b.route === '/') - Number(a.route === '/') || a.route.localeCompare(b.route))
+    .map(page => appBuildContract.design.compositionPlan.pages.find(planned => planned.pageId === page.id)?.target.sectionOrder ?? []));
   const appBuild = await run.stage("app-build", async (signal) => {
     const result = await unisonAppBuilder.generate({
       operationId: `launch:${plan.ids.draftId}:app-build`,
@@ -583,7 +587,7 @@ async function runReservedLaunchPipeline(
       entryPoint: '/src/App.tsx',
       baseRevisionId: null,
       signal,
-      budgetMs: 280_000,
+      budgetMs: authoringBudgetMs,
       onProgress: (event) => {
         if (event.phase === 'authoring') status(`Designing ${event.page.title}…`);
       },
@@ -595,7 +599,7 @@ async function runReservedLaunchPipeline(
       );
     }
     return result;
-  }, { timeoutMs: 300_000 });
+  }, { timeoutMs: authoringBudgetMs + 20_000 });
   const candidateFiles = { ...appBuild.candidateFiles };
   const siteBundleSnapshot = projectCanonicalLaunchCandidateSnapshot(
     canonicalPlan,

@@ -14,6 +14,14 @@ export function sectionPageBudgetMs(sectionOrder: readonly string[]): number {
   return Math.max(150_000, partitionPageSections(sectionOrder).length * (SECTION_PROVIDER_TIMEOUT_MS + SECTION_TRANSPORT_RESERVE_MS) + 60_000);
 }
 
+export function sectionSiteBudgetMs(orders: readonly (readonly string[])[], concurrency = 4): number {
+  const windows = orders.map(sectionPageBudgetMs);
+  let total = (windows[0] ?? 0) + 75_000;
+  const workers = Math.max(1, Math.floor(concurrency));
+  for (let index = 1; index < windows.length; index += workers) total += Math.max(...windows.slice(index, index + workers));
+  return Math.max(280_000, total);
+}
+
 function sourceSections(source: string): string[] {
   const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
   const sections: string[] = [];
