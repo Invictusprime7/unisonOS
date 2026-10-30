@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { inspectAppBuilderPageSectionClosure, inspectAppBuilderPageSections, materializeAppBuilderSectionModels } from '@/services/app-builder/appBuilderSectionModel';
+import {
+  inspectAppBuilderPageSectionClosure,
+  inspectAppBuilderPageSections,
+  materializeAppBuilderSectionModels,
+  materializeAppBuilderSectionModelsWithDiagnostics,
+} from '@/services/app-builder/appBuilderSectionModel';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 
@@ -90,6 +95,24 @@ export default function Home() {
     expect(result.issues.some((issue) => issue.includes('duplicate section id "same"'))).toBe(true);
   });
 
+  it('returns normalized source and actionable diagnostics when no eligible section model can be emitted', () => {
+    const source = 'export default function Home(){return <main><section><p>Unclassified content</p></section></main>}';
+    const result = materializeAppBuilderSectionModelsWithDiagnostics(
+      { '/src/pages/Home.tsx': source },
+      [{ id: 'home', filePath: '/src/pages/Home.tsx', route: '/' }],
+      implementations,
+      { home: Object.keys(implementations) },
+    );
+
+    expect(result.pages[0].normalizedSource).toBe(result.files['/src/pages/Home.tsx']);
+    expect(result.pages[0].sidecarContents).toBeUndefined();
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'section-model-invalid', message: expect.stringContaining('requires literal data-ut-section-id') }),
+      expect.objectContaining({ code: 'section-sidecar-not-generated', path: '/.unison/compositions/pages/Home.json' }),
+    ]));
+    expect(result.files['/.unison/compositions/pages/Home.json']).toBeUndefined();
+  });
+
   it('stamps missing root identity from one certified family dispatcher', () => {
     const source = `import Navbar from "@/unison/design-sources/Navbar";
 import Services from "@/unison/design-sources/Services";
@@ -158,6 +181,49 @@ export function SiteFooter(){return <footer data-ut-section-id="site:footer"><Fo
     expect(files['/src/pages/Home.tsx']).toContain('variantId="hero:split-image"');
     expect(files['/src/pages/Home.tsx']).toContain('props={{"headline":"Northstar","image":"https://images.unsplash.com/photo-1"}}');
     expect(inspectAppBuilderPageSectionClosure('/src/pages/Home.tsx', files, namedImplementations).issues).toEqual([]);
+  });
+
+  it('infers the exact named variant when several certified variants share a family module', () => {
+    const heroImplementations = {
+      ...implementations,
+      'hero:centered': {
+        modulePath: '/src/unison/design-sources/Hero.tsx',
+        sectionType: 'hero',
+        exportName: 'HeroCentered',
+      },
+      'hero:split-image': {
+        modulePath: '/src/unison/design-sources/Hero.tsx',
+        sectionType: 'hero',
+        exportName: 'HeroSplitImage',
+      },
+    };
+    const source = `import Navbar from "@/unison/design-sources/Navbar";
+import Footer from "@/unison/design-sources/Footer";
+import { HeroSplitImage } from "@/unison/design-sources/Hero";
+export default function Home(){return <><header><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{links:[]}} /></header><main><section><HeroSplitImage headline="Northstar" image="https://images.unsplash.com/photo-1" /></section></main><footer><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer></>}`;
+    const shopSource = `import Navbar from "@/unison/design-sources/Navbar";
+import Footer from "@/unison/design-sources/Footer";
+import { HeroCentered } from "@/unison/design-sources/Hero";
+export default function Shop(){return <><header><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{links:[]}} /></header><main><section><HeroCentered headline="Objects for everyday" /></section></main><footer><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer></>}`;
+    const files = materializeAppBuilderSectionModelsWithDiagnostics(
+      { '/src/pages/Home.tsx': source, '/src/pages/Shop.tsx': shopSource },
+      [
+        { id: 'home', filePath: '/src/pages/Home.tsx', route: '/' },
+        { id: 'shop', filePath: '/src/pages/Shop.tsx', route: '/shop' },
+      ],
+      heroImplementations,
+      { home: Object.keys(heroImplementations), shop: Object.keys(heroImplementations) },
+    );
+    const page = files.files['/src/pages/Home.tsx'];
+    const shop = files.files['/src/pages/Shop.tsx'];
+
+    expect(page).toContain('data-ut-section-type="hero"');
+    expect(page).toContain('data-ut-variant="hero:split-image"');
+    expect(page).toContain('variantId="hero:split-image"');
+    expect(files.pages[0].sidecarContents).toContain('"variantId": "hero:split-image"');
+    expect(shop).toContain('data-ut-variant="hero:centered"');
+    expect(files.pages[1].sidecarContents).toContain('"variantId": "hero:centered"');
+    expect(files.diagnostics).toEqual([]);
   });
 
   it('repairs dispatcher identity and wraps static direct props for the registered family', () => {
@@ -249,15 +315,21 @@ import FeaturePanel from "@/project-components/FeaturePanel";
 export default function Home(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{links:[]}} /></header><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="custom:service-panel"><FeaturePanel title="Care, made personal" /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer></>}`,
       '/src/project-components/FeaturePanel.tsx': `export default function FeaturePanel({title}:{title:string}){return <article>{title}</article>}`,
     };
-    const normalized = materializeAppBuilderSectionModels(
+    const materialization = materializeAppBuilderSectionModelsWithDiagnostics(
       files,
       [{ id: 'home', filePath: '/src/pages/Home.tsx' }],
       implementations,
-      { home: Object.keys(implementations) },
+      { home: ['navbar:standard', 'footer:columns'] },
+      ['navbar:standard', 'footer:columns'],
     );
-    const inspection = inspectAppBuilderPageSectionClosure('/src/pages/Home.tsx', normalized, implementations);
+    const normalized = materialization.files;
+    const inspection = inspectAppBuilderPageSectionClosure('/src/pages/Home.tsx', normalized, implementations, {
+      eligibleImplementationIds: ['navbar:standard', 'footer:columns'],
+      sharedShellImplementationIds: ['navbar:standard', 'footer:columns'],
+    });
     const sidecar = JSON.parse(normalized['/.unison/compositions/pages/Home.json']);
 
+    expect(materialization.diagnostics).toEqual([]);
     expect(normalized['/src/pages/Home.tsx']).toContain('variantId="custom:service-panel"');
     expect(normalized['/src/pages/Home.tsx']).toContain('props={{"title":"Care, made personal"}}');
     expect(inspection.issues).toEqual([]);
@@ -269,6 +341,7 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     });
     expect(sidecar.sections.find((section: { sectionId: string }) => section.sectionId === 'home:services:0'))
       .toMatchObject({ variantId: 'custom:service-panel', data: { title: 'Care, made personal' } });
+    expect(sidecar.sections).toEqual(inspection.sections);
   });
 
   it('rejects custom sections without exactly one authorized local component import', () => {

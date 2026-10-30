@@ -14,7 +14,11 @@ import { buildAppBuilderGenerationContext, reportDesignSourceUsage } from './app
 import { findPageStructureIssues, pageStructureRequirement, verifiedPhotosFor } from './design/pageStructureGate';
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
 import { normalizeWizardBindingMarkers } from '@/services/wizardBindingBridge';
-import { inspectAppBuilderPageSectionClosure, materializeAppBuilderSectionModels } from './appBuilderSectionModel';
+import {
+  getAppBuilderSharedShellImplementationIds,
+  materializeAppBuilderSectionModelsWithDiagnostics,
+  type AppBuilderSectionMaterializationResult,
+} from './appBuilderSectionModel';
 import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 
@@ -76,22 +80,23 @@ export async function orchestrateAppBuild(
   const contractPages = input.contract.design.resolvedSiteDesignContext.contract.pages;
   const roleByPath = new Map(pages.map((page) => [page.filePath, page.role]));
   const sectionImplementations = generation.materialization.manifest.implementations;
+  const sharedShellImplementationIds = getAppBuilderSharedShellImplementationIds(baseFiles, sectionImplementations);
   const photoUrls = verifiedPhotosFor(input.contract.design.resolvedSiteDesignContext?.contract.industry ?? input.contract.business.industry);
   let unresolvedMarkerBindingIds: string[] = [];
   let systemMaterializedCompositionFiles: Record<string, string> = {};
+  let latestSectionMaterialization: AppBuilderSectionMaterializationResult | undefined;
   let closureRepairFailure: { reason: ComposerStopReason; errors: string[] } | undefined;
   const pageCheck = (path: string, source: string, files?: Readonly<Record<string, string>>) => {
     const messages = findDesignSourceUsageIssues(manifestSource, source).map((issue) => issue.message);
-    if (Object.keys(sectionImplementations).length > 0) {
-      const page = pages.find((candidate) => candidate.filePath === path);
-      const normalizedFiles = materializeAppBuilderSectionModels(
-        { ...(files ?? {}), [path]: source },
-        [{ id: page?.pageId ?? path, filePath: path, route: page?.route }],
-        sectionImplementations,
-        generation.designSources.eligibleByPage,
-      );
-      messages.push(...inspectAppBuilderPageSectionClosure(path, normalizedFiles, sectionImplementations).issues);
-    }
+    const page = pages.find((candidate) => candidate.filePath === path);
+    const sectionResult = materializeAppBuilderSectionModelsWithDiagnostics(
+      { ...(files ?? {}), [path]: source },
+      [{ id: page?.pageId ?? path, filePath: path, route: page?.route }],
+      sectionImplementations,
+      generation.designSources.eligibleByPage,
+      sharedShellImplementationIds,
+    );
+    messages.push(...sectionResult.diagnostics.map((diagnostic) => diagnostic.message));
     messages.push(...(input.pageCheck?.(path, source, files) ?? []));
     const role = roleByPath.get(path);
     if (role) {
@@ -102,7 +107,13 @@ export async function orchestrateAppBuild(
   };
   const authored = generationMode === 'deterministic'
     ? {
-      files: { ...baseFiles, ...materializeDeterministicAppBuilderScaffold(input.contract) },
+      files: {
+        ...baseFiles,
+        ...materializeDeterministicAppBuilderScaffold(input.contract, {
+          implementations: generation.materialization.manifest.implementations,
+          eligibleByPage: generation.designSources.eligibleByPage,
+        }),
+      },
       outcomes: [],
     }
     : await dependencies.authorSite({
@@ -147,12 +158,19 @@ export async function orchestrateAppBuild(
       files,
       initialFiles: baseFiles,
       systemMaterializedCompositionFiles,
+      requireAppBuilderSectionModels: true,
     });
     const bindingIssues = unresolvedMarkerBindingIds.map((bindingId) => ({
       severity: 'blocker' as const,
       code: 'binding-marker-unresolved',
       path: input.contract.business.intentBindings.find((binding) => binding.bindingId === bindingId)?.route,
       message: `Canonical binding ${bindingId} has no matching generated control in its registered page surface.`,
+    }));
+    const sectionModelIssues = (latestSectionMaterialization?.diagnostics ?? []).map((diagnostic) => ({
+      severity: 'blocker' as const,
+      code: diagnostic.code,
+      path: diagnostic.path,
+      message: diagnostic.message,
     }));
     const pageIssues = pages.flatMap((page) =>
       (generationMode === 'deterministic'
@@ -162,8 +180,8 @@ export async function orchestrateAppBuild(
       })));
     return {
       ...report,
-      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0,
-      issues: [...report.issues, ...bindingIssues, ...pageIssues],
+      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0 && sectionModelIssues.length === 0,
+      issues: [...report.issues, ...bindingIssues, ...sectionModelIssues, ...pageIssues],
     };
   };
   const markerRequirements = input.contract.business.intentBindings
@@ -194,21 +212,22 @@ export async function orchestrateAppBuild(
     );
     unresolvedMarkerBindingIds = markerNormalization.unresolvedBindingIds;
     const beforeSectionMaterialization = markerNormalization.files;
-    const materializedFiles = materializeAppBuilderSectionModels(beforeSectionMaterialization, pages.map((page) => ({
+    const sectionResult = materializeAppBuilderSectionModelsWithDiagnostics(beforeSectionMaterialization, pages.map((page) => ({
       id: page.pageId,
       filePath: page.filePath,
       route: page.route,
-    })), sectionImplementations, generation.designSources.eligibleByPage);
+    })), sectionImplementations, generation.designSources.eligibleByPage, sharedShellImplementationIds);
+    latestSectionMaterialization = sectionResult;
     const generatedSidecars: Record<string, string> = {};
     for (const page of pages) {
       const path = resolvedCompositionPathFor(page.filePath);
-      const sidecar = materializedFiles[path];
+      const sidecar = sectionResult.files[path];
       if (typeof sidecar !== 'string' || sidecar === baseFiles[path]) continue;
       const unchangedSystemOutput = systemMaterializedCompositionFiles[path] === beforeSectionMaterialization[path];
       if (sidecar !== beforeSectionMaterialization[path] || unchangedSystemOutput) generatedSidecars[path] = sidecar;
     }
     systemMaterializedCompositionFiles = generatedSidecars;
-    return materializedFiles;
+    return sectionResult.files;
   };
   let candidateFiles = { ...authored.files };
   if (!compatibilityMode && input.preflight) candidateFiles = input.preflight(candidateFiles);
@@ -281,7 +300,14 @@ export async function orchestrateAppBuild(
   }
 
   const cancelled = input.signal?.aborted === true;
-  const ready = !terminalAuthoringFailure && !closureRepairFailure && (compatibilityMode || closure.ok);
+  const sectionModelsValid = Boolean(
+    latestSectionMaterialization
+    && latestSectionMaterialization.diagnostics.length === 0
+    && latestSectionMaterialization.pages.length === pages.length
+    && latestSectionMaterialization.pages.every((page) => typeof page.sidecarContents === 'string'),
+  );
+  const ready = !terminalAuthoringFailure && !closureRepairFailure && sectionModelsValid
+    && (compatibilityMode || closure.ok);
   const authorDiagnostics = authored.outcomes.flatMap((outcome) => outcome.errors);
   const closureDiagnostics = closure.issues
     .filter((issue) => issue.severity === 'blocker')

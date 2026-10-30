@@ -13,7 +13,7 @@
  */
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import { getIndustryIntentProfile } from '@/platform/core/industryIntentProfiles';
-import { runPreflightRepair } from './aiSitePreflightRepair';
+import { runPreflightRepairSteps } from './aiSitePreflightRepair';
 import { preflightNavWiring } from './preflightNavWiring';
 import { closeRequiredIndustryIntents } from './requiredIntentClosure';
 import { runExperiencePreflight, stampExperienceManifest } from './experiencePreflightGate';
@@ -52,6 +52,8 @@ export interface RunFullPreflightOptions {
    * or copy edit can never grow an unrequested form or CTA on a page.
    */
   closeRequiredIntents?: boolean;
+  /** Launch-selected intent set; omitted for legacy industry-required closure. */
+  activeIntents?: readonly string[];
 }
 
 export interface RunFullPreflightResult {
@@ -75,11 +77,11 @@ export interface RunFullPreflightResult {
   visualQuality: VisualQualityReport;
 }
 
-export function runFullPreflight(
+export function* runFullPreflightSteps(
   inputFiles: Record<string, string>,
   options: RunFullPreflightOptions = {},
-): RunFullPreflightResult {
-  const { siteBundleSnapshot = null, industry, brand, mode = 'repair', allowQuarantine, closeRequiredIntents = true } = options;
+): Generator<void, RunFullPreflightResult, void> {
+  const { siteBundleSnapshot = null, industry, brand, mode = 'repair', allowQuarantine, closeRequiredIntents = true, activeIntents } = options;
   const ctx = { industry, brand };
 
 
@@ -87,7 +89,7 @@ export function runFullPreflight(
   let files = inputFiles;
   let earlyRepair: 'ok' | 'skipped' | 'failed' = 'skipped';
   try {
-    const r = runPreflightRepair(files, { context: ctx, allowQuarantine });
+    const r = yield* runPreflightRepairSteps(files, { context: ctx, allowQuarantine });
     files = r.files;
     earlyRepair = 'ok';
   } catch (e) {
@@ -138,7 +140,7 @@ export function runFullPreflight(
   // 4) Required-intent closure. This is deterministic and profile-driven so
   // required CTA surfaces never depend solely on AI prompt compliance.
   const requiredIntentClosure = closeRequiredIntents
-    ? closeRequiredIndustryIntents(files, resolvedIndustry)
+    ? closeRequiredIndustryIntents(files, resolvedIndustry, activeIntents)
     : { files, injected: [] as string[], missing: [] as string[] };
   files = requiredIntentClosure.files;
   if (requiredIntentClosure.injected.length > 0 || requiredIntentClosure.missing.length > 0) {
@@ -188,7 +190,7 @@ export function runFullPreflight(
   // 7) Final syntax repair (catches damage from steps 2-4)
   let finalRepair: 'ok' | 'skipped' | 'failed' = 'skipped';
   try {
-    const r = runPreflightRepair(files, { context: ctx, allowQuarantine });
+    const r = yield* runPreflightRepairSteps(files, { context: ctx, allowQuarantine });
     files = r.files;
     finalRepair = 'ok';
   } catch (e) {
@@ -276,4 +278,14 @@ export function runFullPreflight(
     },
     visualQuality,
   };
+}
+
+export function runFullPreflight(
+  inputFiles: Record<string, string>,
+  options: RunFullPreflightOptions = {},
+): RunFullPreflightResult {
+  const steps = runFullPreflightSteps(inputFiles, options);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
 }

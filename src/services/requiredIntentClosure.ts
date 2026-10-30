@@ -98,9 +98,13 @@ function injectIntentSurface(source: string, intent: string): string | null {
 export function closeRequiredIndustryIntents(
   files: Record<string, string>,
   industry: string | undefined | null,
+  activeIntents?: readonly string[],
 ): RequiredIntentClosureResult {
   const profile = industry ? getIndustryIntentProfile(industry) : undefined;
-  const required = (profile?.required || []).filter((intent) => !NON_DOM_INTENTS.has(intent));
+  const activeIntentSet = activeIntents ? new Set(activeIntents) : null;
+  const required = (profile?.required || []).filter((intent) =>
+    !NON_DOM_INTENTS.has(intent) && (!activeIntentSet || activeIntentSet.has(intent)),
+  );
   if (required.length === 0) return { files, injected: [], missing: [] };
 
   const next = { ...files };

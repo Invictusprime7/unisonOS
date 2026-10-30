@@ -159,6 +159,21 @@ describe('App Builder candidate closure', () => {
     expect(report.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
   });
 
+  it('requires a page-matched section sidecar for every App Builder page even without a registry manifest', async () => {
+    const report = await validateAppBuildCandidate({
+      contract: contract(),
+      files: initialFiles,
+      initialFiles,
+      requireAppBuilderSectionModels: true,
+    });
+
+    const missingModels = report.issues.filter((issue) => issue.code === 'section-model-not-persisted');
+    expect(missingModels.map((issue) => issue.path).sort()).toEqual([
+      '/src/pages/Contact.tsx',
+      '/src/pages/Home.tsx',
+    ]);
+  });
+
   it('materializes registered booking forms on assigned pages before candidate closure', () => {
     const booking = bookingContract();
     const files = {

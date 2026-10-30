@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeWizardThemeTokens } from '@/utils/wizardThemeTokenNormalizer';
-import { runFullPreflight } from '@/services/runFullPreflight';
+import { runFullPreflight, runFullPreflightSteps } from '@/services/runFullPreflight';
 
 describe('Stage 4b role-aware semantic finalization', () => {
   it('preserves the surface/foreground contrast pair instead of flattening it', () => {
@@ -61,5 +61,18 @@ describe('runFullPreflight modes', () => {
     expect(result.mode).toBe('acceptance');
     expect(result.mutated).toBe(false);
     expect(result.files).toBe(clean);
+  });
+
+  it('yields during full-VFS syntax passes without changing the result', () => {
+    const stepped = runFullPreflightSteps(clean);
+    let yieldCount = 0;
+    let step = stepped.next();
+    while (!step.done) {
+      yieldCount++;
+      step = stepped.next();
+    }
+
+    expect(yieldCount).toBe(2);
+    expect(step.value).toEqual(runFullPreflight(clean));
   });
 });

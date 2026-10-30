@@ -1,13 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { THEME_PRESETS } from '@/components/onboarding/themePresets';
+import { themePresetToThemeTokens } from '@/components/onboarding/themePresetToTokens';
 import { compileResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
+import { buildCanonicalLaunchPlan } from '@/services/launch/canonicalLaunchPlan';
+import { resolveBusinessLaunchPlan } from '@/services/launch/launchCapabilities';
+import { getAllIndustries } from '@/platform/core/industryMatrix';
 import { createUnisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
-import { APP_BUILDER_PROTOCOL_VERSION, type AppBuildContract } from '@/services/app-builder/appBuilderContracts';
+import { APP_BUILDER_PROTOCOL_VERSION, buildAppBuildContract, type AppBuildContract } from '@/services/app-builder/appBuilderContracts';
+import { buildAppBuilderGenerationContext } from '@/services/app-builder/appBuilderGenerationContext';
+import { applyDesignSources } from '@/services/app-builder/design/designSourceMaterializer';
+import { materializeAppBuilderSiteShell } from '@/services/app-builder/design/appBuilderSiteShell';
 import type { ComposerLoopResult } from '@/services/builder/aiRepairLoop';
 import { listContentTypes } from '@/services/cmsRecordService';
 import { saveAppBuilderAISettings } from '@/services/app-builder/appBuilderAISettings';
 import { buildWizardAggregatedRegistryContext } from '@/services/launch/wizardRegistryAggregation';
 import { deriveDesignSourceSelection } from '@/services/app-builder/appBuilderContracts';
+import { buildWizardBindingGuide } from '@/services/wizardBindingBridge';
+import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
+import { materializeDeterministicAppBuilderScaffold } from '@/services/app-builder/design/appBuilderScaffold';
+import { planSiteComposition } from '@/services/composition';
+import {
+  getAppBuilderSharedShellImplementationIds,
+  materializeAppBuilderSectionModelsWithDiagnostics,
+} from '@/services/app-builder/appBuilderSectionModel';
+import type { WizardSelections } from '@/types/playground';
 
 vi.mock('@/services/cmsRecordService', () => ({ listContentTypes: vi.fn(async () => []) }));
 
@@ -16,26 +33,90 @@ const baseFiles = {
   '/package.json': JSON.stringify({ dependencies: { react: '^18.3.1' } }),
 };
 
-function contract(): AppBuildContract {
+function scaffoldAuthoredPages(
+  appContract: AppBuildContract,
+  additions: Record<string, { imports?: string; body?: string }> = {},
+  initialFiles: Record<string, string> = baseFiles,
+): Record<string, string> {
+  const designManifest = JSON.parse(initialFiles['/.unison/design-source-manifest.json'] ?? '{}') as {
+    implementations?: Record<string, { modulePath: string; sectionType: string; props?: string }>;
+    eligibleByPage?: Record<string, string[]>;
+  };
+  const files = {
+    ...initialFiles,
+    ...materializeDeterministicAppBuilderScaffold(appContract, {
+      implementations: designManifest.implementations ?? {},
+      eligibleByPage: designManifest.eligibleByPage ?? {},
+    }),
+  };
+  for (const [path, addition] of Object.entries(additions)) {
+    let source = files[path];
+    if (!source) throw new Error(`Missing scaffold page ${path}`);
+    if (addition.imports) {
+      source = source.replace('export default function', `${addition.imports}\nexport default function`);
+    }
+    if (addition.body) source = source.replace('</main>', `${addition.body}</main>`);
+    files[path] = source;
+  }
+  return files;
+}
+
+function expectedSectionIds(pageId: string, sectionOrder: readonly string[]): string[] {
+  const counts = new Map<string, number>();
+  return sectionOrder.map((sectionType) => {
+    const occurrence = counts.get(sectionType) ?? 0;
+    counts.set(sectionType, occurrence + 1);
+    return `${pageId}:${sectionType}:${occurrence}`;
+  });
+}
+
+function contract(industry = 'salon', pageRoles: readonly string[] = ['home']): AppBuildContract {
+  const roles = [...new Set(['home', ...pageRoles])];
+  const pages = roles.map((role) => {
+    const title = role.split(/[-_\s]+/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+    const path = role === 'home' ? '/' : `/${role.replace(/_/g, '-')}`;
+    const id = role === 'home' ? 'home' : `page-${role}`;
+    return {
+      id, name: role, title, route: path, role, filePath: `/src/pages/${title.replace(/\s+/g, '')}.tsx`,
+      visibleInNav: role !== 'checkout', isHome: role === 'home', generatedBy: 'wizard' as const,
+    };
+  });
   const designContext = compileResolvedSiteDesignContext({
     designSeed: 'app-builder-test',
     businessModel: 'general' as never,
-    industry: 'salon',
-    roles: ['home'],
+    industry,
+    roles,
   });
+  const registryContext = buildWizardAggregatedRegistryContext({
+    industry, templateId: `${industry}-premium`, themePresetId: 'editorial', seed: 'app-builder-test',
+  });
+  const compositionPlan = planSiteComposition(
+    industry,
+    pages.map((page) => ({ pageId: page.id, role: page.role })),
+    'app-builder-test',
+    { artDirection: designContext.contract.artDirectionPackId, availableCapabilities: [] },
+  );
   return {
     protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
     identity: { projectId: 'project-1', businessId: 'business-1', siteId: 'site-1', systemType: 'website' },
     topology: {
       sitePlan: {
-        siteId: 'topology-1', industry: 'salon', businessName: 'Northstar', homePageId: 'home',
-        pages: [{ id: 'home', name: 'home', title: 'Home', route: '/', role: 'home', filePath: '/src/pages/Home.tsx', visibleInNav: true, isHome: true, generatedBy: 'wizard' }],
-        navItems: ['home'], funnels: [], redirects: [], generatedAt: '2026-09-30T12:00:00.000Z',
+        siteId: 'topology-1', industry, businessName: 'Northstar', homePageId: 'home',
+        pages,
+        navItems: pages.filter((page) => page.visibleInNav).map((page) => page.id),
+        funnels: [], redirects: [], generatedAt: '2026-09-30T12:00:00.000Z',
       },
-      pageRegistry: { pages: {}, funnels: {}, homePageId: 'home', version: 1 },
+      pageRegistry: {
+        pages: Object.fromEntries(pages.map((page, navOrder) => [page.id, {
+          pageId: page.id, title: page.title, path: page.route, filePath: page.filePath,
+          pageType: page.role, pageRole: page.role, isHome: page.isHome,
+          showInNav: page.visibleInNav, navOrder,
+        }])),
+        funnels: {}, homePageId: 'home', version: 1,
+      },
     },
     business: {
-      industry: 'salon', businessName: 'Northstar', goals: [], intents: [], capabilities: [], bindingGuide: '',
+      industry, businessName: 'Northstar', goals: [], intents: [], capabilities: [], bindingGuide: '',
       registeredComponents: [], intentBindings: [], configuredBusinessFields: [], parameters: {}, businessProfile: { businessName: 'Northstar' },
       branding: {
         version: '1.0',
@@ -51,9 +132,9 @@ function contract(): AppBuildContract {
     design: {
       seed: 'app-builder-test', themePresetId: 'editorial', themeTokens: {} as never,
       artDirection: {} as never, resolvedSiteDesignContext: designContext,
-      uiFoundation: {} as never, registryContext: {} as never,
-      compositionPlan: { industryId: 'salon', seed: 'app-builder-test', pages: [] },
-      sourceSelection: { implementationIds: [], portableRecipeIds: [], primitiveFamilyIds: [], experiencePrimitiveIds: [], pageCompositionIds: [] },
+      uiFoundation: {} as never, registryContext,
+      compositionPlan,
+      sourceSelection: deriveDesignSourceSelection(registryContext),
     },
     runtime: {
       framework: 'react-vite', language: 'typescript', styling: 'tailwind',
@@ -106,6 +187,16 @@ function ecommerceContract(): AppBuildContract {
     designSeed: 'app-builder-test-ecommerce', businessModel: 'general' as never,
     industry: 'ecommerce', roles: pages.map((page) => page.role),
   });
+  result.design.compositionPlan = planSiteComposition(
+    'ecommerce', pages.map((page) => ({ pageId: page.id, role: page.role })),
+    'app-builder-test-ecommerce',
+    { artDirection: result.design.resolvedSiteDesignContext.contract.artDirectionPackId, availableCapabilities: result.business.capabilities },
+  );
+  const registryContext = buildWizardAggregatedRegistryContext({
+    industry: 'ecommerce', templateId: 'ecommerce-premium', themePresetId: 'editorial', seed: 'app-builder-test-ecommerce',
+  });
+  result.design.registryContext = registryContext;
+  result.design.sourceSelection = deriveDesignSourceSelection(registryContext);
   return result;
 }
 
@@ -113,6 +204,62 @@ const createTestBuilder = (dependencies: Parameters<typeof createUnisonAppBuilde
   createUnisonAppBuilder({ loadContentTypes: async () => [], ...dependencies });
 
 describe('UnisonAppBuilder facade', () => {
+  it('materializes a page-matched section sidecar through runtime for every canonical industry', () => {
+    const industries = getAllIndustries();
+    const pageRoles = [...new Set(industries.flatMap((profile) => profile.defaultPages.map((page) => page.purpose)))];
+    for (const profile of industries) {
+      const appContract = contract(profile.industry, pageRoles);
+      const generation = buildAppBuilderGenerationContext(appContract);
+      const shellFiles = materializeAppBuilderSiteShell({
+        registry: appContract.topology.pageRegistry,
+        businessName: appContract.business.businessName,
+        bundle: generation.designSources,
+        materialization: generation.materialization,
+      });
+      const base = {
+        ...applyDesignSources({}, generation.materialization),
+        ...shellFiles,
+      };
+      const pages = appContract.topology.sitePlan.pages.map((page) => ({
+        id: page.id, filePath: page.filePath, route: page.route,
+      }));
+      const candidate = {
+        ...base,
+        ...materializeDeterministicAppBuilderScaffold(appContract, {
+          implementations: generation.materialization.manifest.implementations,
+          eligibleByPage: generation.designSources.eligibleByPage,
+        }),
+      };
+      const sharedShellIds = getAppBuilderSharedShellImplementationIds(
+        base,
+        generation.materialization.manifest.implementations,
+      );
+      const materialization = materializeAppBuilderSectionModelsWithDiagnostics(
+        candidate,
+        pages,
+        generation.materialization.manifest.implementations,
+        generation.designSources.eligibleByPage,
+        sharedShellIds,
+      );
+
+      expect(materialization.diagnostics, profile.industry).toEqual([]);
+      expect(materialization.pages, profile.industry).toHaveLength(pages.length);
+      for (const page of materialization.pages) {
+        const sidecar = JSON.parse(materialization.files[page.sidecarPath] ?? 'null') as {
+          compiledBy?: string;
+          pageFilePath?: string;
+          sections?: unknown[];
+          variantOverrides?: Record<string, string>;
+        } | null;
+        expect(sidecar, `${profile.industry}:${page.filePath}`).toMatchObject({
+          compiledBy: 'app-builder', pageFilePath: page.filePath,
+        });
+        expect(sidecar?.sections).toEqual(page.inspection.sections);
+        expect(page.sidecarContents).toBe(materialization.files[page.sidecarPath]);
+      }
+    }
+  });
+
   it('keeps the union design context out of page authoring turns', async () => {
     let globalContext = 'not captured';
     let pageContext = '';
@@ -246,7 +393,10 @@ describe('UnisonAppBuilder facade', () => {
     expect(authorSite).not.toHaveBeenCalled();
     expect(runComposer).not.toHaveBeenCalled();
     expect(result.stopReason, result.candidate.diagnostics.join('\n')).toBe('complete');
-    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidate.status, JSON.stringify({
+      diagnostics: result.candidate.diagnostics,
+      issues: result.candidate.closure?.issues,
+    }, null, 2)).toBe('ready-for-commit');
     expect(result.candidate.closure?.ok).toBe(true);
     expect(result.candidate.provenance).toMatchObject({ strategy: 'deterministic-scaffold', authoredPageIds: [] });
     expect(result.outcomes).toEqual([]);
@@ -260,8 +410,177 @@ describe('UnisonAppBuilder facade', () => {
     expect(result.candidateFiles['/src/pages/Shop.tsx']).toContain('data-ut-cta="icon.favorite"');
     expect(result.candidateFiles['/src/pages/Shop.tsx']).toContain('data-ut-cta="icon.filter"');
     expect(result.candidateFiles['/src/pages/Shop.tsx']).toContain('data-ut-cta="icon.sort"');
-    expect(result.candidateFiles['/.unison/compositions/pages/About.json']).toBe(initialFiles['/.unison/compositions/pages/About.json']);
+    const aboutComposition = JSON.parse(result.candidateFiles['/.unison/compositions/pages/About.json']) as {
+      compiledBy?: string;
+      pageFilePath?: string;
+      sections?: Array<{ sectionId: string; semanticType: string; sourcePath?: string }>;
+    };
+    const aboutSectionOrder = appBuildContract.design.compositionPlan.pages
+      .find((page) => page.pageId === 'about')!.target.sectionOrder;
+    expect(aboutComposition).toMatchObject({ compiledBy: 'app-builder', pageFilePath: '/src/pages/About.tsx' });
+    expect(aboutComposition.sections?.filter((section) => section.sourcePath === '/src/pages/About.tsx')
+      .map((section) => section.semanticType)).toEqual(aboutSectionOrder);
+    expect(aboutComposition.sections?.filter((section) => section.sourcePath === '/src/pages/About.tsx')
+      .map((section) => section.sectionId)).toEqual(expectedSectionIds('about', aboutSectionOrder));
+    expect(aboutComposition.sections?.filter((section) => section.sectionId.startsWith('about:'))
+      .every((section) => section.sourcePath === '/src/pages/About.tsx')).toBe(true);
     for (const page of pages) expect(result.candidateFiles[page.filePath]).toContain('<SiteNav />');
+  });
+
+  it('builds and materializes deterministic Home without invoking an AI provider', async () => {
+    const businessName = 'App Builder Probe';
+    const preset = THEME_PRESETS.find((candidate) => candidate.id === 'minimalist')!;
+    const selections: WizardSelections = {
+      visionPrompt: 'Informational seaside guesthouse showcase with a story link.',
+      businessName,
+      businessModel: 'portfolio_creator',
+      industryOverlay: 'portfolio',
+      systemType: 'portfolio',
+      primaryGoal: 'showcase_work',
+      secondaryGoals: [],
+      needsBooking: false,
+      sellsProducts: false,
+      wantsLeadCapture: false,
+      requestedPages: ['about'],
+      scaffoldMode: 'selected-pages',
+      templateId: 'portfolio-premium',
+      themePresetId: preset.id,
+      themeTokens: themePresetToThemeTokens(preset),
+      wizardSeedId: 'deterministic-home-no-ai',
+      businessId: 'business-1',
+    };
+    const launchPlan = buildCanonicalLaunchPlan(selections);
+    const businessLaunchPlan = resolveBusinessLaunchPlan({
+      industry: selections.industryOverlay,
+      primaryGoal: 'showcase_work',
+      customerNeeds: [],
+      selectedPages: ['about'],
+    });
+    const homePage = launchPlan.sitePlan.pages.find((page) => page.isHome)!;
+    const storyPage = launchPlan.sitePlan.pages.find((page) => page.route === '/about')!;
+    const homeRegistryPage = launchPlan.playground.pageRegistry.pages[homePage.id];
+    launchPlan.playground.bindings['bind-home-story'] = {
+      bindingId: 'bind-home-story',
+      sourcePageId: homePage.id,
+      elementKey: `${homePage.id}.hero.story`,
+      sourceSection: 'hero',
+      sourceSlot: 'primary-cta',
+      sourceLabel: 'The House Story',
+      coreIntent: 'nav.goto',
+      intent: 'nav.goto_page',
+      targetId: storyPage.id,
+      targetType: 'page',
+      confidence: 1,
+      source: 'wizard',
+      isValid: true,
+      readiness: 'preview-ready',
+    } as never;
+    const unrequestedActionIntents = new Set([
+      'booking.create', 'newsletter.subscribe', 'cart.add', 'cart.checkout',
+      'donation.start', 'quote.request', 'lead.capture', 'contact.submit', 'contact.call', 'contact.email',
+    ]);
+    const canonicalBindings = Object.values(launchPlan.playground.bindings)
+      .filter((binding) => !binding.coreIntent || !unrequestedActionIntents.has(binding.coreIntent));
+    const activeIntents = [...new Set(canonicalBindings.flatMap((binding) => binding.coreIntent ? [binding.coreIntent] : []))];
+    const designContext = compileResolvedSiteDesignContext({
+      industry: selections.industryOverlay,
+      roles: launchPlan.sitePlan.pages.map((page) => page.role),
+      artDirectionPackId: launchPlan.artDirection.storagePackId as never,
+      experience: selections.designSelection?.experience,
+      mode: selections.designSelection?.mode,
+      designSeed: launchPlan.designIntervention.seed,
+      businessModel: selections.businessModel,
+    });
+    const appContract = buildAppBuildContract({
+      identity: { projectId: 'project-1', businessId: 'business-1', siteId: 'site-1', systemType: 'portfolio' },
+      sitePlan: launchPlan.sitePlan,
+      pageRegistry: launchPlan.playground.pageRegistry,
+      industry: selections.industryOverlay,
+      businessName,
+      businessProfile: launchPlan.playground.creatorData.businessInfo,
+      businessParameters: selections.businessParameters,
+      canonicalBindings,
+      registeredComponentInstances: Object.values(launchPlan.playground.creatorData.componentInstances),
+      goals: [selections.primaryGoal],
+      intents: activeIntents,
+      capabilities: businessLaunchPlan.operationalCapabilities,
+      bindingGuide: buildWizardBindingGuide(launchPlan.playground, {
+        industry: selections.industryOverlay,
+        enabledCapabilities: businessLaunchPlan.operationalCapabilities,
+        activeIntents,
+      }),
+      seed: launchPlan.designIntervention.seed,
+      themePresetId: launchPlan.themePresetId,
+      themeTokens: selections.themeTokens,
+      artDirection: launchPlan.artDirection,
+      designContext,
+      uiFoundation: launchPlan.uiFoundationContract,
+      registryContext: launchPlan.registryContext,
+      protectedPaths: [],
+    });
+    const authorSite = vi.fn();
+    const runComposer = vi.fn();
+
+    const result = await createTestBuilder({ authorSite, runComposer }).generate({
+      operationId: 'deterministic-home-no-ai', contract: appContract, initialFiles: launchPlan.infrastructureFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null, generationMode: 'deterministic',
+    });
+    const normalizedHome = result.candidateFiles[homePage.filePath];
+    const compositionPath = resolvedCompositionPathFor(homePage.filePath);
+    const manifest = JSON.parse(result.candidateFiles['/.unison/design-source-manifest.json'] ?? '{}') as {
+      implementations?: Record<string, { modulePath: string; sectionType: string; exportName?: string }>;
+      eligibleByPage?: Record<string, string[]>;
+    };
+    const sharedShellIds = getAppBuilderSharedShellImplementationIds(result.candidateFiles, manifest.implementations ?? {});
+    const materializationProbe = materializeAppBuilderSectionModelsWithDiagnostics(
+      result.candidateFiles,
+      [{ id: homePage.id, filePath: homePage.filePath, route: homePage.route }],
+      manifest.implementations ?? {},
+      manifest.eligibleByPage,
+      sharedShellIds,
+    );
+    const composition = JSON.parse(result.candidateFiles[compositionPath] ?? 'null') as {
+      compiledBy?: string;
+      pageFilePath?: string;
+      sections?: Array<{ sectionId: string; semanticType: string; variantId?: string; sourcePath?: string }>;
+    };
+
+    expect(authorSite).not.toHaveBeenCalled();
+    expect(runComposer).not.toHaveBeenCalled();
+    expect(result.stopReason, JSON.stringify({
+      diagnostics: result.candidate.diagnostics,
+      closureIssues: result.candidate.closure?.issues,
+      eligibleByPage: manifest.eligibleByPage,
+      sharedShellIds,
+      materializationProbe: materializationProbe.pages,
+      materializationDiagnostics: materializationProbe.diagnostics,
+      sectionRoots: materializationProbe.pages[0]?.sourcePaths.map((path) => ({
+        path,
+        roots: [...(result.candidateFiles[path] ?? '').matchAll(/<(?:section|nav|header|footer)\b[^>]*>/g)].map((match) => match[0]),
+      })),
+      siteNav: result.candidateFiles['/src/project-components/site/SiteNav.tsx'],
+      siteFooter: result.candidateFiles['/src/project-components/site/SiteFooter.tsx'],
+      normalizedHome,
+    }, null, 2)).toBe('complete');
+    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(normalizedHome).toContain('data-ut-binding-id="bind-home-story"');
+    expect(normalizedHome).toContain(`data-ut-target-id="${storyPage.id}"`);
+    expect(normalizedHome).toContain('data-ut-path="/about"');
+    expect(normalizedHome).not.toContain('data-ut-component-slug="contact-form"');
+    expect(normalizedHome).not.toContain('data-ut-component-slug="newsletter-signup"');
+    const homeSectionOrder = appContract.design.compositionPlan.pages
+      .find((page) => page.pageId === homePage.id)!.target.sectionOrder;
+    expect([...normalizedHome.matchAll(/<section\b[^>]*data-ut-section-id=/g)]).toHaveLength(homeSectionOrder.length);
+    expect(composition).toMatchObject({ compiledBy: 'app-builder', pageFilePath: homePage.filePath });
+    expect(composition.sections?.filter((section) => section.sourcePath === homePage.filePath)
+      .map((section) => section.sectionId)).toEqual(expectedSectionIds(homePage.id, homeSectionOrder));
+    expect(composition.sections?.every((section) => Boolean(section.variantId))).toBe(true);
+    expect(composition.sections?.filter((section) => section.sectionId.startsWith(`${homePage.id}:`))
+      .every((section) => section.sourcePath === '/src/pages/Home.tsx')).toBe(true);
+    expect(composition.sections?.find((section) => section.sectionId === 'site:navbar')?.sourcePath)
+      .toBe('/src/project-components/site/SiteNav.tsx');
+    expect(composition.sections?.find((section) => section.sectionId === 'site:footer')?.sourcePath)
+      .toBe('/src/project-components/site/SiteFooter.tsx');
   });
 
   it.each([true, false])('rechecks preview dependencies after closure repair (standalone: %s)', async (standalone) => {
@@ -269,12 +588,17 @@ describe('UnisonAppBuilder facade', () => {
       '/src/pages/Home.tsx': 'import Preview from "../marketplace/selectedPreview"; export default function Home(){return <Preview/>}',
       '/src/marketplace/selectedPreview.tsx': 'export default function Preview(){return <main>Lowtide House</main>}',
     };
-    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
-      files: input.files, outcomes: [{ page: input.pages[0], status: 'kept-baseline' as const, reason: 'gates_exhausted' as const, attempts: 1, errors: ['Still imports preview'] }],
-    }));
-    const repairedFiles = standalone
-      ? { ...previewFiles, '/src/pages/Home.tsx': 'export default function Home(){return <main>Standalone Lowtide House</main>}' }
-      : previewFiles;
+    let repairedFiles = previewFiles;
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => {
+      if (standalone) {
+        repairedFiles = scaffoldAuthoredPages(contract(), {
+          '/src/pages/Home.tsx': { body: '<p>Standalone Lowtide House</p>' },
+        }, input.files);
+      }
+      return {
+        files: input.files, outcomes: [{ page: input.pages[0], status: 'kept-baseline' as const, reason: 'gates_exhausted' as const, attempts: 1, errors: ['Still imports preview'] }],
+      };
+    });
     const runComposer = vi.fn(async (): Promise<ComposerLoopResult> => ({
       ok: true, reason: 'accepted', attempts: 1, errors: [],
       prepared: { ok: true, nextFiles: repairedFiles, errors: [],
@@ -365,10 +689,10 @@ describe('UnisonAppBuilder facade', () => {
       bindingId: 'bind-search', pageId: 'home', route: '/', elementKey: 'home.navbar.icon-search',
       sourceSection: 'navbar', sourceSlot: 'icon-search', sourceLabel: 'Search',
       coreIntent: 'search.open', domIntent: 'nav.goto', ctaMarkers: ['icon.search'], intentHandler: 'client',
-      targetType: 'url', targetId: '/search', requiredCapabilities: [], missingCapabilities: [],
+      targetType: 'url', targetId: '/', requiredCapabilities: [], missingCapabilities: [],
     }];
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
-      files: { ...input.files, '/src/pages/Home.tsx': 'export default function Home(){return <main><button type="button" aria-label="Search">Search</button></main>}' },
+      files: scaffoldAuthoredPages(appContract, {}, input.files),
       revisionId: input.revisionId,
       outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
     }));
@@ -378,7 +702,10 @@ describe('UnisonAppBuilder facade', () => {
       entryPoint: '/src/main.tsx', baseRevisionId: null,
     });
 
-    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidate.status, JSON.stringify({
+      diagnostics: result.candidate.diagnostics,
+      issues: result.candidate.closure?.issues,
+    }, null, 2)).toBe('ready-for-commit');
     expect(result.candidateFiles['/src/pages/Home.tsx']).toContain('data-ut-cta="icon.search"');
     expect(result.candidate.closure?.issues.some((issue) => issue.code === 'wizard-binding-marker-missing')).toBe(false);
     expect(result.candidate.graph?.pages).toEqual(expect.arrayContaining([
@@ -409,16 +736,8 @@ describe('UnisonAppBuilder facade', () => {
       coreIntent: 'nav.goto', domIntent: 'nav.goto', ctaMarkers: ['cta.hero'], intentHandler: 'client',
       targetType: 'page', targetId: 'the-house', requiredCapabilities: [], missingCapabilities: [],
     }];
-    const authoredHome = `import SiteNav from '@/project-components/site/SiteNav';
-import SiteFooter from '@/project-components/site/SiteFooter';
-import { Link } from 'react-router-dom';
-export default function Home(){return <><SiteNav/><main>
-<section data-ut-section-id="home:hero:0" data-ut-section-type="hero"><h1>Northstar</h1><p>Welcome to our house.</p><Link to="/the-house" data-ut-target-page-id="the-house">Explore the shoreline</Link></section>
-<section><img src="https://images.unsplash.com/photo-1.jpg" alt="Coastal house"/><p>Quiet rooms beside the sea.</p></section>
-<section><h2>Stay a while</h2><p>Three rooms and a long shoreline.</p></section>
-</main><SiteFooter/></>}`;
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
-      files: { ...input.files, '/src/pages/Home.tsx': authoredHome },
+      files: scaffoldAuthoredPages(appContract, {}, input.files),
       revisionId: input.revisionId,
       outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
     }));
@@ -432,11 +751,11 @@ export default function Home(){return <><SiteNav/><main>
     expect(result.candidate.status, JSON.stringify({ diagnostics: result.candidate.diagnostics, issues: result.candidate.closure?.issues }, null, 2))
       .toBe('ready-for-commit');
     expect(result.candidate.closure?.issues.some((issue) => issue.code === 'binding-marker-unresolved')).toBe(false);
-    expect(home.match(/<Link\b/g)).toHaveLength(1);
+    expect(home.match(/href="#\/the-house"/g)).toHaveLength(1);
     expect(home).toContain('data-ut-binding-id="bind-home-house"');
-    expect(home).toContain('data-ut-target-page-id="the-house"');
+    expect(home).toContain('data-ut-target-id="the-house"');
     expect(home).toContain('data-ut-cta="cta.hero"');
-    expect(home).toContain('to="#/the-house"');
+    expect(home).toContain('data-ut-path="/the-house"');
   });
 
   it('normalizes registered section dispatchers before per-page candidate gates run', async () => {
@@ -488,7 +807,7 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
 
   it('adapts site authoring behind generate and preserves the candidate result', async () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
-      files: { ...input.files, '/src/pages/Home.tsx': 'export default function Home(){return <main>After</main>}' },
+      files: scaffoldAuthoredPages(contract(), { '/src/pages/Home.tsx': { body: '<p>After</p>' } }, input.files),
       revisionId: 'revision-2',
       outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
     }));
@@ -529,7 +848,7 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
   });
   it('continues authoring without optional CMS schema hints when scoped discovery fails', async () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
-      files: { ...input.files, '/src/pages/Home.tsx': 'export default function Home(){return <main>Authored without CMS hints</main>}' },
+      files: scaffoldAuthoredPages(contract(), { '/src/pages/Home.tsx': { body: '<p>Authored without CMS hints</p>' } }, input.files),
       revisionId: input.revisionId,
       outcomes: [],
     }));
@@ -544,19 +863,24 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
   });
 
   it('repairs site-wide closure in memory before returning a candidate', async () => {
-    const brokenFiles = {
-      ...baseFiles,
-      '/src/pages/Home.tsx': 'import Card from "../project-components/Card"; export default function Home(){return <Card />}',
-    };
-    const repairedFiles = {
-      ...brokenFiles,
-      '/src/project-components/Card.tsx': 'export default function Card(){return <section>Card</section>}',
-    };
-    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
-      files: brokenFiles,
-      revisionId: input.revisionId,
-      outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
-    }));
+    let repairedFiles: Record<string, string> = {};
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => {
+      const brokenFiles = scaffoldAuthoredPages(contract(), {
+        '/src/pages/Home.tsx': {
+          imports: 'import Card from "../project-components/Card";',
+          body: '<Card />',
+        },
+      }, input.files);
+      repairedFiles = {
+        ...brokenFiles,
+        '/src/project-components/Card.tsx': 'export default function Card(){return <article>Card</article>}',
+      };
+      return {
+        files: brokenFiles,
+        revisionId: input.revisionId,
+        outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
+      };
+    });
     const changeSet = {
       id: 'cand_closure', provenance: { origin: 'repair' as const, knowledgeVersion: 'test' },
       fileOps: [{ type: 'create' as const, path: '/src/project-components/Card.tsx', content: repairedFiles['/src/project-components/Card.tsx'] }],
@@ -624,17 +948,29 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
       designSeed: 'app-builder-test', businessModel: 'general' as never,
       industry: 'salon', roles: ['home', 'contact'],
     });
-    const candidateFiles = {
-      ...baseFiles,
-      '/src/pages/Home.tsx': 'import Mark from "../project-components/Mark"; export default function Home(){return <main><Mark /></main>}',
-      '/src/pages/Contact.tsx': 'export default function Contact(){return <main>Contact us</main>}',
+    multiPage.design.compositionPlan = planSiteComposition('salon',
+      multiPage.topology.sitePlan.pages.map((page) => ({ pageId: page.id, role: page.role })),
+      'app-builder-test-multi-page',
+      { artDirection: multiPage.design.resolvedSiteDesignContext.contract.artDirectionPackId, availableCapabilities: multiPage.business.capabilities },
+    );
+    let candidateFiles: Record<string, string> = {};
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => {
+      candidateFiles = {
+      ...scaffoldAuthoredPages(multiPage, {
+        '/src/pages/Home.tsx': {
+          imports: 'import Mark from "../project-components/Mark";',
+          body: '<Mark />',
+        },
+        '/src/pages/Contact.tsx': { body: '<p>Contact us</p>' },
+      }, input.files),
       '/src/project-components/Mark.tsx': 'export default function Mark(){return <span>Northstar</span>}',
-    };
-    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
-      files: candidateFiles,
-      revisionId: input.revisionId,
-      outcomes: input.pages.map((page) => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
-    }));
+      };
+      return {
+        files: candidateFiles,
+        revisionId: input.revisionId,
+        outcomes: input.pages.map((page) => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
+      };
+    });
     const result = await createTestBuilder({ authorSite }).generate({
       operationId: 'operation-multi-page', contract: multiPage, initialFiles: baseFiles,
       entryPoint: '/src/main.tsx', baseRevisionId: null,

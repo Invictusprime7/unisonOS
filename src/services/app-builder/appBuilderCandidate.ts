@@ -15,7 +15,10 @@ import { enforceSiteDesignContract } from '@/services/launch/homepageFirstContra
 import { assertSiteShellClosure, buildSiteShellTopology } from '@/services/siteShellTopology';
 import { CANONICAL_COMPONENT_DEFINITIONS } from '@/services/canonicalComponentRegistry';
 import { collectResolvedCompositions, RESOLVED_COMPOSITION_ROOT, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
-import { inspectAppBuilderPageSectionClosure } from './appBuilderSectionModel';
+import {
+  getAppBuilderSharedShellImplementationIds,
+  inspectAppBuilderPageSectionClosure,
+} from './appBuilderSectionModel';
 import type {
   AppBuildCandidateClosureIssue,
   AppBuildCandidateClosureReport,
@@ -330,6 +333,8 @@ export async function validateAppBuildCandidate(input: {
   initialFiles: Readonly<Record<string, string>>;
   /** Exact resolved-composition sidecars freshly emitted by the App Builder materializer. */
   systemMaterializedCompositionFiles?: Readonly<Record<string, string>>;
+  /** Fresh App Builder runtime must prove a serialized section model for every registered page. */
+  requireAppBuilderSectionModels?: boolean;
 }): Promise<AppBuildCandidateClosureReport> {
   const files = { ...input.files };
   const issues: AppBuildCandidateClosureIssue[] = [];
@@ -460,6 +465,8 @@ export async function validateAppBuildCandidate(input: {
     const assignedWriteIntents = input.contract.business.intentBindings
       .filter((binding) => binding.componentInstanceId === component.runtime.instanceId && binding.missingCapabilities.length === 0)
       .map((binding) => binding.coreIntent);
+    const activeIntents = input.contract.business.intents;
+    if (activeIntents.length > 0 && !activeIntents.includes(writeIntent) && assignedWriteIntents.length === 0) continue;
     if (assignedWriteIntents.length > 0 && !assignedWriteIntents.includes(writeIntent)) {
       issues.push({
         severity: 'blocker',
@@ -582,30 +589,49 @@ export async function validateAppBuildCandidate(input: {
 
   const manifestSource = files['/.unison/design-source-manifest.json'] ?? input.initialFiles['/.unison/design-source-manifest.json'];
   let sectionImplementations: Record<string, { modulePath: string; sectionType: string; exportName?: string }> = {};
+  let eligibleByPage: Record<string, string[]> | undefined;
   try {
-    sectionImplementations = JSON.parse(manifestSource ?? 'null')?.implementations ?? {};
+    const manifest = JSON.parse(manifestSource ?? 'null');
+    sectionImplementations = manifest?.implementations ?? {};
+    eligibleByPage = manifest?.eligibleByPage;
   } catch {
     sectionImplementations = {};
+    eligibleByPage = undefined;
   }
+  const sharedShellImplementationIds = getAppBuilderSharedShellImplementationIds(input.initialFiles, sectionImplementations);
   for (const page of pages) {
     for (const found of findDesignSourceUsageIssues(manifestSource, files[page.filePath])) {
       issues.push({ severity: 'blocker', code: found.code, path: page.filePath, message: `${page.filePath} ${found.message}` });
     }
-    if (Object.keys(sectionImplementations).length > 0) {
-      const inspection = inspectAppBuilderPageSectionClosure(page.filePath, files, sectionImplementations);
+    if (input.requireAppBuilderSectionModels || Object.keys(sectionImplementations).length > 0) {
+      const inspection = inspectAppBuilderPageSectionClosure(page.filePath, files, sectionImplementations, {
+        eligibleImplementationIds: eligibleByPage?.[page.id],
+        sharedShellImplementationIds,
+      });
       for (const message of inspection.issues) {
         issues.push({ severity: 'blocker', code: 'section-model-invalid', path: page.filePath, message });
       }
       const sidecarPath = resolvedCompositionPathFor(page.filePath);
-      let serialized: { compiledBy?: string; sections?: unknown[]; variantOverrides?: Record<string, string> } | null = null;
+      let serialized: {
+        version?: string;
+        compiledBy?: string;
+        pageFilePath?: string;
+        sections?: unknown[];
+        variantOverrides?: Record<string, string>;
+      } | null = null;
       try {
         serialized = JSON.parse(files[sidecarPath] ?? 'null');
       } catch {
         serialized = null;
       }
+      const expectedVariantOverrides = Object.fromEntries(inspection.sections.flatMap((section) =>
+        section.variantId ? [[section.sectionId, section.variantId] as const] : [],
+      ));
       if (!serialized || serialized.compiledBy !== 'app-builder'
+        || serialized.version !== '1.0'
+        || serialized.pageFilePath !== page.filePath
         || JSON.stringify(serialized.sections) !== JSON.stringify(inspection.sections)
-        || !serialized.variantOverrides) {
+        || JSON.stringify(serialized.variantOverrides) !== JSON.stringify(expectedVariantOverrides)) {
         issues.push({
           severity: 'blocker',
           code: 'section-model-not-persisted',

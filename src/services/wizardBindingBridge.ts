@@ -813,10 +813,13 @@ function describeBindingTarget(binding: PlaygroundBinding, snapshot: WizardBindi
 
 export function buildWizardBindingGuide(
   snapshot: WizardBindingGuideSource,
-  options: { industry?: string | null; enabledCapabilities?: readonly string[] } = {},
+  options: { industry?: string | null; enabledCapabilities?: readonly string[]; activeIntents?: readonly string[] } = {},
 ): string {
+  const activeIntentSet = options.activeIntents ? new Set(options.activeIntents) : null;
+  const isActiveIntent = (intent?: string) => !intent || !activeIntentSet || activeIntentSet.has(intent);
   const bindings = Object.values(snapshot.bindings)
     .filter((binding) => binding.sourceSection && binding.sourceSlot)
+    .filter((binding) => isActiveIntent(binding.coreIntent))
     .filter((binding) => bindingIsActive(binding, options.enabledCapabilities))
     .sort((a, b) => `${a.sourcePageId}:${a.elementKey || a.bindingId}`.localeCompare(`${b.sourcePageId}:${b.elementKey || b.bindingId}`));
 
@@ -851,9 +854,18 @@ export function buildWizardBindingGuide(
   const industry = options.industry ?? null;
   if (hasUIIntentProfile(industry)) {
     const profile = getUIIntentProfile(industry);
+    const activeProfile = activeIntentSet && profile
+      ? {
+          ...profile,
+          intents: Object.fromEntries(
+            Object.entries(profile.intents ?? {}).filter(([intent]) => activeIntentSet.has(intent)),
+          ),
+        }
+      : profile;
     // Build binding spec snapshot from existing bindings so resolver can mark "covered" placements.
     const specs: PlaygroundBindingSpecV2[] = Object.values(snapshot.bindings)
-      .filter((b) => b.sourceSection && b.sourceSlot && b.coreIntent && bindingIsActive(b, options.enabledCapabilities))
+      .filter((b) => b.sourceSection && b.sourceSlot && b.coreIntent && isActiveIntent(b.coreIntent)
+        && bindingIsActive(b, options.enabledCapabilities))
       .map((b) => {
         const page = snapshot.pageRegistry.pages[b.sourcePageId];
         return {
@@ -872,7 +884,7 @@ export function buildWizardBindingGuide(
         (p) => ((p.pageRole || p.pageType) ?? 'home') as PlaygroundPageRole,
       ),
     );
-    const resolution = resolveUIIntentPlacements(profile, specs, availablePages);
+    const resolution = resolveUIIntentPlacements(activeProfile, specs, availablePages);
     const contract = buildUIIntentContract(industry, resolution);
     if (contract) {
       if (lines.length > 0) lines.push('');

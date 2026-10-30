@@ -312,7 +312,7 @@ async function runReservedLaunchPipeline(
     const activeIntentSet = new Set([...requestedIntentSet, ...forcedIntentSet]);
     const userSelectableIntents = new Set([
       'booking.create', 'newsletter.subscribe', 'cart.add', 'cart.checkout',
-      'donation.start', 'quote.request', 'lead.capture', 'contact.submit', 'contact.call',
+      'donation.start', 'quote.request', 'lead.capture', 'contact.submit', 'contact.call', 'contact.email',
     ]);
     const canonicalIntents = uniqueValues<string>([
       ...(industryProfile
@@ -494,6 +494,13 @@ async function runReservedLaunchPipeline(
     });
   }, { timeoutMs: 30_000 });
 
+  const activeIntentSet = new Set(plan.canonicalIntents);
+  for (const [bindingId, binding] of Object.entries(canonicalPlan.playground.bindings)) {
+    if (binding.coreIntent && !activeIntentSet.has(binding.coreIntent)) {
+      delete canonicalPlan.playground.bindings[bindingId];
+    }
+  }
+
   const materializedPlayground = canonicalPlan.playground;
   const sitePlan = canonicalPlan.sitePlan;
   const pipelineValidations = canonicalPlan.validations;
@@ -504,6 +511,7 @@ async function runReservedLaunchPipeline(
   const bindingGuide = buildWizardBindingGuide(canonicalPlan.playground, {
     industry: plan.industryOverlay,
     enabledCapabilities: plan.launchCapabilities,
+    activeIntents: plan.canonicalIntents,
   });
   const designContext = compileResolvedSiteDesignContext({
     industry: plan.industryOverlay,
@@ -755,6 +763,7 @@ async function runReservedLaunchPipeline(
         wizardSelections: plan.selections,
         businessRuntime,
         enabledCapabilities: plan.launchCapabilities,
+        activeIntents: plan.canonicalIntents,
         approvedExperienceCapabilities: resolveApprovedExperienceCapabilities({
           webgl: canonicalPlan.designIntervention.envelope?.webgl,
           foundationCapabilities: canonicalPlan.uiFoundationContract.experienceCapabilities,

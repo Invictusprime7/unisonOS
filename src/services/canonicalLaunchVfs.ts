@@ -39,7 +39,7 @@ import { normalizeWizardThemeTokens } from '@/utils/wizardThemeTokenNormalizer';
 import {
   type VisualQualityReport,
 } from './visualQualityEvaluation';
-import { runFullPreflight } from './runFullPreflight';
+import { runFullPreflightSteps } from './runFullPreflight';
 import { runRuntimeCompatibilityPreflight, type RuntimeCompatibilityReport } from './runtimeCompatibilityPreflight';
 import { resolveSiteDependencyRuntime } from '@/utils/dependencyExtractor';
 import { SANDPACK_PREVIEW_CORE_DEPENDENCIES } from '@/utils/sandpackDependencies';
@@ -154,6 +154,8 @@ export interface BuildCanonicalLaunchArtifactsInput {
   businessRuntime?: BusinessRuntimeContract | null;
   /** Capability set that authorizes generated component runtime contracts. */
   enabledCapabilities?: readonly CapabilityId[];
+  /** Launch-selected user intents; limits required-intent closure when present. */
+  activeIntents?: readonly string[];
   approvedExperienceCapabilities?: readonly string[];
   /**
     * OPT-IN ONLY (`true`). Allows Stage 4b page bodies to fill unusable or
@@ -996,11 +998,12 @@ function* buildCanonicalLaunchArtifactSteps(
   // This is the shared launcher/builder authority. It runs against the exact
   // merged VFS that will be sealed, including companion modules and runtime
   // facades, and stamps the experience manifest before snapshot sealing.
-  let convergedPreflight = runFullPreflight(mergedFiles, {
+  let convergedPreflight = yield* runFullPreflightSteps(mergedFiles, {
     siteBundleSnapshot: input.siteBundleSnapshot,
     industry: input.industry || input.siteBundleSnapshot?.industry,
     brand: input.businessName || undefined,
     mode: 'repair',
+    activeIntents: input.activeIntents,
   });
   for (const path of Object.keys(mergedFiles)) delete mergedFiles[path];
   Object.assign(mergedFiles, convergedPreflight.files);
@@ -1014,11 +1017,12 @@ function* buildCanonicalLaunchArtifactSteps(
     });
     for (const path of Object.keys(mergedFiles)) delete mergedFiles[path];
     Object.assign(mergedFiles, refinalized.files);
-    const acceptance = runFullPreflight(mergedFiles, {
+    const acceptance = yield* runFullPreflightSteps(mergedFiles, {
       siteBundleSnapshot: input.siteBundleSnapshot,
       industry: input.industry || input.siteBundleSnapshot?.industry,
       brand: input.businessName || undefined,
       mode: 'acceptance',
+      activeIntents: input.activeIntents,
     });
     const unresolvedAcceptance = [
       ...acceptance.mutatedFiles,

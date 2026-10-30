@@ -127,6 +127,16 @@ export function materializeRegisteredComponents(
   const materializedInstanceIds: string[] = [];
 
   for (const component of contract.business.registeredComponents) {
+    const activeIntents = contract.business.intents;
+    const writeIntent = component.runtime.writeIntent;
+    const explicitlyDisabledIntent = Boolean(
+      writeIntent && activeIntents?.length && !activeIntents.includes(writeIntent),
+    );
+    if (component.instanceStatus === 'stubbed'
+      || explicitlyDisabledIntent
+      || component.runtime.requiredCapabilities.some((capability) => !contract.business.capabilities.includes(capability))) {
+      continue;
+    }
     const instanceId = component.runtime.instanceId;
     const template = component.nativeComponentTemplate;
     if (!template) continue;

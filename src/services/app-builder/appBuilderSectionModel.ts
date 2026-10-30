@@ -19,6 +19,32 @@ export interface AppBuilderSectionInspection {
   issues: string[];
 }
 
+export interface AppBuilderSectionMaterializationDiagnostic {
+  code: 'section-model-invalid' | 'section-model-empty' | 'section-sidecar-not-generated' | 'section-sidecar-invalid';
+  pageId: string;
+  path: string;
+  message: string;
+}
+
+export interface AppBuilderPageSectionMaterialization {
+  pageId: string;
+  filePath: string;
+  route?: string;
+  /** Normalized page source captured before App Build candidate validation. */
+  normalizedSource: string;
+  sourcePaths: string[];
+  eligibleImplementationIds: string[];
+  inspection: AppBuilderSectionInspection;
+  sidecarPath: string;
+  sidecarContents?: string;
+}
+
+export interface AppBuilderSectionMaterializationResult {
+  files: Record<string, string>;
+  pages: AppBuilderPageSectionMaterialization[];
+  diagnostics: AppBuilderSectionMaterializationDiagnostic[];
+}
+
 export interface AppBuilderPageTarget {
   id: string;
   filePath: string;
@@ -53,9 +79,10 @@ function findCustomSectionImplementations(
     const visit = (node: ts.Node) => {
       if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
         && tagName(node.tagName) === 'section') {
-        const variantId = readStringAttribute(node, 'data-ut-variant', sourceFile);
-        const sectionType = readStringAttribute(node, 'data-ut-section-type', sourceFile);
+        const variantId = readStringAttribute(node, 'variantId', sourceFile)
+          ?? readStringAttribute(node, 'data-ut-variant', sourceFile);
         const registeredEntry = variantId ? registered[variantId] : undefined;
+        const sectionType = readStringAttribute(node, 'data-ut-section-type', sourceFile);
         if (variantId && CUSTOM_VARIANT_ID.test(variantId) && !registeredEntry
           && sectionType && families.has(sectionType)) {
           const root = ts.isJsxSelfClosingElement(node)
@@ -95,6 +122,62 @@ function findCustomSectionImplementations(
 
   for (const variantId of ambiguous) delete discovered[variantId];
   return discovered;
+}
+
+interface PageSectionImplementations {
+  known: Record<string, EligibleImplementation>;
+  eligible: Record<string, EligibleImplementation>;
+}
+
+const SHARED_SHELL_SECTION_FILES: Readonly<Record<string, 'navbar' | 'footer'>> = {
+  '/src/project-components/site/SiteNav.tsx': 'navbar',
+  '/src/project-components/site/SiteFooter.tsx': 'footer',
+};
+
+/** Resolve only the variants already stamped by the canonical shared-shell compiler. */
+export function getAppBuilderSharedShellImplementationIds(
+  files: Readonly<Record<string, string>>,
+  implementations: Readonly<Record<string, EligibleImplementation>>,
+): string[] {
+  const ids = new Set<string>();
+  for (const [filePath, expectedType] of Object.entries(SHARED_SHELL_SECTION_FILES)) {
+    const source = files[filePath];
+    if (!source) continue;
+    const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const visit = (node: ts.Node) => {
+      if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+        && (tagName(node.tagName) === 'header' || tagName(node.tagName) === 'nav' || tagName(node.tagName) === 'footer')) {
+        const variantId = readStringAttribute(node, 'data-ut-variant', sourceFile);
+        if (variantId && implementations[variantId]?.sectionType === expectedType) ids.add(variantId);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+  return [...ids].sort();
+}
+
+function pageSectionImplementations(
+  pagePath: string,
+  files: Readonly<Record<string, string>>,
+  implementations: Readonly<Record<string, EligibleImplementation>>,
+  eligibleIds?: readonly string[],
+  sharedShellImplementationIds: readonly string[] = [],
+): PageSectionImplementations {
+  const custom = findCustomSectionImplementations(pagePath, files, implementations);
+  const eligibleRegistered = eligibleIds
+    ? Object.fromEntries(eligibleIds.flatMap((id) => implementations[id] ? [[id, implementations[id]]] : []))
+    : { ...implementations };
+  for (const id of sharedShellImplementationIds) {
+    const implementation = implementations[id];
+    if (implementation && (implementation.sectionType === 'navbar' || implementation.sectionType === 'footer')) {
+      eligibleRegistered[id] = implementation;
+    }
+  }
+  return {
+    known: { ...implementations, ...custom },
+    eligible: { ...eligibleRegistered, ...custom },
+  };
 }
 
 interface StaticResult {
@@ -191,6 +274,14 @@ function readStringAttribute(element: ts.JsxOpeningLikeElement, name: string, so
   return parsed.ok && typeof parsed.value === 'string' ? parsed.value : undefined;
 }
 
+/** Registered runtime hosts own component identity; they are not design sections. */
+function isRegisteredComponentHost(element: ts.JsxOpeningLikeElement, sourceFile: ts.SourceFile): boolean {
+  return Boolean(
+    readStringAttribute(element, 'data-ut-component-slug', sourceFile)
+    && readStringAttribute(element, 'data-ut-component-instance-id', sourceFile),
+  );
+}
+
 interface ImportedBinding {
   modulePath: string;
   importedName: string | null;
@@ -243,12 +334,23 @@ function findRootVariantIdentity(
       && SECTION_ROOT_TAGS.has(tagName(node.tagName) ?? '')) return;
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const component = tagName(node.tagName);
-      const variantId = readStringAttribute(node, 'variantId', sourceFile) ?? readStringAttribute(node, 'data-ut-variant', sourceFile);
+      let variantId = readStringAttribute(node, 'variantId', sourceFile)
+        ?? readStringAttribute(node, 'data-ut-variant', sourceFile);
       const sectionId = readStringAttribute(node, 'sectionId', sourceFile) ?? readStringAttribute(node, 'data-ut-section-id', sourceFile);
-      const implementation = variantId ? implementations[variantId] : undefined;
       const imported = component ? imports.get(component) : undefined;
+      let implementation = variantId ? implementations[variantId] : undefined;
+      if (!implementation && imported) {
+        const registeredImports = Object.entries(implementations).filter(([, candidate]) => {
+          const expectedImport = candidate.modulePath.replace(/^\/src\//, '@/').replace(/\.(?:tsx?|jsx?)$/i, '');
+          return importsRegisteredImplementation(imported, expectedImport, candidate);
+        });
+        if (registeredImports.length === 1) {
+          [variantId, implementation] = registeredImports[0];
+        }
+      }
       const expectedImport = implementation?.modulePath.replace(/^\/src\//, '@/').replace(/\.(?:tsx?|jsx?)$/i, '');
-      if (implementation && expectedImport && importsRegisteredImplementation(imported, expectedImport, implementation)) {
+      if (variantId && implementation && expectedImport
+        && importsRegisteredImplementation(imported, expectedImport, implementation)) {
         matches += 1;
         match = { sectionId, sectionType: implementation.sectionType, variantId };
       }
@@ -405,6 +507,10 @@ function materializeSectionRootIdentity(
   const visit = (node: ts.Node) => {
     if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
       && SECTION_ROOT_TAGS.has(tagName(node.tagName) ?? '')) {
+      if (tagName(node.tagName) === 'section' && isRegisteredComponentHost(node, sourceFile)) {
+        ts.forEachChild(node, visit);
+        return;
+      }
       const parent = node.parent;
       const nested = (() => {
         let current = parent;
@@ -618,7 +724,9 @@ export function inspectAppBuilderPageSections(
   };
   const visit = (node: ts.Node) => {
     if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
-      && SECTION_ROOT_TAGS.has(tagName(node.tagName) ?? '') && !isNestedRoot(node)) {
+      && SECTION_ROOT_TAGS.has(tagName(node.tagName) ?? '')
+      && !(tagName(node.tagName) === 'section' && isRegisteredComponentHost(node, sourceFile))
+      && !isNestedRoot(node)) {
       const sectionId = readStringAttribute(node, 'data-ut-section-id', sourceFile);
       const sectionType = readStringAttribute(node, 'data-ut-section-type', sourceFile);
       const variantId = readStringAttribute(node, 'data-ut-variant', sourceFile);
@@ -681,13 +789,17 @@ export function inspectAppBuilderPageSectionClosure(
   pagePath: string,
   files: Readonly<Record<string, string>>,
   implementations: Readonly<Record<string, EligibleImplementation>>,
-  options: { allowNamedExports?: boolean } = {},
+  options: {
+    allowNamedExports?: boolean;
+    eligibleImplementationIds?: readonly string[];
+    sharedShellImplementationIds?: readonly string[];
+  } = {},
 ): AppBuilderSectionInspection {
-  const inspectionOptions = { allowNamedExports: true, ...options };
-  const pageImplementations = {
-    ...implementations,
-    ...findCustomSectionImplementations(pagePath, files, implementations),
-  };
+  const { eligibleImplementationIds, sharedShellImplementationIds, ...inspectionOptions } = options;
+  const optionsWithNamedExports = { allowNamedExports: true, ...inspectionOptions };
+  const pageImplementations = pageSectionImplementations(
+    pagePath, files, implementations, eligibleImplementationIds, sharedShellImplementationIds,
+  );
   const paths = collectLocalImportClosure(files, pagePath, (path) =>
     /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/i.test(path),
   );
@@ -695,8 +807,8 @@ export function inspectAppBuilderPageSectionClosure(
   const issues: string[] = [];
   const seenIds = new Set<string>();
   for (const path of paths) {
-    const inspection = inspectAppBuilderPageSections(path, files[path] ?? '', pageImplementations, {
-      ...inspectionOptions,
+    const inspection = inspectAppBuilderPageSections(path, files[path] ?? '', pageImplementations.eligible, {
+      ...optionsWithNamedExports,
       requireChromeRoots: false,
       allowEmpty: true,
     });
@@ -721,24 +833,22 @@ export function inspectAppBuilderPageSectionClosure(
   return { sections, issues };
 }
 
-/** Add system-authored section sidecars; no page source or business data is rewritten. */
-export function materializeAppBuilderSectionModels(
+/** Normalize source roots and emit section models with structured per-page diagnostics. */
+export function materializeAppBuilderSectionModelsWithDiagnostics(
   files: Readonly<Record<string, string>>,
   pages: readonly AppBuilderPageTarget[],
   implementations: Readonly<Record<string, EligibleImplementation>>,
   eligibleByPage?: Readonly<Record<string, readonly string[]>>,
-): Record<string, string> {
+  sharedShellImplementationIds: readonly string[] = [],
+): AppBuilderSectionMaterializationResult {
   const result = { ...files };
+  const pageResults: AppBuilderPageSectionMaterialization[] = [];
+  const diagnostics: AppBuilderSectionMaterializationDiagnostic[] = [];
   for (const page of pages) {
     const eligibleIds = eligibleByPage?.[page.id];
-    const customImplementations = findCustomSectionImplementations(page.filePath, result, implementations);
-    const pageImplementations = { ...implementations, ...customImplementations };
-    const eligibleImplementations = eligibleIds
-      ? Object.fromEntries(eligibleIds.flatMap((id) => implementations[id] ? [[id, implementations[id]]] : []))
-      : pageImplementations;
-    for (const [id, implementation] of Object.entries(customImplementations)) {
-      eligibleImplementations[id] = implementation;
-    }
+    const pageImplementations = pageSectionImplementations(
+      page.filePath, result, implementations, eligibleIds, sharedShellImplementationIds,
+    );
     const sidecarPath = resolvedCompositionPathFor(page.filePath);
     const sourcePaths = collectLocalImportClosure(result, page.filePath, (path) =>
       /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/i.test(path),
@@ -747,14 +857,46 @@ export function materializeAppBuilderSectionModels(
       result[path] = materializeSectionRootIdentity(
         path,
         result[path] ?? '',
-        pageImplementations,
-        eligibleImplementations,
+        pageImplementations.known,
+        pageImplementations.eligible,
         path === page.filePath ? page.id : undefined,
         path === page.filePath ? page.route : undefined,
       );
     }
-    const inspection = inspectAppBuilderPageSectionClosure(page.filePath, result, pageImplementations, { allowNamedExports: true });
-    if (inspection.issues.length || !inspection.sections.length) continue;
+    const pageEligibleIds = Object.keys(pageImplementations.eligible).sort();
+    const inspection = inspectAppBuilderPageSectionClosure(page.filePath, result, implementations, {
+      allowNamedExports: true,
+      eligibleImplementationIds: eligibleIds,
+      sharedShellImplementationIds,
+    });
+    const pageResult: AppBuilderPageSectionMaterialization = {
+      pageId: page.id,
+      filePath: page.filePath,
+      route: page.route,
+      normalizedSource: result[page.filePath] ?? '',
+      sourcePaths: [...sourcePaths],
+      eligibleImplementationIds: pageEligibleIds,
+      inspection,
+      sidecarPath,
+    };
+    for (const message of inspection.issues) {
+      diagnostics.push({ code: 'section-model-invalid', pageId: page.id, path: page.filePath, message });
+    }
+    if (inspection.sections.length === 0 && inspection.issues.length === 0) {
+      diagnostics.push({
+        code: 'section-model-empty', pageId: page.id, path: page.filePath,
+        message: `${page.filePath}: no registered or explicitly authorized custom sections were found to serialize.`,
+      });
+    }
+    if (inspection.issues.length > 0 || inspection.sections.length === 0) {
+      diagnostics.push({
+        code: 'section-sidecar-not-generated', pageId: page.id, path: sidecarPath,
+        message: `${sidecarPath}: no App Builder composition sidecar was emitted because the normalized page source did not pass section inspection.`,
+      });
+      pageResults.push(pageResult);
+      continue;
+    }
+
     const variantOverrides = Object.fromEntries(inspection.sections.map((section) => [section.sectionId, section.variantId!]));
     const composition: ResolvedPageComposition = {
       version: '1.0',
@@ -763,9 +905,36 @@ export function materializeAppBuilderSectionModels(
       sections: inspection.sections,
       variantOverrides,
     };
-    result[sidecarPath] = serializeResolvedComposition(composition);
+    const serialized = serializeResolvedComposition(composition);
+    let verified: ResolvedPageComposition | null = null;
+    try { verified = JSON.parse(serialized) as ResolvedPageComposition; } catch { verified = null; }
+    if (!verified || verified.compiledBy !== 'app-builder' || verified.pageFilePath !== page.filePath
+      || JSON.stringify(verified.sections) !== JSON.stringify(inspection.sections)
+      || JSON.stringify(verified.variantOverrides) !== JSON.stringify(variantOverrides)) {
+      diagnostics.push({
+        code: 'section-sidecar-invalid', pageId: page.id, path: sidecarPath,
+        message: `${sidecarPath}: serialized composition does not match the inspected normalized source and eligible implementation contract.`,
+      });
+      pageResults.push(pageResult);
+      continue;
+    }
+    result[sidecarPath] = serialized;
+    pageResults.push({ ...pageResult, sidecarContents: serialized });
   }
-  return result;
+  return { files: result, pages: pageResults, diagnostics };
+}
+
+/** Add system-authored section sidecars; no page source or business data is rewritten. */
+export function materializeAppBuilderSectionModels(
+  files: Readonly<Record<string, string>>,
+  pages: readonly AppBuilderPageTarget[],
+  implementations: Readonly<Record<string, EligibleImplementation>>,
+  eligibleByPage?: Readonly<Record<string, readonly string[]>>,
+  sharedShellImplementationIds: readonly string[] = [],
+): Record<string, string> {
+  return materializeAppBuilderSectionModelsWithDiagnostics(
+    files, pages, implementations, eligibleByPage, sharedShellImplementationIds,
+  ).files;
 }
 
 function staticNamedVariantProps(element: ts.JsxOpeningLikeElement, sourceFile?: ts.SourceFile): Record<string, unknown> | null {

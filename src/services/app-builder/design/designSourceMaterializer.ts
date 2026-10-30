@@ -13,6 +13,7 @@ export interface DesignSourceManifest {
   root: string;
   modules: MaterializedDesignModule[];
   implementations: Record<string, { modulePath: string; sectionType: string; certification: string; exportName?: string; props?: string }>;
+  eligibleByPage?: Record<string, string[]>;
   unresolved: string[];
 }
 
@@ -56,6 +57,7 @@ export function materializeDesignSources(bundle: DesignSourceBundle): DesignSour
     root: DESIGN_SOURCE_ROOT,
     modules: compiled.modules,
     implementations,
+    eligibleByPage: bundle.eligibleByPage,
     unresolved: compiled.unresolved,
   };
   return { files: { ...compiled.files, [DESIGN_SOURCE_MANIFEST_PATH]: `${JSON.stringify(manifest, null, 2)}\n` }, manifest };

@@ -35,6 +35,16 @@ describe('closeRequiredIndustryIntents', () => {
     expect(second.files).toEqual(first.files);
   });
 
+  it('does not inject industry-required actions excluded by an explicit launch intent set', () => {
+    const result = runFullPreflight({
+      '/src/pages/Home.tsx': 'export default function Home() { return <main>Work</main>; }',
+    }, { industry: 'portfolio', activeIntents: ['nav.goto'] });
+
+    expect(result.stages.requiredIntentClosure.injected).toEqual([]);
+    expect(result.files['/src/pages/Home.tsx']).not.toContain('contact.submit');
+    expect(result.files['/src/pages/Home.tsx']).not.toContain('newsletter.subscribe');
+  });
+
   it('runs required-intent closure before the final shared syntax gate', () => {
     const result = runFullPreflight({
       '/src/pages/Home.tsx': 'export default function Home() { return <main><section>Shop</section></main>; }',
