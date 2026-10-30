@@ -349,10 +349,9 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
   // Images are embedded after acceptance: data URLs exceed the per-file request limit.
   const initialFiles = { ...plan.infrastructureFiles, ...material.files,
     '/src/App.tsx': generateCanonicalRouter(snapshot.pageRegistry, snapshot.businessName) };
-  // Budget covers one fresh-invocation retry per page when the provider times
-  // out (transient latency), on top of the normal per-page authoring windows.
+  // App Builder derives the site budget from sealed batch counts; provider failures never replay paid pages.
   const result = await unisonAppBuilder.generate({
-    operationId: `marketplace-install:${ids.draftId}:app-build`, contract, initialFiles, entryPoint: '/src/App.tsx', baseRevisionId: null, budgetMs: 430_000,
+    operationId: `marketplace-install:${ids.draftId}:app-build`, contract, initialFiles, entryPoint: '/src/App.tsx', baseRevisionId: null,
     reuseAcceptedPages: false, signal: options.signal,
     onStatus: options.onStatus,
     onProgress: event => options.onPage?.({ title: event.page.title, index: event.index, total: event.total, phase: event.phase }),
