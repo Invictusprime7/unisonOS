@@ -972,16 +972,19 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
       fileOps: [{ type: 'create' as const, path: '/src/project-components/Card.tsx', content: repairedFiles['/src/project-components/Card.tsx'] }],
       routeOps: [], targetPages: ['home'], attempt: 1,
     };
-    const runComposer = vi.fn(async (): Promise<ComposerLoopResult> => ({
-      ok: true, reason: 'accepted', attempts: 1, errors: [],
-      prepared: {
-        ok: true,
-        build: { changeSet, candidateFiles: repairedFiles, refused: [] },
-        gates: { passed: true, failures: [], advisories: [] },
-        nextFiles: repairedFiles,
-        errors: [],
-      },
-    }));
+    const runComposer = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['runComposer']>>[0]): Promise<ComposerLoopResult> => {
+      const nextFiles = { ...input.baseFiles, '/src/project-components/Card.tsx': repairedFiles['/src/project-components/Card.tsx'] };
+      return {
+        ok: true, reason: 'accepted', attempts: 1, errors: [],
+        prepared: {
+          ok: true,
+          build: { changeSet, candidateFiles: nextFiles, refused: [] },
+          gates: { passed: true, failures: [], advisories: [] },
+          nextFiles,
+          errors: [],
+        },
+      };
+    });
     const result = await createTestBuilder({ authorSite, runComposer }).generate({
       operationId: 'operation-closure', contract: contract(), initialFiles: baseFiles,
       entryPoint: '/src/main.tsx', baseRevisionId: null,
