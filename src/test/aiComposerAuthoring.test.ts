@@ -8,6 +8,7 @@ import { repairBuilderCandidate, runComposerRepairLoop } from '@/services/builde
 import type { AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import { authorSitePages, orderAuthoringPages } from '@/services/launch/siteAuthoringOrchestrator';
 import { planSiteComposition } from '@/services/composition';
+import type { AIComposerRequest } from '@/contracts/aiComposerContract';
 
 const base = {
   '/src/pages/Home.tsx': 'export default function Home(){return <main>Old</main>}',
@@ -267,7 +268,7 @@ describe('site authoring orchestrator', () => {
     const sidecarPath = '/.unison/compositions/pages/Home.json';
     const sidecar = JSON.stringify({ compiledBy: 'app-builder', pageFilePath: '/src/pages/Home.tsx',
       sections: [{ sectionId: 'home:services:0', data: { headline: 'Owner services' } }] });
-    const requests: Array<typeof request> = [];
+    const requests: AIComposerRequest[] = [];
     const invoke = vi.fn(async (turn: { messages: Array<{ content: string }> }) => {
       const sent = JSON.parse(turn.messages[0].content);
       requests.push(sent);
