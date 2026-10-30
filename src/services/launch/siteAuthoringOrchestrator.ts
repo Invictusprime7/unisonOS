@@ -106,7 +106,7 @@ export interface SiteAuthoringInput {
   /** Canonical in-memory projection only; never accepts or persists a revision. */
   preparePage?: (files: Record<string, string>, page: AuthoringPage) => Record<string, string>;
   /** Per-page design-source check run inside each page's repair loop. */
-  pageCheck?: (path: string, source: string) => string[];
+  pageCheck?: (path: string, source: string, files?: Readonly<Record<string, string>>) => string[];
   /** Reuse pages accepted by an earlier identical authoring run (default off). */
   reuseAcceptedPages?: boolean;
   /** false keeps /package.json untouched in authored candidates. */

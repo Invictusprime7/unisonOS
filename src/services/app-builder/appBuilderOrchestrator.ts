@@ -2,7 +2,7 @@
 
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import type { ComposerLoopInput, ComposerLoopResult, ComposerStopReason } from '@/services/builder/aiRepairLoop';
-import type { SiteAuthoringInput, SiteAuthoringResult } from '@/services/launch/siteAuthoringOrchestrator';
+import type { AuthoringPage, SiteAuthoringInput, SiteAuthoringResult } from '@/services/launch/siteAuthoringOrchestrator';
 import { APP_BUILDER_PROTOCOL_VERSION, type AppBuildRequest, type AppBuildResult } from './appBuilderContracts';
 import { findDesignSourceUsageIssues, validateAppBuildCandidate } from './appBuilderCandidate';
 import { materializeRegisteredComponents } from './registeredComponentMaterializer';
@@ -103,7 +103,7 @@ export async function orchestrateAppBuild(
         markers: binding.ctaMarkers,
       };
     });
-  const projectPage = (files: Readonly<Record<string, string>>, page: typeof pages[number]) => {
+  const projectPage = (files: Readonly<Record<string, string>>, page: AuthoringPage) => {
     const bindings = input.contract.business.intentBindings.filter(binding => binding.pageId === page.pageId);
     const scopedContract = {
       ...input.contract,
@@ -203,7 +203,8 @@ export async function orchestrateAppBuild(
   // failures instead of accepting the untouched reference source or retrying it.
   const terminalAuthoringFailure = authored.outcomes.some((outcome) =>
     outcome.status !== 'authored' && ['credits', 'denied', 'provider', 'rate_limited', 'invalid_response', 'aborted'].includes(outcome.reason));
-  const incompleteAuthoring = generationMode === 'ai' && authored.outcomes.some(outcome => outcome.status !== 'authored');
+  const incompleteAuthoring = generationMode === 'ai' && authored.outcomes.some(outcome =>
+    outcome.status === 'skipped' || outcome.reason === 'commit_failed' || outcome.reason === 'budget');
   const validateClosure = async (files: Record<string, string>) => {
     const report = await validateAppBuildCandidate({
       contract: input.contract,
