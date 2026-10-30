@@ -8,6 +8,36 @@ import { getAllIndustries, getIndustryProfile } from '@/platform/core/industryMa
 import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
 import { listResources, type ContentTypeRow } from '@/services/resources/resourceRegistry';
 import { listTopologyPageRoleAliases } from '@/platform/core/siteTopologyPlanner';
+import { collectResolvedCompositions } from '@/platform/core/resolvedComposition';
+
+/** Read-only Home object references; source data stays in its canonical composition sidecar. */
+export function renderHomeObjectContext(contract: AppBuildContract, files: Readonly<Record<string, string>>, homePageId: string): string {
+  const home = contract.topology.sitePlan.pages.find(page => page.id === homePageId);
+  if (!home) return '';
+  const composition = collectResolvedCompositions({ ...files })[home.filePath];
+  if (!composition || composition.compiledBy !== 'app-builder') return '';
+  const bindings = contract.business.intentBindings.filter(binding => binding.pageId === homePageId);
+  return [
+    'HOME OBJECT CONTRACT (read-only canonical reference; not new authorization):',
+    JSON.stringify({
+      pageId: homePageId, pageFilePath: home.filePath,
+      objects: composition.sections.map(section => ({
+        sectionId: section.sectionId, family: section.semanticType, variantId: section.variantId,
+        sourcePath: section.sourcePath, sourceModulePath: section.sourceModulePath,
+        dataFields: Object.keys(section.data ?? {}),
+      })),
+      bindings: bindings.map(binding => ({
+        bindingId: binding.bindingId, sourceSection: binding.sourceSection, sourceSlot: binding.sourceSlot,
+        coreIntent: binding.coreIntent, domIntent: binding.domIntent, targetType: binding.targetType,
+        targetId: binding.targetId, componentInstanceId: binding.componentInstanceId,
+        requiredCapabilities: binding.requiredCapabilities, missingCapabilities: binding.missingCapabilities,
+        businessFieldBindings: binding.businessFieldBindings,
+      })),
+      enabledCapabilities: contract.business.capabilities,
+    }),
+    'Read the supplied Home composition sidecar for established content and object data. Preserve shared resource, component, field and intent identities. Reuse these contracts only where this page has its own canonical binding; never copy Home binding IDs onto other pages or invent capabilities. Keep the current page role and sealed composition. Pending business setup does not authorize a success claim.',
+  ].join('\n');
+}
 
 export interface AppBuilderGenerationContext {
   contract: AppBuildContract;

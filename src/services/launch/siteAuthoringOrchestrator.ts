@@ -24,6 +24,7 @@ import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalA
 import { selectSourceKnowledge } from '@/services/builder/sourceKnowledgeContext';
 import { isImageLedRole, verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
 import { createSectionAuthoringInvoke, partitionPageSections, sectionPageBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
+import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import {
   extractHomepageVisualLanguage,
   renderHomepageInheritanceContract,
@@ -101,7 +102,9 @@ export interface SiteAuthoringInput {
   /** Extra runtime facts for every page turn (e.g. certified design-source modules with prop contracts). */
   runtimeContext?: string;
   /** Per-page override of runtimeContext (trimmed to the modules that page can use). */
-  runtimeContextForPage?: (pageId: string) => string;
+  runtimeContextForPage?: (pageId: string, files: Readonly<Record<string, string>>, homePageId?: string) => string;
+  /** Canonical in-memory projection only; never accepts or persists a revision. */
+  preparePage?: (files: Record<string, string>, page: AuthoringPage) => Record<string, string>;
   /** Per-page design-source check run inside each page's repair loop. */
   pageCheck?: (path: string, source: string) => string[];
   /** Reuse pages accepted by an earlier identical authoring run (default off). */
@@ -295,7 +298,9 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       knowledgeQuery: `${input.businessName} ${page.role} ${page.title} ${page.route}`,
       baseFiles,
       baseRevisionId: revisionId,
-      sourceTargets: [page.filePath, ...(referenceHomePath ? [referenceHomePath] : [])],
+      sourceTargets: [page.filePath, ...(referenceHomePath ? [referenceHomePath,
+        ...(baseFiles[resolvedCompositionPathFor(referenceHomePath)] ? [resolvedCompositionPathFor(referenceHomePath)] : []),
+      ] : [])],
       routes,
       priorPages: priorPages.slice(-20),
       registryContext: input.registryContext,
@@ -304,7 +309,7 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
         input.designContext
           ? `Industry ${input.designContext.contract.industry}; experience ${input.designContext.contract.experience}; forbidden implementations ${JSON.stringify(input.designContext.hardLegality.forbiddenImplementations)}.`
           : '',
-        input.runtimeContextForPage?.(page.pageId) ?? input.runtimeContext ?? '',
+        input.runtimeContextForPage?.(page.pageId, baseFiles, establishedLanguage?.sourcePageId) ?? input.runtimeContext ?? '',
       ].filter(Boolean).join('\n').slice(0, 12000) || undefined,
     })).request;
     // Reserve one turn for each remaining worker wave. Home must not consume
@@ -407,7 +412,8 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       try {
         // Rebase only the keys this candidate changed onto the latest commit,
         // preserving newer shared-file edits made by pages authored in parallel.
-        const candidate = stampAuthoredPage(prepared.nextFiles, page, input.designContext?.fingerprint);
+        const projected = input.preparePage?.(prepared.nextFiles, page) ?? prepared.nextFiles;
+        const candidate = stampAuthoredPage(projected, page, input.designContext?.fingerprint);
         const nextFiles: Record<string, string> = { ...files };
         for (const [path, content] of Object.entries(candidate)) {
           if (baseFiles[path] === content) continue;
@@ -435,6 +441,7 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
         files = committed.files;
         visualMemory.record(page.pageId, page.role, extractCompositionSignature(files[page.filePath]));
         if (page.pageId === input.homePageId || page.route === '/') {
+          referenceHomePath = page.filePath;
           establishedLanguage = extractHomepageVisualLanguage(files[page.filePath], page.pageId);
         }
         revisionId = committed.revisionId ?? revisionId;
@@ -469,7 +476,13 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
   // Home first (it establishes the site's visual language), then the rest
   // in parallel with bounded concurrency.
   try {
-    if (ordered.length > 0) await authorOne(ordered[0], 0);
+    if (ordered.length > 0) {
+      await authorOne(ordered[0], 0);
+      const first = ordered[0];
+      if ((first.pageId === input.homePageId || first.route === '/') && outcomeSlots[0]?.status !== 'authored') {
+        paused = paused ?? 'gates_exhausted';
+      }
+    }
     let cursor = 1;
     const worker = async () => {
       while (cursor < ordered.length) {
