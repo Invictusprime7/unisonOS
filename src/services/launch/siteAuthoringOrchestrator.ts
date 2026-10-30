@@ -23,7 +23,7 @@ import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import { selectSourceKnowledge } from '@/services/builder/sourceKnowledgeContext';
 import { isImageLedRole, verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
-import { createSectionAuthoringInvoke } from '@/services/launch/sectionAuthoringInvoke';
+import { createSectionAuthoringInvoke, partitionPageSections, sectionPageBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 import {
   extractHomepageVisualLanguage,
   renderHomepageInheritanceContract,
@@ -314,7 +314,11 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
     // A page needs ~45-90s to author plus ~60s for one repair turn; a shorter
     // window only produces a guaranteed timeout. Later pages past the overall
     // budget keep their baseline instead.
-    const pageDeadline = Math.min(deadline, now() + Math.min(150_000, Math.max(120_000, (deadline - now()) / waves)));
+    const batched = Boolean(input.designContext && planned && partitionPageSections(planned.target.sectionOrder).length > 1);
+    const pageWindow = batched && planned
+      ? sectionPageBudgetMs(planned.target.sectionOrder)
+      : Math.min(150_000, Math.max(120_000, (deadline - now()) / waves));
+    const pageDeadline = Math.min(deadline, now() + pageWindow);
     const loopInput = (request: AIComposerRequest) => ({
       request,
       baseFiles,

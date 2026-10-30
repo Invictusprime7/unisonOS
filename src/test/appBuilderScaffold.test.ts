@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { materializeDeterministicAppBuilderScaffold } from '@/services/app-builder/design/appBuilderScaffold';
 import { planSiteComposition } from '@/services/composition';
 import type { AppBuildContract } from '@/services/app-builder/appBuilderContracts';
+import { materializeAppBuilderSectionModelsWithDiagnostics } from '@/services/app-builder/appBuilderSectionModel';
+import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 
 const page = (id: string, title: string, route: string, role: string, isHome = false) => ({
   id,
@@ -135,6 +137,24 @@ describe('deterministic App Builder scaffold', () => {
     expect(home).not.toContain('AppBuilderScaffoldSection');
     for (const variantId of registry.eligibleByPage.home) expect(home).toContain(`data-ut-variant="${variantId}"`);
     expect(files['/src/pages/Home.tsx']).not.toContain('data-ut-intent=');
+    const shellImplementations = {
+      ...registry.implementations,
+      'navbar:test': { modulePath: '/src/unison/design-sources/Navbar.tsx', sectionType: 'navbar' },
+      'footer:test': { modulePath: '/src/unison/design-sources/Footer.tsx', sectionType: 'footer' },
+    };
+    const modeled = materializeAppBuilderSectionModelsWithDiagnostics({
+      ...files,
+      '/src/project-components/site/SiteNav.tsx': 'import Navbar from "@/unison/design-sources/Navbar"; export function SiteNav(){return <header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:test"><Navbar sectionId="site:navbar" variantId="navbar:test" props={{links:[]}} /></header>}',
+      '/src/project-components/site/SiteFooter.tsx': 'import Footer from "@/unison/design-sources/Footer"; export function SiteFooter(){return <footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:test"><Footer sectionId="site:footer" variantId="footer:test" props={{links:[]}} /></footer>}',
+    }, pages, shellImplementations, registry.eligibleByPage, ['navbar:test', 'footer:test']);
+    expect(modeled.diagnostics).toEqual([]);
+    for (const target of pages) {
+      const sidecar = JSON.parse(modeled.files[resolvedCompositionPathFor(target.filePath)]);
+      expect(sidecar.compiledBy).toBe('app-builder');
+      const planned = contract.design.compositionPlan.pages.find(entry => entry.pageId === target.id);
+      expect(sidecar.sections.filter((section: { sourcePath: string }) => section.sourcePath === target.filePath)
+        .map((section: { semanticType: string }) => section.semanticType)).toEqual(planned?.target.sectionOrder);
+    }
   });
 
   it('does not emit controls for bindings disabled by missing capabilities', () => {

@@ -21,6 +21,7 @@ import {
 } from './appBuilderSectionModel';
 import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
+import { sectionSiteBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 
 export interface AppBuilderOrchestratorDependencies {
   authorSite: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
@@ -51,7 +52,9 @@ export async function orchestrateAppBuild(
   // site-wide closure repair inside the same stage budget, otherwise the repair
   // starts after the budget is spent and the launch watchdog fires.
   const startedAt = Date.now();
-  const totalBudgetMs = input.budgetMs ?? 280_000;
+  const orderedPages = [...pages].sort((a, b) => Number(b.route === '/') - Number(a.route === '/') || a.route.localeCompare(b.route));
+  const totalBudgetMs = input.budgetMs ?? sectionSiteBudgetMs(orderedPages.map(page =>
+    input.contract.design.compositionPlan.pages.find(planned => planned.pageId === page.pageId)?.target.sectionOrder ?? []), input.concurrency);
   const authoringBudgetMs = Math.max(60_000, totalBudgetMs - CLOSURE_REPAIR_RESERVE_MS);
   let contentTypes: ContentTypeRow[] = [];
   if (generationMode === 'ai' && dependencies.loadContentTypes && input.baseRevisionId) {
