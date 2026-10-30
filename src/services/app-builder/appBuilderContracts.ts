@@ -15,7 +15,7 @@ import type { ResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDe
 import type { WizardAggregatedRegistryContext } from '@/services/launch/wizardRegistryAggregation';
 import type { BuilderPageType, PageRegistry } from '@/types/pageRegistry';
 import { resolvePlaygroundBindingDomIntent, type PlaygroundBinding } from '@/platform/core/playground';
-import type { CreatorBusinessInfo, CreatorComponentInstance } from '@/types/creatorData';
+import type { CreatorBusinessInfo, CreatorComponentInstance, CreatorForm, CreatorFormField } from '@/types/creatorData';
 import type { AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import type { WizardBusinessParameters } from '@/platform/core/playground';
@@ -276,6 +276,7 @@ export interface AppBuildIntentBinding {
   componentInstanceId?: string;
   componentSlug?: string;
   componentWriteIntent?: string;
+  formFields?: CreatorFormField[];
 }
 
 export interface AppBuildRegisteredComponent {
@@ -287,6 +288,7 @@ export interface AppBuildRegisteredComponent {
   requiredBindingKeys: string[];
   requiredWhenCapabilitiesEnabled?: string[];
   requiredNativeFormFields?: string[];
+  formFields?: CreatorFormField[];
   nativeComponentTemplate?: string;
   requiredBusinessFields: string[];
   requiredSetupSteps: string[];
@@ -295,6 +297,7 @@ export interface AppBuildRegisteredComponent {
 function deriveRegisteredComponents(
   instances: readonly CreatorComponentInstance[],
   capabilities: readonly string[],
+  forms: readonly CreatorForm[],
 ): AppBuildRegisteredComponent[] {
   return instances.flatMap((instance) => {
     if (!instance.componentSlug) return [];
@@ -305,6 +308,7 @@ function deriveRegisteredComponents(
     assertCanonicalComponentDefinition(definition);
     const runtime = resolveComponentRuntimeContract(instance, capabilities);
     if (!runtime) throw new Error(`AppBuildContract component ${instance.componentSlug} has no runtime contract.`);
+    const form = forms.find((candidate) => candidate.formId === instance.bindings.formId);
     return [{
       runtime,
       label: instance.label,
@@ -314,6 +318,7 @@ function deriveRegisteredComponents(
       requiredBindingKeys: [...definition.requiredBindingKeys],
       requiredWhenCapabilitiesEnabled: [...(definition.requiredWhenCapabilitiesEnabled ?? [])],
       requiredNativeFormFields: [...(definition.requiredNativeFormFields ?? [])],
+      formFields: form?.fields.map((field) => ({ ...field, options: field.options ? [...field.options] : undefined })),
       nativeComponentTemplate: definition.htmlTemplate.replace(/\sclass=/g, ' className='),
       requiredBusinessFields: [...(definition.requiredBusinessFields ?? [])],
       requiredSetupSteps: [...(definition.requiredSetupSteps ?? [])],
@@ -364,6 +369,7 @@ function deriveIntentBindings(
         componentInstanceId: component?.runtime.instanceId,
         componentSlug: component?.runtime.componentSlug,
         componentWriteIntent: component?.runtime.writeIntent ?? undefined,
+        formFields: component?.formFields,
       };
     })
     .sort((left, right) => left.bindingId.localeCompare(right.bindingId));
@@ -430,6 +436,8 @@ export interface BuildAppBuildContractInput {
   businessProfile?: CreatorBusinessInfo;
   canonicalBindings?: readonly PlaygroundBinding[];
   registeredComponentInstances?: readonly CreatorComponentInstance[];
+  /** Canonical Wizard form definitions, including owner-selected extra fields. */
+  forms?: readonly CreatorForm[];
   goals: readonly string[];
   intents: readonly string[];
   capabilities: readonly string[];
@@ -689,6 +697,7 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
   const registeredComponents = deriveRegisteredComponents(
     input.registeredComponentInstances ?? [],
     input.capabilities,
+    input.forms ?? [],
   );
   const intentBindings = deriveIntentBindings(
     input.canonicalBindings ?? [],

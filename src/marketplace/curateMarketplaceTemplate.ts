@@ -219,6 +219,7 @@ export function curateMarketplaceTemplate(
     businessProfile: plan.playground.creatorData.businessInfo,
     canonicalBindings: Object.values(plan.playground.bindings),
     registeredComponentInstances: Object.values(plan.playground.creatorData.componentInstances),
+    forms: Object.values(plan.playground.creatorData.forms),
     goals: [primaryGoal],
     intents: activeIntents,
     capabilities: [],

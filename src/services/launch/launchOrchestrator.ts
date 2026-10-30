@@ -544,6 +544,7 @@ async function runReservedLaunchPipeline(
     businessProfile: canonicalPlan.playground.creatorData.businessInfo,
     canonicalBindings: Object.values(canonicalPlan.playground.bindings),
     registeredComponentInstances: Object.values(canonicalPlan.playground.creatorData.componentInstances),
+    forms: Object.values(canonicalPlan.playground.creatorData.forms),
     businessParameters: {
       ...plan.selections.businessParameters,
       ownerEmail: plan.ownerEmail || undefined,
