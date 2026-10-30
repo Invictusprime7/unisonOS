@@ -602,7 +602,7 @@ export async function runProviderLoop(opts: {
       const isPrimaryGemini = geminiOwnsLeadBudget(
         providerPlan.gatewayModels,
         modelIndex,
-        !hasDirectGemini || geminiQuotaExhausted || directOnCooldown(),
+        !hasDirectGemini || geminiQuotaExhausted || geminiCooling(),
         providerPlan.primaryProvider === 'gemini' && providerPlan.preferLongLeadAttempt === true,
       );
       // Gemini owns the lead attempt, but the managed gateway still needs a
@@ -842,7 +842,7 @@ export async function runProviderLoop(opts: {
     ].filter(Boolean);
     // A key skipped for a remembered depleted balance must name that cause, or
     // later pages report "no providers configured" instead of the real remedy.
-    const cooldownNotes = directOnCooldown()
+    const cooldownNotes = geminiCooling()
       ? ['gemini: 402 key is out of prepaid credit (skipped until credits are added)']
       : [];
     const errorTrail = [...providerErrors.slice(-10), ...cooldownNotes].join(' | ') || lastError || 'no provider attempts completed';
