@@ -38,6 +38,15 @@ function makeInput(implementations: WizardRegistryImplementationSummary[]): Buil
 }
 
 describe('DesignSystemResolver', () => {
+  it('uses the composition role for a legacy Landing page without allowing unrelated roles', () => {
+    const contract = buildAppBuildContract(makeInput([
+      impl('hero:home', 'hero', ['home']), impl('hero:contact', 'hero', ['contact']),
+    ]));
+    contract.topology.sitePlan.pages = contract.topology.sitePlan.pages.map((page) => ({ ...page, role: 'landing' }));
+    const bundle = resolveDesignSourceBundle(contract);
+    expect(bundle.eligibleByPage['page-home']).toEqual(['hero:home']);
+  });
+
   it('derives sourceSelection from the sealed registry context', () => {
     const contract = buildAppBuildContract(makeInput([impl('hero:b', 'hero'), impl('hero:a', 'hero', ['home'], 'approved')]));
     expect(contract.design.sourceSelection.implementationIds).toEqual(['hero:a', 'hero:b']);

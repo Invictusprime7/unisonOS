@@ -4,7 +4,7 @@
 - [x] Enforce complete-source file operations and transactional batch validation; safely retain completed batches and resume only failed work. Checkpoints live only in bounded tab memory for 15 minutes, keyed by exact request/source/plan/settings; refresh clears provisional progress, and no partial revision is committed.
 - [x] Separate bounded provider calls from multi-batch page/site budgets; derive Wizard watchdog and marketplace budget from sealed section counts. Verify deterministic Home independently through canonical planning → App Builder → section-model closure, without AI calls.
 - [x] Run focused reliability regressions: 123 client checks plus the independent deterministic Home test and all 125 edge checks pass; both authority lints pass. Node test environment avoids unavailable native canvas. Provider fixtures require ambient provider keys removed.
-- [ ] Resolve the three pre-existing broad App Builder fixture failures: Landing hero and Contact services/stats have no page-eligible implementation for their sealed composition. Do not silently drop sections or broaden registry eligibility; needs coherent composition/registry contract resolution in a separately scoped fix.
+- [x] Resolve the broad App Builder failures: normalize Landing/Portfolio request roles, inherit generic profiles by role identity, correct unsupported Contact/Gallery/Booking/FAQ families before sealing, and give Pricing/Shop/Checkout/Blog explicit page jobs. Compact Shop/FAQ/Blog and Checkout start with their content rather than requiring a hero absent from some sealed packs. Industry coverage tests now use each industry's own default pages, not unrelated cross-industry page unions. All 89 targeted checks plus 102 neighboring composition checks pass (one existing skip); both authority lints and preview build pass. Canonical registry and sealed-target guards remain unchanged.
 - [ ] Verify deployed Gemini, configured fallback, five-page launch and saved reload; requires canonical deployment and an authoritative UNISON session.
 
 ### Production checklist: 0 / 8 verified live
@@ -14,8 +14,8 @@
 4. Multiple batches preserve earlier sections — same blocker; source preservation fixture passes.
 5. Failed batch resumes without regenerating completed sections — same blocker; exact-request tab-memory recovery fixture passes, not durable refresh recovery.
 6. Deterministic Home passes section-model validation — independent local canonical launch fixture passes; production not verified.
-7. Five-page ecommerce reaches Live Workspace — same blocker; five-page scaffold → section-model fixture passes, broader registry mismatch remains above.
-8. Saved revision survives reload and preview — blocked by authoritative session; available injected session redirects /home to /auth?next=%2Fhome.
+7. Five-page ecommerce reaches Live Workspace — same blocker; complete five-page scaffold → candidate closure → section-model fixture now passes without AI calls or commit.
+8. Saved revision survives reload and preview — blocked by authoritative session; current injected session targets a different backend, so it was not restored; browser /home redirects to /auth?next=%2Fhome.
 Fallback production configuration remains unverified; no relay, credential change, alternate-backend deployment or paid live generation was attempted.
 
 ## Active: Gemini install preflight
@@ -25,7 +25,7 @@ Fallback production configuration remains unverified; no relay, credential chang
 
 ## Active: Uploaded Gemini timeout follow-up
 - [x] Replace the full-page timeout replay with bounded, sequential page-section requests before final candidate validation; preserve sealed order, repeated sections, owner settings and source quantities.
-- [x] Verify section accumulation, provider-stop behavior, and existing authoring regressions: 36 focused tests and authoring authority lint pass; preview build OK. Broader App Builder suite has three scaffold eligibility failures unrelated to the invocation adapter.
+- [x] Verify section accumulation, provider-stop behavior, and existing authoring regressions: 36 original checks pass; the follow-up above also resolves the broader App Builder scaffold failures and verifies all 27 facade tests.
 - [ ] Verify live generation → save → reopen; requires an authoritative UNISON session and a successful real provider response.
 
 ## Active: Marketplace install failure follow-up

@@ -78,7 +78,7 @@ const SALON = build('salon', {
     narrativeGoals: ['prove craft through results', 'let imagery lead'],
     requiredCapabilities: [], domainVocabulary: ['before & after', 'looks', 'transformations'],
     character: { density: 'medium', mediaDominance: 0.95, typographyDominance: 0.2, asymmetry: 0.7 },
-    preferredFamilies: ['gallery', 'testimonials', 'cta'],
+    preferredFamilies: ['gallery', 'before-after', 'cta'],
     heroCandidates: ['typographic', 'none'], geometryCandidates: ['asymmetric', 'grid'],
     preferredCompositionPatterns: ['masonry or editorial image grid', 'before/after comparison'],
     discouragedCompositionPatterns: ['text-heavy intro', 'service cards'], noveltyBudget: 0.7,
@@ -100,7 +100,7 @@ const SALON = build('salon', {
     preferredFamilies: ['services', 'contact', 'faq'],
     sectionOrderCandidates: [
       ['hero', 'services', 'contact', 'faq'],
-      ['hero', 'contact', 'faq', 'testimonials'],
+      ['hero', 'contact', 'faq'],
     ],
     heroCandidates: ['utility-header'], geometryCandidates: ['centered', 'split'],
     preferredCompositionPatterns: ['focused booking flow', 'reassurance sidebar'],
@@ -111,7 +111,7 @@ const SALON = build('salon', {
     primaryIntent: 'contact.submit', requiredCapabilities: ['contact'],
     domainVocabulary: ['visit the studio', 'hours', 'directions'],
     character: { density: 'medium', mediaDominance: 0.35, informationDensity: 0.6, conversionPressure: 0.6 },
-    preferredFamilies: ['contact', 'faq', 'stats'],
+    preferredFamilies: ['contact', 'faq'],
     heroCandidates: ['utility-header', 'typographic'], geometryCandidates: ['split', 'centered'],
     preferredCompositionPatterns: ['hours + location + form split'],
     discouragedCompositionPatterns: ['service grid', 'gallery'], noveltyBudget: 0.3,
@@ -120,9 +120,9 @@ const SALON = build('salon', {
     narrativeGoals: ['resolve practical objections', 'route unresolved questions to the studio'],
     requiredCapabilities: [], domainVocabulary: ['appointments', 'consultations', 'policies', 'aftercare'],
     character: { density: 'medium', informationDensity: 0.8, typographyDominance: 0.65, conversionPressure: 0.35 },
-    preferredFamilies: ['hero', 'faq', 'contact', 'cta'],
-    sectionOrderCandidates: [['hero', 'faq', 'contact', 'cta'], ['hero', 'faq', 'cta']],
-    heroCandidates: ['utility-header', 'typographic'], geometryCandidates: ['centered', 'split'],
+    preferredFamilies: ['faq', 'cta'],
+    sectionOrderCandidates: [['faq', 'cta']],
+    heroCandidates: ['none'], geometryCandidates: ['centered', 'split'],
     preferredCompositionPatterns: ['grouped questions with a contact escape hatch'],
     discouragedCompositionPatterns: ['immersive media', 'service catalog'], noveltyBudget: 0.25,
   },
@@ -190,10 +190,10 @@ const RESTAURANT = build('restaurant', {
     primaryIntent: 'booking.open', requiredCapabilities: ['booking'],
     domainVocabulary: ['party size', 'date', 'time'],
     character: { density: 'low', mediaDominance: 0.2, conversionPressure: 0.95, interactionDepth: 0.8 },
-    preferredFamilies: ['contact', 'faq', 'testimonials'],
+    preferredFamilies: ['contact', 'faq'],
     sectionOrderCandidates: [
       ['hero', 'contact', 'faq'],
-      ['hero', 'contact', 'testimonials', 'faq'],
+      ['hero', 'faq', 'contact'],
     ],
     heroCandidates: ['utility-header'], geometryCandidates: ['centered', 'split'],
     preferredCompositionPatterns: ['focused reservation widget'], discouragedCompositionPatterns: ['gallery'], noveltyBudget: 0.2,
@@ -210,20 +210,62 @@ const RESTAURANT = build('restaurant', {
 });
 
 /** Generic role jobs used for industries without dedicated profiles yet. */
+function genericRoleProfile(role: string): ProfileSeed {
+  const profile = SALON.find((candidate) => candidate.pageRole === role);
+  if (!profile) throw new Error(`[CompositionRegistry] Missing base role profile: ${role}`);
+  return { ...profile, character: { ...profile.compositionCharacter }, domainVocabulary: [] };
+}
+
 const GENERIC = build('*', {
-  home: { ...SALON[0], character: { ...SALON[0].compositionCharacter }, domainVocabulary: [], primaryIntent: undefined, requiredCapabilities: [] },
-  services: { ...SALON[1], character: { ...SALON[1].compositionCharacter }, domainVocabulary: [], requiredCapabilities: [] },
-  gallery: { ...SALON[2], character: { ...SALON[2].compositionCharacter }, domainVocabulary: [] },
-  about: { ...SALON[3], character: { ...SALON[3].compositionCharacter }, domainVocabulary: [] },
-  booking: { ...SALON[4], character: { ...SALON[4].compositionCharacter }, domainVocabulary: [] },
-  contact: { ...SALON[5], character: { ...SALON[5].compositionCharacter }, domainVocabulary: [] },
+  home: { ...genericRoleProfile('home'), primaryIntent: undefined, requiredCapabilities: [] },
+  services: { ...genericRoleProfile('services'), requiredCapabilities: [] },
+  gallery: genericRoleProfile('gallery'),
+  about: genericRoleProfile('about'),
+  booking: genericRoleProfile('booking'),
+  contact: genericRoleProfile('contact'),
+  pricing: {
+    narrativeGoals: ['compare options and make costs clear'],
+    requiredCapabilities: [], domainVocabulary: [], character: { density: 'high', informationDensity: 0.85 },
+    preferredFamilies: ['hero', 'pricing', 'faq', 'cta'],
+    heroCandidates: ['utility-header'], geometryCandidates: ['grid', 'centered'],
+    preferredCompositionPatterns: ['comparable plan details followed by objections'],
+    discouragedCompositionPatterns: ['service catalog', 'team story'], noveltyBudget: 0.3,
+  },
+  faq: genericRoleProfile('faq'),
+  shop: {
+    narrativeGoals: ['browse products and choose the next purchase'],
+    requiredCapabilities: ['commerce'], domainVocabulary: ['products', 'collection'],
+    character: { density: 'high', mediaDominance: 0.7, informationDensity: 0.8 },
+    preferredFamilies: ['services', 'gallery', 'cta'],
+    heroCandidates: ['none'], geometryCandidates: ['grid', 'split'],
+    preferredCompositionPatterns: ['product-led browsing with clear purchase actions'],
+    discouragedCompositionPatterns: ['team story', 'long-form company introduction'], noveltyBudget: 0.4,
+  },
+  checkout: {
+    narrativeGoals: ['complete the order with minimal distraction'],
+    requiredCapabilities: ['commerce'], domainVocabulary: ['order', 'checkout'],
+    character: { density: 'low', conversionPressure: 0.95, interactionDepth: 0.8 },
+    preferredFamilies: ['contact', 'faq'],
+    heroCandidates: ['none'], geometryCandidates: ['centered', 'split'],
+    preferredCompositionPatterns: ['focused order handoff'],
+    discouragedCompositionPatterns: ['team story', 'product discovery', 'gallery'], noveltyBudget: 0.2,
+  },
+  blog: {
+    narrativeGoals: ['browse stories and discover useful reading'],
+    requiredCapabilities: [], domainVocabulary: ['journal', 'articles'],
+    character: { density: 'medium', editoriality: 0.85 },
+    preferredFamilies: ['blog-preview'],
+    heroCandidates: ['none'], geometryCandidates: ['grid', 'asymmetric'],
+    preferredCompositionPatterns: ['editorial story index'],
+    discouragedCompositionPatterns: ['service catalog', 'checkout form'], noveltyBudget: 0.5,
+  },
 });
 
 const REGISTRY: IndustryPageCompositionProfile[] = [...SALON, ...RESTAURANT, ...GENERIC];
 
 const ROLE_ALIASES: Record<string, string> = {
   index: 'home', landing: 'home', 'book-now': 'booking', book: 'booking', reservations: 'booking', reserve: 'booking',
-  portfolio: 'gallery', work: 'gallery', 'our-studio': 'about', team: 'about', story: 'about', pricing: 'services',
+  portfolio: 'gallery', work: 'gallery', 'our-studio': 'about', team: 'about', story: 'about',
 };
 
 export function normalizePageRole(role: string): string {

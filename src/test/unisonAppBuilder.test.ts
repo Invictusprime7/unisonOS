@@ -206,8 +206,8 @@ const createTestBuilder = (dependencies: Parameters<typeof createUnisonAppBuilde
 describe('UnisonAppBuilder facade', () => {
   it('materializes a page-matched section sidecar through runtime for every canonical industry', () => {
     const industries = getAllIndustries();
-    const pageRoles = [...new Set(industries.flatMap((profile) => profile.defaultPages.map((page) => page.purpose)))];
     for (const profile of industries) {
+      const pageRoles = [...new Set(profile.defaultPages.map((page) => page.purpose))];
       const appContract = contract(profile.industry, pageRoles);
       const generation = buildAppBuilderGenerationContext(appContract);
       const shellFiles = materializeAppBuilderSiteShell({
