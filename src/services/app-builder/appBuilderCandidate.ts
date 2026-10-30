@@ -14,6 +14,7 @@ import {
 import { enforceSiteDesignContract } from '@/services/launch/homepageFirstContract';
 import { assertSiteShellClosure, buildSiteShellTopology } from '@/services/siteShellTopology';
 import { CANONICAL_COMPONENT_DEFINITIONS } from '@/services/canonicalComponentRegistry';
+import { missingNativeFormFields } from './nativeFormContract';
 import { collectResolvedCompositions, RESOLVED_COMPOSITION_ROOT, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import {
   getAppBuilderSharedShellImplementationIds,
@@ -508,15 +509,11 @@ export async function validateAppBuildCandidate(input: {
       const incompleteForm = componentSources.find(({ source }) => {
         const form = formPattern.exec(source)?.[0];
         return !form || /\bonSubmit\s*=/.test(form)
-          || (component.requiredNativeFormFields ?? []).some((field) =>
-            !new RegExp(`name\\s*=\\s*["']${field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'i').test(form),
-          );
+          || missingNativeFormFields(form, component).length > 0;
       });
       if (incompleteForm) {
         const form = formPattern.exec(incompleteForm.source)?.[0] ?? '';
-        const missingFields = (component.requiredNativeFormFields ?? []).filter((field) =>
-          !new RegExp(`name\\s*=\\s*["']${field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'i').test(form),
-        );
+        const missingFields = missingNativeFormFields(form, component);
         issues.push({
           severity: 'blocker',
           code: 'registered-component-native-form-incomplete',

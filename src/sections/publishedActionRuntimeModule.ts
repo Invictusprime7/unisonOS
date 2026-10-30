@@ -212,9 +212,9 @@ function bookingRequestBody(form: HTMLFormElement) {
   };
 }
 
-function requestBody(controller: RuntimeController, intent: string, element: HTMLElement) {
+function requestBody(controller: RuntimeController, intent: string, element: HTMLElement, formPayload?: Record<string, unknown>) {
   const runtime = PUBLISHED_RUNTIME_CONFIG;
-  const params = elementParams(element);
+  const params = { ...elementParams(element), ...formPayload };
   const sessionId = createSessionId();
   if (controller.functionName === 'create-order-checkout') {
     return {
@@ -240,6 +240,7 @@ async function dispatchBackendIntent(
   controller: RuntimeController,
   intent: string,
   element: HTMLElement,
+  formPayload?: Record<string, unknown>,
 ) {
   const runtime = PUBLISHED_RUNTIME_CONFIG;
   if (!runtime.siteId || !runtime.businessId || !controller.functionName) {
@@ -251,10 +252,10 @@ async function dispatchBackendIntent(
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody(controller, intent, element)),
+    body: JSON.stringify(requestBody(controller, intent, element, formPayload)),
   });
   const result = await response.json().catch(() => ({})) as Record<string, any>;
-  if (!response.ok || result.ok === false || result.success === false) {
+  if (!response.ok || result.ok === false || result.success === false || (formPayload && result.ok !== true && result.success !== true)) {
     throw new Error(result.error?.message || result.error || 'The action could not be completed.');
   }
   const redirectUrl = result.url || result.checkoutUrl || result.redirectUrl;
@@ -441,7 +442,7 @@ export function usePublishedActionRuntime() {
       const intent = element.dataset.utIntent || '';
       if (!intent || element.closest('form[data-demo-form="true"]')) return;
       // Form submit controls belong to submit, never a duplicate click dispatch.
-      if (element.closest('form[data-intent-form^="auth."]')) return;
+      if (element.closest('form[data-intent-form]')) return;
 
       if (['cart.add', 'cart.view', 'cart.update', 'cart.remove'].includes(intent)) {
         event.preventDefault();
@@ -478,6 +479,25 @@ export function usePublishedActionRuntime() {
     const onSubmit = (event: SubmitEvent) => {
       const form = event.target as HTMLFormElement | null;
       const intent = form?.dataset.intentForm;
+      if (form && intent && Object.keys(FORM_INTENT_TARGETS).includes(intent)) {
+        event.preventDefault();
+        if (form.getAttribute('aria-busy') === 'true' || !form.reportValidity()) return;
+        const host = form.closest('[data-ut-component-instance-id]') as HTMLElement | null;
+        const component = COMPONENTS.find((candidate) => candidate.instanceId === host?.dataset.utComponentInstanceId && candidate.writeIntent === intent
+          && candidate.slots.some((slot) => slot.intent === intent && slot.status === 'ready'));
+        const controller = controllerForIntent(intent);
+        if (!component || !controller || controller.transport !== 'supabase-function') {
+          showActionStatus(form, 'This form is not connected to the site.');
+          return;
+        }
+        const payload = Object.fromEntries(new FormData(form).entries());
+        form.setAttribute('aria-busy', 'true');
+        void dispatchBackendIntent(controller, intent, form, { ...payload, intent, componentId: component.instanceId, idempotencyKey: createIdempotencyKey(form) })
+          .then(() => { form.dataset.utIdempotencyKey = ''; })
+          .catch((error) => showActionStatus(form, error instanceof Error ? error.message : 'The form could not be submitted.'))
+          .finally(() => form.removeAttribute('aria-busy'));
+        return;
+      }
       if (form && (intent === 'auth.login' || intent === 'auth.register')) {
         event.preventDefault();
         if (form.getAttribute('aria-busy') === 'true' || !form.reportValidity()) return;

@@ -527,15 +527,16 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
   document.addEventListener('submit', function (event) {
     const form = event.target as HTMLFormElement;
     if (!form || form.tagName !== 'FORM') return;
-    const formIntent = form.getAttribute('data-ut-intent');
+    // Published action runtime yields in hosted previews; the bridge owns native submission here.
+    const formIntent = form.getAttribute('data-intent-form') || form.getAttribute('data-ut-intent');
     if (!formIntent) return;
     event.preventDefault();
+    if (!form.reportValidity()) return;
     const formData = new FormData(form);
     const payload: Record<string, unknown> = {};
     formData.forEach((value, key) => { payload[key] = value.toString(); });
     payload.source = 'preview-form';
-    // Show immediate in-preview confirmation
-    __showPreviewFeedback('Submitted \u2713', '#2563eb');
+    // Parent acknowledgment owns success; dispatch alone is not a saved submission.
     window.parent.postMessage({
       type: 'INTENT_TRIGGER',
       intent: formIntent,

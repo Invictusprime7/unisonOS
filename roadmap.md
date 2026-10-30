@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Active: Wizard business fields and native contact submissions
-- [ ] Carry canonical selected form fields into App Builder component and intent contracts, preserving required name/email/message and selected extra fields.
-- [ ] Verify native contact ownership, no local success handlers, preserved selections and explicit deterministic starter behavior.
-- [ ] Run focused contract/materialization/launch regressions; report authenticated live submission access separately.
+- [x] Carry canonical selected form fields into App Builder component and intent contracts, preserving required name/email/message and selected extra fields. Business field bindings carry scoped profile references and readiness, never private destination values.
+- [x] Verify native contact ownership, no local success handlers, preserved selections and explicit deterministic starter behavior. Published native forms require ready registered slots, validate fields, prevent duplicate submissions and require confirmed backend success; hosted preview bridge recognizes native forms without immediate success claims.
+- [x] Run focused contract/materialization/launch regressions: 129 checks and both authority lints pass; preview build OK.
+- [ ] Verify authenticated live contact submission and read-back; blocked by the unavailable authoritative UNISON session. Runtime delivery tests use controlled backend responses, not production writes.
 
 ## Active: App Builder authoring reliability
 - [x] Enforce complete-source file operations and transactional batch validation; safely retain completed batches and resume only failed work. Checkpoints live only in bounded tab memory for 15 minutes, keyed by exact request/source/plan/settings; refresh clears provisional progress, and no partial revision is committed.
