@@ -6,6 +6,7 @@ import {
   listIndustryProfiles,
   planSiteComposition,
   renderCompositionBrief,
+  resolvePageCompositionProfile,
 } from '@/services/composition';
 import { getAllSections } from '@/sections/registry';
 
@@ -14,6 +15,26 @@ const pages = roles.map((role) => ({ pageId: `p-${role}`, role }));
 const key = (t: { hero: string; geometry: string; sectionOrder: string[] }) => `${t.hero}|${t.geometry}|${t.sectionOrder.join('>')}`;
 
 describe('siteCompositionPlanner', () => {
+  it('inherits generic profiles by role rather than their position in the industry list', () => {
+    for (const role of roles) {
+      const generic = resolvePageCompositionProfile('ecommerce', role);
+      const source = resolvePageCompositionProfile('salon', role);
+      expect(generic.pageRole).toBe(role);
+      expect(generic.preferredFamilies).toEqual(source.preferredFamilies);
+      expect(generic.sectionOrderCandidates).toEqual(source.sectionOrderCandidates);
+      expect(generic.narrativeGoals).toEqual(source.narrativeGoals);
+    }
+  });
+
+  it('plans Contact using its supported contact and FAQ families before sealing', () => {
+    for (const industry of ['salon', 'ecommerce']) {
+      for (const seed of ['one', 'two', 'three']) {
+        const plan = planSiteComposition(industry, [{ pageId: 'contact', role: 'contact' }], seed);
+        expect(plan.pages[0].target.sectionOrder).toEqual(['contact', 'faq']);
+      }
+    }
+  });
+
   it('gives every salon page a distinct composition job', () => {
     const plan = planSiteComposition('salon', pages, 'seed-a');
     expect(plan.pages).toHaveLength(6);

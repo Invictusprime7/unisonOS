@@ -11,6 +11,7 @@
 - Composer contracts mirror `supabase/functions/_shared/aiComposerContract.ts` and `src/contracts/aiComposerContract.ts`; enforce targets/routes/import reads/intents; prefer hunks, accept replaces. Why: vocabulary is not readiness.
 - Composer modes stay in `ai-code-assistant/composerLane.ts`. Why: no parallel author/repair/edit pipelines.
 - Page composition intelligence lives in `src/services/composition/` (one universal planner + data-only industry profiles, consumed under App Builder orchestration); why: industries differ by data, never by engine.
+- Generic composition profiles inherit by role identity, not array position; design-source role filtering uses the composition role normalizer, and unsupported families are corrected in profile inputs before sealing, never removed from sealed targets. Why: shifted profiles and legacy role spellings requested sections the canonical page contract could not execute.
 - Variant selection goes through `src/services/designImplementationEligibility.ts`; variants carry authored `capabilities`/`compatibility`/`lifecycle`/`ai` contracts, preferred over string inference. Why: registry growth narrows candidates deterministically, never widens AI context.
 - WebBuilder launch-handoff dedupes on `routeHandoffImportedRef`, never `importedRouteStateRef`; why: revision adoption updates the shared ref, replaying original Wizard files over saved edits.
 - `projects` ↔ `builder_drafts` name-sync triggers skip when `pg_trigger_depth() > 1` and write only changed values; why: re-entry raises SQLSTATE 27000 and blocks saves.

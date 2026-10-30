@@ -111,7 +111,7 @@ const SALON = build('salon', {
     primaryIntent: 'contact.submit', requiredCapabilities: ['contact'],
     domainVocabulary: ['visit the studio', 'hours', 'directions'],
     character: { density: 'medium', mediaDominance: 0.35, informationDensity: 0.6, conversionPressure: 0.6 },
-    preferredFamilies: ['contact', 'faq', 'stats'],
+    preferredFamilies: ['contact', 'faq'],
     heroCandidates: ['utility-header', 'typographic'], geometryCandidates: ['split', 'centered'],
     preferredCompositionPatterns: ['hours + location + form split'],
     discouragedCompositionPatterns: ['service grid', 'gallery'], noveltyBudget: 0.3,
@@ -210,13 +210,19 @@ const RESTAURANT = build('restaurant', {
 });
 
 /** Generic role jobs used for industries without dedicated profiles yet. */
+function genericRoleProfile(role: string): ProfileSeed {
+  const profile = SALON.find((candidate) => candidate.pageRole === role);
+  if (!profile) throw new Error(`[CompositionRegistry] Missing base role profile: ${role}`);
+  return { ...profile, character: { ...profile.compositionCharacter }, domainVocabulary: [] };
+}
+
 const GENERIC = build('*', {
-  home: { ...SALON[0], character: { ...SALON[0].compositionCharacter }, domainVocabulary: [], primaryIntent: undefined, requiredCapabilities: [] },
-  services: { ...SALON[1], character: { ...SALON[1].compositionCharacter }, domainVocabulary: [], requiredCapabilities: [] },
-  gallery: { ...SALON[2], character: { ...SALON[2].compositionCharacter }, domainVocabulary: [] },
-  about: { ...SALON[3], character: { ...SALON[3].compositionCharacter }, domainVocabulary: [] },
-  booking: { ...SALON[4], character: { ...SALON[4].compositionCharacter }, domainVocabulary: [] },
-  contact: { ...SALON[5], character: { ...SALON[5].compositionCharacter }, domainVocabulary: [] },
+  home: { ...genericRoleProfile('home'), primaryIntent: undefined, requiredCapabilities: [] },
+  services: { ...genericRoleProfile('services'), requiredCapabilities: [] },
+  gallery: genericRoleProfile('gallery'),
+  about: genericRoleProfile('about'),
+  booking: genericRoleProfile('booking'),
+  contact: genericRoleProfile('contact'),
 });
 
 const REGISTRY: IndustryPageCompositionProfile[] = [...SALON, ...RESTAURANT, ...GENERIC];

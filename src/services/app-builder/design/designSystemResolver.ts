@@ -6,6 +6,7 @@
 
 import type { AppBuildContract } from '@/services/app-builder/appBuilderContracts';
 import type { WizardRegistryImplementationSummary } from '@/services/launch/wizardRegistryAggregation';
+import { normalizePageRole } from '@/services/composition/industryCompositionRegistry';
 import {
   DESIGN_SOURCE_BUNDLE_VERSION,
   type DesignSourceBundle,
@@ -60,8 +61,9 @@ export function resolveDesignSourceBundle(contract: AppBuildContract): DesignSou
   const eligibleByPage: Record<string, string[]> = {};
   for (const page of contract.topology.sitePlan.pages) {
     const pinnedIds = new Set(registry.pinnedImplementationIdsByPage?.[page.id] ?? []);
+    const pageRole = normalizePageRole(page.role);
     const roleFit = pool.filter((impl) => pinnedIds.has(impl.id)
-      || impl.pageRoles.length === 0 || impl.pageRoles.includes(page.role));
+      || impl.pageRoles.length === 0 || impl.pageRoles.includes(pageRole));
     const richerTypes = new Set(roleFit.filter((impl) => !isGenericImplementationId(impl.id)).map((impl) => impl.sectionType));
     const rank = (impl: WizardRegistryImplementationSummary) =>
       (preferred[impl.sectionType] ?? []).includes(impl.id) ? 0 : 1;
