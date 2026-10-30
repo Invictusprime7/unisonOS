@@ -43,7 +43,8 @@ export function normalizeCatalogPatch(surface: CatalogSurface, patch: CatalogPat
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (['name', 'description', 'price', 'image_url', 'active'].includes(k)) continue;
-    if (editable.has(k)) out[k] = v;
+    // Integer columns (duration, sort order, stock) reject fractional seeds.
+    if (editable.has(k)) out[k] = typeof v === 'number' && Number.isFinite(v) && /(_minutes|sort_order|_count)$/.test(k) ? Math.round(v) : v;
   }
   if (patch.name !== undefined) out[f.title] = patch.name ?? '';
   if (patch.description !== undefined && f.description) out[f.description] = patch.description;
