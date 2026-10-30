@@ -340,6 +340,7 @@ export async function materializeTemplateWithAppBuilder(material: MarketplaceTem
     visionBrief: 'Install the selected marketplace template faithfully. The supplied authored source is the design authority, not inspiration. Preserve every page, section order, layout, variant, authored copy, image assignment, geometric rhythm and slot-intent identity. Do not substitute industry-default content or imagery. Converge preview-only interactions with the canonical runtime; do not invent a different site or copy seller service authorizations.',
     goals: [selections.primaryGoal], intents, capabilities, bindingGuide, seed, themePresetId: plan.themePresetId,
     canonicalBindings: Object.values(plan.playground.bindings), registeredComponentInstances: Object.values(plan.playground.creatorData.componentInstances),
+    forms: Object.values(plan.playground.creatorData.forms),
     businessProfile: plan.playground.creatorData.businessInfo,
     themeTokens: snapshot.themeTokens, artDirection: snapshot.meta.artDirection ?? plan.artDirection,
     designContext: compileResolvedSiteDesignContext({ industry: snapshot.industry, roles: plan.sitePlan.pages.map(page => page.role), artDirectionPackId: packId as never, designSeed: seed, businessModel: 'general' }),

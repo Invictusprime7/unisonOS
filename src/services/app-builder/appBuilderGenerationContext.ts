@@ -182,7 +182,8 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     ...componentsForPage(pageId)
       .filter((component) => component.nativeComponentTemplate)
       .map((component) => `${component.runtime.componentSlug}:\n${component.nativeComponentTemplate}`),
-    'Use Unison form controls and semantic theme tokens around registered hosts. Never replace canonical native markup with a generic form or alter its intent trigger.',
+    ...componentsForPage(pageId).filter((component) => component.formFields?.length).map((component) => `${component.runtime.componentSlug} selected form fields: ${JSON.stringify(component.formFields)}. Preserve their stable fieldId names for extra fields; canonical name, email, message names remain required. Collect visitor values through native FormData, never prefill business answers as visitor input.`),
+    'Use Unison form controls and semantic theme tokens around registered hosts. Never replace canonical native markup with a generic form or alter its intent trigger. Native forms must not define local onSubmit success handlers; only a confirmed runtime result may report success.',
   ].join('\n');
   const canonicalIntentBindings = (pageId?: string) => {
     const bindings = bindingsForPage(pageId);
