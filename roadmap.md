@@ -1,8 +1,9 @@
 # Roadmap
 
 ## Active: Wizard launch progress
-- [ ] Show actual launch stages, page/batch updates and a public Affinity activity feed during designing, without internal reasoning or simulated completion.
-- [ ] Verify progress updates, retry reset and the visible designing display; real production authoring remains dependent on the authoritative session.
+- [x] Show actual launch stages, page/batch updates and a bounded public Affinity activity feed during designing, without internal reasoning or simulated completion; reset progress for each launch and ignore stale callbacks.
+- [x] Verify the display with controlled browser progress events and 48 progress/batch/authoring checks; preview build OK. The broader launchRun suite has two Node-only storage failures, and jsdom is unavailable because native canvas is missing.
+- [ ] Verify progress during real production authoring; requires an authoritative UNISON session. The browser check renders controlled events, not a paid live generation.
 
 ## Active: Wizard business fields and native contact submissions
 - [x] Carry canonical selected form fields into App Builder component and intent contracts, preserving required name/email/message and selected extra fields. Business field bindings carry scoped profile references and readiness, never private destination values.
