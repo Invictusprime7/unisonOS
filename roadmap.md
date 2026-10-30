@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Home sidecar wiring and downstream context
+- [x] Project each provisional page through existing canonical component, binding and composition materializers before handing it forward. Home source and its composition sidecar reach subsequent requests with value-safe canonical object/binding/capability references; Home remains read-only and later pages keep their own roles and permissions. Home failure prevents secondary requests; skipped/budget/projection-failed pages cannot count as a complete application. No partial revision is accepted.
+- [x] Verify Home wiring, downstream inheritance and failure isolation: 146 checks across eight suites pass, including applicable Home binding materialization, sidecar/data handoff, invalid Home barriers, read-only Home enforcement, inactive capability metadata, final closure and marketplace regressions. Both save/authoring authority lints pass; preview build OK. Tests use controlled authoring responses, not a live Gemini launch.
+- [ ] Verify a real multi-page launch and saved reload; requires an authoritative UNISON session and usable deployed Gemini service.
+
 ## Active: Wizard launch progress
 - [x] Show actual launch stages, page/batch updates and a bounded public Affinity activity feed during designing, without internal reasoning or simulated completion; reset progress for each launch and ignore stale callbacks.
 - [x] Verify the display with controlled browser progress events and 48 progress/batch/authoring checks; preview build OK. The broader launchRun suite has two Node-only storage failures, and jsdom is unavailable because native canvas is missing.
