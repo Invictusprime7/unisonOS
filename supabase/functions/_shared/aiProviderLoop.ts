@@ -577,7 +577,7 @@ export async function runProviderLoop(opts: {
     
     for (const [modelIndex, model] of providerPlan.gatewayModels.entries()) {
       throwIfCancelled();
-      if (directOnCooldown()) geminiQuotaExhausted = true;
+      if (geminiCooling()) geminiQuotaExhausted = true;
       if (geminiQuotaExhausted && isGeminiModelId(model.id)) {
         console.warn(`[AI-Hybrid] Skipping ${model.label} — Gemini quota exhausted this turn.`);
         continue;
