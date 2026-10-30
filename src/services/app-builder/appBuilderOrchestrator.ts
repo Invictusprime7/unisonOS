@@ -317,7 +317,7 @@ export async function orchestrateAppBuild(
       }
       if (repaired.ok && repaired.prepared) {
         const unrelatedChanges = Object.keys({ ...candidateFiles, ...repaired.prepared.nextFiles }).filter(path =>
-          path !== group.target && candidateFiles[path] !== undefined
+          path.startsWith('/src/') && path !== group.target && candidateFiles[path] !== undefined
           && candidateFiles[path] !== repaired.prepared?.nextFiles[path]);
         if (unrelatedChanges.length) {
           closureRepairFailure = { reason: 'invalid_response', errors: [`Final-check repair changed read-only source: ${unrelatedChanges.join(', ')}`] };
