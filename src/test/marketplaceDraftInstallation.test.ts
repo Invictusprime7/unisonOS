@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-const mocks = vi.hoisted(() => ({ getUser: vi.fn(), provision: vi.fn(), commit: vi.fn(), build: vi.fn(), concept: vi.fn(), seed: vi.fn(), bindings: vi.fn(), forms: vi.fn() }));
+const mocks = vi.hoisted(() => ({ preflight: vi.fn(), getUser: vi.fn(), provision: vi.fn(), commit: vi.fn(), build: vi.fn(), concept: vi.fn(), seed: vi.fn(), bindings: vi.fn(), forms: vi.fn() }));
+vi.mock('@/marketplace/geminiInstallPreflight', () => ({ verifyGeminiBeforeInstall: mocks.preflight }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { auth: { getUser: mocks.getUser } } }));
 vi.mock('@/services/confirmedLaunchProvisioner', () => ({ createConfirmedLaunchIds: () => ({}), provisionConfirmedLaunchSite: mocks.provision }));
 vi.mock('@/services/vfsCommitService', () => ({ commitMutation: mocks.commit }));
@@ -13,6 +14,7 @@ describe('template draft acceptance', () => {
   const selection = { kind: 'concept' as const, template: { name: 'Pollen Objects' } as never };
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.preflight.mockResolvedValue(undefined);
     mocks.seed.mockResolvedValue({ created: 3 });
     mocks.bindings.mockResolvedValue({ failed: 0 });
     mocks.forms.mockResolvedValue({ error: null });
@@ -40,6 +42,8 @@ describe('template draft acceptance', () => {
   });
   it('saves through canonical acceptance before opening the buyer draft', async () => {
     const result = await installTemplateDraft(selection);
+    expect(mocks.preflight).toHaveBeenCalledOnce();
+    expect(mocks.preflight.mock.invocationCallOrder[0]).toBeLessThan(mocks.concept.mock.invocationCallOrder[0]);
     expect(mocks.build).toHaveBeenCalledOnce();
     expect(mocks.build.mock.invocationCallOrder[0]).toBeLessThan(mocks.commit.mock.invocationCallOrder[0]);
     expect(mocks.commit.mock.calls[0][0].current.activePagePath).toBe('/src/App.tsx');
@@ -55,6 +59,14 @@ describe('template draft acceptance', () => {
         bindings: [{ sourceSlot: 'contact-submit', intent: 'contact.submit' }],
       }],
     }));
+  });
+  it.each(['concept', 'release'] as const)('blocks %s installation before any paid authoring or project creation when Gemini check fails', async kind => {
+    mocks.preflight.mockRejectedValue(new Error('Gemini credit unavailable'));
+    await expect(installTemplateDraft(kind === 'concept' ? selection : { kind, slug: 'pollen', title: 'Pollen' })).rejects.toThrow('credit unavailable');
+    expect(mocks.concept).not.toHaveBeenCalled();
+    expect(mocks.provision).not.toHaveBeenCalled();
+    expect(mocks.build).not.toHaveBeenCalled();
+    expect(mocks.commit).not.toHaveBeenCalled();
   });
   it('does not persist when App Builder rejects the template', async () => {
     mocks.build.mockRejectedValue(new Error('App Builder could not prepare this template'));
