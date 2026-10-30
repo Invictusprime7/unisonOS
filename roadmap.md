@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Gemini install preflight
+- [x] Add an authenticated, bounded direct-Gemini check before any release claim, project creation or page authoring; report credit, connectivity and permission failures without starting installation.
+- [ ] Run preflight and installation regressions.
+- [ ] Verify live preflight and install after canonical backend deployment; requires the UNISON deploy workflow and an authoritative session.
+
 ## Active: Uploaded Gemini timeout follow-up
 - [x] Replace the full-page timeout replay with bounded, sequential page-section requests before final candidate validation; preserve sealed order, repeated sections, owner settings and source quantities.
 - [x] Verify section accumulation, provider-stop behavior, and existing authoring regressions: 36 focused tests and authoring authority lint pass; preview build OK. Broader App Builder suite has three scaffold eligibility failures unrelated to the invocation adapter.

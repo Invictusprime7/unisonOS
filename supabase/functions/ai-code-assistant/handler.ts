@@ -14,6 +14,7 @@ import { getServiceRoleClient, verifyAuth, authError } from "../_shared/auth.ts"
 import { errorResponse } from "../_shared/response.ts";
 import { safeParseBody } from "../_shared/validate.ts";
 import { handleImageGenerate } from "./imageExtension.ts";
+import { checkGeminiForInstall } from '../_shared/geminiInstallPreflight.ts';
 import { classifyGuestDemoError, createGuestDemoUsageMeter, executeGuestDemoAction, releaseGuestDemoAction, validateGuestDemoRequest, type GuestDemoRpcClient, type GuestDemoUsageMeter } from "../_shared/guestDemo.ts";
 
 async function addGuestOperationId(response: Response, operationId: string): Promise<Response> {
@@ -90,6 +91,14 @@ export async function handleAssistant(req: Request, pageGenerationOnly = false):
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
+
+    if ((rawBody as { mode?: unknown }).mode === 'gemini-install-preflight') {
+      if (auth.user.isAnonymous) return errorResponse('Sign in before checking Gemini for installation.', 403, corsHeaders);
+      const result = await checkGeminiForInstall(req.signal);
+      return new Response(JSON.stringify({ success: true, preflight: result }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
       });
     }
 

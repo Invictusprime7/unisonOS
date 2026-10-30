@@ -12,6 +12,7 @@ import { persistGeneratedBindings } from '@/services/persistGeneratedBindings';
 import { planLaunchFormDefinitions } from '@/services/launchFormDefinitions';
 import { persistLaunchFormDefinitions } from '@/services/launchFormDefinitionPersistence';
 import { resolvePlaygroundBindingDomIntent } from '@/platform/core/playground';
+import { verifyGeminiBeforeInstall } from './geminiInstallPreflight';
 
 export type MarketplaceDraftSelection = { kind: 'concept'; template: AuthoredMarketplaceTemplate } | { kind: 'release'; slug: string; title: string };
 
@@ -23,6 +24,9 @@ export async function installTemplateDraft(selection: MarketplaceDraftSelection,
   status({ label: 'Checking your account' });
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) throw new Error('Sign in before installing a template draft.');
+  status({ label: 'Checking Gemini connection and credit' });
+  await verifyGeminiBeforeInstall(options.signal);
+  if (options.signal?.aborted) throw new Error('Installation was stopped before it started.');
   let artifacts: MarketplaceTemplateMaterial;
   let receipt: { installationId: string } | undefined;
   if (selection.kind === 'concept') {
