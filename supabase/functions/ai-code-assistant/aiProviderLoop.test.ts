@@ -603,3 +603,36 @@ test('Lovable AI 429 is retried and its refusal remains visible', async () => {
     }
   }
 });
+
+test('Gemini-only key is re-checked after a credit-depleted 402 so a top-up works at once', async () => {
+  const originalFetch = globalThis.fetch;
+  const names = ['AI_PROVIDER_MODE', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'UNISONGEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'LOVABLE_API_KEY', 'MANAGED_AI_RELAY_SECRET'];
+  const originalEnv = new Map(names.map(name => [name, Deno.env.get(name)]));
+  for (const name of names) Deno.env.delete(name);
+  Deno.env.set('AI_PROVIDER_MODE', 'hybrid');
+  Deno.env.set('GEMINI_API_KEY', 'test-gemini-key');
+  const plan = { gatewayModels: [{ id: 'google/gemini-3.8-flash', label: 'Gemini', maxTokens: 1000 }], perModelTimeoutMs: 30_000, fallbackMaxTokens: 1000 };
+  let funded = false;
+  let geminiCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (!url.includes('generativelanguage.googleapis.com')) throw new Error(`Unexpected provider URL: ${url}`);
+    geminiCalls++;
+    if (!funded) return new Response('{"error":{"message":"Your prepayment credits are depleted. Please add credits."}}', { status: 402 });
+    return new Response(JSON.stringify({ choices: [{ message: { content: 'ok after top-up' } }] }));
+  }) as typeof fetch;
+  try {
+    const first = await runProviderLoop({ aiMessages: [{ role: 'user', content: 'hi' }], providerPlan: plan, navPageGen: false });
+    assert(first.earlyError?.status === 402, 'depleted credits must be reported');
+    funded = true;
+    const second = await runProviderLoop({ aiMessages: [{ role: 'user', content: 'hi' }], providerPlan: plan, navPageGen: false });
+    assert(geminiCalls === 2, `the topped-up key must be tried again, got ${geminiCalls} calls`);
+    assert(!second.earlyError, 'the funded key must answer');
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [name, value] of originalEnv) {
+      if (value === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, value);
+    }
+  }
+});

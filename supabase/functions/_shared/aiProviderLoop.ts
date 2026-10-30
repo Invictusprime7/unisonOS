@@ -217,10 +217,14 @@ export async function runProviderLoop(opts: {
   const activeAttempts = new Set<() => void>();
   const geminiExclusive = isGeminiExclusiveProviderMode();
   const geminiOnlyTurn = geminiExclusive || Boolean(providerPlan.geminiOnly);
-  const hasDirectGemini = allowDirectFallbacks && !directOnCooldown() && Boolean(Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('UNISONGEMINI_API_KEY'));
-  const hasDirectAnthropic = !guestOnly && !geminiOnlyTurn && allowDirectFallbacks && Boolean(Deno.env.get('ANTHROPIC_API_KEY'));
   // Guest actions use only models with a configured, enforceable price schedule.
   const hasLastResortGateway = !guestOnly && allowDirectFallbacks && hasLovableGatewayAccess();
+  // The remembered out-of-credit pause only exists to hand work to a backup
+  // faster. With no backup, always re-check the key: a 402 answers instantly
+  // and costs nothing, and the owner may have just added credits.
+  const geminiCooling = () => hasLastResortGateway && directOnCooldown();
+  const hasDirectGemini = allowDirectFallbacks && !geminiCooling() && Boolean(Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('UNISONGEMINI_API_KEY'));
+  const hasDirectAnthropic = !guestOnly && !geminiOnlyTurn && allowDirectFallbacks && Boolean(Deno.env.get('ANTHROPIC_API_KEY'));
   // The managed gateway is the final safety net; a 20 s slice is not enough for
   // a real generation, so reserve a usable window for it.
   const lastResortReserveMs = hasLastResortGateway ? 30_000 : 0;
@@ -229,7 +233,7 @@ export async function runProviderLoop(opts: {
   // A 429 whose body says billing/quota is exhausted is not a transient rate
   // limit: every further call to that provider will fail the same way. Mark the
   // whole family dead so the remaining budget goes to providers that can answer.
-  let geminiQuotaExhausted = directOnCooldown();
+  let geminiQuotaExhausted = geminiCooling();
   const isQuotaExhausted = (detail: string) =>
     /insufficient[_\s-]?quota|insufficient (?:credits?|funds?)|credits? (?:are )?(?:depleted|exhausted)|prepayment|billing.{0,40}(?:required|disabled|inactive|exhausted|insufficient)|payment required|exceeded your current quota/i.test(detail);
   // Tracks whether any provider failed for a non-rate-limit reason (timeout,
@@ -573,7 +577,7 @@ export async function runProviderLoop(opts: {
     
     for (const [modelIndex, model] of providerPlan.gatewayModels.entries()) {
       throwIfCancelled();
-      if (directOnCooldown()) geminiQuotaExhausted = true;
+      if (geminiCooling()) geminiQuotaExhausted = true;
       if (geminiQuotaExhausted && isGeminiModelId(model.id)) {
         console.warn(`[AI-Hybrid] Skipping ${model.label} — Gemini quota exhausted this turn.`);
         continue;
@@ -598,7 +602,7 @@ export async function runProviderLoop(opts: {
       const isPrimaryGemini = geminiOwnsLeadBudget(
         providerPlan.gatewayModels,
         modelIndex,
-        !hasDirectGemini || geminiQuotaExhausted || directOnCooldown(),
+        !hasDirectGemini || geminiQuotaExhausted || geminiCooling(),
         providerPlan.primaryProvider === 'gemini' && providerPlan.preferLongLeadAttempt === true,
       );
       // Gemini owns the lead attempt, but the managed gateway still needs a
@@ -838,7 +842,7 @@ export async function runProviderLoop(opts: {
     ].filter(Boolean);
     // A key skipped for a remembered depleted balance must name that cause, or
     // later pages report "no providers configured" instead of the real remedy.
-    const cooldownNotes = directOnCooldown()
+    const cooldownNotes = geminiCooling()
       ? ['gemini: 402 key is out of prepaid credit (skipped until credits are added)']
       : [];
     const errorTrail = [...providerErrors.slice(-10), ...cooldownNotes].join(' | ') || lastError || 'no provider attempts completed';
