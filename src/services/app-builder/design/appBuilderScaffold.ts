@@ -131,7 +131,7 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
       }
       occurrenceByFamily.set(sectionType, (occurrenceByFamily.get(sectionType) ?? 0) + 1);
       return {
-        sectionType,
+        sectionType: sectionType as PlannedScaffoldSection['sectionType'],
         variantId,
         modulePath: implementation.modulePath,
         propHint: implementation.props,
