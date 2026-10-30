@@ -492,6 +492,7 @@ export interface AppBuildRequest {
     index: number;
     total: number;
     phase: 'authoring' | 'committed' | 'kept-baseline';
+    batch?: { index: number; total: number };
   }) => void;
   /** M2 compatibility adapter; removed when M3 makes generation candidate-only. */
   acceptPage?: (
@@ -541,6 +542,7 @@ export interface AppBuilderPageGenerationRequest {
     index: number;
     total: number;
     phase: 'authoring' | 'committed' | 'kept-baseline';
+    batch?: { index: number; total: number };
   }) => void;
 }
 

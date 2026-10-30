@@ -590,7 +590,13 @@ async function runReservedLaunchPipeline(
       signal,
       budgetMs: authoringBudgetMs,
       onProgress: (event) => {
-        if (event.phase === 'authoring') status(`Designing ${event.page.title}…`);
+        if (event.phase === 'authoring') {
+          status(event.batch
+            ? `Designing ${event.page.title} · part ${event.batch.index + 1} of ${event.batch.total}…`
+            : `Designing ${event.page.title}…`);
+        } else if (event.phase === 'committed') {
+          status(`${event.page.title} draft completed. Checking it with the rest of your site.`);
+        }
       },
     });
     if (result.candidate.status !== 'ready-for-commit' || result.stopReason !== 'complete') {

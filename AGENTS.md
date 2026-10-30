@@ -40,6 +40,7 @@
 - Edit gates retain compile/imports, ownership, protected paths, data-loss and binding safety; design/scope is advisory. Queue rebase checks domain dependencies, not age; reviews remain revision-bound. Why: independent saves must not block edits.
 
 - Affinity shows public paragraphs, never native thinking. Why: explanations without private deliberation.
+- Wizard launch progress projects canonical stage and page/batch events into a bounded public activity feed; elapsed time never advances completion. Why: visitors can see real work without fabricated progress or private reasoning.
 - Marketplace certification evidence is server-owned and source-bound; client preflight stays non-publishing and deployment SQL lives only in canonical migrations. Why: local checks and concept previews are not release authorization.
 - Marketplace cards share MarketplaceThumbnailSurface; published covers read image references from the safe package without executing source, while VFSPreview stays on details. Why: static cards must not mount the full site runtime or expose restricted source media.
 - Marketplace releases preserve capability requirements and slot-intent identities, never creator approvals or resource payloads; provisioning remains buyer-owned. Why: copying requirements must not authorize live writes to the creator's services.

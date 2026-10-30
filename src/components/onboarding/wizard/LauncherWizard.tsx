@@ -216,6 +216,7 @@ export const LauncherWizard = ({
 
   const [isLaunching, setIsLaunching] = useState(false);
   const [launchStatus, setLaunchStatus] = useState("");
+  const [launchActivity, setLaunchActivity] = useState<string[]>([]);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [launchFailure, setLaunchFailure] =
     useState<LaunchFailureReport | null>(null);
@@ -298,6 +299,8 @@ export const LauncherWizard = ({
     setLastGenerationMode('ai');
     setProgress(null);
     latestProgressRef.current = null;
+    setProgress({ stages: [], activeStage: null, degradations: [], fatal: null, cancelled: false });
+    setLaunchActivity([]);
   }, []);
 
   useEffect(() => {
@@ -586,8 +589,13 @@ export const LauncherWizard = ({
           setIsLaunching(false);
           reviewDecision.current = resolve;
         }),
-        onStatus: status => { if (generation === generationRef.current) setLaunchStatus(status); },
+        onStatus: status => {
+          if (generation !== generationRef.current || !mountedRef.current) return;
+          setLaunchStatus(status);
+          setLaunchActivity(current => current[current.length - 1] === status ? current : [...current, status].slice(-6));
+        },
         onProgress: (snapshot) => {
+          if (generation !== generationRef.current || !mountedRef.current) return;
           latestProgressRef.current = snapshot;
           setProgress(snapshot);
         },
@@ -707,7 +715,7 @@ export const LauncherWizard = ({
           <div className={isChat ? "" : "max-h-[calc(94dvh-65px)] overflow-y-auto"}>
             {isLaunching && progress ? (
               <div className="mx-auto flex min-h-[560px] max-w-xl items-center px-6 py-12">
-                <LaunchStageTimeline snapshot={progress} statusText={launchStatus} className="w-full" />
+                <LaunchStageTimeline snapshot={progress} statusText={launchStatus} activity={launchActivity} generationMode={lastGenerationMode} className="w-full" />
               </div>
             ) : (
               <fieldset disabled={isLaunching || guidancePending} aria-busy={isLaunching || guidancePending} className={cn("mx-auto min-w-0 max-w-4xl", isChat ? "px-3 pb-4 pt-2" : "px-5 py-7 sm:px-8 sm:py-10")}>
