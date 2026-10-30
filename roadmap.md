@@ -2,7 +2,7 @@
 
 ## Active: Gemini install preflight
 - [x] Add an authenticated, bounded direct-Gemini check before any release claim, project creation or page authoring; report credit, connectivity and permission failures without starting installation.
-- [ ] Run preflight and installation regressions.
+- [x] Run preflight and installation regressions: 21 client checks and 10 direct-Gemini preflight checks pass; preview build OK. Broad edge run has one ambient-key fixture failure, isolated below.
 - [ ] Verify live preflight and install after canonical backend deployment; requires the UNISON deploy workflow and an authoritative session.
 
 ## Active: Uploaded Gemini timeout follow-up

@@ -23,12 +23,14 @@ export async function checkGeminiForInstall(
   else signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => controller.abort(), GEMINI_PREFLIGHT_TIMEOUT_MS);
   try {
+    controller.signal.throwIfAborted();
     const response = await invoke({
       model: `google/${configuredComposerGeminiModel(readEnv)}`,
       messages: [{ role: 'user', content: 'Reply OK.' }],
       max_tokens: 16, reasoning_effort: 'low', stream: false,
     }, controller.signal, false);
     const payload = await response.json().catch(() => null);
+    controller.signal.throwIfAborted();
     if (response.ok && Array.isArray(payload?.choices) && payload.choices.length > 0) {
       return { ready: true, code: 'ready', message: 'Gemini is reachable and accepted a small test request. This does not guarantee enough credit for the entire installation.' };
     }

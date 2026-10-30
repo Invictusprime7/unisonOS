@@ -8,6 +8,7 @@ export async function verifyGeminiBeforeInstall(signal?: AbortSignal): Promise<v
   else signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {
+    controller.signal.throwIfAborted();
     const response = await fetch(getSupabaseFunctionUrl('ai-code-assistant'), {
       method: 'POST',
       headers: { ...await getSupabaseFunctionHeaders(), 'Content-Type': 'application/json' },
