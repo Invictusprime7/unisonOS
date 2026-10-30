@@ -995,6 +995,38 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     expect(result.revisionId).toBeNull();
   });
 
+  it('repairs multiple page owners separately without resending completed pages', async () => {
+    const appContract = contract('salon', ['home', 'about']);
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: scaffoldAuthoredPages(appContract, {
+        '/src/pages/Home.tsx': { body: '<span>needs-layout-fix</span>' },
+        '/src/pages/About.tsx': { body: '<span>needs-layout-fix</span>' },
+      }, input.files),
+      outcomes: input.pages.map(page => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
+    }));
+    const runComposer = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['runComposer']>>[0]): Promise<ComposerLoopResult> => {
+      const path = input.request.page.filePath;
+      const otherPage = path.endsWith('Home.tsx') ? '/src/pages/About.tsx' : '/src/pages/Home.tsx';
+      expect(input.request.files[otherPage]).toBeUndefined();
+      expect(input.request.files[path]).toBe(input.baseFiles[path]);
+      if (path.endsWith('About.tsx')) expect(input.baseFiles['/src/pages/Home.tsx']).not.toContain('needs-layout-fix');
+      const nextFiles = { ...input.baseFiles, [path]: input.baseFiles[path].replace('needs-layout-fix', 'fixed') };
+      return { ok: true, reason: 'accepted', attempts: 1, errors: [], prepared: {
+        ok: true, nextFiles, errors: [], gates: { passed: true, failures: [], advisories: [] },
+        build: { changeSet: { id: 'scoped-fix', fileOps: [], routeOps: [], targetPages: [], attempt: 1,
+          provenance: { origin: 'repair', knowledgeVersion: 'test' } }, candidateFiles: nextFiles, refused: [] },
+      } };
+    });
+    const result = await createTestBuilder({ authorSite, runComposer }).generate({
+      operationId: 'separate-layout-fixes', contract: appContract, initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', pageCheck: (_path, source) => source.includes('needs-layout-fix') ? ['Layout check failed.'] : [],
+    });
+    expect(runComposer).toHaveBeenCalledTimes(2);
+    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidateFiles['/src/pages/Home.tsx']).toContain('fixed');
+    expect(result.candidateFiles['/src/pages/About.tsx']).toContain('fixed');
+  });
+
   it('bounds and reports the site-wide closure repair phase', async () => {
     const brokenFiles = {
       ...baseFiles,
