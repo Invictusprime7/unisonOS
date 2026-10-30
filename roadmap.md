@@ -1,5 +1,9 @@
 # Roadmap
 
+## Active: Wizard launch progress
+- [ ] Show actual launch stages, page/batch updates and a public Affinity activity feed during designing, without internal reasoning or simulated completion.
+- [ ] Verify progress updates, retry reset and the visible designing display; real production authoring remains dependent on the authoritative session.
+
 ## Active: Wizard business fields and native contact submissions
 - [x] Carry canonical selected form fields into App Builder component and intent contracts, preserving required name/email/message and selected extra fields. Business field bindings carry scoped profile references and readiness, never private destination values.
 - [x] Verify native contact ownership, no local success handlers, preserved selections and explicit deterministic starter behavior. Published native forms require ready registered slots, validate fields, prevent duplicate submissions and require confirmed backend success; hosted preview bridge recognizes native forms without immediate success claims.

@@ -65,6 +65,7 @@ export interface SiteAuthoringProgress {
   index: number;
   total: number;
   phase: 'authoring' | 'committed' | 'kept-baseline';
+  batch?: { index: number; total: number };
 }
 
 export interface SiteAuthoringInput {
@@ -327,8 +328,8 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       signal: authoringController.signal,
       timeoutMs: Math.max(1, pageDeadline - now()),
       invoke: input.designContext && planned
-        ? createSectionAuthoringInvoke(input.invoke, planned.target.sectionOrder, () => {
-          input.onProgress?.({ page, index, total: ordered.length, phase: 'authoring' });
+        ? createSectionAuthoringInvoke(input.invoke, planned.target.sectionOrder, (batchIndex, batchTotal) => {
+          input.onProgress?.({ page, index, total: ordered.length, phase: 'authoring', batch: { index: batchIndex, total: batchTotal } });
         })
         : input.invoke,
       gatewayOptions: input.gatewayOptions,
