@@ -1,10 +1,22 @@
 # Roadmap
 
 ## Active: App Builder authoring reliability
-- [ ] Enforce complete-source file operations and transactional batch validation; safely retain completed batches and resume only failed work.
-- [ ] Separate bounded provider calls from multi-batch page budgets; test deterministic Home section-model acceptance independently.
-- [ ] Run focused reliability regressions and record the eight production checks separately from fixture results.
+- [x] Enforce complete-source file operations and transactional batch validation; safely retain completed batches and resume only failed work. Checkpoints live only in bounded tab memory for 15 minutes, keyed by exact request/source/plan/settings; refresh clears provisional progress, and no partial revision is committed.
+- [x] Separate bounded provider calls from multi-batch page/site budgets; derive Wizard watchdog and marketplace budget from sealed section counts. Verify deterministic Home independently through canonical planning → App Builder → section-model closure, without AI calls.
+- [x] Run focused reliability regressions: 123 client checks plus the independent deterministic Home test and all 125 edge checks pass; both authority lints pass. Node test environment avoids unavailable native canvas. Provider fixtures require ambient provider keys removed.
+- [ ] Resolve the three pre-existing broad App Builder fixture failures: Landing hero and Contact services/stats have no page-eligible implementation for their sealed composition. Do not silently drop sections or broaden registry eligibility; needs coherent composition/registry contract resolution in a separately scoped fix.
 - [ ] Verify deployed Gemini, configured fallback, five-page launch and saved reload; requires canonical deployment and an authoritative UNISON session.
+
+### Production checklist: 0 / 8 verified live
+1. Small Gemini request through deployed backend — blocked by authoritative session/deployment; fixture passes.
+2. Gemini top-up recognized without cooldown lockout — same blocker; edge recovery fixture passes.
+3. One-page AI authoring completes without timeout — same blocker; bounded invocation fixture passes.
+4. Multiple batches preserve earlier sections — same blocker; source preservation fixture passes.
+5. Failed batch resumes without regenerating completed sections — same blocker; exact-request tab-memory recovery fixture passes, not durable refresh recovery.
+6. Deterministic Home passes section-model validation — independent local canonical launch fixture passes; production not verified.
+7. Five-page ecommerce reaches Live Workspace — same blocker; five-page scaffold → section-model fixture passes, broader registry mismatch remains above.
+8. Saved revision survives reload and preview — blocked by authoritative session; available injected session redirects /home to /auth?next=%2Fhome.
+Fallback production configuration remains unverified; no relay, credential change, alternate-backend deployment or paid live generation was attempted.
 
 ## Active: Gemini install preflight
 - [x] Add an authenticated, bounded direct-Gemini check before any release claim, project creation or page authoring; report credit, connectivity and permission failures without starting installation.
