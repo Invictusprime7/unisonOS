@@ -263,6 +263,71 @@ describe('site authoring orchestrator', () => {
     expect(orderAuthoringPages(pages, 'home').map((p) => p.pageId)).toEqual(['home', 'about']);
   });
 
+  it('hands projected Home sidecar and source to later pages before invoking them', async () => {
+    const sidecarPath = '/.unison/compositions/pages/Home.json';
+    const sidecar = JSON.stringify({ compiledBy: 'app-builder', pageFilePath: '/src/pages/Home.tsx',
+      sections: [{ sectionId: 'home:services:0', data: { headline: 'Owner services' } }] });
+    const requests: Array<typeof request> = [];
+    const invoke = vi.fn(async (turn: { messages: Array<{ content: string }> }) => {
+      const sent = JSON.parse(turn.messages[0].content);
+      requests.push(sent);
+      return good(sent.page.filePath, sent.page.title);
+    });
+    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null,
+      businessName: 'Wired Home', files: base, invoke: invoke as never,
+      preparePage: (files, page) => page.pageId === 'home' ? { ...files, [sidecarPath]: sidecar } : files,
+      runtimeContextForPage: (_pageId, files, homePageId) => homePageId ? `Home objects: ${files[sidecarPath]}` : '',
+      commitPage: async files => ({ files }),
+    });
+    expect(result.outcomes.map(outcome => outcome.status)).toEqual(['authored', 'authored']);
+    expect(requests[1].files[sidecarPath]).toBe(sidecar);
+    expect(requests[1].files['/src/pages/Home.tsx']).toContain('Home');
+    expect(requests[1].runtimeContext).toContain('home:services:0');
+    expect(requests[1].page.role).toBe('about');
+  });
+
+  it('does not spend requests on later pages when Home projection fails', async () => {
+    const invoke = vi.fn().mockResolvedValue(good('/src/pages/Home.tsx', 'Home'));
+    const commitPage = vi.fn(async (files: Record<string, string>) => ({ files }));
+    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null,
+      businessName: 'Incomplete Home', files: base, invoke: invoke as never, commitPage,
+      preparePage: () => { throw new Error('Home object home:services:0 has no valid sidecar.'); },
+    });
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(commitPage).not.toHaveBeenCalled();
+    expect(result.outcomes.map(outcome => outcome.status)).toEqual(['kept-baseline', 'skipped']);
+    expect(result.outcomes[0].errors).toContain('Home object home:services:0 has no valid sidecar.');
+    expect(result.files).toEqual(base);
+  });
+
+  it('does not release later pages when Home exhausts its object validation repairs', async () => {
+    const invoke = vi.fn().mockResolvedValue(good('/src/pages/Home.tsx', 'Home'));
+    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null,
+      businessName: 'Missing binding', files: base, invoke: invoke as never,
+      pageCheck: () => ['Home binding bind-home-contact has no matching control.'],
+      commitPage: vi.fn(),
+    });
+    expect(invoke.mock.calls.every(([turn]) => JSON.parse(turn.messages[0].content).page.role === 'home')).toBe(true);
+    expect(result.outcomes.map(outcome => outcome.status)).toEqual(['kept-baseline', 'skipped']);
+  });
+
+  it('refuses a secondary page that rewrites its read-only Home reference', async () => {
+    const invoke = vi.fn(async (turn: { messages: Array<{ content: string }> }) => {
+      const sent = JSON.parse(turn.messages[0].content);
+      if (sent.page.role === 'home') return good(sent.page.filePath, 'Established Home');
+      return { data: { content: JSON.stringify({ summary: 'Wrong owner', fileOps: [
+        { type: 'replace', path: sent.page.filePath, content: 'export default function About(){return <main>About</main>}' },
+        { type: 'replace', path: '/src/pages/Home.tsx', content: 'export default function Home(){return <main>Overwritten</main>}' },
+      ] }) }, error: null };
+    });
+    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null,
+      businessName: 'Protected Home', files: base, invoke: invoke as never, commitPage: async files => ({ files }),
+    });
+    expect(result.outcomes.map(outcome => outcome.status)).toEqual(['authored', 'kept-baseline']);
+    expect(result.files['/src/pages/Home.tsx']).toContain('Established Home');
+    expect(result.files['/src/pages/Home.tsx']).not.toContain('Overwritten');
+  });
+
   it('commits each accepted page and keeps baseline for failures', async () => {
     const invoke = vi.fn(async (input: { messages: Array<{ content: string }> }) => {
       const req = JSON.parse(input.messages[0].content);

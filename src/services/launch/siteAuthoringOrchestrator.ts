@@ -346,7 +346,14 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       candidateIntent: `author:${page.role}`,
       initialRouteOps: input.initialRouteOps,
       resolveDependencies: input.resolveDependencies,
-      pageCheck: input.pageCheck,
+      pageCheck: (path: string, source: string, candidateFiles?: Readonly<Record<string, string>>) => {
+        const referenceErrors = referenceHomePath && referenceHomePath !== page.filePath
+          ? [referenceHomePath, resolvedCompositionPathFor(referenceHomePath)]
+            .filter(reference => candidateFiles && candidateFiles[reference] !== baseFiles[reference])
+            .map(reference => `${reference} is a read-only Home object reference; author only the current page.`)
+          : [];
+        return [...referenceErrors, ...(input.pageCheck?.(path, source, candidateFiles) ?? [])];
+      },
     });
     const runLoop = (request: AIComposerRequest) => runComposerRepairLoop(loopInput(request));
     const firstRequest = await buildRequest(null);

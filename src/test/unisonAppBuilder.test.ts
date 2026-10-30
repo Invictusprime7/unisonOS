@@ -8,7 +8,7 @@ import { resolveBusinessLaunchPlan } from '@/services/launch/launchCapabilities'
 import { getAllIndustries } from '@/platform/core/industryMatrix';
 import { createUnisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { APP_BUILDER_PROTOCOL_VERSION, buildAppBuildContract, type AppBuildContract } from '@/services/app-builder/appBuilderContracts';
-import { buildAppBuilderGenerationContext } from '@/services/app-builder/appBuilderGenerationContext';
+import { buildAppBuilderGenerationContext, renderHomeObjectContext } from '@/services/app-builder/appBuilderGenerationContext';
 import { applyDesignSources } from '@/services/app-builder/design/designSourceMaterializer';
 import { materializeAppBuilderSiteShell } from '@/services/app-builder/design/appBuilderSiteShell';
 import type { ComposerLoopResult } from '@/services/builder/aiRepairLoop';
@@ -276,6 +276,51 @@ describe('UnisonAppBuilder facade', () => {
     expect(globalContext).toBe('');
     expect(pageContext).toContain('PERSISTABLE SECTION CONTRACT');
     expect(authorSite).toHaveBeenCalledOnce();
+  });
+
+  it('projects canonical Home objects and bindings before handing the page forward', async () => {
+    const appContract = contract('salon', ['home', 'about']);
+    let homeFiles: Record<string, string> = {};
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => {
+      const home = input.pages.find(page => page.pageId === 'home');
+      if (!home || !input.preparePage) throw new Error('Missing canonical page projection');
+      const drafted = scaffoldAuthoredPages(appContract, {}, input.files);
+      expect(input.pageCheck?.(home.filePath, drafted[home.filePath], drafted)).toEqual([]);
+      homeFiles = input.preparePage(drafted, home);
+      const composition = JSON.parse(homeFiles[resolvedCompositionPathFor(home.filePath)]);
+      expect(composition.compiledBy).toBe('app-builder');
+      expect(composition.sections.length).toBeGreaterThan(2);
+      expect(composition.sections.every((section: { data?: unknown }) => section.data)).toBe(true);
+      const nextContext = input.runtimeContextForPage?.('page-about', homeFiles, 'home') ?? '';
+      expect(nextContext).toContain('HOME OBJECT CONTRACT');
+      expect(nextContext).toContain(composition.sections[0].sectionId);
+      return { files: homeFiles, outcomes: [] };
+    });
+    const result = await createTestBuilder({ authorSite, runComposer: vi.fn() }).generate({
+      operationId: 'wired-home-handoff', contract: appContract, initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', budgetMs: 1,
+    });
+    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidateFiles[resolvedCompositionPathFor('/src/pages/Home.tsx')]).toBeDefined();
+  });
+
+  it('Home context retains inactive capability requirements without granting them or exposing private values', () => {
+    const appContract = ecommerceContract();
+    const binding = { ...appContract.business.intentBindings[1], pageId: 'home',
+      bindingId: 'bind-home-checkout', requiredCapabilities: ['commerce', 'payments'], missingCapabilities: ['payments'] };
+    appContract.business.intentBindings = [binding];
+    const files = { [resolvedCompositionPathFor('/src/pages/Home.tsx')]: JSON.stringify({
+      version: '1.0', compiledBy: 'app-builder', pageFilePath: '/src/pages/Home.tsx',
+      sections: [{ sectionId: 'home:services:0', semanticType: 'services', variantId: 'services:card-grid',
+        data: { headline: 'Owner headline', notificationEmail: 'private@example.test' } }],
+    }) };
+    const context = renderHomeObjectContext(appContract, files, 'home');
+    const projection = JSON.parse(context.split('\n')[1]);
+    expect(projection.bindings[0].missingCapabilities).toEqual(['payments']);
+    expect(projection.enabledCapabilities).toEqual(['commerce']);
+    expect(projection.objects).toHaveLength(1);
+    expect(context).not.toContain('private@example.test');
+    expect(renderHomeObjectContext(appContract, {}, 'home')).toBe('');
   });
 
   it('reports exhausted provider credits instead of accepting unchanged preview material', async () => {
