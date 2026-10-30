@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { Check, Loader2, AlertCircle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import './launchProgress.css';
 import type {
   LaunchRunSnapshot,
   LaunchStageState,
@@ -28,32 +29,17 @@ const STAGE_HINT: Record<string, string> = {
 function statusIcon(status: LaunchStageStatus) {
   switch (status) {
     case "done":
-      return <Check className="h-3 w-3 stroke-[2.5]" />;
+      return <Check className="launch-progress-icon" aria-hidden="true" />;
     case "active":
       return (
-        <Loader2 className="h-3 w-3 motion-safe:animate-spin text-cyan-200" />
+        <Loader2 className="launch-progress-icon motion-safe:animate-spin" aria-hidden="true" />
       );
     case "degraded":
-      return <Sparkles className="h-3 w-3 text-amber-300" />;
+      return <Sparkles className="launch-progress-icon" aria-hidden="true" />;
     case "failed":
-      return <AlertCircle className="h-3 w-3 text-rose-300" />;
+      return <AlertCircle className="launch-progress-icon" aria-hidden="true" />;
     default:
-      return <div className="h-1.5 w-1.5 rounded-full bg-white/20" />;
-  }
-}
-
-function statusRing(status: LaunchStageStatus) {
-  switch (status) {
-    case "done":
-      return "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/40 shadow-[0_0_12px_rgba(34,211,238,0.2)]";
-    case "active":
-      return "bg-gradient-to-r from-cyan-500 to-blue-500 text-[#07080F] ring-2 ring-cyan-300/80 shadow-[0_0_20px_rgba(34,211,238,0.4)] motion-safe:animate-pulse";
-    case "degraded":
-      return "bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/30";
-    case "failed":
-      return "bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30";
-    default:
-      return "bg-white/[0.04] text-white/25 ring-1 ring-white/[0.06]";
+      return <span className="launch-progress-icon" aria-hidden="true">·</span>;
   }
 }
 
@@ -69,12 +55,16 @@ export interface LaunchStageTimelineProps {
   snapshot: LaunchRunSnapshot;
   statusText?: string;
   className?: string;
+  activity?: readonly string[];
+  generationMode?: 'ai' | 'deterministic';
 }
 
 export const LaunchStageTimeline = ({
   snapshot,
   statusText,
   className,
+  activity = [],
+  generationMode = 'ai',
 }: LaunchStageTimelineProps) => {
   // Re-render every second so running-stage timers advance between backend events.
   const [, setTick] = useState(0);
@@ -88,32 +78,43 @@ export const LaunchStageTimeline = ({
   const failedStage = snapshot.stages.find(
     (stage) => stage.status === "failed",
   );
-  const finished = snapshot.stages.every(
+  const finished = snapshot.stages.length > 0 && snapshot.stages.every(
     (stage) => stage.status === "done" || stage.status === "degraded",
   );
+  const completed = snapshot.stages.filter(stage => stage.status === 'done' || stage.status === 'degraded').length;
   return (
-    <div className={cn("space-y-8", className)}>
-      <div>
-        <div className="flex items-center gap-2 text-xs font-medium text-primary"><Sparkles className="h-3.5 w-3.5 motion-safe:animate-pulse" />Creating your site</div>
-        <h2 role="status" className="mt-3 text-2xl font-semibold">
+    <div className={cn("launch-progress", className)} aria-busy={!failedStage && !finished}>
+      <div className="launch-progress-header">
+        <div className="launch-progress-label"><Sparkles className="launch-progress-icon" aria-hidden="true" />{generationMode === 'deterministic' ? 'Building your deterministic starter' : 'Affinity · Creating your site'}</div>
+        <h2 role="status">
           {failedStage ? "Creation paused" : finished ? "Ready to review" : activeStage ? STAGE_HINT[activeStage.name] : "Preparing your project"}
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">{failedStage ? "Review the message and try again." : statusText || "Each step appears as it completes."}</p>
+        <p className="launch-progress-muted" role="status">{failedStage ? "Review the message and try again." : statusText || "Preparing your project…"}</p>
       </div>
-      <ol className="relative space-y-1 before:absolute before:bottom-4 before:left-[15px] before:top-4 before:w-px before:bg-border">
+      {snapshot.stages.length > 0 && <div>
+        <div className="launch-progress-meter" role="progressbar" aria-label="Launch steps completed" aria-valuemin={0} aria-valuemax={snapshot.stages.length} aria-valuenow={completed} aria-valuetext={`${completed} of ${snapshot.stages.length} launch steps completed`}>
+          {snapshot.stages.map(stage => <span key={stage.name} className="launch-progress-segment" data-complete={stage.status === 'done' || stage.status === 'degraded'} data-active={stage.status === 'active'} />)}
+        </div>
+        <p className="launch-progress-muted">{completed} of {snapshot.stages.length} steps completed</p>
+      </div>}
+      <ol className="launch-progress-stages">
         {snapshot.stages.map((stage, index) => {
           const time = duration(stage);
           const visible = stage.status !== "pending" || index <= Math.max(0, snapshot.stages.findIndex((entry) => entry.status === "active") + 1);
           if (!visible) return null;
           return (
-            <li key={stage.name} className={cn("relative flex items-center gap-3 rounded-md px-1 py-3 transition-all duration-300", stage.status === "active" && "translate-x-1 bg-muted/50")}>
-              <span className={cn("z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-background", statusRing(stage.status))}>{statusIcon(stage.status)}</span>
-              <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><span className={cn("text-sm", stage.status === "active" ? "font-semibold text-foreground" : stage.status === "done" ? "text-foreground/70" : "text-muted-foreground")}>{STAGE_HINT[stage.name] ?? stage.label}</span>{time && <span className="text-[10px] tabular-nums text-muted-foreground">{time}</span>}</div></div>
+            <li key={stage.name} className="launch-progress-stage" data-status={stage.status} aria-current={stage.status === 'active' ? 'step' : undefined}>
+              {statusIcon(stage.status)}
+              <span className="launch-progress-stage-name">{STAGE_HINT[stage.name] ?? stage.label}</span>
+              {time && <span className="launch-progress-time">{time}</span>}
             </li>
           );
         })}
       </ol>
-      {(snapshot.degradations.length > 0 || statusText) && <details className="border-t border-border pt-4 text-xs text-muted-foreground"><summary className="cursor-pointer font-medium">Launch details{snapshot.degradations.length ? ` · ${snapshot.degradations.length} notes` : ''}</summary>{statusText && <p className="mt-3">{statusText}</p>}{snapshot.degradations.length > 0 && <ul className="mt-3 space-y-2">{snapshot.degradations.map((degradation,index) => <li key={`${degradation.code}-${index}`}>{degradation.message}{degradation.detail && <span className="mt-1 block whitespace-pre-line text-muted-foreground/80">{degradation.detail.split('; ').join('\n')}</span>}</li>)}</ul>}</details>}
+      {activity.length > 0 && <div className="launch-progress-activity" role="log" aria-label="Affinity launch activity" aria-live="polite" aria-relevant="additions" aria-atomic="false">
+        {activity.map((message, index) => <p key={`${index}-${message}`} className={index === activity.length - 1 ? undefined : 'launch-progress-muted'}>{message}</p>)}
+      </div>}
+      {snapshot.degradations.length > 0 && <div className="launch-progress-notes">{snapshot.degradations.map((note, index) => <p key={`${note.code}-${index}`} className="launch-progress-muted">{note.message}</p>)}</div>}
     </div>
   );
 };
