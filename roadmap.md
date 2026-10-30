@@ -1,5 +1,9 @@
 # Roadmap
 
+## Active: Visit-page save classification
+- [ ] Correct shared page-role resolution for saved restaurant Visit pages without changing authored content or relaxing renderability checks.
+- [ ] Run classification and saved-page compilation regressions; verify preview diagnostics. Live save/reopen requires an authoritative UNISON session.
+
 ## Active: Marketplace final-check timeout
 - [x] Replace all-page repair fallback with diagnostic-owned requests using complete target source and direct imports, page-specific context and EDIT guidance; validate after each provisional fix and refuse unrelated source changes. Unknown/protected owners never trigger an all-site rewrite. Provider timeouts stop without replay; completed provisional fixes remain in the candidate, not an accepted revision.
 - [x] Test targeted page/shared-component repair, separate multi-page fixes, prior-fix preservation on later timeout, and existing marketplace acceptance: 103 checks across six suites pass; both authority lints and preview build OK.
