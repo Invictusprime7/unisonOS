@@ -6,6 +6,7 @@
 - [x] Run focused reliability regressions: 123 client checks plus the independent deterministic Home test and all 125 edge checks pass; both authority lints pass. Node test environment avoids unavailable native canvas. Provider fixtures require ambient provider keys removed.
 - [x] Resolve the broad App Builder failures: normalize Landing/Portfolio request roles, inherit generic profiles by role identity, correct unsupported Contact/Gallery/Booking/FAQ families before sealing, and give Pricing/Shop/Checkout/Blog explicit page jobs. Compact Shop/FAQ/Blog and Checkout start with their content rather than requiring a hero absent from some sealed packs. Industry coverage tests now use each industry's own default pages, not unrelated cross-industry page unions. All 89 targeted checks plus 102 neighboring composition checks pass (one existing skip); both authority lints and preview build pass. Canonical registry and sealed-target guards remain unchanged.
 - [ ] Verify deployed Gemini, configured fallback, five-page launch and saved reload; requires canonical deployment and an authoritative UNISON session.
+- [x] Recheck verification access (2026-10-30): 59 launch/batch/preflight/install regressions and both authority lints pass; preview reports build OK. Fresh browser `/home` redirects to sign-in. No canonical deployment credentials or GitHub workflow-dispatch credentials are available in this sandbox; no paid AI request or alternate-backend deployment was attempted.
 
 ### Production checklist: 0 / 8 verified live
 1. Small Gemini request through deployed backend — blocked by authoritative session/deployment; fixture passes.
@@ -15,7 +16,7 @@
 5. Failed batch resumes without regenerating completed sections — same blocker; exact-request tab-memory recovery fixture passes, not durable refresh recovery.
 6. Deterministic Home passes section-model validation — independent local canonical launch fixture passes; production not verified.
 7. Five-page ecommerce reaches Live Workspace — same blocker; complete five-page scaffold → candidate closure → section-model fixture now passes without AI calls or commit.
-8. Saved revision survives reload and preview — blocked by authoritative session; current injected session targets a different backend, so it was not restored; browser /home redirects to /auth?next=%2Fhome.
+8. Saved revision survives reload and preview — blocked by authoritative session; latest sandbox status is signed_out, and a fresh browser /home redirects to /auth?next=%2Fhome. Managed session minting targets the attached noncanonical backend and cannot supply a UNISON session.
 Fallback production configuration remains unverified; no relay, credential change, alternate-backend deployment or paid live generation was attempted.
 
 ## Active: Gemini install preflight
