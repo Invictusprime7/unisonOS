@@ -203,6 +203,7 @@ export async function orchestrateAppBuild(
   // failures instead of accepting the untouched reference source or retrying it.
   const terminalAuthoringFailure = authored.outcomes.some((outcome) =>
     outcome.status !== 'authored' && ['credits', 'denied', 'provider', 'rate_limited', 'invalid_response', 'aborted'].includes(outcome.reason));
+  const incompleteAuthoring = generationMode === 'ai' && authored.outcomes.some(outcome => outcome.status !== 'authored');
   const validateClosure = async (files: Record<string, string>) => {
     const report = await validateAppBuildCandidate({
       contract: input.contract,
@@ -338,7 +339,7 @@ export async function orchestrateAppBuild(
     && latestSectionMaterialization.pages.length === pages.length
     && latestSectionMaterialization.pages.every((page) => typeof page.sidecarContents === 'string'),
   );
-  const ready = !terminalAuthoringFailure && !closureRepairFailure && sectionModelsValid
+  const ready = !incompleteAuthoring && !terminalAuthoringFailure && !closureRepairFailure && sectionModelsValid
     && (compatibilityMode || closure.ok);
   const authorDiagnostics = authored.outcomes.flatMap((outcome) => outcome.errors);
   const closureDiagnostics = closure.issues
@@ -375,7 +376,7 @@ export async function orchestrateAppBuild(
       baseRevisionId: input.baseRevisionId ?? null,
       contractSeed: input.contract.design.seed,
       sourceHash: closure.sourceHash,
-      authoredPageIds: generationMode === 'ai' ? pages.map((page) => page.pageId) : [],
+      authoredPageIds: generationMode === 'ai' ? authored.outcomes.filter(outcome => outcome.status === 'authored').map(outcome => outcome.page.pageId) : [],
       strategy,
     },
   };
