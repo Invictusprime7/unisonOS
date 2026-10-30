@@ -348,7 +348,8 @@ describe('UnisonAppBuilder facade', () => {
     appContract.business.intentBindings = [homeBinding];
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => {
       const home = input.pages[0];
-      const drafted = scaffoldAuthoredPages(appContract, {}, input.files);
+      const withoutBinding = { ...appContract, business: { ...appContract.business, intentBindings: [] } };
+      const drafted = scaffoldAuthoredPages(withoutBinding, {}, input.files);
       expect(input.pageCheck?.(home.filePath, drafted[home.filePath], drafted)?.join(' ')).toContain('bind-home-return');
       const wired = { ...drafted, [home.filePath]: drafted[home.filePath].replace('</main>',
         '<a href="#/" data-ut-cta="cta.home-story">View our story</a></main>') };
