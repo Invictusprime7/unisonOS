@@ -592,7 +592,7 @@ export const LauncherWizard = ({
         onStatus: status => {
           if (generation !== generationRef.current || !mountedRef.current) return;
           setLaunchStatus(status);
-          setLaunchActivity(current => current.at(-1) === status ? current : [...current, status].slice(-6));
+          setLaunchActivity(current => current[current.length - 1] === status ? current : [...current, status].slice(-6));
         },
         onProgress: (snapshot) => {
           if (generation !== generationRef.current || !mountedRef.current) return;
