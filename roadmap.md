@@ -1,8 +1,8 @@
 # Roadmap
 
 ## Active: Uploaded Gemini timeout follow-up
-- [ ] Replace the full-page timeout replay with bounded, sequential page-section requests before final candidate validation.
-- [ ] Verify section accumulation, provider-stop behavior, and existing authoring regressions.
+- [x] Replace the full-page timeout replay with bounded, sequential page-section requests before final candidate validation; preserve sealed order, repeated sections, owner settings and source quantities.
+- [x] Verify section accumulation, provider-stop behavior, and existing authoring regressions: 36 focused tests and authoring authority lint pass; preview build OK. Broader App Builder suite has three scaffold eligibility failures unrelated to the invocation adapter.
 - [ ] Verify live generation → save → reopen; requires an authoritative UNISON session and a successful real provider response.
 
 ## Active: Marketplace install failure follow-up
