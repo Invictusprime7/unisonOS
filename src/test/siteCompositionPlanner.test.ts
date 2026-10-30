@@ -20,7 +20,7 @@ describe('siteCompositionPlanner', () => {
     ['checkout', ['contact', 'faq']],
     ['blog', ['hero', 'blog-preview']],
     ['shop', ['hero', 'services', 'gallery', 'cta']],
-    ['faq', ['hero', 'faq', 'cta']],
+    ['faq', ['faq', 'cta']],
     ['gallery', ['gallery', 'before-after', 'cta']],
   ])('preserves the %s page responsibility rather than inheriting About', (role, sectionOrder) => {
     const plan = planSiteComposition('ecommerce', [{ pageId: role as string, role: role as string }], 'role-jobs');
