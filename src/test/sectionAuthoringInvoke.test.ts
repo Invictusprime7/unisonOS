@@ -62,13 +62,12 @@ describe('bounded page-section authoring', () => {
     let clock = 0;
     const spy = vi.spyOn(Date, 'now').mockImplementation(() => clock);
     let source = 'export default function Home(){return <main></main>}';
-    const invoke = vi.fn(async () => { clock += 59_000; source = source.replace('</main>', `<section>${clock}</section></main>`); return reply(source); });
+    const invoke = vi.fn(async (_input: unknown, options?: { timeoutMs?: number }) => { expect(options?.timeoutMs).toBe(65_000); clock += 59_000; source = source.replace('</main>', `<section>${clock}</section></main>`); return reply(source); });
     try {
       const order = ['hero', 'services', 'gallery', 'testimonials', 'cta'];
       const result = await createSectionAuthoringInvoke(invoke as ComposerInvoke, order)(turn, { timeoutMs: sectionPageBudgetMs(order) });
       expect(result.error).toBeNull();
       expect(invoke).toHaveBeenCalledTimes(3);
-      expect(invoke.mock.calls.every(call => call.length === 2)).toBe(true);
       expect(clock).toBe(177_000);
     } finally { spy.mockRestore(); }
   });
