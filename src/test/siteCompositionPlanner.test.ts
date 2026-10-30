@@ -19,7 +19,7 @@ describe('siteCompositionPlanner', () => {
     ['pricing', ['hero', 'pricing', 'faq', 'cta']],
     ['checkout', ['contact', 'faq']],
     ['blog', ['blog-preview']],
-    ['shop', ['hero', 'services', 'gallery', 'cta']],
+    ['shop', ['services', 'gallery', 'cta']],
     ['faq', ['faq', 'cta']],
     ['gallery', ['gallery', 'before-after', 'cta']],
   ])('preserves the %s page responsibility rather than inheriting About', (role, sectionOrder) => {
