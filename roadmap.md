@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Visit-page save classification
+- [x] Shared route aliases classify informational Visit pages as contact; explicit role/type takes precedence over route inference. Saved authored source and renderability checks remain unchanged.
+- [x] All 20 role/compilation/launch regressions and both authority lints pass; preview build OK. Saved Visit source survives recompile and /visit remains in the router.
+- [ ] Live Sorella House edit → save → reopen: the designated project redirects to sign-in in the sandbox (zero runtime errors); requires an authoritative UNISON session.
+
 ## Active: Marketplace final-check timeout
 - [x] Replace all-page repair fallback with diagnostic-owned requests using complete target source and direct imports, page-specific context and EDIT guidance; validate after each provisional fix and refuse unrelated source changes. Unknown/protected owners never trigger an all-site rewrite. Provider timeouts stop without replay; completed provisional fixes remain in the candidate, not an accepted revision.
 - [x] Test targeted page/shared-component repair, separate multi-page fixes, prior-fix preservation on later timeout, and existing marketplace acceptance: 103 checks across six suites pass; both authority lints and preview build OK.

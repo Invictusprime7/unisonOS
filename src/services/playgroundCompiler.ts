@@ -436,9 +436,11 @@ function buildScaffoldPlan(
 }
 
 function inferTopologyRole(page: BuilderPage): PageRole {
-  const raw = (page.pageRole || page.pageType || '').toString();
-  const role = resolveTopologyPageRoleAlias(raw);
-  if (role && role !== 'custom') return role;
+  // A legacy custom role must not mask an explicitly classified page type.
+  for (const value of [page.pageRole, page.pageType]) {
+    const role = resolveTopologyPageRoleAlias(String(value ?? ''));
+    if (role && role !== 'custom') return role;
+  }
 
   const path = page.path.toLowerCase();
   const pathRole = resolveTopologyPageRoleAlias(path);

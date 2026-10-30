@@ -66,6 +66,7 @@ const PAGE_ROLE_ALIASES: Record<string, PageRole> = {
   index: 'home', landing: 'services', service: 'services', room: 'services', rooms: 'services',
   accommodation: 'services', accommodations: 'services', stay: 'services', stays: 'services',
   portfolio: 'gallery', work: 'gallery', listings: 'gallery',
+  visit: 'contact',
   book: 'booking', 'book-now': 'booking', reserve: 'booking', reservations: 'booking',
   thankyou: 'thank_you', 'thank-you': 'thank_you', 'booking-confirmation': 'thank_you', booking_confirmation: 'thank_you',
   experience: 'immersive',
