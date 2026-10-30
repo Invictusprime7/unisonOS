@@ -255,7 +255,7 @@ async function dispatchBackendIntent(
     body: JSON.stringify(requestBody(controller, intent, element, formPayload)),
   });
   const result = await response.json().catch(() => ({})) as Record<string, any>;
-  if (!response.ok || result.ok === false || result.success === false) {
+  if (!response.ok || result.ok === false || result.success === false || (formPayload && result.ok !== true && result.success !== true)) {
     throw new Error(result.error?.message || result.error || 'The action could not be completed.');
   }
   const redirectUrl = result.url || result.checkoutUrl || result.redirectUrl;
@@ -483,7 +483,8 @@ export function usePublishedActionRuntime() {
         event.preventDefault();
         if (form.getAttribute('aria-busy') === 'true' || !form.reportValidity()) return;
         const host = form.closest('[data-ut-component-instance-id]') as HTMLElement | null;
-        const component = COMPONENTS.find((candidate) => candidate.instanceId === host?.dataset.utComponentInstanceId && candidate.writeIntent === intent);
+        const component = COMPONENTS.find((candidate) => candidate.instanceId === host?.dataset.utComponentInstanceId && candidate.writeIntent === intent
+          && candidate.slots.some((slot) => slot.intent === intent && slot.status === 'ready'));
         const controller = controllerForIntent(intent);
         if (!component || !controller || controller.transport !== 'supabase-function') {
           showActionStatus(form, 'This form is not connected to the site.');
