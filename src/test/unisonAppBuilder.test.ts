@@ -998,7 +998,7 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     expect(result.revisionId).toBeNull();
   });
 
-  it('repairs multiple page owners separately without resending completed pages', async () => {
+  it.each([false, true])('repairs page owners separately and preserves completed work (later timeout: %s)', async (laterTimeout) => {
     const appContract = contract('salon', ['home', 'about']);
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
       files: scaffoldAuthoredPages(appContract, {
@@ -1013,6 +1013,9 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
       expect(input.request.files[otherPage]).toBeUndefined();
       expect(input.request.files[path]).toBe(input.baseFiles[path]);
       if (path.endsWith('About.tsx')) expect(input.baseFiles['/src/pages/Home.tsx']).not.toContain('needs-layout-fix');
+      if (laterTimeout && path.endsWith('About.tsx')) return {
+        ok: false, reason: 'provider', attempts: 1, errors: ['Gemini timed out during the second layout fix.'],
+      };
       const nextFiles = { ...input.baseFiles, [path]: input.baseFiles[path].replace('needs-layout-fix', 'fixed') };
       return { ok: true, reason: 'accepted', attempts: 1, errors: [], prepared: {
         ok: true, nextFiles, errors: [], gates: { passed: true, failures: [], advisories: [] },
@@ -1025,9 +1028,10 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
       entryPoint: '/src/main.tsx', pageCheck: (_path, source) => source.includes('needs-layout-fix') ? ['Layout check failed.'] : [],
     });
     expect(runComposer).toHaveBeenCalledTimes(2);
-    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(result.candidate.status).toBe(laterTimeout ? 'rejected' : 'ready-for-commit');
     expect(result.candidateFiles['/src/pages/Home.tsx']).toContain('fixed');
-    expect(result.candidateFiles['/src/pages/About.tsx']).toContain('fixed');
+    expect(result.candidateFiles['/src/pages/About.tsx']).toContain(laterTimeout ? 'needs-layout-fix' : 'fixed');
+    if (laterTimeout) expect(result.stopReason).toBe('provider-error');
   });
 
   it('bounds and reports the site-wide closure repair phase', async () => {
