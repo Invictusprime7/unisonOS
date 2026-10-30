@@ -403,7 +403,20 @@ describe('AppBuildContract', () => {
       requiredCapabilities: ['contact'],
     }];
 
+    input.forms = [{ formId: 'form-contact', name: 'Contact Form', submitLabel: 'Send', successMessage: 'Saved', sortOrder: 0,
+      fields: [{ fieldId: 'field-budget', label: 'Project budget', type: 'number', required: true, sortOrder: 4 }],
+    }];
+    input.businessParameters.industry = { serviceArea: 'Chicago', emptyAnswer: '', notificationEmail: 'private@example.test' };
+
     const contract = buildAppBuildContract(input);
+
+    expect(contract.business.intentBindings[0]?.formFields?.[0]).toMatchObject({ fieldId: 'field-budget', required: true });
+    expect(contract.business.intentBindings[0]?.businessFieldBindings).toEqual(expect.arrayContaining([
+      { field: 'serviceArea', source: 'business-profile.customValues', configured: true },
+      { field: 'emptyAnswer', source: 'business-profile.customValues', configured: false },
+      { field: 'notificationEmail', source: 'business-profile', configured: true },
+    ]));
+    expect(serializeAppBuildContract(contract)).not.toContain('private@example.test');
 
     expect(contract.business.registeredComponents).toEqual(expect.arrayContaining([
       expect.objectContaining({ runtime: expect.objectContaining({
