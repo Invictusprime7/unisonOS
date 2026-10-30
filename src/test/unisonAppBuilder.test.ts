@@ -323,6 +323,23 @@ describe('UnisonAppBuilder facade', () => {
     expect(renderHomeObjectContext(appContract, {}, 'home')).toBe('');
   });
 
+  it('rejects an incomplete Home handoff even when baseline pages pass final closure', async () => {
+    const appContract = contract('salon', ['home', 'about']);
+    const result = await createTestBuilder({
+      authorSite: async input => ({ files: scaffoldAuthoredPages(appContract, {}, input.files), outcomes: [
+        { page: input.pages[0], status: 'kept-baseline', reason: 'gates_exhausted', attempts: 3,
+          errors: ['Home binding did not pass.'] },
+        { page: input.pages[1], status: 'skipped', reason: 'paused', attempts: 0, errors: [] },
+      ] }),
+      runComposer: vi.fn(),
+    }).generate({ operationId: 'incomplete-home', contract: appContract, initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', budgetMs: 1 });
+    expect(result.candidate.closure.ok).toBe(true);
+    expect(result.candidate.status).toBe('rejected');
+    expect(result.candidate.provenance.authoredPageIds).toEqual([]);
+    expect(result.candidate.diagnostics).toContain('Home binding did not pass.');
+  });
+
   it('reports exhausted provider credits instead of accepting unchanged preview material', async () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
       files: input.files,
