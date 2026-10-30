@@ -23,6 +23,7 @@ import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import { selectSourceKnowledge } from '@/services/builder/sourceKnowledgeContext';
 import { isImageLedRole, verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
+import { createSectionAuthoringInvoke } from '@/services/launch/sectionAuthoringInvoke';
 import {
   extractHomepageVisualLanguage,
   renderHomepageInheritanceContract,
@@ -119,19 +120,6 @@ export interface AcceptedPageEntry {
 /** Accepted-page cache: a retry with an identical page contract reuses the page instead of re-authoring. */
 const acceptedPages = new Map<string, AcceptedPageEntry>();
 const MAX_ACCEPTED_PAGES = 64;
-/** A split follow-up request needs a full fresh server window to be worth sending. */
-export const PAGE_SPLIT_MIN_WINDOW_MS = 125_000;
-const LEAN_PAGE_DIRECTIVE = 'SIZE LIMIT (previous attempt timed out): keep the same section order, but write a compact page — at most 3 items per repeated list, one or two short sentences per description, no inline data arrays longer than 4 entries, and no comments.';
-
-/** A smaller version of a page request so Gemini can finish inside one server window. */
-export function leanRequest(request: AIComposerRequest): AIComposerRequest {
-  return {
-    ...request,
-    brief: `${LEAN_PAGE_DIRECTIVE}\n${request.brief ?? ''}`.slice(0, 8000),
-    runtimeContext: request.runtimeContext?.slice(0, 4000),
-  };
-}
-
 function hashKey(value: string): string {
   let h = 5381;
   for (let i = 0; i < value.length; i += 1) h = ((h * 33) ^ value.charCodeAt(i)) >>> 0;
@@ -334,7 +322,11 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       preflight: input.preflight,
       signal: authoringController.signal,
       timeoutMs: Math.max(1, pageDeadline - now()),
-      invoke: input.invoke,
+      invoke: input.designContext && planned
+        ? createSectionAuthoringInvoke(input.invoke, planned.target.sectionOrder, () => {
+          input.onProgress?.({ page, index, total: ordered.length, phase: 'authoring' });
+        })
+        : input.invoke,
       gatewayOptions: input.gatewayOptions,
       affinity: {
         language: establishedLanguage,
@@ -372,16 +364,6 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       };
     } else {
       loop = await runLoop(firstRequest);
-      // Split a timed-out page into a smaller follow-up request in a fresh server
-      // window: resume the paid draft when one exists, else re-ask for a leaner page.
-      const timedOut = (loop.reason === 'provider' || (loop.reason === 'aborted' && !authoringController.signal.aborted))
-        && loop.errors.some((e) => /timeout|timed out|took too long|time budget/i.test(e));
-      if (!loop.ok && timedOut && deadline - now() >= PAGE_SPLIT_MIN_WINDOW_MS) {
-        input.onProgress?.({ page, index, total: ordered.length, phase: 'authoring' });
-        loop = loop.resume
-          ? await runComposerRepairLoop({ ...loopInput(loop.resume.request), resume: loop.resume, timeoutMs: Math.max(1, Math.min(deadline, now() + 150_000) - now()) })
-          : await runComposerRepairLoop({ ...loopInput(leanRequest(firstRequest)), timeoutMs: Math.max(1, Math.min(deadline, now() + 150_000) - now()) });
-      }
     }
     // Redundancy check: one targeted recomposition when this page repeats another page's topology.
     const terminalPageFailure = ['credits', 'denied', 'rate_limited', 'provider', 'invalid_response'].includes(loop.reason)
