@@ -78,7 +78,7 @@ const SALON = build('salon', {
     narrativeGoals: ['prove craft through results', 'let imagery lead'],
     requiredCapabilities: [], domainVocabulary: ['before & after', 'looks', 'transformations'],
     character: { density: 'medium', mediaDominance: 0.95, typographyDominance: 0.2, asymmetry: 0.7 },
-    preferredFamilies: ['gallery', 'testimonials', 'cta'],
+    preferredFamilies: ['gallery', 'before-after', 'cta'],
     heroCandidates: ['typographic', 'none'], geometryCandidates: ['asymmetric', 'grid'],
     preferredCompositionPatterns: ['masonry or editorial image grid', 'before/after comparison'],
     discouragedCompositionPatterns: ['text-heavy intro', 'service cards'], noveltyBudget: 0.7,
@@ -223,13 +223,57 @@ const GENERIC = build('*', {
   about: genericRoleProfile('about'),
   booking: genericRoleProfile('booking'),
   contact: genericRoleProfile('contact'),
+  pricing: {
+    narrativeGoals: ['compare options and make costs clear'],
+    requiredCapabilities: [], domainVocabulary: [], character: { density: 'high', informationDensity: 0.85 },
+    preferredFamilies: ['hero', 'pricing', 'faq', 'cta'],
+    heroCandidates: ['utility-header'], geometryCandidates: ['grid', 'centered'],
+    preferredCompositionPatterns: ['comparable plan details followed by objections'],
+    discouragedCompositionPatterns: ['service catalog', 'team story'], noveltyBudget: 0.3,
+  },
+  faq: genericRoleProfile('faq'),
+  shop: {
+    narrativeGoals: ['browse products and choose the next purchase'],
+    requiredCapabilities: ['commerce'], domainVocabulary: ['products', 'collection'],
+    character: { density: 'high', mediaDominance: 0.7, informationDensity: 0.8 },
+    preferredFamilies: ['hero', 'services', 'gallery', 'cta'],
+    heroCandidates: ['utility-header', 'split-media'], geometryCandidates: ['grid', 'split'],
+    preferredCompositionPatterns: ['product-led browsing with clear purchase actions'],
+    discouragedCompositionPatterns: ['team story', 'long-form company introduction'], noveltyBudget: 0.4,
+  },
+  checkout: {
+    narrativeGoals: ['complete the order with minimal distraction'],
+    requiredCapabilities: ['commerce'], domainVocabulary: ['order', 'checkout'],
+    character: { density: 'low', conversionPressure: 0.95, interactionDepth: 0.8 },
+    preferredFamilies: ['hero', 'contact'],
+    heroCandidates: ['utility-header'], geometryCandidates: ['centered', 'split'],
+    preferredCompositionPatterns: ['focused order handoff'],
+    discouragedCompositionPatterns: ['team story', 'product discovery', 'gallery'], noveltyBudget: 0.2,
+  },
+  blog: {
+    narrativeGoals: ['browse stories and discover useful reading'],
+    requiredCapabilities: [], domainVocabulary: ['journal', 'articles'],
+    character: { density: 'medium', editoriality: 0.85 },
+    preferredFamilies: ['hero', 'blog-preview', 'cta'],
+    heroCandidates: ['typographic', 'editorial-intro'], geometryCandidates: ['grid', 'asymmetric'],
+    preferredCompositionPatterns: ['editorial story index'],
+    discouragedCompositionPatterns: ['service catalog', 'checkout form'], noveltyBudget: 0.5,
+  },
+  thank_you: {
+    narrativeGoals: ['confirm completion and provide a clear next step'],
+    requiredCapabilities: [], domainVocabulary: [], character: { density: 'low' },
+    preferredFamilies: ['hero', 'cta'],
+    heroCandidates: ['utility-header'], geometryCandidates: ['centered'],
+    preferredCompositionPatterns: ['focused confirmation'],
+    discouragedCompositionPatterns: ['team story', 'product discovery'], noveltyBudget: 0.2,
+  },
 });
 
 const REGISTRY: IndustryPageCompositionProfile[] = [...SALON, ...RESTAURANT, ...GENERIC];
 
 const ROLE_ALIASES: Record<string, string> = {
   index: 'home', landing: 'home', 'book-now': 'booking', book: 'booking', reservations: 'booking', reserve: 'booking',
-  portfolio: 'gallery', work: 'gallery', 'our-studio': 'about', team: 'about', story: 'about', pricing: 'services',
+  portfolio: 'gallery', work: 'gallery', 'our-studio': 'about', team: 'about', story: 'about',
 };
 
 export function normalizePageRole(role: string): string {
