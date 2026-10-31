@@ -12,7 +12,7 @@ export function pageCompositionCoverage(planned: PlannedPage | undefined, page: 
   const expected = planned.target.sectionOrder.filter(family => family !== 'navbar' && family !== 'footer');
   const tags: Record<string, string[]> = {};
   for (const section of body) {
-    const variant = getVariantById(section.variantId as VariantId);
+    const variant = section.variantId ? getVariantById(section.variantId as VariantId) : undefined;
     tags[section.semanticType] = [...(tags[section.semanticType] ?? []), ...(variant?.tags ?? [])];
   }
   const errors = pageArchetypeIssues(normalizePageRole(planned.role), actual, tags);
