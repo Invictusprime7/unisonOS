@@ -483,9 +483,9 @@ export async function validateAppBuildCandidate(input: {
     // binding routes when no host page is declared.
     const hostPages = component.runtime.usedOnPages
       .map((pageId) => pages.find((page) => page.id === pageId)).filter((page) => !!page);
-    const componentPages = hostPages.length > 0 ? hostPages : input.contract.business.intentBindings
+    const componentPages = component.targetType === 'form' && hostPages.length > 0 ? hostPages : [...hostPages, ... input.contract.business.intentBindings
       .filter((binding) => binding.componentInstanceId === component.runtime.instanceId)
-      .map((binding) => pages.find((page) => page.route === binding.route)).filter((page) => !!page);
+      .map((binding) => pages.find((page) => page.route === binding.route)).filter((page) => !!page)];
     const uniquePages = [...new Map(componentPages.map((page) => [page!.id, page!])).values()];
     const componentSources = uniquePages.filter((page) => files[page!.filePath]?.trim()).map((page) => {
       const surface = collectLocalImportClosure(files, page.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path));
