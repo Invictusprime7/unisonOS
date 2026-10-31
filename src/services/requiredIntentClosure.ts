@@ -96,7 +96,7 @@ function renderIntentForm(intent: string): string {
         `\n          <label className="flex flex-col gap-1 text-sm text-muted-foreground"><span>${field.label}</span><input type="${field.type}" name="${field.name}" required className="rounded-md border border-border bg-background px-3 py-2 text-foreground" /></label>`,
     )
     .join('');
-  return `\n      <section className="mt-8" data-ut-generated-intent="${intent}">\n        <form data-ut-intent="${intent}" data-intent="${intent}" className="mx-auto flex w-full max-w-md flex-col gap-3">\n          <h2 className="text-lg font-semibold text-foreground">${spec.title}</h2>${fields}\n          <button type="submit" data-ut-intent="${intent}" data-intent="${intent}" className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-6 py-3 text-primary-foreground shadow transition hover:opacity-90">${labelForIntent(intent)}</button>\n        </form>\n      </section>\n`;
+  return `\n      <section className="mt-8" data-ut-generated-intent="${intent}">\n        <form data-intent-form="${intent}" data-demo-form="true" data-ut-intent="${intent}" data-intent="${intent}" className="mx-auto flex w-full max-w-md flex-col gap-3">\n          <h2 className="text-lg font-semibold text-foreground">${spec.title}</h2>${fields}\n          <button type="submit" data-ut-intent="${intent}" data-intent="${intent}" className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-6 py-3 text-primary-foreground shadow transition hover:opacity-90">${labelForIntent(intent)}</button>\n        </form>\n      </section>\n`;
 }
 
 function injectIntentSurface(source: string, intent: string): string | null {
