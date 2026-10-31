@@ -284,6 +284,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
     { priority: 1, text: 'AI ENRICHMENT: author business-specific copy, complete object collections, purposeful media and working interactions through the registered contracts. The deterministic starter is not an AI response: do not retain baseline filler, generic field substitutions or empty sections. Preserve every planned section, including repeated families, in the planned order. CTA sections need specific, business-worded headlines and actions, never generic "Get started" copy. Platform projection wires objects; it never supplies missing creative content.' },
     { priority: 1, text: registeredComponentBlueprints(pageId) },
+    { priority: 3, text: registeredComponentTemplates(pageId) },
     { priority: 1, text: modules },
     { priority: 2, text: `PAGE DESIGN FIT: ${designSources.implementations.filter(impl => !pageId || designSources.eligibleByPage[pageId]?.includes(impl.implementationId))
       .map(impl => `${impl.implementationId}: ${impl.visualSignature ? `${impl.visualSignature.geometry}, ${impl.visualSignature.mediaDominance} media, ${impl.visualSignature.density}` : impl.name}`).join('; ')}. Variants are listed best-fit first per family. Choose designs that realize the target geometry and media dominance, and do not reuse one variant for different sections of a page or repeat the previous page's choices when another listed variant fits.` },
