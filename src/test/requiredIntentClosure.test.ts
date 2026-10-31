@@ -17,14 +17,31 @@ describe('closeRequiredIndustryIntents', () => {
     expect(result.slice(0, result.indexOf('export default'))).toBe(source.slice(0, source.indexOf('export default')));
     expect(result.indexOf('data-ut-generated-intent')).toBeGreaterThan(result.indexOf('<SiteLayout>'));
   });
-  it.each(HARDENED_INDUSTRIES)('closes every required renderable intent for %s', (industry) => {
+  it.each(HARDENED_INDUSTRIES)('closes every required renderable intent for %s with at most one lead form', (industry) => {
     const result = closeRequiredIndustryIntents({ '/src/pages/Home.tsx': page }, industry);
     const source = result.files['/src/pages/Home.tsx'];
+    const lead = new Set(['contact.submit', 'lead.capture', 'quote.request']);
+    const required = INDUSTRY_INTENT_PROFILES[industry].required.filter((intent) => intent !== 'nav.goto');
 
     expect(result.missing).toEqual([]);
-    for (const intent of INDUSTRY_INTENT_PROFILES[industry].required.filter((intent) => intent !== 'nav.goto')) {
+    for (const intent of required.filter((intent) => !lead.has(intent))) {
       expect(source).toContain(`data-ut-intent="${intent}"`);
     }
+    if (required.some((intent) => lead.has(intent))) {
+      expect(required.filter((intent) => lead.has(intent)).some((intent) => source.includes(`data-intent-form="${intent}"`))).toBe(true);
+    }
+    expect((source.match(/data-intent-form="(?:contact\.submit|lead\.capture|quote\.request)"/g) ?? []).length).toBeLessThanOrEqual(1);
+    // Inside <main>, never after the shared footer.
+    expect(source.lastIndexOf('data-ut-generated-intent')).toBeLessThan(source.lastIndexOf('</main>'));
+  });
+
+  it('never adds a lead form when a certified Contact design already renders one', () => {
+    const contact = 'import SectionContact from "@/unison/design-sources/Contact";\nexport default function Contact(){return <><main><section data-ut-section-type="contact"><SectionContact props={{"submitIntent":"contact.submit"}} /></section></main><SiteFooter /></>}';
+    const result = closeRequiredIndustryIntents({ '/src/pages/Home.tsx': page, '/src/pages/Contact.tsx': contact }, 'portfolio');
+    expect(result.injected).not.toContain('lead.capture');
+    expect(result.injected).not.toContain('contact.submit');
+    expect(result.files['/src/pages/Contact.tsx']).toBe(contact);
+    expect(Object.values(result.files).join('\n')).not.toContain('Get started');
   });
 
   it('is idempotent for an already-closed ecommerce page', () => {

@@ -911,6 +911,9 @@ describe('UnisonAppBuilder facade', () => {
     expect(contactPage).toContain('"name":"project_details","type":"text","placeholder":"Project details","label":"Project details","required":true');
     expect(contactPage).toContain('"name":"budget"');
     expect(contactPage.match(/<form\b/g)).toBeNull();
+    // No raw intent-key button beside the form it would only repeat.
+    expect(contactPage).not.toContain('{"contact"}');
+    expect(result.candidate.closure?.issues.some((issue) => issue.code === 'registered-component-native-form-incomplete')).toBe(false);
     expect(result.candidateFiles['/.unison/compositions/pages/Home.json']).toBeDefined();
   });
 
