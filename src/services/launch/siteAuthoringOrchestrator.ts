@@ -34,7 +34,6 @@ import {
 import {
   createSiteVisualMemory,
   extractCompositionSignature,
-  findRedundancy,
   planSiteComposition,
   renderCompositionBrief,
   type RedundancyIssue,
@@ -382,7 +381,8 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
     } else {
       loop = await runLoop(firstRequest);
     }
-    // Redundancy check: one targeted recomposition when this page repeats another page's topology.
+    // Cosmetic repetition is reported by final closure, never another paid
+    // full-page turn. The sealed planner already assigns distinct page jobs.
     const terminalPageFailure = ['credits', 'denied', 'rate_limited', 'provider', 'invalid_response'].includes(loop.reason)
       || (loop.reason === 'aborted' && !authoringController.signal.aborted);
     if (terminalPageFailure) {
@@ -390,13 +390,6 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       stopTriggeredByPageIndex = index;
       if (!authoringController.signal.aborted) {
         authoringController.abort(new DOMException(`Page authoring stopped after ${loop.reason}.`, 'AbortError'));
-      }
-    }
-    if (!cached && loop.ok && loop.prepared && now() < deadline) {
-      const issue = findRedundancy(page.pageId, extractCompositionSignature(loop.prepared.nextFiles[page.filePath]), visualMemory.entries());
-      if (issue) {
-        const retry = await runLoop(await buildRequest(issue));
-        if (retry.ok && retry.prepared) loop = retry;
       }
     }
     if (!loop.ok || !loop.prepared) {

@@ -844,6 +844,43 @@ describe('UnisonAppBuilder facade', () => {
     expect(home).toContain('data-ut-path="/the-house"');
   });
 
+  it('finalizes multiple pages with pending contact wiring without another AI repair', async () => {
+    const appContract = contract('portfolio', ['home', 'contact']);
+    appContract.business.capabilities = ['contact'];
+    appContract.business.intents = ['contact.submit'];
+    appContract.business.registeredComponents = [{
+      runtime: { instanceId: 'cmp-pending', componentSlug: 'contact-form', usedOnPages: ['page-contact'],
+        requiredCapabilities: ['contact'], catalogSurfaces: [], writeIntent: 'contact.submit', slotBindings: ['form-submit'],
+        status: 'blocked', blockers: ['Missing component binding: formId.'] },
+      label: 'Contact', targetType: 'form', instanceStatus: 'ready', bindings: {}, requiredBindingKeys: ['formId'],
+      requiredNativeFormFields: ['name', 'email', 'message'], requiredBusinessFields: [], requiredSetupSteps: [],
+      nativeComponentTemplate: '<section data-ut-component-slug="contact-form"><form data-intent-form="contact.submit"><input name="name" required /><input type="email" name="email" required /><textarea name="message" required></textarea><button type="submit" data-intent-trigger="contact.submit">Send</button></form></section>',
+      formFields: [
+        { fieldId: 'field_F0EFea', label: 'Project details', type: 'text', required: true, sortOrder: 4 },
+        { fieldId: 'field_lBxDTO', label: 'Budget', type: 'number', required: true, sortOrder: 5 },
+      ],
+    }];
+    appContract.business.intentBindings = [{ bindingId: 'pending-contact', pageId: 'page-contact', route: '/contact',
+      sourceSection: 'contact', sourceSlot: 'form-submit', coreIntent: 'contact.submit', domIntent: 'contact.submit',
+      ctaMarkers: ['cta.contact'], intentHandler: 'site-runtime', targetType: 'form', targetId: 'form-pending',
+      requiredCapabilities: ['contact'], missingCapabilities: [], componentInstanceId: 'cmp-pending', componentSlug: 'contact-form', componentWriteIntent: 'contact.submit' }];
+    const runComposer = vi.fn();
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: scaffoldAuthoredPages(appContract, {}, input.files),
+      outcomes: input.pages.map(page => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
+    }));
+    const result = await createTestBuilder({ authorSite, runComposer }).generate({ operationId: 'pending-multi-page',
+      contract: appContract, initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null });
+    expect(result.stopReason, JSON.stringify(result.candidate.diagnostics)).toBe('complete');
+    expect(result.candidate.status).toBe('ready-for-commit');
+    expect(runComposer).not.toHaveBeenCalled();
+    expect(result.candidate.closure?.issues).toContainEqual(expect.objectContaining({ severity: 'advisory', code: 'registered-component-not-ready' }));
+    expect(result.candidate.diagnostics.join(' ')).toContain('Missing component binding: formId.');
+    expect(result.candidateFiles['/src/pages/Contact.tsx']).toContain('name="field_F0EFea" required');
+    expect(result.candidateFiles['/src/pages/Contact.tsx']).toContain('name="field_lBxDTO" required');
+    expect(result.candidateFiles['/.unison/compositions/pages/Home.json']).toBeDefined();
+  });
+
   it('normalizes registered section dispatchers before per-page candidate gates run', async () => {
     const appContract = contract();
     const registryContext = buildWizardAggregatedRegistryContext({

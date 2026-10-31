@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: Efficient multi-page finalization and selected contact fields
+- [x] Remove cosmetic full-page re-authoring, exclude provisioning/contract issues from paid repairs and require a usable correction window; retain existing exact-request provisional checkpoints, never accept unfinished page source.
+- [x] Finalize pending operational component bindings with explicit draft advisories exposed in launch progress; ready binding markers, ownership, native submission correctness, render safety and publish gates remain enforced.
+- [x] Repair registered native forms by JSX source spans before closure, including required selected fields field_F0EFea and field_lBxDTO; 127 focused checks plus 124 neighboring checks (34 overlapping) and both authority lints pass. Preview build OK. No paid live generation or delivery test performed.
+- [ ] Verify live multi-page generation → save → reopen and contact delivery; requires authoritative UNISON session/deployment.
+
 ## Active: Visit-page save classification
 - [x] Shared route aliases classify informational Visit pages as contact; explicit role/type takes precedence over route inference. Saved authored source and renderability checks remain unchanged.
 - [x] All 20 role/compilation/launch regressions and both authority lints pass; preview build OK. Saved Visit source survives recompile and /visit remains in the router.

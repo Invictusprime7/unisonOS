@@ -14,6 +14,11 @@ const files = {
 const issue = (path?: string) => ({ severity: 'blocker', code: 'layout', path, message: 'Layout check failed.' });
 
 describe('final-check repair ownership', () => {
+  it('does not spend AI requests on registration or connection setup', () => {
+    const issues = ['registered-component-not-ready', 'intent-binding-component-unregistered', 'intent-binding-guide-missing']
+      .map(code => ({ ...issue('/src/pages/Contact.tsx'), code }));
+    expect(closureRepairTargets(files, pages, issues)).toEqual([]);
+  });
   it('targets the failing page rather than all completed pages', () => {
     expect(closureRepairTargets(files, pages, [issue('/src/pages/Contact.tsx')]))
       .toEqual([{ page: pages[1], target: '/src/pages/Contact.tsx', diagnostics: ['layout (/src/pages/Contact.tsx): Layout check failed.'] }]);

@@ -14,6 +14,13 @@ function component(): AppBuildRegisteredComponent {
 }
 
 describe('selected native contact form contract', () => {
+  it.each(['field_F0EFea', 'field_lBxDTO'])('renders selected required field %s in the native form', (fieldId) => {
+    const contact = component();
+    contact.formFields = [{ fieldId, label: 'Selected business field', type: 'text', required: true, sortOrder: 4 }];
+    const source = selectedNativeFormTemplate(contact) ?? '';
+    expect(missingNativeFormFields(source, contact)).toEqual([]);
+    expect(missingNativeFormFields(source.replace(`name="${fieldId}"`, 'name="other"'), contact)).toEqual([fieldId]);
+  });
   it('preserves required name, email, message and the selected budget field', () => {
     const contact = component();
     const source = selectedNativeFormTemplate(contact) ?? '';

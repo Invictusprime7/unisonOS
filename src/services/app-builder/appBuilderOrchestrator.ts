@@ -23,6 +23,7 @@ import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import { sectionSiteBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 import { closureRepairTargets } from './closureRepairTargets';
+import { isBindingOperationallyPending } from './bindingAvailability';
 
 export interface AppBuilderOrchestratorDependencies {
   authorSite: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
@@ -90,7 +91,7 @@ export async function orchestrateAppBuild(
   let latestSectionMaterialization: AppBuilderSectionMaterializationResult | undefined;
   let closureRepairFailure: { reason: ComposerStopReason; errors: string[] } | undefined;
   const markerRequirements = input.contract.business.intentBindings
-    .filter((binding) => binding.missingCapabilities.length === 0 && binding.ctaMarkers.length > 0)
+    .filter((binding) => !isBindingOperationallyPending(input.contract, binding) && binding.ctaMarkers.length > 0)
     .map((binding) => {
       const targetPage = binding.targetType === 'page'
         ? input.contract.topology.pageRegistry.pages[binding.targetId]
@@ -346,7 +347,8 @@ export async function orchestrateAppBuild(
     .map((issue) => issue.message);
   const surfacedDiagnostics = terminalAuthoringFailure
     ? authorDiagnostics
-    : [...(closureRepairFailure?.errors ?? []), ...authorDiagnostics, ...closureDiagnostics];
+    : [...(closureRepairFailure?.errors ?? []), ...authorDiagnostics, ...closureDiagnostics,
+      ...closure.issues.filter(issue => issue.severity === 'advisory').map(issue => issue.message)];
   const strategy = generationMode === 'deterministic'
     ? 'deterministic-scaffold' as const
     : compatibilityMode
