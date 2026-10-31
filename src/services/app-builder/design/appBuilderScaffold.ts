@@ -60,7 +60,7 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
       const hostedHere = binding.componentInstanceId && contract.business.registeredComponents.some((component) =>
         component.runtime.instanceId === binding.componentInstanceId && component.runtime.usedOnPages.includes(pageId));
       if (hostedHere && binding.targetType !== 'page' && binding.targetType !== 'url') return [];
-      const label = binding.sourceLabel?.trim() || ACTION_LABELS[binding.coreIntent] || sentence(marker.slice(marker.indexOf('.') + 1).replace(/[-._]+/g, ' '));
+      const label = binding.sourceLabel?.trim() || ACTION_LABELS[binding.coreIntent] || marker.slice(marker.indexOf('.') + 1).replace(/[-._]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
       const jsxLabel = `{${JSON.stringify(label)}}`;
       const accessibleName = marker.startsWith('icon.') ? ` aria-label=${JSON.stringify(label)}` : '';
       const isNavigation = binding.domIntent === 'nav.goto';
