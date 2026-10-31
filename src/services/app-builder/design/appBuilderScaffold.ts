@@ -180,19 +180,22 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
       if (array) {
         const [, name, optional, fieldHint] = array;
         if (optional && !content.items.length) continue;
-        const fields = (fieldHint ?? '').split('|').map((field) => field.replace(/\?$/, '')).filter(Boolean);
-        props[name] = content.items.map((item, index) => Object.fromEntries(fields.map((field) => {
-          const value = propValue(field, content, contract, headingLevel, imageUrl);
-          if (value !== undefined) return [field, value];
-          if (['title', 'name', 'label'].includes(field)) return [field, item.title];
-          if (['description', 'text', 'answer'].includes(field)) return [field, item.description];
-          if (['question'].includes(field)) return [field, `What should visitors know about ${contract.business.businessName}?`];
-          if (['quote'].includes(field)) return [field, 'Owner-provided testimonial goes here.'];
-          if (['author'].includes(field)) return [field, 'Owner-provided'];
-          if (['alt', 'caption'].includes(field)) return [field, `${item.title} for ${contract.business.businessName}`];
-          if (['value'].includes(field)) return [field, `Add ${index + 1}`];
-          if (['src', 'image', 'imageUrl', 'url'].includes(field) && imageUrl) return [field, imageUrl];
-          return [field, item.description];
+        // Links, buttons, stats and similar lists need owner-approved values; never fill them with filler copy.
+        if (['ctas', 'actions', 'stats', 'badges', 'logos', 'links', 'columns', 'socials', 'fields'].includes(name)) continue;
+        const fields = (fieldHint ?? '').split('|').filter(Boolean);
+        props[name] = content.items.map((item, index) => Object.fromEntries(fields.flatMap((rawField) => {
+          const field = rawField.replace(/\?$/, '');
+          const isOptional = rawField.endsWith('?');
+          if (['title', 'name', 'label'].includes(field)) return [[field, item.title]];
+          if (['description', 'text', 'answer', 'body'].includes(field)) return [[field, item.description]];
+          if (['question'].includes(field)) return [[field, `What should visitors know about ${contract.business.businessName}?`]];
+          if (['quote'].includes(field)) return [[field, 'Owner-provided testimonial goes here.']];
+          if (['author'].includes(field)) return [[field, 'Owner-provided']];
+          if (['alt', 'caption'].includes(field)) return [[field, `${item.title} for ${contract.business.businessName}`]];
+          if (['value'].includes(field)) return [[field, `Add ${index + 1}`]];
+          if (['src', 'image', 'imageUrl', 'url'].includes(field)) return imageUrl ? [[field, imageUrl]] : [];
+          if (isOptional) return [];
+          return [[field, item.description]];
         })));
         continue;
       }
