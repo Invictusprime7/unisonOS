@@ -9,13 +9,13 @@ import { hsl, hsla } from '../../themeUtils';
 
 export const ContactMinimalInline: React.FC<BaseSectionProps<'contact'>> = ({ section, theme }) => {
   const { headline, description, fields, submitLabel = 'Send', submitIntent = 'contact.submit', phone, email, address } = section.props;
-  const formFields = fields?.length ? fields.slice(0, 2) : [
+  const formFields = fields?.length ? fields : [
     { name: 'email', type: 'email', placeholder: 'your@email.com' },
     { name: 'message', type: 'text', placeholder: 'Message' },
   ];
 
   const inputStyle: React.CSSProperties = {
-    flex: 1,
+    flex: '1 1 12rem',
     padding: '0.65rem 0.85rem',
     borderRadius: theme.radius,
     border: `1px solid ${hsla(theme.colors.border, 0.8)}`,
@@ -56,11 +56,11 @@ export const ContactMinimalInline: React.FC<BaseSectionProps<'contact'>> = ({ se
         <form
           data-demo-form="true"
           data-ut-intent={submitIntent}
-          className="mb-6 flex flex-col gap-3 sm:flex-row"
+          className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap"
           style={{ maxWidth: '36rem', margin: '0 auto' }}
         >
           {formFields.map((field) => (
-            <input key={field.name} name={field.name} type={field.type || 'text'} placeholder={field.placeholder || field.name} required={field.required} style={inputStyle} />
+            <input key={field.name} name={field.name} type={field.type || 'text'} placeholder={field.placeholder || field.label || field.name} aria-label={field.label || field.name} required={field.required} style={inputStyle} />
           ))}
           <button data-ut-intent="contact.submit"
             type="submit"
