@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Starter completeness and AI enrichment separation
+- [ ] Enforce sealed page archetypes, legal variants and every planned section in builds without AI, preserving repeated sections and objects.
+- [ ] Prevent AI authoring from accepting or projecting untouched starter sections as AI-enriched output.
+- [ ] Run focused generation regressions and render checks; report any live generation/session limitation.
+
 ## Active: Remaining App Builder intent wiring
 - [x] Native contact/lead/quote/newsletter CTAs focus their form instead of dispatching empty submissions; missing forms show a warning. Booking validates native fields, prevents in-flight duplicate submissions and requires explicit backend acknowledgment. Runtime sessions are site-scoped; unhandled intent-exec actions fail instead of falsely claiming completion. No shared enquiry recipient configured.
 - [x] 63 runtime/contract checks and 139 isolated edge checks pass; both authority lints and preview build OK. Existing contact/quote CRM metadata already preserves custom answers; no extra storage pipeline added.
