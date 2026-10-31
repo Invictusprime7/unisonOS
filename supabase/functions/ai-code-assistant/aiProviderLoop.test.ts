@@ -57,6 +57,46 @@ test('Unison cancellation interrupts Gemini cooldown without replay', async () =
   });
 });
 
+test('Unison bounds repeated Gemini 429s to two requests', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test' }, async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response('rate limited', { status: 429, headers: { 'retry-after': '0.001' } });
+    }) as typeof fetch;
+    const result = await runProviderLoop({ aiMessages: messages, providerPlan: hybridPlan, navPageGen: false });
+    assert(result.earlyError?.status === 429 && calls === 2, 'one retry only, with no hidden transport retry');
+  });
+});
+
+test('Unison native Gemini helper honors cooldown and remains direct', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test' }, async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return calls === 1
+        ? new Response('rate limited', { status: 429, headers: { 'retry-after': '0.001' } })
+        : new Response(JSON.stringify({ choices: [{ message: { content: 'Native recovered' } }] }));
+    }) as typeof fetch;
+    const result = await runProviderLoop({ aiMessages: messages, providerPlan: { ...hybridPlan, gatewayModels: [] }, navPageGen: false });
+    assert(result.providerUsed === 'gemini' && result.content === 'Native recovered' && calls === 2, 'native helper should recover once');
+  });
+});
+
+test('Unison uses configured backup rather than shortening a long Gemini cooldown', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      return String(url).includes('googleapis')
+        ? new Response('rate limited', { status: 429, headers: { 'retry-after': '120' } })
+        : new Response(JSON.stringify({ choices: [{ message: { content: 'Backup recovered' } }] }));
+    }) as typeof fetch;
+    const result = await runProviderLoop({ aiMessages: messages, providerPlan: hybridPlan, navPageGen: false, totalBudgetMs: 60000 });
+    assert(result.providerUsed === 'lovable' && calls.length === 2 && calls[0].includes('googleapis') && calls[1].includes('lovable'), 'direct first, backup only after refusal');
+  });
+});
+
 test('Composer image references survive provider fallback and format repair end to end', async () => {
   await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
     const data = 'data:image/png;base64,aGVsbG8=';
