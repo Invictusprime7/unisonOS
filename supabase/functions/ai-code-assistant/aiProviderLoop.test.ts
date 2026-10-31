@@ -12,6 +12,91 @@ import { isPageDesignRequest } from '../_shared/catalogTools.ts';
 import { buildResponseBody } from '../_shared/responseNormalizer.ts';
 import { runComposerLane } from './composerLane.ts';
 
+test('Unison retries a refused Gemini request once after its explicit cooldown', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test' }, async () => {
+    const starts: number[] = [];
+    globalThis.fetch = (async () => {
+      starts.push(Date.now());
+      return starts.length === 1
+        ? new Response('{"error":{"message":"requests per minute exceeded"}}', { status: 429, headers: { 'retry-after': '0.02' } })
+        : new Response(JSON.stringify({ choices: [{ message: { content: 'Recovered batch' } }] }));
+    }) as typeof fetch;
+    const result = await runProviderLoop({ aiMessages: messages, providerPlan: hybridPlan, navPageGen: false });
+    assert(result.content === 'Recovered batch' && result.providerUsed === 'gemini', 'same Gemini provider must recover');
+    assert(starts.length === 2 && starts[1] - starts[0] >= 20, 'no immediate or nested retry');
+  });
+});
+
+test('Unison preserves rate-limit refusal when cooldown cannot fit a usable request window', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test' }, async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response('{"error":{"message":"requests per minute exceeded"}}', { status: 429, headers: { 'retry-after': '120' } });
+    }) as typeof fetch;
+    const result = await runProviderLoop({ aiMessages: messages, providerPlan: hybridPlan, navPageGen: false, totalBudgetMs: 60000 });
+    assert(result.earlyError?.status === 429 && calls === 1, 'cooldown must remain a 429, not a timeout or early replay');
+  });
+});
+
+test('Unison cancellation interrupts Gemini cooldown without replay', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test' }, async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response('rate limited', { status: 429, headers: { 'retry-after': '10' } });
+    }) as typeof fetch;
+    const timer = setTimeout(() => controller.abort(new DOMException('Cancelled', 'AbortError')), 10);
+    try {
+      await runProviderLoop({ aiMessages: messages, providerPlan: hybridPlan, navPageGen: false, signal: controller.signal });
+      throw new Error('Cancellation ignored');
+    } catch (error) {
+      assert(error instanceof Error && error.name === 'AbortError' && calls === 1, 'cancelled wait must not replay Gemini');
+    } finally { clearTimeout(timer); }
+  });
+});
+
+test('Unison bounds repeated Gemini 429s to two requests', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test' }, async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response('rate limited', { status: 429, headers: { 'retry-after': '0.001' } });
+    }) as typeof fetch;
+    const result = await runProviderLoop({ aiMessages: messages, providerPlan: hybridPlan, navPageGen: false });
+    assert(result.earlyError?.status === 429 && calls === 2, 'one retry only, with no hidden transport retry');
+  });
+});
+
+test('Unison native Gemini helper honors cooldown and remains direct', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test' }, async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return calls === 1
+        ? new Response('rate limited', { status: 429, headers: { 'retry-after': '0.001' } })
+        : new Response(JSON.stringify({ choices: [{ message: { content: 'Native recovered' } }] }));
+    }) as typeof fetch;
+    const result = await runProviderLoop({ aiMessages: messages, providerPlan: { ...hybridPlan, gatewayModels: [] }, navPageGen: false });
+    assert(result.providerUsed === 'gemini' && result.content === 'Native recovered' && calls === 2, 'native helper should recover once');
+  });
+});
+
+test('Unison uses configured backup rather than shortening a long Gemini cooldown', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      return String(url).includes('googleapis')
+        ? new Response('rate limited', { status: 429, headers: { 'retry-after': '120' } })
+        : new Response(JSON.stringify({ choices: [{ message: { content: 'Backup recovered' } }] }));
+    }) as typeof fetch;
+    const result = await runProviderLoop({ aiMessages: messages, providerPlan: hybridPlan, navPageGen: false, totalBudgetMs: 60000 });
+    assert(result.providerUsed === 'lovable' && calls.length === 2 && calls[0].includes('googleapis') && calls[1].includes('lovable'), 'direct first, backup only after refusal');
+  });
+});
+
 test('Composer image references survive provider fallback and format repair end to end', async () => {
   await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
     const data = 'data:image/png;base64,aGVsbG8=';

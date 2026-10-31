@@ -23,7 +23,7 @@ import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import { selectSourceKnowledge } from '@/services/builder/sourceKnowledgeContext';
 import { isImageLedRole, verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
-import { createSectionAuthoringInvoke, partitionPageSections, sectionPageBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
+import { createSectionAuthoringInvoke, DEFAULT_PAGE_AUTHORING_CONCURRENCY, partitionPageSections, sectionPageBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import {
   extractHomepageVisualLanguage,
@@ -88,7 +88,7 @@ export interface SiteAuthoringInput {
   /** Total wall-clock budget; pages past it keep their baseline. */
   budgetMs?: number;
   maxPages?: number;
-  /** Pages authored in parallel after Home (default 3). */
+  /** Pages authored in parallel after Home (default 1 for shared Gemini quota). */
   concurrency?: number;
   signal?: AbortSignal;
   invoke?: ComposerInvoke;
@@ -204,8 +204,8 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
   const now = input.now ?? (() => Date.now());
   const candidateOrigin = input.candidateOrigin ?? 'wizard';
   const deadline = now() + (input.budgetMs ?? 240_000);
-  // Default: after Home, write up to 4 pages at once — fast, within the shared rate limit.
-  const concurrency = Math.max(1, Math.floor(input.concurrency ?? 4));
+  // Avoid multiplying token/request bursts against the owner's shared Gemini quota.
+  const concurrency = Math.max(1, Math.floor(input.concurrency ?? DEFAULT_PAGE_AUTHORING_CONCURRENCY));
   const ordered = orderAuthoringPages(input.pages, input.homePageId).slice(0, input.maxPages ?? Infinity);
   const routes = [...(input.existingRoutes ?? []), ...ordered.map((p) => ({ title: p.title, route: p.route }))];
   let files = input.files;

@@ -23,7 +23,8 @@ describe('bounded page-section authoring', () => {
   it('sizes a page for all batches and site for Home plus parallel waves', () => {
     const order = ['hero', 'services', 'gallery', 'testimonials', 'cta'];
     expect(sectionPageBudgetMs(order)).toBe(255_000);
-    expect(sectionSiteBudgetMs([order, order, order, order, order])).toBe(585_000);
+    expect(sectionSiteBudgetMs([order, order, order, order, order])).toBe(1_350_000);
+    expect(sectionSiteBudgetMs([order, order, order, order, order], 4)).toBe(585_000);
   });
   it('resumes only the failed batch across invoke instances without changing accepted files', async () => {
     const first = 'export default function Home(){return <main><section>Paid hero</section></main>}';

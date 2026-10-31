@@ -19,6 +19,23 @@ const bad = (path: string) => ({ data: { content: JSON.stringify({ summary: 'x',
 const request = { task: 'site_page_author' as const, page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' }, brief: 'b', files: base, routes: [] };
 
 describe('AI composer repair loop', () => {
+  it('defaults to one Gemini page request at a time and retains completed Home', async () => {
+    const pages = ['Home', 'About', 'Contact', 'Shop'].map((title, index) => ({ pageId: title.toLowerCase(), title, route: index ? `/${title.toLowerCase()}` : '/', filePath: `/src/pages/${title}.tsx`, role: title.toLowerCase() }));
+    let active = 0;
+    let peak = 0;
+    const invoke = vi.fn(async (input: { messages: Array<{ content: string }> }) => {
+      active++;
+      peak = Math.max(peak, active);
+      const request = JSON.parse(input.messages[0].content);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      active--;
+      return good(request.page.filePath, request.page.title);
+    });
+    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null, businessName: 'Serial quota test', files: base, budgetMs: 900000, invoke: invoke as never, commitPage: async files => ({ files }) });
+    expect(peak).toBe(1);
+    expect(result.outcomes.map(outcome => outcome.status)).toEqual(['authored', 'authored', 'authored', 'authored']);
+    expect(result.files['/src/pages/Home.tsx']).toContain('Home');
+  });
   it('gives full-page prompts the minimum viable generation window', async () => {
     const pages = ['Home', 'About', 'Contact', 'Gallery', 'Shop'].map((title, index) => ({ pageId: title.toLowerCase(), title, route: index ? `/${title.toLowerCase()}` : '/', filePath: `/src/pages/${title}.tsx`, role: title.toLowerCase() }));
     const invoke = vi.fn(async (input: { messages: Array<{ content: string }> }, _options: { timeoutMs: number }) => {

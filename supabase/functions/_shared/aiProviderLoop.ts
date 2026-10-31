@@ -15,6 +15,7 @@ import type { ChatCompletionRequest, ChatMessage } from "../_shared/ai/providerC
 import type { ModelSpec } from './providerRouter.ts';
 import { DEFAULT_GEMINI_GATEWAY_MODEL, configuredComposerGeminiModel } from './geminiModel.ts';
 import type { GuestDemoUsageMeter } from './guestDemo.ts';
+import { rateLimitDelayMs, waitForRateLimit } from './ai/rateLimitRetry.ts';
 
 export interface ProviderEarlyError {
   status: number;
@@ -293,6 +294,16 @@ export async function runProviderLoop(opts: {
       throw signal.reason instanceof Error ? signal.reason : new DOMException('Request aborted', 'AbortError');
     }
   };
+  const retryGeminiRateLimit = async (response: Response, body: string, retryNo: number): Promise<boolean> => {
+    if (guestOnly || retryNo >= 1) return false;
+    const delayMs = rateLimitDelayMs(response.headers, body, retryNo);
+    // Never shorten Google's cooldown or leave only a doomed generation slice.
+    if (budgetRemaining() - delayMs - lastResortReserveMs - 2000 < Math.min(30_000, providerPlan.perModelTimeoutMs)) return false;
+    console.warn(`[AI-Hybrid] Gemini rate limited; waiting ${delayMs}ms before one bounded retry`);
+    await waitForRateLimit(delayMs, signal);
+    throwIfCancelled();
+    return true;
+  };
 
   // ── Direct Gemini API helper ──────────────────────────────────────────
   // Gemini 3.8 Flash supports 65 536 output tokens for large wizard seeds.
@@ -309,7 +320,9 @@ export async function runProviderLoop(opts: {
       { id: configuredComposerGeminiModel(), maxTokens: Math.min(providerPlan.fallbackMaxTokens, 65_536), label: 'Gemini 3.8 Flash' },
     ];
 
-    for (const model of geminiModels) {
+    let rateRetries = 0;
+    for (let modelIndex = 0; modelIndex < geminiModels.length; modelIndex++) {
+      const model = geminiModels[modelIndex];
       throwIfCancelled();
       const remaining = budgetRemaining();
       if (remaining < 8000) {
@@ -318,9 +331,9 @@ export async function runProviderLoop(opts: {
         break;
       }
       const perModelMs = Math.min(providerPlan.perModelTimeoutMs, Math.max(8000, remaining - 2000));
+      const attempt = createAttemptSignal(perModelMs);
       try {
         console.log(`[AI-Hybrid] Trying ${role} ${model.label} (timeout: ${perModelMs / 1000}s, budget left: ${remaining / 1000}s)...`);
-        const attempt = createAttemptSignal(perModelMs);
 
         const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
           method: 'POST',
@@ -348,7 +361,12 @@ export async function runProviderLoop(opts: {
             console.warn(`[AI-Hybrid] ${model.label} quota/billing exhausted; abandoning Gemini for this turn.`);
             break;
           }
-          deferredEarlyError ??= { status: 429, error: 'Rate limit exceeded. Please try again later.' };
+          deferredEarlyError ??= { status: 429, error: 'Gemini is temporarily rate limited. Completed batches remain available in this tab; retry after the provider cooldown.' };
+          attempt.cleanup();
+          if (await retryGeminiRateLimit(resp, errText, rateRetries)) {
+            rateRetries++;
+            modelIndex--;
+          }
           console.warn(`[AI-Hybrid] ${model.label} returned ${resp.status}; trying next...`);
           continue;
         }
@@ -394,7 +412,7 @@ export async function runProviderLoop(opts: {
         break;
       } catch (err) {
         throwIfCancelled();
-        if (err instanceof Error && err.name === 'AbortError') {
+        if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
           console.warn(`[AI-Hybrid] ${model.label} timed out, trying next...`);
           recordProviderError(model.label, 'timeout');
           continue;
@@ -402,7 +420,7 @@ export async function runProviderLoop(opts: {
         console.warn(`[AI-Hybrid] ${model.label} failed:`, err);
         recordProviderError(model.label, err instanceof Error ? err.message : 'unknown');
         continue;
-      }
+      } finally { attempt.cleanup(); }
     }
   };
 
@@ -468,11 +486,8 @@ export async function runProviderLoop(opts: {
           deferredEarlyError = { status: 402, error: gatewayErrorMessage(errText) };
         }
         if (!transient || attemptNo === MAX_GATEWAY_ATTEMPTS) return;
-        const retryAfterSec = Number(resp.headers.get('retry-after'));
-        const backoffMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
-          ? retryAfterSec * 1000
-          : 1_500 * 2 ** (attemptNo - 1) + Math.floor(Math.random() * 750);
-        const waitMs = Math.min(backoffMs, 15_000);
+        attempt.cleanup();
+        const waitMs = rateLimitDelayMs(resp.headers, errText, attemptNo - 1);
         if (deadline - Date.now() - waitMs < 20_000) return; // no room left for a real generation
         console.warn(`[AI-Hybrid] ${label} returned ${resp.status}; retrying in ${Math.round(waitMs / 1000)}s`);
         await new Promise<void>((resolve, reject) => {
@@ -575,7 +590,9 @@ export async function runProviderLoop(opts: {
     const totalChars = aiMessages.reduce((sum, m) => sum + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length), 0);
     console.log(`[AI-Hybrid] Total prompt size: ${totalChars} chars across ${aiMessages.length} messages`);
     
-    for (const [modelIndex, model] of providerPlan.gatewayModels.entries()) {
+    let rateRetries = 0;
+    for (let modelIndex = 0; modelIndex < providerPlan.gatewayModels.length; modelIndex++) {
+      const model = providerPlan.gatewayModels[modelIndex];
       throwIfCancelled();
       if (geminiCooling()) geminiQuotaExhausted = true;
       if (geminiQuotaExhausted && isGeminiModelId(model.id)) {
@@ -648,14 +665,14 @@ export async function runProviderLoop(opts: {
           guestUsageReservation = { callId, inputTokenLimit, outputTokenLimit };
         }
 
-        const resp = await createPlannedChatCompletion(reqBody, attempt.signal, !guestOnly);
+        const resp = await createPlannedChatCompletion(reqBody, attempt.signal, false);
 
         if (resp.status === 429 || resp.status === 402) {
           const errText = await resp.text().catch(() => '');
           const detail = `${resp.status}${errText ? ` ${errText.substring(0, 200)}` : ''}`;
           const exhausted = isQuotaExhausted(errText) || resp.status === 402;
           const earlyError: ProviderEarlyError = resp.status === 429 && !exhausted
-            ? { status: 429, error: 'Rate limit exceeded. Please try again later.' }
+            ? { status: 429, error: 'Gemini is temporarily rate limited. Completed batches remain available in this tab; retry after the provider cooldown.' }
             : { status: 402, error: 'Payment required. Please add credits to your Google AI account.' };
           recordProviderError(model.label, detail);
           if (exhausted) {
@@ -664,6 +681,11 @@ export async function runProviderLoop(opts: {
             console.warn(`[AI-Hybrid] ${model.label} quota/billing exhausted; skipping all Gemini attempts this turn.`);
           }
           deferredEarlyError ??= earlyError;
+          attempt.cleanup();
+          if (!exhausted && await retryGeminiRateLimit(resp, errText, rateRetries)) {
+            rateRetries++;
+            modelIndex--;
+          }
           console.warn(`[AI-Hybrid] ${model.label} returned ${resp.status}; trying next provider...`);
           continue;
         }
