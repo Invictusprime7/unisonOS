@@ -4,6 +4,7 @@ import { runBuilderTurn } from '@/services/builderBrainClient';
 import { parse } from '@babel/parser';
 
 export const SECTION_PROVIDER_TIMEOUT_MS = 60_000;
+export const DEFAULT_PAGE_AUTHORING_CONCURRENCY = 1;
 const SECTION_TRANSPORT_RESERVE_MS = 5_000;
 const checkpoints = new Map<string, { files: Record<string, string>; responses: AIComposerResponse[]; lastData: Record<string, unknown>; savedAt: number }>();
 const MAX_CHECKPOINT_BYTES = 8_000_000;
@@ -14,7 +15,7 @@ export function sectionPageBudgetMs(sectionOrder: readonly string[]): number {
   return Math.max(150_000, partitionPageSections(sectionOrder).length * (SECTION_PROVIDER_TIMEOUT_MS + SECTION_TRANSPORT_RESERVE_MS) + 60_000);
 }
 
-export function sectionSiteBudgetMs(orders: readonly (readonly string[])[], concurrency = 4): number {
+export function sectionSiteBudgetMs(orders: readonly (readonly string[])[], concurrency = DEFAULT_PAGE_AUTHORING_CONCURRENCY): number {
   const windows = orders.map(sectionPageBudgetMs);
   let total = (windows[0] ?? 0) + 75_000;
   const workers = Math.max(1, Math.floor(concurrency));

@@ -377,5 +377,6 @@ export async function createLastResortGatewayChatCompletion(
   if (!hasLovableGatewayAccess()) {
     throw new Error("Managed AI gateway is not configured");
   }
-  return callChatCompletionTransport("lovable", request, signal);
+  // The provider loop owns gateway backoff; no hidden second retry chain.
+  return callChatCompletionTransport("lovable", request, signal, false);
 }
