@@ -153,11 +153,11 @@ export function missingContactDesignFields(source: string, component: AppBuildRe
   const form = contactDesignForms(source).find((candidate) => candidate.submitIntent === intent);
   if (!form) return null;
   const present = new Set(form.fieldNames);
-  const required = new Set(component.requiredNativeFormFields ?? []);
+  const missing = (component.requiredNativeFormFields ?? []).filter((name) => !present.has(name));
   for (const field of selectedNativeFormFields(component)) {
-    if (field.required && !present.has(field.fieldId)) required.add(field.name);
+    if (field.required && !present.has(field.name) && !present.has(field.fieldId) && !missing.includes(field.name)) missing.push(field.name);
   }
-  return [...required].filter((name) => !present.has(name));
+  return missing;
 }
 
 export function selectedNativeFormTemplate(component: AppBuildRegisteredComponent): string | undefined {
