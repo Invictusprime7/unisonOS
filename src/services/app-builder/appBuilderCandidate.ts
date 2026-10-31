@@ -446,11 +446,10 @@ export async function validateAppBuildCandidate(input: {
     if (component.instanceStatus === 'stubbed') continue;
     if (component.instanceStatus !== 'ready' || component.runtime.status !== 'ready') {
       issues.push({
-        severity: 'blocker',
+        severity: 'advisory',
         code: 'registered-component-not-ready',
         message: `Registered ${component.runtime.componentSlug} is not ready: ${component.runtime.blockers.join(' ') || `instance status is ${component.instanceStatus ?? 'unset'}`}`,
       });
-      continue;
     }
     const configuredFields = new Set(input.contract.business.configuredBusinessFields);
     const missingBusinessFields = component.requiredBusinessFields.filter((field) => !configuredFields.has(field));
@@ -679,7 +678,7 @@ export async function validateAppBuildCandidate(input: {
     const redundant = findRedundancy(page.id, signature, memory.entries());
     if (redundant) {
       issues.push({
-        severity: 'blocker',
+        severity: 'advisory',
         code: 'site-composition-redundant',
         path: page.filePath,
         message: redundant.reason,

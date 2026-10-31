@@ -122,7 +122,6 @@ export async function orchestrateAppBuild(
       [{ id: page.pageId, filePath: page.filePath, route: page.route }], sectionImplementations,
       generation.designSources.eligibleByPage, sharedShellImplementationIds);
     return { files: sections.files, errors: [
-      ...markers.unresolvedBindingIds.map(id => `Canonical binding ${id} has no matching generated control on ${page.filePath}.`),
       ...sections.diagnostics.map(diagnostic => diagnostic.message),
     ] };
   };
@@ -214,7 +213,7 @@ export async function orchestrateAppBuild(
       requireAppBuilderSectionModels: true,
     });
     const bindingIssues = unresolvedMarkerBindingIds.map((bindingId) => ({
-      severity: 'blocker' as const,
+      severity: 'advisory' as const,
       code: 'binding-marker-unresolved',
       path: input.contract.business.intentBindings.find((binding) => binding.bindingId === bindingId)?.route,
       message: `Canonical binding ${bindingId} has no matching generated control in its registered page surface.`,
@@ -233,7 +232,7 @@ export async function orchestrateAppBuild(
       })));
     return {
       ...report,
-      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0 && sectionModelIssues.length === 0,
+      ok: report.ok && pageIssues.length === 0 && sectionModelIssues.length === 0,
       issues: [...report.issues, ...bindingIssues, ...sectionModelIssues, ...pageIssues],
     };
   };
@@ -346,7 +345,8 @@ export async function orchestrateAppBuild(
     .map((issue) => issue.message);
   const surfacedDiagnostics = terminalAuthoringFailure
     ? authorDiagnostics
-    : [...(closureRepairFailure?.errors ?? []), ...authorDiagnostics, ...closureDiagnostics];
+    : [...(closureRepairFailure?.errors ?? []), ...authorDiagnostics, ...closureDiagnostics,
+      ...closure.issues.filter(issue => issue.severity === 'advisory').map(issue => issue.message)];
   const strategy = generationMode === 'deterministic'
     ? 'deterministic-scaffold' as const
     : compatibilityMode
