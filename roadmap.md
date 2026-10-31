@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Unison Gemini rate-limit recovery
+- [ ] Reduce default page request fan-out and align whole-site budgets with the same concurrency.
+- [ ] Honor Gemini Retry-After and Google retry metadata within the request deadline, without nested retries, billing retries or replaying timed-out work.
+- [ ] Run focused authoring/provider regressions; live recovery requires authoritative UNISON deployment/session. Uploaded report records a timeout, not a confirmed 429.
+
 ## Active: Efficient multi-page finalization and selected contact fields
 - [x] Remove cosmetic full-page re-authoring, exclude provisioning/contract issues from paid repairs and require a usable correction window; retain existing exact-request provisional checkpoints, never accept unfinished page source.
 - [x] Finalize pending operational component bindings with explicit draft advisories exposed in launch progress; ready binding markers, ownership, native submission correctness, render safety and publish gates remain enforced.
