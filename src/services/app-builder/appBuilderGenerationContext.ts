@@ -308,7 +308,8 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     contract,
     designSources,
     materialization,
-    runtimeContext: compose(renderDesignSourceModules(materialization)),
+    // Site-wide reference is not a request payload; only per-page context is budgeted.
+    runtimeContext: compose(renderDesignSourceModules(materialization), undefined, Number.POSITIVE_INFINITY),
     runtimeContextForPage: (pageId, budget) => compose(renderDesignSourceModules(materialization, new Set(designSources.eligibleByPage[pageId] ?? [])), pageId, budget),
   };
 }
