@@ -202,7 +202,7 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
   const pageId = page.id;
   const description = contract.business.businessProfile.description?.trim()
     || contract.business.parameters.description?.trim()
-    || `A starter page for ${contract.business.businessName}.`;
+    || contract.business.businessName;
   const actions = actionMarkup(contract, pageId);
     const importByFamily = new Map<string, string>();
     const occurrences = new Map<string, number>();
