@@ -516,9 +516,8 @@ export async function validateAppBuildCandidate(input: {
         const form = formPattern.exec(incompleteForm.source)?.[0] ?? '';
         const missingFields = missingNativeFormFields(form, component);
         issues.push({
-          // Advisory: strict native-form field validation forced paid repair
-          // rounds that pushed Gemini past its deadline.
-          severity: 'advisory',
+          // Missing field setup stays advisory; fabricated local success never does.
+          severity: /\bonSubmit\s*=/.test(form) ? 'blocker' : 'advisory',
           code: 'registered-component-native-form-incomplete',
           path: incompleteForm.page.filePath,
           message: `Render registered ${component.runtime.componentSlug} with native form data-intent-form="${writeIntent}"${missingFields.length ? ` and required fields ${missingFields.join(', ')}` : ''}; local submit handlers cannot claim success.`,

@@ -43,6 +43,22 @@ function scaffoldRegistry(contract: AppBuildContract) {
 }
 
 describe('deterministic App Builder scaffold', () => {
+  it('uses pinned variants and preserves repeated planned sections', () => {
+    const target = page('home', 'Home', '/', 'home', true);
+    const contract = { topology: { sitePlan: { pages: [target] }, pageRegistry: { pages: {} } },
+      business: { industry: 'salon', capabilities: [], businessName: 'Studio', businessProfile: {}, parameters: {}, intentBindings: [] },
+      design: { seed: 'stable', resolvedSiteDesignContext: { contract: { industry: 'salon' } } },
+    } as unknown as AppBuildContract;
+    const registry = scaffoldRegistry(contract);
+    registry.implementations['services:pinned'] = { ...registry.implementations['services:test'] };
+    registry.eligibleByPage.home.push('services:pinned');
+    contract.design.registryContext = { pinnedImplementationIdsByPage: { home: ['services:pinned'] } } as never;
+    contract.design.compositionPlan.pages[0].target.sectionOrder = ['hero', 'services', 'services', 'cta'];
+    const source = materializeDeterministicAppBuilderScaffold(contract, registry)[target.filePath];
+    expect(source.match(/data-ut-variant="services:pinned"/g)).toHaveLength(2);
+    expect(source.match(/data-ut-section-type="services"/g)).toHaveLength(2);
+    expect(materializeDeterministicAppBuilderScaffold(contract, registry)[target.filePath]).toBe(source);
+  });
   it('creates all canonical ecommerce pages and places active route/cart controls on their bound pages', () => {
     const pages = [
       page('home', 'Home', '/', 'home', true),

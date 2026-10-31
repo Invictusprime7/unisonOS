@@ -204,6 +204,17 @@ const createTestBuilder = (dependencies: Parameters<typeof createUnisonAppBuilde
   createUnisonAppBuilder({ loadContentTypes: async () => [], ...dependencies });
 
 describe('UnisonAppBuilder facade', () => {
+  it.each(['missing-outcomes', 'kept-baseline'])('never accepts valid starter source as completed AI authorship: %s', async mode => {
+    const appContract = contract();
+    const runComposer = vi.fn();
+    const result = await createTestBuilder({ runComposer, authorSite: async input => ({
+      files: scaffoldAuthoredPages(appContract, {}, input.files),
+      outcomes: mode === 'missing-outcomes' ? [] : [{ page: input.pages[0], status: 'kept-baseline', reason: 'gates_exhausted', attempts: 1, errors: [] }],
+    }) }).generate({ operationId: `authorship-${mode}`, contract: appContract, initialFiles: baseFiles, entryPoint: '/src/main.tsx' });
+    expect(result.candidate.status).toBe('rejected');
+    expect(result.candidate.closure.issues).toContainEqual(expect.objectContaining({ code: 'ai-page-not-authored' }));
+    expect(runComposer).not.toHaveBeenCalled();
+  });
   it('materializes a page-matched section sidecar through runtime for every canonical industry', () => {
     const industries = getAllIndustries();
     for (const profile of industries) {
