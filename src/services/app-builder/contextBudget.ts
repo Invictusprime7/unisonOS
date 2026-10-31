@@ -11,6 +11,8 @@ export interface ContextBlock {
   text: string;
   /** 1 = required for a correct page; larger numbers are dropped first. */
   priority: number;
+  /** Line-oriented lists may lose trailing lines instead of the whole block. */
+  trimmable?: boolean;
 }
 
 export interface PackedContext {
@@ -28,6 +30,13 @@ export function packContextBlocks(blocks: readonly ContextBlock[], budget = COMP
     // Drop the last block of the lowest priority so earlier context survives.
     let index = -1;
     for (let i = live.length - 1; i >= 0; i -= 1) if (live[i].priority === worst) { index = i; break; }
+    const overflow = size() - budget;
+    const block = live[index];
+    if (block.trimmable && block.text.length - overflow > 200) {
+      const lines = block.text.split('\n');
+      while (lines.length > 1 && lines.join('\n').length > block.text.length - overflow) lines.pop();
+      if (lines.length > 1) { block.text = lines.join('\n'); block.priority = 1; continue; }
+    }
     live.splice(index, 1);
     dropped += 1;
   }
