@@ -188,7 +188,8 @@ export function buildIndustryIconContext(
 export function buildRegisteredResourceContext(contentTypes: readonly ContentTypeRow[] = []): string {
   return [
     'REGISTERED RESOURCE CONTRACT: read and edit through agentOperations / ResourceRuntime with the current project and business scope; bind data-ut-resource to the returned persisted record ID and editable field. Labels and fixture slugs are not database IDs.',
-    ...listResources(contentTypes).map((resource) => `- ${resource.key} → ${resource.storage.table ?? `CMS ${resource.storage.contentType}`} (${resource.cardinality}); fields: ${resource.schema.map((field) => `${field.key}:${field.type}`).join(', ')}.`),
+    // Project-scoped CMS types lead so a trimmed context keeps this site's own schemas.
+    ...[...listResources(contentTypes)].sort((a, b) => Number(!a.key.startsWith('content:')) - Number(!b.key.startsWith('content:'))).map((resource) => `- ${resource.key} → ${resource.storage.table ?? `CMS ${resource.storage.contentType}`} (${resource.cardinality}); fields: ${resource.schema.map((field) => `${field.key}:${field.type}`).join(', ')}.`),
     'CMS seed targets are planned, not installed: create their declared content types through the existing CMS command only when supplied content exists, then use returned type/entry IDs. Features, coverage, credentials and shipping copy never imply a new catalog or API.',
   ].join('\n');
 }
@@ -300,7 +301,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 4, text: industryContext },
     { priority: 4, text: logoContext },
     { priority: 4, text: iconContext },
-    { priority: 3, text: buildRegisteredResourceContext(contentTypes) },
+    { priority: 3, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
     { priority: 4, text: `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.` },
     { priority: 5, text: `Protected paths: ${runtime.protectedPaths.join(', ')}.` },
     { priority: 5, text: `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.` },
