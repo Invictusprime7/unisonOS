@@ -30,6 +30,7 @@ import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 import { createCrmActivity, createCrmContact, createCrmLead } from "../_shared/canonicalCrm.ts";
+import { unsupportedIntentResult } from "../_shared/unsupportedIntent.ts";
 
 // ============================================================================
 // Types
@@ -551,16 +552,7 @@ async function executeCoreFallback(
     return await handleQuoteRequest(supabase, params, context);
   }
   
-  // Default: just acknowledge
-  return {
-    ok: true,
-    result: { acknowledged: true },
-    clientActions: [{
-      type: "TOAST",
-      message: "Action completed",
-      level: "success",
-    }],
-  };
+  return unsupportedIntentResult(intentId);
 }
 
 function handleNavIntent(

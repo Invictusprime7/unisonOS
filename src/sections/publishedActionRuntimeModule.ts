@@ -145,7 +145,7 @@ async function submitAuth(form: HTMLFormElement, intent: string) {
 }
 
 function createSessionId(): string {
-  const storageKey = 'unison-runtime-session';
+  const storageKey = 'unison-runtime-session:' + PUBLISHED_RUNTIME_CONFIG.siteId;
   const existing = window.sessionStorage.getItem(storageKey);
   if (existing) return existing;
   const sessionId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -277,7 +277,7 @@ async function submitBooking(form: HTMLFormElement) {
     body: JSON.stringify(bookingRequestBody(form)),
   });
   const result = await response.json().catch(() => ({})) as Record<string, any>;
-  if (!response.ok || result.success === false) {
+  if (!response.ok || result.success !== true) {
     throw new Error(result.error?.message || result.error || 'The booking could not be completed.');
   }
   form.dataset.utIdempotencyKey = '';
@@ -376,7 +376,7 @@ function focusForm(intent: string): boolean {
   if (!candidates) return false;
   for (const candidate of candidates) {
     const form = document.querySelector(
-      'form[data-demo-form="true"][data-ut-intent="' + candidate + '"]',
+      'form[data-intent-form="' + candidate + '"], form[data-demo-form="true"][data-ut-intent="' + candidate + '"]',
     ) as HTMLFormElement | null;
     if (!form) continue;
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -463,6 +463,12 @@ export function usePublishedActionRuntime() {
         event.preventDefault();
         return;
       }
+      // Submission CTAs focus their native form; a click without fields is not a submission.
+      if (Object.keys(FORM_INTENT_TARGETS).includes(intent)) {
+        event.preventDefault();
+        showActionStatus(element, 'The enquiry form is not available on this page.');
+        return;
+      }
       const controller = controllerForIntent(intent);
       if (!controller || controller.transport !== 'supabase-function') return;
       event.preventDefault();
@@ -509,6 +515,7 @@ export function usePublishedActionRuntime() {
       }
       if (!form?.matches('form[data-intent-form="booking.create"]')) return;
       event.preventDefault();
+      if (form.getAttribute('aria-busy') === 'true' || !form.reportValidity()) return;
       form.setAttribute('aria-busy', 'true');
       void submitBooking(form)
         .catch((error) => showActionStatus(

@@ -1,9 +1,9 @@
 # Roadmap
 
-## Active: Native contact-form owner email delivery
-- [ ] Connect canonical contact.submit to owner email notification after existing CRM storage, preserving selected custom fields and backend-confirmed success. Reuse existing canonical delivery adapters; no parallel form writer.
-- [ ] Configure a verified sender domain and confirm the destination inbox; no Lovable email domain is currently configured. Canonical UNISON email configuration must be verified separately from the attached Cloud instance.
-- [ ] Test native submission, stored read-back and confirmed email delivery; requires authoritative UNISON deployment/session and usable sender configuration.
+## Active: Remaining App Builder intent wiring
+- [x] Native contact/lead/quote/newsletter CTAs focus their form instead of dispatching empty submissions; missing forms show a warning. Booking validates native fields, prevents in-flight duplicate submissions and requires explicit backend acknowledgment. Runtime sessions are site-scoped; unhandled intent-exec actions fail instead of falsely claiming completion. No shared enquiry recipient configured.
+- [x] 63 runtime/contract checks and 139 isolated edge checks pass; both authority lints and preview build OK. Existing contact/quote CRM metadata already preserves custom answers; no extra storage pipeline added.
+- [ ] Verify production behavior and provision additional actions (demo/consultation/proposal/coupon/volunteer) per site's actual configured handlers; requires authoritative UNISON deployment/session and each site's usable business connections. They now report unconfigured rather than pretending to persist. No live enquiry/email delivery or booking test performed.
 
 ## Active: Unison Gemini rate-limit recovery
 - [x] Default to one page worker and align whole-site budgets with that concurrency; preserve explicit concurrency overrides and existing provisional checkpoints.
