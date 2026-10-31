@@ -15,7 +15,7 @@ export function renderCompositionBrief(
     `PAGE RESPONSIBILITY (${profile.industryId === '*' ? 'generic' : profile.industryId} · ${profile.pageRole}): ${profile.narrativeGoals.join('; ')}.`,
     profile.primaryIntent ? `PRIMARY INTENT: ${profile.primaryIntent}` : '',
     profile.domainVocabulary?.length ? `DOMAIN VOCABULARY: ${profile.domainVocabulary.join(', ')}` : '',
-    `COMPOSITION TARGET (${planned.compositionKey}): hero=${target.hero}; geometry=${target.geometry}; density=${target.density}; suggested sections: ${target.sectionOrder.join(' → ')}.`,
+    `COMPOSITION TARGET (${planned.compositionKey}): hero=${target.hero}; geometry=${target.geometry}; density=${target.density}; required complete sections in order: ${target.sectionOrder.join(' → ')}.`,
     `CHARACTER: media ${pct(c.mediaDominance)}, typography ${pct(c.typographyDominance)}, editorial ${pct(c.editoriality)}, information ${pct(c.informationDensity)}, conversion ${pct(c.conversionPressure)}.`,
     `PREFER: ${profile.preferredCompositionPatterns.join('; ')}. AVOID: ${profile.discouragedCompositionPatterns.join('; ')}.`,
     `NOVELTY BUDGET: ${pct(profile.noveltyBudget)} — invent local composition only within the sealed art direction.`,
