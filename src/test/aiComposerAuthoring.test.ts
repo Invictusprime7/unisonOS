@@ -385,7 +385,7 @@ describe('site authoring orchestrator', () => {
   it('stops the build when a page with no baseline source fails its gates', async () => {
     const freshPages = [
       { pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' },
-      { pageId: 'blog', title: 'Journal', route: '/journal', filePath: '/src/pages/Blog.tsx', role: 'blog' },
+      { pageId: 'blog', title: 'Journal', route: '/blog', filePath: '/src/pages/Blog.tsx', role: 'blog' },
       { pageId: 'contact', title: 'Contact', route: '/contact', filePath: '/src/pages/Contact.tsx', role: 'contact' },
     ];
     const invoke = vi.fn(async (input: { messages: Array<{ content: string }> }) => {
