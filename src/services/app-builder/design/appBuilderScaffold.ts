@@ -196,7 +196,7 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
       props.items = content.items.map((item) => ({
         title: item.title, name: item.title, description: item.description,
         question: item.title, answer: item.description, quote: item.description, author: item.title,
-        ...(item.imageUrl ? { image: item.imageUrl, src: item.imageUrl } : {}),
+        ...((item as ScaffoldItem).imageUrl ? { image: (item as ScaffoldItem).imageUrl, src: (item as ScaffoldItem).imageUrl } : {}),
       }));
     }
     return props;
