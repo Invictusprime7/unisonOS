@@ -207,14 +207,10 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     const components = componentsForPage(pageId);
     return `REGISTERED COMPONENT CONTRACT: ${components.length ? components.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; pages ${component.runtime.usedOnPages.join(', ') || 'site-wide'}; target ${component.targetType}; status ${component.runtime.status}; write intent ${component.runtime.writeIntent ?? 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required native form fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this page.'}`;
   };
-  const registeredComponentBlueprints = (pageId?: string) => [
-    'REGISTERED COMPONENT BLUEPRINTS: preserve these canonical native hosts, field names, and intent markers exactly; they define behavior, while certified design-source modules define presentation.',
-    ...componentsForPage(pageId)
-      .filter((component) => component.nativeComponentTemplate)
-      .map((component) => `${component.runtime.componentSlug}:\n${component.nativeComponentTemplate}`),
-    ...componentsForPage(pageId).filter((component) => component.formFields?.length).map((component) => `${component.runtime.componentSlug} selected form fields: ${JSON.stringify(component.formFields)}. Preserve their stable fieldId names for extra fields; canonical name, email, message names remain required. Collect visitor values through native FormData, never prefill business answers as visitor input.`),
-    'Use Unison form controls and semantic theme tokens around registered hosts. Never replace canonical native markup with a generic form or alter its intent trigger. Native forms must not define local onSubmit success handlers; only a confirmed runtime result may report success.',
-  ].join('\n');
+  // Native form blueprints and custom field JSON were removed from prompts to
+  // cut output tokens; the platform materializer wires forms after authoring.
+  const registeredComponentBlueprints = (_pageId?: string) =>
+    'Use Unison form controls and semantic theme tokens for forms (name, email, message). Native forms must not define local onSubmit success handlers.';
   const canonicalIntentBindings = (pageId?: string) => {
     const bindings = bindingsForPage(pageId);
     return [
