@@ -103,8 +103,7 @@ export function adoptContactSectionHost(
   if (!intent || component.targetType !== 'form') return null;
   const identifiers = contactDesignIdentifiers(source);
   // The variant form submits its submitIntent prop (default contact.submit).
-  if (!contactDesignForms(source).some((form) => form.submitIntent === intent)
-    && !(intent !== 'contact.submit' && contactDesignForms(source).length > 0)) return null;
+  if (!contactDesignForms(source).some((form) => form.submitIntent === intent)) return null;
   const dispatcher = identifiers.find((name) => new RegExp(`<${name}\\b`).test(source));
   if (!dispatcher) return null;
   const withFields = withContactFormFields(source, dispatcher, component) ?? source;
