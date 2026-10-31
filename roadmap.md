@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Active: Unison Gemini rate-limit recovery
-- [ ] Reduce default page request fan-out and align whole-site budgets with the same concurrency.
-- [ ] Honor Gemini Retry-After and Google retry metadata within the request deadline, without nested retries, billing retries or replaying timed-out work.
-- [ ] Run focused authoring/provider regressions; live recovery requires authoritative UNISON deployment/session. Uploaded report records a timeout, not a confirmed 429.
+- [x] Default to one page worker and align whole-site budgets with that concurrency; preserve explicit concurrency overrides and existing provisional checkpoints.
+- [x] Provider loop honors Gemini Retry-After and Google RetryInfo once within the remaining request budget; no nested Gemini/gateway retries, shortened cooldowns, billing retries or timed-out work replay. Retry waits use request cancellation rather than the expired generation timer.
+- [x] 53 focused authoring checks, 133 isolated edge checks, 34 App Builder checks and 21 marketplace checks pass; both authority lints and preview build OK. Two previously known launchRun Node-only storage checks still fail; no launchRun code changed.
+- [ ] Verify live recovery through the canonical UNISON deployment and an authoritative signed-in launch. Uploaded report records a timeout, not a confirmed 429; fallback configuration and paid end-to-end generation remain unverified. No alternate-backend deployment performed.
 
 ## Active: Efficient multi-page finalization and selected contact fields
 - [x] Remove cosmetic full-page re-authoring, exclude provisioning/contract issues from paid repairs and require a usable correction window; retain existing exact-request provisional checkpoints, never accept unfinished page source.
