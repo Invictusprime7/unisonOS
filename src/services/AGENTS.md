@@ -1,4 +1,5 @@
 # Directory rules
+- Native submission CTAs focus their registered form rather than sending empty payloads; booking requires validity, deduplication and explicit backend success, and runtime sessions are site-scoped. Why: preserve site-host ownership and never imply an unconfirmed enquiry or booking.
 - Project-list refreshes use serial coalescing with a trailing read; draft lookup projects only identity/name fields. Why: event bursts and embedded snapshots must not multiply list traffic.
 - Live Demo uses accountDemoGeneration reservations; canonical revision operation IDs settle usage atomically. Why: browser flags cannot enforce an account allowance or prove a saved draft.
 - App Builder candidate gates validate arbitrary CSS class values before acceptance; table recipes render scalar display values and bind only explicit source tables plus persisted row IDs. Why: syntax-valid JSX can still fail CSS compilation or render record objects as children.
