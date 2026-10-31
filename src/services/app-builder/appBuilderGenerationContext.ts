@@ -273,13 +273,13 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   };
   // Priority 1 blocks carry the design vocabulary and placement rules and are never dropped.
   const compose = (modules: string, pageId?: string, budget = COMPOSER_CONTEXT_LIMIT) => packContextBlocks([
+    { priority: 1, text: !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '' },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
     { priority: 1, text: 'AI ENRICHMENT: author business-specific copy, complete object collections, purposeful media and working interactions through the registered contracts. The deterministic starter is not an AI response: do not retain baseline filler, generic field substitutions or empty sections. Preserve every planned section, including repeated families, in the planned order. CTA sections need specific, business-worded headlines and actions, never generic "Get started" copy. Platform projection wires objects; it never supplies missing creative content.' },
     { priority: 1, text: registeredComponentBlueprints(pageId) },
     { priority: 1, text: modules },
     { priority: 2, text: `PAGE DESIGN FIT: ${designSources.implementations.filter(impl => !pageId || designSources.eligibleByPage[pageId]?.includes(impl.implementationId))
       .map(impl => `${impl.implementationId}: ${impl.visualSignature ? `${impl.visualSignature.geometry}, ${impl.visualSignature.mediaDominance} media, ${impl.visualSignature.density}` : impl.name}`).join('; ')}. Variants are listed best-fit first per family. Choose designs that realize the target geometry and media dominance, and do not reuse one variant for different sections of a page or repeat the previous page's choices when another listed variant fits.` },
-    { priority: 2, text: !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '' },
     { priority: 1, text: 'PERSISTABLE SECTION CONTRACT: every page-level body <section>, shared <header> navbar, and shared <footer> must carry literal stable data-ut-section-id, data-ut-section-type, and data-ut-variant values. Use site:navbar and site:footer as the shared chrome IDs across pages. For a listed certified variant, import its default family dispatcher from @/unison/design-sources/<Family> and render exactly one per root with matching sectionId/variantId and JSON-serializable props={{...}}. For a unique authored body component that has no suitable listed variant, use data-ut-variant="custom:<kebab-slug>" on a known non-chrome section family and render exactly one default component imported from @/project-components/ or @/components/generated/ inside that root; keep all JSX props literal and serializable. Never use custom variants for navbar/footer. Keep existing data-ut-intent, data-ut-cta, data-ut-resource, slot, and registered component markers inside the root; never replace or regenerate those bindings when changing visual layout.' },
     { priority: 1, text: 'CANONICAL SHARED SHELL: import and render the existing named SiteNav from @/project-components/site/SiteNav and SiteFooter from @/project-components/site/SiteFooter exactly once on every page, outside <main>: SiteNav first, then <main> holding every body section, then SiteFooter last. Nothing renders after SiteFooter. These wrappers are compiler-materialized from the canonical route registry and shared eligible design variants; do not inline, duplicate, or re-author page-local navigation or footer.' },
     { priority: 1, text: canonicalIntentBindings(pageId) },
@@ -292,8 +292,8 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 3, text: industryContext },
     { priority: 3, text: logoContext },
     { priority: 4, text: iconContext },
-    { priority: 3, text: `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.` },
-    { priority: 5, text: buildRegisteredResourceContext(contentTypes) },
+    { priority: 3, text: buildRegisteredResourceContext(contentTypes) },
+    { priority: 4, text: `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.` },
     { priority: 5, text: `Protected paths: ${runtime.protectedPaths.join(', ')}.` },
     { priority: 5, text: `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.` },
   ], budget).text;
