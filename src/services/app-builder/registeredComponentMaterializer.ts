@@ -91,6 +91,49 @@ function adoptNativeForm(source: string, component: AppBuildContract['business']
   return source.slice(0, form.index) + host + source.slice(form.index + form[0].length);
 }
 
+const CONTACT_DISPATCHER_IMPORT = /import\s+([A-Z][\w$]*)\s+from\s+['"]@\/unison\/design-sources\/Contact['"]/;
+
+/**
+ * Certified Contact variants render their own form. When the page renders one,
+ * that section is the registered host; appending a platform form duplicated it.
+ */
+export function adoptContactSectionHost(
+  source: string,
+  component: AppBuildContract['business']['registeredComponents'][number],
+): string | null {
+  const intent = component.runtime.writeIntent;
+  if (!intent || component.targetType !== 'form') return null;
+  const dispatcher = CONTACT_DISPATCHER_IMPORT.exec(source)?.[1];
+  if (!dispatcher || !new RegExp(`<${dispatcher}\\b`).test(source)) return null;
+  // The variant form submits its submitIntent prop (default contact.submit).
+  const escapedIntent = intent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (intent !== 'contact.submit' && !new RegExp(`submitIntent["']?\\s*:\\s*["']${escapedIntent}["']`).test(source)) return null;
+  const wrapper = /<section\b[^>]*\bdata-ut-section-type\s*=\s*["']contact["'][^>]*>/.exec(source);
+  if (!wrapper) return null;
+  let tag = wrapper[0];
+  if (!/\bdata-ut-component-slug\s*=/.test(tag)) {
+    tag = tag.replace(/\s*>$/, ` data-ut-component-slug="${escapeAttributeValue(component.runtime.componentSlug)}">`);
+  } else if (!hasAttributeValue(tag, 'data-ut-component-slug', component.runtime.componentSlug)) return null;
+  if (!/\bdata-ut-component-instance-id\s*=/.test(tag)) {
+    tag = tag.replace(/\s*>$/, ` data-ut-component-instance-id="${escapeAttributeValue(component.runtime.instanceId)}">`);
+  } else if (!hasAttributeValue(tag, 'data-ut-component-instance-id', component.runtime.instanceId)) return null;
+  return source.slice(0, wrapper.index) + tag + source.slice(wrapper.index + wrapper[0].length);
+}
+
+/** Business content belongs in <main>, before the shared footer — never after it. */
+export function bodyInsertionIndex(source: string): number | null {
+  let mainClose: RegExpExecArray | null = null;
+  const mainPattern = /<\/main\s*>/gi;
+  for (let match = mainPattern.exec(source); match; match = mainPattern.exec(source)) mainClose = match;
+  if (mainClose) return mainClose.index;
+  const footer = /<(?:SiteFooter|footer)\b/.exec(source);
+  if (footer) return footer.index;
+  let rootClose: RegExpExecArray | null = null;
+  const rootPattern = /<\/(?:div|section|article)\s*>/gi;
+  for (let match = rootPattern.exec(source); match; match = rootPattern.exec(source)) rootClose = match;
+  return rootClose ? rootClose.index : null;
+}
+
 function repairNativeFormWithinHost(
   source: string,
   component: AppBuildContract['business']['registeredComponents'][number],
@@ -218,6 +261,15 @@ export function materializeRegisteredComponents(
           || source.includes(`data-ut-component-instance-id='${instanceId}'`)
       };
       const nativePath = surfacePaths.find(path => adoptNativeForm(files[path] ?? '', component) !== null);
+      const hasNativeForm = (path: string) => nativeFormSources(files[path] ?? '', component.runtime.writeIntent ?? '').length > 0;
+      if (!surfacePaths.some(hasNativeForm)) {
+        const contactPath = surfacePaths.find(path => adoptContactSectionHost(files[path] ?? '', component) !== null);
+        if (contactPath) {
+          files[contactPath] = adoptContactSectionHost(files[contactPath], component)!;
+          materializedInstanceIds.push(instanceId);
+          continue;
+        }
+      }
       const hostPath = surfacePaths.find(hasSlug) ?? surfacePaths.find(hasInstance) ?? nativePath ?? pagePath;
       if (!hasSlug(hostPath) && !hasInstance(hostPath)) {
         const adopted = adoptNativeForm(files[hostPath], component);
