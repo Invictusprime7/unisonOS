@@ -887,8 +887,12 @@ describe('UnisonAppBuilder facade', () => {
     expect(runComposer).not.toHaveBeenCalled();
     expect(result.candidate.closure?.issues).toContainEqual(expect.objectContaining({ severity: 'advisory', code: 'registered-component-not-ready' }));
     expect(result.candidate.diagnostics.join(' ')).toContain('Missing component binding: formId.');
-    expect(result.candidateFiles['/src/pages/Contact.tsx']).toContain('name="field_F0EFea" required');
-    expect(result.candidateFiles['/src/pages/Contact.tsx']).toContain('name="field_lBxDTO" required');
+    // The certified Contact design's own form is the registered host: one form, with the site's selected fields.
+    const contactPage = result.candidateFiles['/src/pages/Contact.tsx'];
+    expect(contactPage).toContain('data-ut-component-instance-id="cmp-pending"');
+    expect(contactPage).toContain('"name":"field_F0EFea","type":"text","placeholder":"Project details","label":"Project details","required":true');
+    expect(contactPage).toContain('"name":"field_lBxDTO"');
+    expect(contactPage.match(/<form\b/g)).toBeNull();
     expect(result.candidateFiles['/.unison/compositions/pages/Home.json']).toBeDefined();
   });
 
