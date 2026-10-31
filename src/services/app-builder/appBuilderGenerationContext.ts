@@ -223,21 +223,21 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     return `REGISTERED COMPONENT CONTRACT: ${components.length ? components.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; pages ${component.runtime.usedOnPages.join(', ') || 'site-wide'}; target ${component.targetType}; status ${component.runtime.status}; write intent ${component.runtime.writeIntent ?? 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required native form fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this page.'}`;
   };
   // Keep identity concise, not generic: source-owned projection supplies fields.
-  const registeredComponentBlueprints = (pageId?: string) => {
-    const components = componentsForPage(pageId);
-    const hosts = components.filter(component => component.runtime.writeIntent && ['form', 'calendar'].includes(component.targetType));
-    const templates = components.filter(component => component.nativeComponentTemplate);
-    const blueprints = templates.length ? [
+  const registeredComponentTemplates = (pageId?: string) => {
+    const templates = componentsForPage(pageId).filter(component => component.nativeComponentTemplate);
+    return templates.length ? [
       'REGISTERED COMPONENT BLUEPRINTS: preserve these canonical native hosts, field names, and intent markers exactly; they define behavior, while certified design-source modules define presentation.',
       ...templates.map(component => `${component.runtime.componentSlug}:\n${component.nativeComponentTemplate}`),
     ].join('\n') : '';
-    if (!hosts.length) return [blueprints, 'FORMS: this page hosts no registered form. Do not add forms; certified Contact variants already render their own form, so only use a Contact section where the plan requires it.'].filter(Boolean).join('\n');
+  };
+  const registeredComponentBlueprints = (pageId?: string) => {
+    const hosts = componentsForPage(pageId).filter(component => component.runtime.writeIntent && ['form', 'calendar'].includes(component.targetType));
+    if (!hosts.length) return 'FORMS: this page hosts no registered form. Do not add forms; certified Contact variants already render their own form, so only use a Contact section where the plan requires it.';
     return [
-      blueprints,
       'FORM PLACEMENT (one form per purpose, inside <main>, before the shared footer):',
       ...hosts.map(component => `- ${component.runtime.componentSlug}: if the page renders a Contact family section, that section's built-in form IS the registered form — put data-ut-component-slug="${component.runtime.componentSlug}" on that contact <section> wrapper, pass submitIntent "${component.runtime.writeIntent}" and the selected fields in its props, and add no other form. Otherwise compose exactly one host data-ut-component-slug="${component.runtime.componentSlug}" with native <form data-intent-form="${component.runtime.writeIntent}"> inside its planned body section. No local onSubmit success handler.`),
       'Never place a form after the footer and never render a second form for the same purpose.',
-    ].filter(Boolean).join('\n');
+    ].join('\n');
   };
   const canonicalIntentBindings = (pageId?: string) => {
     const bindings = bindingsForPage(pageId);
