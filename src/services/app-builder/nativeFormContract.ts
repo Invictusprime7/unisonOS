@@ -1,4 +1,33 @@
 import type { AppBuildRegisteredComponent } from './appBuilderContracts';
+import { parse } from '@babel/parser';
+
+/** JSX attributes may contain arrow functions with >; HTML tag regexes truncate them. */
+export function nativeFormSources(source: string, intent: string): string[] {
+  const forms: string[] = [];
+  try {
+    const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    const visit = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      const value = node as Record<string, unknown>;
+      const opening = value.openingElement as { name?: { name?: string }; attributes?: Array<{ name?: { name?: string }; value?: { type?: string; value?: string } }> } | undefined;
+      if (value.type === 'JSXElement' && opening?.name?.name === 'form'
+        && opening.attributes?.some(attribute => attribute.name?.name === 'data-intent-form' && attribute.value?.value === intent)
+        && typeof value.start === 'number' && typeof value.end === 'number') {
+        forms.push(source.slice(value.start, value.end));
+        return;
+      }
+      for (const child of Object.values(value)) {
+        if (Array.isArray(child)) child.forEach(visit);
+        else if (child && typeof child === 'object') visit(child);
+      }
+    };
+    visit(ast.program);
+  } catch {
+    const escaped = intent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    forms.push(...[...source.matchAll(new RegExp(`<form\\b(?=[^>]*data-intent-form\\s*=\\s*["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/form>`, 'gi'))].map(match => match[0]));
+  }
+  return forms;
+}
 
 export function selectedNativeFormFields(component: AppBuildRegisteredComponent) {
   const canonical = new Set(component.requiredNativeFormFields ?? []);
