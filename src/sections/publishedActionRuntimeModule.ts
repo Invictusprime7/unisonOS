@@ -484,7 +484,10 @@ export function usePublishedActionRuntime() {
 
     const onSubmit = (event: SubmitEvent) => {
       const form = event.target as HTMLFormElement | null;
-      const intent = form?.dataset.intentForm;
+      // A certified Contact variant's built-in form is native only when its section
+      // is the registered component host; the same instance/slot checks apply below.
+      const intent = form?.dataset.intentForm
+        || (form?.dataset.demoForm === 'true' && form.closest('[data-ut-component-instance-id]') ? form.dataset.utIntent : undefined);
       if (form && intent && Object.keys(FORM_INTENT_TARGETS).includes(intent)) {
         event.preventDefault();
         if (form.getAttribute('aria-busy') === 'true' || !form.reportValidity()) return;
