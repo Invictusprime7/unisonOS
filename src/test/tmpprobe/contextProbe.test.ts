@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { it } from 'vitest';
 import { THEME_PRESETS } from '@/components/onboarding/themePresets';
 import { ALL_COMPOSITIONS } from '@/sections/templates';
