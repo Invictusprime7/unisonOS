@@ -735,16 +735,19 @@ export function materializePlayground(
 
   // One registered host per form slug per page: a page renders a single
   // contact section, so secondary inquiry forms delegate to the first host.
-  const hostedSlugPages = new Set<string>();
+  const hostedSlugPages = new Map<string, string>();
+  const delegatedFormIds = new Map<string, string>();
   for (const form of Object.values(creatorData.forms).sort((a, b) => a.sortOrder - b.sortOrder)) {
     const slug = inferComponentSlugForForm(form.name);
     if (!slug) continue;
     const hostKey = `${slug}::${slug === 'newsletter-signup' ? homePageId : contactPageId}`;
-    if (hostedSlugPages.has(hostKey)) {
+    const hostFormId = hostedSlugPages.get(hostKey);
+    if (hostFormId) {
+      delegatedFormIds.set(form.formId, hostFormId);
       warnings.push(`Form "${form.name}" shares the existing ${slug} host instead of registering a duplicate.`);
       continue;
     }
-    hostedSlugPages.add(hostKey);
+    hostedSlugPages.set(hostKey, form.formId);
     const component = createCanonicalComponentInstance(slug, {
       label: form.name,
       usedOnPages: [slug === 'newsletter-signup' ? homePageId : contactPageId].filter(Boolean),
@@ -755,6 +758,25 @@ export function materializePlayground(
       component.status = 'ready';
       creatorData.componentInstances[component.instanceId] = component;
     }
+  }
+
+  // Triggers that targeted a delegated (unhosted) form now point at the
+  // registered host's form, and the orphaned form record is removed so every
+  // form on the site is backed by a registered component instance.
+  if (delegatedFormIds.size > 0) {
+    for (const binding of Object.values(bindings)) {
+      const hostId = binding.targetType === 'form' ? delegatedFormIds.get(binding.targetId) : undefined;
+      if (hostId) binding.targetId = hostId;
+    }
+    for (const [key, id] of Object.entries(formIdMap)) {
+      const hostId = delegatedFormIds.get(id);
+      if (hostId) formIdMap[key] = hostId;
+    }
+    for (const calendar of Object.values(calendars)) {
+      const hostId = calendar.intakeFormId ? delegatedFormIds.get(calendar.intakeFormId) : undefined;
+      if (hostId) calendar.intakeFormId = hostId;
+    }
+    for (const id of delegatedFormIds.keys()) delete creatorData.forms[id];
   }
 
   for (const calendar of Object.values(calendars)) {
