@@ -579,6 +579,21 @@ describe('App Builder candidate closure', () => {
     expect(report.issues.some((issue) => issue.code.startsWith('registered-component-'))).toBe(false);
   });
 
+  it('does not require a form host on pages whose CTA only triggers the contact form', async () => {
+    const value = contactCrmContract();
+    value.business.intentBindings.push({
+      ...value.business.intentBindings[0],
+      bindingId: 'bind-home-cta', pageId: 'home', route: '/', elementKey: 'home.hero.cta', sourceSection: 'hero', sourceSlot: 'cta',
+    });
+    const files = {
+      ...initialFiles,
+      '/src/pages/Home.tsx': 'export default function Home(){return <main><button data-ut-cta="cta.primary">Start Project</button></main>}',
+      '/src/pages/Contact.tsx': contactCrmPage,
+    };
+    const report = await validateAppBuildCandidate({ contract: value, files, initialFiles });
+    expect(report.issues.filter((issue) => issue.code.startsWith('registered-component-') && /Home/.test(issue.message))).toEqual([]);
+  });
+
   it('validates registered non-form writers through their declared native action target', async () => {
     const checkout = contactCrmContract();
     checkout.business.capabilities = ['commerce'];
