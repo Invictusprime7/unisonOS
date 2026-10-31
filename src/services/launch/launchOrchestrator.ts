@@ -608,6 +608,11 @@ async function runReservedLaunchPipeline(
     return result;
   }, { timeoutMs: authoringBudgetMs + 20_000 });
   const candidateFiles = { ...appBuild.candidateFiles };
+  for (const issue of appBuild.candidate.closure?.issues ?? []) {
+    if (issue.severity === 'advisory') {
+      run.degrade('app-build', `app-build.${issue.code}`, issue.message, issue.path);
+    }
+  }
   const siteBundleSnapshot = projectCanonicalLaunchCandidateSnapshot(
     canonicalPlan,
     plan.selections,
