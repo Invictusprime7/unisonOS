@@ -18,7 +18,7 @@ describe('siteCompositionPlanner', () => {
   it.each([
     ['pricing', ['hero', 'pricing', 'faq', 'cta']],
     ['checkout', ['contact', 'faq']],
-    ['blog', ['blog-preview']],
+    ['blog', ['blog-preview', 'cta']],
     ['shop', ['services', 'gallery', 'cta']],
     ['faq', ['faq', 'cta']],
     ['gallery', ['gallery', 'before-after', 'cta']],
