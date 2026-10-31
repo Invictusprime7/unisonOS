@@ -233,7 +233,7 @@ export const INDUSTRY_MATRIX: Record<string, IndustryProfile> = {
     name: 'Portfolio & Creative',
     systemType: 'portfolio',
     layoutCategories: ['portfolio'],
-    defaultCapabilities: ['contact', 'newsletter'],
+    defaultCapabilities: ['contact', 'lead-capture', 'newsletter'],
     primaryIntent: 'contact.submit',
     crmPipeline: {
       name: 'Creative Pipeline',
