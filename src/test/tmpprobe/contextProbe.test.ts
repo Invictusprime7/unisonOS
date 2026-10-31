@@ -30,3 +30,14 @@ it('brief', () => {
     }
   }
 });
+it('show', () => {
+  const c = curateMarketplaceTemplate(ALL_COMPOSITIONS.find(x => x.id === 'agency-consulting')!, THEME_PRESETS[0]);
+  for (const p of c.contract.topology.sitePlan.pages.slice(0, 2)) {
+    const planned = c.contract.design.compositionPlan.pages.find(x => x.pageId === p.id);
+    console.log('COMP\n' + renderCompositionBrief(planned as never, [], null));
+    console.log('PINS', JSON.stringify(c.contract.design.registryContext.pinnedImplementationIdsByPage?.[p.id]));
+    const g = buildAppBuilderGenerationContext(c.contract);
+    const s = g.runtimeContextForPage(p.id);
+    console.log('MODS\n' + s.slice(s.indexOf('PAGE DESIGN FIT'), s.indexOf('PAGE DESIGN FIT') + 1500));
+  }
+});
