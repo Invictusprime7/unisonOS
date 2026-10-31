@@ -46,6 +46,32 @@ function toResolvedSource(impl: WizardRegistryImplementationSummary): ResolvedDe
   };
 }
 
+/** Variants offered per planned family, so the AI can vary style instead of seeing one option. */
+export const MAX_VARIANTS_PER_PAGE_FAMILY = 6;
+
+function seededRank(seed: string, value: string): number {
+  let hash = 2166136261;
+  for (const char of `${seed}\u0000${value}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return hash >>> 0;
+}
+
+const DENSITY_FIT: Record<string, string> = { low: 'airy', medium: 'balanced', high: 'dense' };
+
+/** Higher means the variant's authored visual signature realizes the page's composition target. */
+function targetFit(impl: WizardRegistryImplementationSummary, target: { hero?: string; geometry?: string; density?: string } | undefined): number {
+  const signature = impl.visualSignature;
+  if (!target || !signature) return 0;
+  let score = 0;
+  if (target.geometry && signature.geometry === target.geometry) score += 2;
+  if (target.density && signature.density === DENSITY_FIT[target.density]) score += 1;
+  if (impl.sectionType === 'hero' && target.hero) {
+    const mediaLed = /immersive|media|cinematic|full-bleed|gallery/.test(target.hero);
+    if (mediaLed && signature.mediaDominance === 'high') score += 3;
+    if (!mediaLed && signature.mediaDominance !== 'high') score += 1;
+  }
+  return score;
+}
+
 export function resolveDesignSourceBundle(contract: AppBuildContract): DesignSourceBundle {
   const { design } = contract;
   const registry = design.registryContext;
@@ -62,28 +88,50 @@ export function resolveDesignSourceBundle(contract: AppBuildContract): DesignSou
   for (const page of contract.topology.sitePlan.pages) {
     const pinnedIds = new Set(registry.pinnedImplementationIdsByPage?.[page.id] ?? []);
     const pageRole = normalizePageRole(page.role);
+    const target = design.compositionPlan?.pages.find((planned) => planned.pageId === page.id)?.target;
+    // The sealed section order owns which families this page renders; those
+    // families get the variety, never unrelated families that merely sort first.
+    const pageFamilies = new Set<string>([...(target?.sectionOrder ?? []), 'navbar', 'footer']);
     const roleFit = pool.filter((impl) => pinnedIds.has(impl.id)
       || impl.pageRoles.length === 0 || impl.pageRoles.includes(pageRole));
     const richerTypes = new Set(roleFit.filter((impl) => !isGenericImplementationId(impl.id)).map((impl) => impl.sectionType));
-    const rank = (impl: WizardRegistryImplementationSummary) =>
-      (preferred[impl.sectionType] ?? []).includes(impl.id) ? 0 : 1;
+    const seed = `${design.seed}:${page.id}`;
+    const rank = (impl: WizardRegistryImplementationSummary) => [
+      pinnedIds.has(impl.id) ? 0 : 1,
+      (preferred[impl.sectionType] ?? []).includes(impl.id) ? 0 : 1,
+      -targetFit(impl, target),
+    ];
     const ranked = roleFit
       .filter((impl) => !(isGenericImplementationId(impl.id) && richerTypes.has(impl.sectionType)))
-      .sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id));
+      .sort((a, b) => {
+        const left = rank(a); const right = rank(b);
+        for (let index = 0; index < left.length; index += 1) if (left[index] !== right[index]) return left[index] - right[index];
+        // Seeded tie-break: equally legal variants rotate per site/page instead of alphabetical first-match.
+        return seededRank(seed, a.id) - seededRank(seed, b.id) || a.id.localeCompare(b.id);
+      });
     const byType = new Map<string, WizardRegistryImplementationSummary[]>();
     for (const impl of ranked) byType.set(impl.sectionType, [...(byType.get(impl.sectionType) ?? []), impl]);
-    const interleaved: WizardRegistryImplementationSummary[] = [];
-    for (let round = 0; interleaved.length < ranked.length; round += 1) {
-      for (const group of byType.values()) if (group[round]) interleaved.push(group[round]);
+    const bounded: WizardRegistryImplementationSummary[] = [];
+    const boundedIds = new Set<string>();
+    const take = (impl: WizardRegistryImplementationSummary) => {
+      if (boundedIds.has(impl.id)) return;
+      bounded.push(impl);
+      boundedIds.add(impl.id);
+    };
+    for (const [family, group] of byType) {
+      if (pageFamilies.has(family)) group.slice(0, MAX_VARIANTS_PER_PAGE_FAMILY).forEach(take);
     }
-    const bounded = interleaved.slice(0, MAX_ELIGIBLE_PER_PAGE);
-    const boundedIds = new Set(bounded.map((impl) => impl.id));
-    for (const implementation of interleaved) {
-      if (pinnedIds.has(implementation.id) && !boundedIds.has(implementation.id)) {
-        bounded.push(implementation);
-        boundedIds.add(implementation.id);
+    // Remaining room offers one option per other family for owner-requested additions.
+    for (let round = 0; bounded.length < MAX_ELIGIBLE_PER_PAGE; round += 1) {
+      let added = false;
+      for (const [family, group] of byType) {
+        if (pageFamilies.has(family) || !group[round] || bounded.length >= MAX_ELIGIBLE_PER_PAGE) continue;
+        take(group[round]);
+        added = true;
       }
+      if (!added || round > 0) break;
     }
+    for (const implementation of ranked) if (pinnedIds.has(implementation.id)) take(implementation);
     eligibleByPage[page.id] = bounded.map((impl) => impl.id);
   }
 
