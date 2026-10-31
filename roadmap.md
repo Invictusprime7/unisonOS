@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: Efficient multi-page finalization and selected contact fields
+- [ ] Reduce redundant authoring/fix work and preserve completed provisional pages on an identical retry; never accept unfinished page source.
+- [ ] Finalize and allow draft persistence with explicit unmet-binding warnings while retaining render safety, native submission ownership and publish gates.
+- [ ] Render required selected fields field_F0EFea and field_lBxDTO in the registered native contact form; verify with focused regression tests.
+- [ ] Verify live multi-page generation → save → reopen and contact delivery; requires authoritative UNISON session/deployment.
+
 ## Active: Visit-page save classification
 - [x] Shared route aliases classify informational Visit pages as contact; explicit role/type takes precedence over route inference. Saved authored source and renderability checks remain unchanged.
 - [x] All 20 role/compilation/launch regressions and both authority lints pass; preview build OK. Saved Visit source survives recompile and /visit remains in the router.
