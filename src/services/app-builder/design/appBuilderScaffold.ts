@@ -186,8 +186,6 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
         props[name] = content.items.map((item, index) => Object.fromEntries(fields.flatMap((rawField) => {
           const field = rawField.replace(/\?$/, '');
           const isOptional = rawField.endsWith('?');
-          const value = propValue(field, content, contract, headingLevel, imageUrl);
-          if (value !== undefined && typeof value !== 'object') return [[field, value]];
           if (['title', 'name', 'label'].includes(field)) return [[field, item.title]];
           if (['description', 'text', 'answer', 'body'].includes(field)) return [[field, item.description]];
           if (['question'].includes(field)) return [[field, `What should visitors know about ${contract.business.businessName}?`]];
