@@ -49,5 +49,7 @@ export function extractCompositionSignature(source: string | undefined): Composi
 
   const sections = order.length;
   const density = sections >= 6 ? 'high' : sections >= 3 ? 'medium' : 'low';
-  return { hero, geometry, density, sectionOrder: order };
+  const variants = [...new Set([...src.matchAll(/data-ut-variant\s*=\s*["']([a-z-]+:[a-z0-9-]+)["']/g)]
+    .map((match) => match[1]).filter((id) => !/^(?:navbar|footer):/.test(id)))];
+  return { hero, geometry, density, sectionOrder: order, variants };
 }

@@ -387,10 +387,10 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
       'product.select':       { msg: 'Option selected',                color: '#2563eb' },
       'plan.select':          { msg: 'Plan selected',                  color: '#2563eb' },
       'option.select':        { msg: 'Option selected',                color: '#2563eb' },
-      'contact.submit':       { msg: 'Message sent \u2713',           color: '#2563eb' },
-      'newsletter.subscribe': { msg: 'Subscribed \u2713',             color: '#2563eb' },
-      'quote.request':        { msg: 'Quote requested \u2713',        color: '#2563eb' },
-      'lead.capture':         { msg: 'Thanks! We\u2019ll be in touch',color: '#2563eb' },
+      'contact.submit':       { msg: 'The enquiry form is not on this page', color: '#2563eb' },
+      'newsletter.subscribe': { msg: 'The signup form is not on this page', color: '#2563eb' },
+      'quote.request':        { msg: 'The quote form is not on this page', color: '#2563eb' },
+      'lead.capture':         { msg: 'The enquiry form is not on this page', color: '#2563eb' },
     };
     // Scroll-to-section intents
     const target = __findIntentTarget(intent, clicked);
@@ -401,6 +401,20 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
         'input:not([type="hidden"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]), textarea'
       ) as HTMLElement | null;
       if (input) setTimeout(function() { input.focus(); }, 480);
+      return true;
+    }
+    // A form hosted on another page (e.g. Contact): open that page and focus it.
+    const formPath = clicked.getAttribute('data-ut-form-path');
+    if (formPath && formPath.charAt(0) === '/') {
+      window.location.hash = formPath;
+      setTimeout(function() {
+        const form = document.querySelector('form[data-intent-form], form[data-demo-form="true"]') as HTMLElement | null;
+        if (form) {
+          form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const field = form.querySelector('input, textarea, select') as HTMLElement | null;
+          if (field) field.focus({ preventScroll: true });
+        }
+      }, 450);
       return true;
     }
     // Fallback toast so every slot intent click is visibly responsive.

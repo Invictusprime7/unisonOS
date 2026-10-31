@@ -466,6 +466,13 @@ export function usePublishedActionRuntime() {
       // Submission CTAs focus their native form; a click without fields is not a submission.
       if (Object.keys(FORM_INTENT_TARGETS).includes(intent)) {
         event.preventDefault();
+        // The form lives on its host page (e.g. Contact): open it there.
+        const formPath = element.getAttribute('data-ut-form-path');
+        if (formPath && formPath.startsWith('/')) {
+          window.location.hash = formPath;
+          window.setTimeout(() => focusForm(intent), 400);
+          return;
+        }
         showActionStatus(element, 'The enquiry form is not available on this page.');
         return;
       }

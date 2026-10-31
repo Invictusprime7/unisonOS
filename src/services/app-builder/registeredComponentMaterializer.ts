@@ -1,7 +1,10 @@
 import type { AppBuildContract } from './appBuilderContracts';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
-import { missingNativeFormFields, nativeFormSources, selectedNativeFormFields, selectedNativeFormTemplate } from './nativeFormContract';
+import { contactDesignForms, contactDesignIdentifiers, missingNativeFormFields, nativeFormSources, selectedNativeFormFields, selectedNativeFormTemplate } from './nativeFormContract';
 import { parse } from '@babel/parser';
+
+/** Intents a certified Contact design's built-in form can represent. */
+const LEAD_FORM_INTENTS = new Set(['contact.submit', 'lead.capture', 'quote.request']);
 
 const APP_BUILDER_SOURCE_PATH = /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/;
 
@@ -91,8 +94,6 @@ function adoptNativeForm(source: string, component: AppBuildContract['business']
   return source.slice(0, form.index) + host + source.slice(form.index + form[0].length);
 }
 
-const CONTACT_DISPATCHER_IMPORT = /import\s+([A-Z][\w$]*)\s+from\s+['"]@\/unison\/design-sources\/Contact['"]/;
-
 /**
  * Certified Contact variants render their own form. When the page renders one,
  * that section is the registered host; appending a platform form duplicated it.
@@ -103,12 +104,11 @@ export function adoptContactSectionHost(
 ): string | null {
   const intent = component.runtime.writeIntent;
   if (!intent || component.targetType !== 'form') return null;
-  const dispatcher = CONTACT_DISPATCHER_IMPORT.exec(source)?.[1];
-  if (!dispatcher || !new RegExp(`<${dispatcher}\\b`).test(source)) return null;
+  const identifiers = contactDesignIdentifiers(source);
   // The variant form submits its submitIntent prop (default contact.submit).
-  const escapedIntent = intent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (intent !== 'contact.submit' && !new RegExp(`submitIntent["']?\\s*:\\s*["']${escapedIntent}["']`).test(source)) return null;
-  if (!/<section\b[^>]*\bdata-ut-section-type\s*=\s*["']contact["']/.test(source)) return null;
+  if (!contactDesignForms(source).some((form) => form.submitIntent === intent)) return null;
+  const dispatcher = identifiers.find((name) => new RegExp(`<${name}\\b`).test(source));
+  if (!dispatcher) return null;
   const withFields = withContactFormFields(source, dispatcher, component) ?? source;
   // Section roots stay design sections; the host is an inner element around the dispatcher.
   const host = `data-ut-component-slug="${escapeAttributeValue(component.runtime.componentSlug)}" data-ut-component-instance-id="${escapeAttributeValue(component.runtime.instanceId)}"`;
@@ -166,8 +166,9 @@ function withContactFormFields(
   try {
     const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
     let span: { objectStart: number; fieldsStart?: number; fieldsEnd?: number; hasIntent: boolean } | null = null;
+    let direct: { tagEnd: number; fieldsStart?: number; fieldsEnd?: number; hasIntent: boolean } | null = null;
     const visit = (node: unknown): void => {
-      if (span || !node || typeof node !== 'object') return;
+      if (span || direct || !node || typeof node !== 'object') return;
       const value = node as Record<string, any>;
       if (value.type === 'JSXOpeningElement' && value.name?.name === dispatcher) {
         const props = (value.attributes ?? []).find((attribute: any) => attribute.name?.name === 'props');
@@ -177,6 +178,11 @@ function withContactFormFields(
           const existing = object.properties.find((property: any) => keyOf(property) === 'fields');
           span = { objectStart: object.start, fieldsStart: existing?.start, fieldsEnd: existing?.end,
             hasIntent: object.properties.some((property: any) => keyOf(property) === 'submitIntent') };
+        } else if (!props && typeof value.name?.end === 'number') {
+          // Named variant exports take props directly: <ContactMapStudio fields={[...]} />.
+          const existing = (value.attributes ?? []).find((attribute: any) => attribute.name?.name === 'fields');
+          direct = { tagEnd: value.name.end, fieldsStart: existing?.start, fieldsEnd: existing?.end,
+            hasIntent: (value.attributes ?? []).some((attribute: any) => attribute.name?.name === 'submitIntent') };
         }
         return;
       }
@@ -186,6 +192,15 @@ function withContactFormFields(
       }
     };
     visit(ast.program);
+    const directFound = direct as { tagEnd: number; fieldsStart?: number; fieldsEnd?: number; hasIntent: boolean } | null;
+    if (!span && directFound) {
+      const attribute = `fields={${JSON.stringify([...fields.values()])}}`;
+      const intentAttribute = !directFound.hasIntent && component.runtime.writeIntent ? ` submitIntent=${JSON.stringify(component.runtime.writeIntent)}` : '';
+      if (typeof directFound.fieldsStart === 'number' && typeof directFound.fieldsEnd === 'number') {
+        return source.slice(0, directFound.fieldsStart) + attribute + intentAttribute + source.slice(directFound.fieldsEnd);
+      }
+      return `${source.slice(0, directFound.tagEnd)} ${attribute}${intentAttribute}${source.slice(directFound.tagEnd)}`;
+    }
     if (!span) return null;
     const found = span as { objectStart: number; fieldsStart?: number; fieldsEnd?: number; hasIntent: boolean };
     const literal = `"fields":${JSON.stringify([...fields.values()])}`;
@@ -350,6 +365,14 @@ export function materializeRegisteredComponents(
           materializedInstanceIds.push(instanceId);
           continue;
         }
+      }
+      // A rendered Contact design on this page already owns a lead form; a second
+      // platform form beside it is a duplicate, whatever intent it would carry.
+      if (component.targetType === 'form'
+        && surfacePaths.some((path) => contactDesignForms(files[path] ?? '').length > 0)
+        && !surfacePaths.some(hasNativeForm)
+        && LEAD_FORM_INTENTS.has(component.runtime.writeIntent ?? '')) {
+        continue;
       }
       const hostPath = surfacePaths.find(hasSlug) ?? surfacePaths.find(hasInstance) ?? nativePath ?? pagePath;
       if (!hasSlug(hostPath) && !hasInstance(hostPath)) {

@@ -1,5 +1,12 @@
 # Roadmap
 
+## Active: Contact page completeness (2026-10-31)
+- [x] One lead form per page: Contact designs host the site form; no extra "Get started" fallback form; fallback forms land before the footer and submit through the site runtime
+- [x] Custom fields captioned by their label (no generated IDs); inline contact design keeps every selected field
+- [x] Starter buttons get real captions; buttons for a form on another page open that page instead of warning or faking success
+- [x] Each page is told which designs earlier pages used, to vary layouts
+- [ ] Live AI launch check across industries (needs signed-in Unison session and Unison deployment)
+
 ## Active: AI design recovery (2026-10-31)
 - [x] Stop cutting design-system lists and form rules out of page AI requests
 - [x] Offer several style variants per planned section family, matched to the page target

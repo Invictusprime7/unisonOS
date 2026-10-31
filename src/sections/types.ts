@@ -248,7 +248,8 @@ export interface SectionPropsMap {
     headline?: string;
     description?: string;
     layout?: 'centered' | 'split-card' | 'minimal-inline';
-    fields?: { name: string; type: string; placeholder?: string; required?: boolean }[];
+    /** `label` is the visible caption; `name` is the submitted key and never shown when a label exists. */
+    fields?: { name: string; type: string; placeholder?: string; label?: string; required?: boolean }[];
     submitLabel?: string;
     submitIntent?: string;
     showMap?: boolean;

@@ -410,6 +410,15 @@ function getBindingAttrs(binding: PlaygroundBinding, snapshot: SiteBundleSnapsho
     }
   }
 
+  if (binding.targetType === 'form' || binding.targetType === 'calendar') {
+    // A trigger for a form hosted on another page opens that page instead of
+    // reporting a missing form; same-page triggers still focus the form.
+    const host = Object.values(snapshot.componentInstances ?? {}).find((instance) =>
+      instance.bindings?.formId === binding.targetId || instance.bindings?.calendarId === binding.targetId);
+    const hostPage = host?.usedOnPages?.map((pageId) => snapshot.pageRegistry.pages[pageId]).find(Boolean);
+    if (hostPage) attrs['data-ut-form-path'] = normalizeRoute(hostPage.path);
+  }
+
   attrs['data-ut-target-id'] = binding.targetId;
   attrs['data-ut-target-type'] = binding.targetType;
 

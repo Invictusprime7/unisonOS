@@ -24,6 +24,10 @@ export function renderCompositionBrief(
     lines.push(`ALREADY USED ON OTHER PAGES (do not repeat this topology): ${memory
       .map((m) => `${m.role}[hero ${m.signature.hero}, ${m.signature.sectionOrder.join('→') || 'n/a'}]`).join('; ')}`);
   }
+  const usedVariants = [...new Set(memory.flatMap((m) => m.signature.variants ?? []))];
+  if (usedVariants.length) {
+    lines.push(`VARIANTS ALREADY USED ON OTHER PAGES: ${usedVariants.join(', ')}. For each family, pick a different listed variant when one fits this page's target; reuse only when it is the sole eligible design.`);
+  }
   if (redundancy) lines.push(`REDUNDANCY REPAIR: ${redundancy.reason} Recompose with a different hero and section order that fits this page's job.`);
   return lines.filter(Boolean).join('\n');
 }

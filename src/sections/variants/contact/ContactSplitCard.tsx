@@ -63,9 +63,9 @@ export const ContactSplitCard: React.FC<BaseSectionProps<'contact'>> = ({ sectio
           >
             <form data-demo-form="true" data-ut-intent={submitIntent} className="flex flex-col gap-4">
               {formFields.map((field) => field.type === 'textarea' ? (
-                <textarea key={field.name} name={field.name} placeholder={field.placeholder || field.name} required={field.required} rows={5} style={inputStyle} className="transition-all focus:ring-2 focus:ring-primary/20" />
+                <textarea key={field.name} name={field.name} placeholder={field.placeholder || field.label || field.name} aria-label={field.label || field.name} required={field.required} rows={5} style={inputStyle} className="transition-all focus:ring-2 focus:ring-primary/20" />
               ) : (
-                <input key={field.name} name={field.name} type={field.type || 'text'} placeholder={field.placeholder || field.name} required={field.required} style={inputStyle} className="transition-all focus:ring-2 focus:ring-primary/20" />
+                <input key={field.name} name={field.name} type={field.type || 'text'} placeholder={field.placeholder || field.label || field.name} aria-label={field.label || field.name} required={field.required} style={inputStyle} className="transition-all focus:ring-2 focus:ring-primary/20" />
               ))}
               <button data-ut-intent="contact.submit"
                 type="submit"

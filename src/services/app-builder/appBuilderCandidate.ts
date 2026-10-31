@@ -14,7 +14,7 @@ import {
 import { enforceSiteDesignContract } from '@/services/launch/homepageFirstContract';
 import { assertSiteShellClosure, buildSiteShellTopology } from '@/services/siteShellTopology';
 import { CANONICAL_COMPONENT_DEFINITIONS } from '@/services/canonicalComponentRegistry';
-import { missingNativeFormFields, nativeFormSources } from './nativeFormContract';
+import { contactDesignForms, missingContactDesignFields, missingNativeFormFields, nativeFormSources } from './nativeFormContract';
 import { isBindingOperationallyPending } from './bindingAvailability';
 import { collectResolvedCompositions, RESOLVED_COMPOSITION_ROOT, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import {
@@ -497,6 +497,18 @@ export async function validateAppBuildCandidate(input: {
     const hasRegisteredHost = componentSources.some(({ source }) => new RegExp(
       `(?:data-ut-component-slug\\s*=\\s*["']${escapedSlug}["']|data-ut-component-instance-id\\s*=\\s*["']${escapedId}["'])`,
     ).test(source));
+    if (!hasRegisteredHost && component.targetType === 'form'
+      && ['contact.submit', 'lead.capture', 'quote.request'].includes(writeIntent)
+      && componentSources.some(({ source }) => contactDesignForms(source).length > 0)) {
+      // One lead form per page: the page's Contact design form serves this enquiry too.
+      issues.push({
+        severity: 'advisory',
+        code: 'registered-component-shares-contact-design',
+        path: componentSources[0]?.page.filePath,
+        message: `${component.runtime.componentSlug} shares the page's Contact design form instead of adding a second form.`,
+      });
+      continue;
+    }
     if (!hasRegisteredHost) {
       issues.push({
         severity: 'blocker',
@@ -507,14 +519,21 @@ export async function validateAppBuildCandidate(input: {
       continue;
     }
     if (component.targetType === 'form' || component.targetType === 'calendar') {
+      const missingFor = (source: string): string[] | null => {
+        const form = nativeFormSources(source, writeIntent)[0];
+        if (form) return missingNativeFormFields(form, component);
+        // A certified Contact design renders the native form from its props.
+        return missingContactDesignFields(source, component);
+      };
       const incompleteForm = componentSources.find(({ source }) => {
         const form = nativeFormSources(source, writeIntent)[0];
-        return !form || /\bonSubmit\s*=/.test(form)
-          || missingNativeFormFields(form, component).length > 0;
+        if (form && /\bonSubmit\s*=/.test(form)) return true;
+        const missing = missingFor(source);
+        return missing === null || missing.length > 0;
       });
       if (incompleteForm) {
         const form = nativeFormSources(incompleteForm.source, writeIntent)[0] ?? '';
-        const missingFields = missingNativeFormFields(form, component);
+        const missingFields = missingFor(incompleteForm.source) ?? missingNativeFormFields(form, component);
         issues.push({
           // Missing field setup stays advisory; fabricated local success never does.
           severity: /\bonSubmit\s*=/.test(form) ? 'blocker' : 'advisory',

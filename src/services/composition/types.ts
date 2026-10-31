@@ -63,6 +63,8 @@ export interface CompositionSignature {
   density: CompositionCharacter['density'];
   /** Ordered section families, e.g. ["hero","services","gallery","cta"]. */
   sectionOrder: string[];
+  /** Certified body variants the page rendered (shared nav/footer excluded). */
+  variants?: string[];
 }
 
 export interface PlannedPage {

@@ -30,7 +30,7 @@ export function EditorialContactForm({
       {fields.map((field, index) => (
         <div key={`${field.name}-${index}`} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}>
           <label htmlFor={`${prefix}-${index}`} className="mb-2 block text-sm font-medium">
-            {field.name.replace(/[_-]/g, ' ')}
+            {field.label || field.name.replace(/[_-]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase())}
             {field.required && <span aria-hidden="true"> *</span>}
           </label>
           {field.type === 'textarea' ? (

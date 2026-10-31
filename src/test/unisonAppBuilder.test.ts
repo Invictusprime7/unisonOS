@@ -908,9 +908,12 @@ describe('UnisonAppBuilder facade', () => {
     // The certified Contact design's own form is the registered host: one form, with the site's selected fields.
     const contactPage = result.candidateFiles['/src/pages/Contact.tsx'];
     expect(contactPage).toContain('data-ut-component-instance-id="cmp-pending"');
-    expect(contactPage).toContain('"name":"field_F0EFea","type":"text","placeholder":"Project details","label":"Project details","required":true');
-    expect(contactPage).toContain('"name":"field_lBxDTO"');
+    expect(contactPage).toContain('"name":"project_details","type":"text","placeholder":"Project details","label":"Project details","required":true');
+    expect(contactPage).toContain('"name":"budget"');
     expect(contactPage.match(/<form\b/g)).toBeNull();
+    // No raw intent-key button beside the form it would only repeat.
+    expect(contactPage).not.toContain('{"contact"}');
+    expect(result.candidate.closure?.issues.some((issue) => issue.code === 'registered-component-native-form-incomplete')).toBe(false);
     expect(result.candidateFiles['/.unison/compositions/pages/Home.json']).toBeDefined();
   });
 

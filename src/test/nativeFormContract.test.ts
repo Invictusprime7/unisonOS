@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { missingNativeFormFields, selectedNativeFormTemplate } from '@/services/app-builder/nativeFormContract';
+import { missingContactDesignFields, missingNativeFormFields, selectedNativeFormFields, selectedNativeFormTemplate } from '@/services/app-builder/nativeFormContract';
 import type { AppBuildRegisteredComponent } from '@/services/app-builder/appBuilderContracts';
 import { getCanonicalComponentDefinition } from '@/services/canonicalComponentRegistry';
 
@@ -14,18 +14,48 @@ function component(): AppBuildRegisteredComponent {
 }
 
 describe('selected native contact form contract', () => {
-  it.each(['field_F0EFea', 'field_lBxDTO'])('renders selected required field %s in the native form', (fieldId) => {
+  it.each([['field_F0EFea', 'Project details', 'project_details'], ['field_X1Zx1f', 'Phone', 'phone']])('submits selected field %s under its readable key', (fieldId, label, name) => {
     const contact = component();
-    contact.formFields = [{ fieldId, label: 'Selected business field', type: 'text', required: true, sortOrder: 4 }];
+    contact.formFields = [{ fieldId, label, type: 'text', required: true, sortOrder: 4 }];
     const source = selectedNativeFormTemplate(contact) ?? '';
+    expect(source).toContain(`name="${name}" required`);
+    expect(source).not.toContain(fieldId);
     expect(missingNativeFormFields(source, contact)).toEqual([]);
-    expect(missingNativeFormFields(source.replace(`name="${fieldId}"`, 'name="other"'), contact)).toEqual([fieldId]);
+    expect(missingNativeFormFields(source.replace(`name="${name}"`, 'name="other"'), contact)).toEqual([name]);
+  });
+  it('still accepts forms saved with the generated field id', () => {
+    const contact = component();
+    const source = (selectedNativeFormTemplate(contact) ?? '').replace('name="budget"', 'name="field-budget"');
+    expect(missingNativeFormFields(source, contact)).toEqual([]);
+  });
+  it('keeps the field id when two labels would share a key', () => {
+    const contact = component();
+    contact.formFields = [
+      { fieldId: 'field_a', label: 'Budget', type: 'text', required: false, sortOrder: 4 },
+      { fieldId: 'field_b', label: 'Budget!', type: 'text', required: false, sortOrder: 5 },
+      { fieldId: 'field_c', label: 'Email', type: 'email', required: true, sortOrder: 6 },
+    ];
+    expect(selectedNativeFormFields(contact).map((field) => field.name)).toEqual(['budget', 'field_b', 'email']);
   });
   it('preserves required name, email, message and the selected budget field', () => {
     const contact = component();
     const source = selectedNativeFormTemplate(contact) ?? '';
     expect(missingNativeFormFields(source, contact)).toEqual([]);
-    expect(missingNativeFormFields(source.replace('name="field-budget"', 'name="other"'), contact)).toEqual(['field-budget']);
+    expect(missingNativeFormFields(source.replace('name="budget"', 'name="other"'), contact)).toEqual(['budget']);
+  });
+  it('counts a certified Contact design form as the native form, including its selected fields', () => {
+    const contact = component();
+    const page = (fields: string) => `import SectionContact from "@/unison/design-sources/Contact";\nexport default function Contact(){return <main><SectionContact variantId="contact:map-studio" props={{"fields":${fields},"submitIntent":"contact.submit"}} /></main>}`;
+    const all = JSON.stringify(['name', 'email', 'message', 'budget'].map((name) => ({ name, type: 'text' })));
+    expect(missingContactDesignFields(page(all), contact)).toEqual([]);
+    const partial = JSON.stringify(['name', 'email'].map((name) => ({ name, type: 'text' })));
+    expect(missingContactDesignFields(page(partial), contact)).toEqual(['message', 'budget']);
+    expect(missingContactDesignFields('export default function Contact(){return <main /> }', contact)).toBeNull();
+  });
+  it('reads named Contact variants that take props directly', () => {
+    const contact = component();
+    const source = `import { ContactSplitCard } from "@/unison/design-sources/Contact";\nexport default function Contact(){return <main><ContactSplitCard fields={[{"name":"name"},{"name":"email"},{"name":"message"},{"name":"budget"}]} /></main>}`;
+    expect(missingContactDesignFields(source, contact)).toEqual([]);
   });
   it.each(['name', 'email', 'message'])('rejects optional %s when the registered field is required', (name) => {
     const contact = component();
