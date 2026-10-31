@@ -283,7 +283,6 @@ export async function orchestrateAppBuild(
   if (!compatibilityMode && input.preflight) candidateFiles = input.preflight(candidateFiles);
   candidateFiles = normalizeCandidateFiles(candidateFiles);
   let closure = await validateClosure(candidateFiles);
-  console.log("CLOSUREDBG", JSON.stringify(closure.issues.filter((i) => i.severity === "blocker")).slice(0, 2000)); console.log("SRCDBG", candidateFiles["/src/pages/Contact.tsx"]);
   let closureRepairAttempts = 0;
 
   if (generationMode === 'ai' && !compatibilityMode && !terminalAuthoringFailure && !incompleteAuthoring) {
