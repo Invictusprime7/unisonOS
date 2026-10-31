@@ -78,6 +78,19 @@ function nativeFormSatisfiesContract(form: string, component: AppBuildContract['
   return missingNativeFormFields(form, component).length === 0;
 }
 
+/** Adopt an authored native form instead of adding a second generic form. */
+function adoptNativeForm(source: string, component: AppBuildContract['business']['registeredComponents'][number]): string | null {
+  const intent = component.runtime.writeIntent;
+  if (!intent) return null;
+  const escaped = intent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const forms = [...source.matchAll(new RegExp(`<form\\b(?=[^>]*data-intent-form\\s*=\\s*["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/form>`, 'gi'))];
+  if (forms.length !== 1) return null;
+  const form = forms[0];
+  if (form.index === undefined) return null;
+  const host = `<div data-ut-component-slug="${escapeAttributeValue(component.runtime.componentSlug)}" data-ut-component-instance-id="${escapeAttributeValue(component.runtime.instanceId)}">${form[0]}</div>`;
+  return source.slice(0, form.index) + host + source.slice(form.index + form[0].length);
+}
+
 function repairNativeFormWithinHost(
   source: string,
   component: AppBuildContract['business']['registeredComponents'][number],
@@ -204,7 +217,12 @@ export function materializeRegisteredComponents(
         return source.includes(`data-ut-component-instance-id="${instanceId}"`)
           || source.includes(`data-ut-component-instance-id='${instanceId}'`)
       };
-      const hostPath = surfacePaths.find(hasSlug) ?? surfacePaths.find(hasInstance) ?? pagePath;
+      const nativePath = surfacePaths.find(path => adoptNativeForm(files[path] ?? '', component) !== null);
+      const hostPath = surfacePaths.find(hasSlug) ?? surfacePaths.find(hasInstance) ?? nativePath ?? pagePath;
+      if (!hasSlug(hostPath) && !hasInstance(hostPath)) {
+        const adopted = adoptNativeForm(files[hostPath], component);
+        if (adopted) files[hostPath] = adopted;
+      }
       const source = files[hostPath];
       if (!source) continue;
       const hostHasInstance = hasInstance(hostPath);
@@ -246,11 +264,16 @@ export function materializeRegisteredComponents(
         continue;
       }
 
-      const rootClosePattern = /<\/(?:main|div|section|article|header|footer)\s*>/gi;
+      // Main owns page content. Never append business forms inside/after site footer.
+      const mainClose = /<\/main\s*>/gi;
+      let mainRoot: RegExpExecArray | null = null;
+      for (let match = mainClose.exec(source); match; match = mainClose.exec(source)) mainRoot = match;
+      const rootClosePattern = /<\/(?:div|section|article)\s*>/gi;
       let rootClose: RegExpExecArray | null = null;
       for (let match = rootClosePattern.exec(source); match; match = rootClosePattern.exec(source)) {
         rootClose = match;
       }
+      rootClose = mainRoot ?? rootClose;
       if (!rootClose || rootClose.index === undefined) continue;
       const registeredTemplate = stampIntentMarkers(
         stampComponentInstance(

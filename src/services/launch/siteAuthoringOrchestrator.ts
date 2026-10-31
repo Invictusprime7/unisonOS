@@ -304,11 +304,11 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       priorPages: priorPages.slice(-20),
       registryContext: input.registryContext,
       runtimeContext: [
+        input.runtimeContextForPage?.(page.pageId, baseFiles, establishedLanguage?.sourcePageId) ?? input.runtimeContext ?? '',
         referenceHomePath ? `Existing homepage ${referenceHomePath} is read-only design/API reference. Reuse its shared chrome, semantic tokens and imported component contracts; do not rewrite it or change the site's art direction.` : '',
         input.designContext
           ? `Industry ${input.designContext.contract.industry}; experience ${input.designContext.contract.experience}; forbidden implementations ${JSON.stringify(input.designContext.hardLegality.forbiddenImplementations)}.`
           : '',
-        input.runtimeContextForPage?.(page.pageId, baseFiles, establishedLanguage?.sourcePageId) ?? input.runtimeContext ?? '',
       ].filter(Boolean).join('\n').slice(0, 12000) || undefined,
     })).request;
     // Reserve one turn for each remaining worker wave. Home must not consume

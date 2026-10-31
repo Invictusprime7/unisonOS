@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compilePortableRecipes, DESIGN_SOURCE_ROOT } from '@/services/app-builder/design/portableRecipeCompiler';
+import { compilePortableRecipes, DESIGN_SOURCE_ROOT, variantPropHints } from '@/services/app-builder/design/portableRecipeCompiler';
 import type { DesignSourceBundle } from '@/services/app-builder/design/DesignSourceBundle';
 
 const ids = ['hero:prisma-cinematic', 'services:editorial-rows', 'gallery:case-study', 'testimonials:vertical-marquee', 'cta:generic-missing', 'navbar:x'];
@@ -8,6 +8,14 @@ const bundle = {
 } as unknown as DesignSourceBundle;
 
 describe('portableRecipeCompiler', () => {
+  it('retains required content reads beyond the former 6000 character cutoff', () => {
+    const source = `var LongSection = ({section}) => { const decoration = "${'x'.repeat(6500)}"; return section.props.items.map(item => item.title + item.description); };`;
+    expect(variantPropHints(source, 'LongSection')).toContain('items[]{title|description}');
+  });
+  it('includes required arrays from multiline section delegation', () => {
+    const source = `var Parent = ({section}) => React.createElement(Child, {\n section: section,\n theme: {}\n});\nvar Child = ({section}) => section.props.items.map(item => item.title);`;
+    expect(variantPropHints(source, 'Parent')).toContain('items[]{title}');
+  });
   const out = compilePortableRecipes(bundle);
   it('emits wrappers + family bundles under the design-source root', () => {
     expect(out.implementationModules['hero:prisma-cinematic']).toBe(`${DESIGN_SOURCE_ROOT}/Hero.tsx`);

@@ -207,10 +207,12 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     const components = componentsForPage(pageId);
     return `REGISTERED COMPONENT CONTRACT: ${components.length ? components.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; pages ${component.runtime.usedOnPages.join(', ') || 'site-wide'}; target ${component.targetType}; status ${component.runtime.status}; write intent ${component.runtime.writeIntent ?? 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required native form fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this page.'}`;
   };
-  // Native form blueprints and custom field JSON were removed from prompts to
-  // cut output tokens; the platform materializer wires forms after authoring.
-  const registeredComponentBlueprints = (_pageId?: string) =>
-    'Use Unison form controls and semantic theme tokens for forms (name, email, message). Native forms must not define local onSubmit success handlers.';
+  // Keep identity concise, not generic: source-owned projection supplies fields.
+  const registeredComponentBlueprints = (pageId?: string) => [
+    ...componentsForPage(pageId).filter(component => component.runtime.writeIntent && ['form', 'calendar'].includes(component.targetType))
+      .map(component => `Compose exactly one ${component.runtime.componentSlug} host data-ut-component-slug="${component.runtime.componentSlug}" with native <form data-intent-form="${component.runtime.writeIntent}"> inside its intended body section. Use the site's selected field purpose, not generic replacements. Preserve your authored layout; platform projection adds selected fields. No local onSubmit success handler.`),
+    'Use Unison form controls and semantic theme tokens. Do not add a second form or place a form after the footer.',
+  ].join('\n');
   const canonicalIntentBindings = (pageId?: string) => {
     const bindings = bindingsForPage(pageId);
     return [
@@ -253,6 +255,9 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const compose = (modules: string, pageId?: string) => [
     pageId ? pageIdentityContext(pageId) : '',
     'AI ENRICHMENT: author business-specific copy, complete object collections, purposeful media and working interactions through the registered contracts. The deterministic starter is not an AI response: do not retain baseline filler, generic field substitutions or empty sections. Preserve every planned section, including repeated families. Platform projection wires objects; it never supplies missing creative content.',
+    `PAGE DESIGN FIT: ${designSources.implementations.filter(impl => !pageId || designSources.eligibleByPage[pageId]?.includes(impl.implementationId))
+      .map(impl => `${impl.implementationId}: ${impl.visualSignature ? `${impl.visualSignature.geometry}, ${impl.visualSignature.mediaDominance} media, ${impl.visualSignature.density}, ${impl.visualSignature.experienceLevel}` : impl.name}`).join('; ')}. Choose designs that realize the target geometry and media dominance; do not default every section to the first listed variant.`,
+    modules,
     !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '',
     'PERSISTABLE SECTION CONTRACT: every page-level body <section>, shared <header> navbar, and shared <footer> must carry literal stable data-ut-section-id, data-ut-section-type, and data-ut-variant values. Use site:navbar and site:footer as the shared chrome IDs across pages. For a listed certified variant, import its default family dispatcher from @/unison/design-sources/<Family> and render exactly one per root with matching sectionId/variantId and JSON-serializable props={{...}}. For a unique authored body component that has no suitable listed variant, use data-ut-variant="custom:<kebab-slug>" on a known non-chrome section family and render exactly one default component imported from @/project-components/ or @/components/generated/ inside that root; keep all JSX props literal and serializable. Never use custom variants for navbar/footer. Keep existing data-ut-intent, data-ut-cta, data-ut-resource, slot, and registered component markers inside the root; never replace or regenerate those bindings when changing visual layout.',
     'CANONICAL SHARED SHELL: import and render the existing named SiteNav from @/project-components/site/SiteNav and SiteFooter from @/project-components/site/SiteFooter exactly once on every page, outside <main>. These wrappers are compiler-materialized from the canonical route registry and shared eligible design variants; do not inline, duplicate, or re-author page-local navigation or footer.',
@@ -270,7 +275,6 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     interactiveSurfaceContract,
     `Protected paths: ${runtime.protectedPaths.join(', ')}.`,
     `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.`,
-    modules,
     'Portable recipe identity: pass stable sectionId from the page composition and componentInstanceId only from an existing canonical functional instance; never invent cmp_ IDs or substitute an implementation ID for an instance ID. Local toggles are component state, not data-ut-intent. Auth submit forms use data-intent-form="auth.login"/"auth.register"; auth.login/auth.register click bindings only open/focus auth.',
     `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.`,
   ].filter(Boolean).join('\n');

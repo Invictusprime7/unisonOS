@@ -3,6 +3,7 @@
 import { certifiedComponentForSectionType, certifiedSectionModuleFiles } from '@/sections/compositionToFileSet';
 import { compilerOwnershipHash } from '@/platform/core/resolvedComposition';
 import type { DesignSourceBundle } from './DesignSourceBundle';
+import { parse } from '@babel/parser';
 
 export const DESIGN_SOURCE_ROOT = '/src/unison/design-sources';
 const COMPONENTS_ROOT = '/src/components';
@@ -31,12 +32,28 @@ function variantIdentifier(recipeSource: string, id: string): string | undefined
   return new RegExp(`"${escaped}"\\s*:\\s*([A-Za-z_$][\\w$]*)`).exec(recipeSource)?.[1];
 }
 
+const declarationCache = new Map<string, Map<string, string>>();
 function declarationBody(source: string, id: string): string | undefined {
-  const match = new RegExp(String.raw`(?:function\s+${id}\s*\(|(?:var|const|let)\s+${id}\s*=)`).exec(source);
-  if (!match) return undefined;
-  const rest = source.slice(match.index + match[0].length);
-  const end = rest.search(/\n(?:function |var |const |let |\/\/ src\/)/);
-  return rest.slice(0, end < 0 ? 6000 : Math.min(end, 6000));
+  let declarations = declarationCache.get(source);
+  if (!declarations) {
+    declarations = new Map();
+    const ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] });
+    for (const entry of ast.program.body) {
+      const node = entry.type === 'ExportNamedDeclaration' ? entry.declaration : entry;
+      if (node?.type === 'FunctionDeclaration' && node.id && node.start !== null && node.end !== null) {
+        declarations.set(node.id.name, source.slice(node.start, node.end));
+      } else if (node?.type === 'VariableDeclaration') {
+        for (const declaration of node.declarations) {
+          if (declaration.id.type === 'Identifier' && declaration.init && declaration.init.start !== null && declaration.init.end !== null) {
+            declarations.set(declaration.id.name, source.slice(declaration.init.start, declaration.init.end));
+          }
+        }
+      }
+    }
+    if (declarationCache.size >= 24) declarationCache.clear();
+    declarationCache.set(source, declarations);
+  }
+  return declarations.get(id);
 }
 
 interface PropShape { arrays: Set<string>; scalars: Set<string>; fields: Map<string, Map<string, boolean>> }
@@ -95,15 +112,15 @@ function collectPropShape(source: string, id: string, shape: PropShape, depth = 
     }
   }
   collectItemFields(body, shape.arrays, shape);
-  for (const call of body.matchAll(/createElement\(\s*([A-Z]\w*)\s*,\s*(\{[^\n]{0,80})/g)) {
+  for (const call of body.matchAll(/createElement\(\s*([A-Z]\w*)\s*,\s*(\{[\s\S]*?\})/g)) {
     if (call[1] === 'EditorialSection') continue;
-    const delegatesAll = /props:\s*(?:\{\s*\.\.\.)?section\.props/.test(call[2]);
+    const delegatesAll = /(?:props:\s*(?:\{\s*\.\.\.)?section\.props|section:\s*section\b)/.test(call[2]);
     collectPropShape(source, call[1], shape, depth + 1, itemsOnly || !delegatesAll);
   }
 }
 
 /** "headline, items[]{title|description|image?}": props a variant reads, with item fields for array props. */
-function variantPropHints(recipeSource: string, identifier: string): string | undefined {
+export function variantPropHints(recipeSource: string, identifier: string): string | undefined {
   const shape: PropShape = { arrays: new Set(), scalars: new Set(), fields: new Map() };
   collectPropShape(recipeSource, identifier, shape);
   const scalars = [...shape.scalars].filter((name) => !shape.arrays.has(name));

@@ -14,7 +14,7 @@ import {
 import { enforceSiteDesignContract } from '@/services/launch/homepageFirstContract';
 import { assertSiteShellClosure, buildSiteShellTopology } from '@/services/siteShellTopology';
 import { CANONICAL_COMPONENT_DEFINITIONS } from '@/services/canonicalComponentRegistry';
-import { missingNativeFormFields } from './nativeFormContract';
+import { missingNativeFormFields, nativeFormSources } from './nativeFormContract';
 import { isBindingOperationallyPending } from './bindingAvailability';
 import { collectResolvedCompositions, RESOLVED_COMPOSITION_ROOT, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import {
@@ -505,20 +505,17 @@ export async function validateAppBuildCandidate(input: {
       continue;
     }
     if (component.targetType === 'form' || component.targetType === 'calendar') {
-      const escapedIntent = writeIntent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const formPattern = new RegExp(`<form\\b(?=[^>]*data-intent-form\\s*=\\s*["']${escapedIntent}["'])[^>]*>[\\s\\S]*?<\\/form>`, 'i');
       const incompleteForm = componentSources.find(({ source }) => {
-        const form = formPattern.exec(source)?.[0];
+        const form = nativeFormSources(source, writeIntent)[0];
         return !form || /\bonSubmit\s*=/.test(form)
           || missingNativeFormFields(form, component).length > 0;
       });
       if (incompleteForm) {
-        const form = formPattern.exec(incompleteForm.source)?.[0] ?? '';
+        const form = nativeFormSources(incompleteForm.source, writeIntent)[0] ?? '';
         const missingFields = missingNativeFormFields(form, component);
         issues.push({
-          // Advisory: strict native-form field validation forced paid repair
-          // rounds that pushed Gemini past its deadline.
-          severity: 'advisory',
+          // Missing field setup stays advisory; fabricated local success never does.
+          severity: /\bonSubmit\s*=/.test(form) ? 'blocker' : 'advisory',
           code: 'registered-component-native-form-incomplete',
           path: incompleteForm.page.filePath,
           message: `Render registered ${component.runtime.componentSlug} with native form data-intent-form="${writeIntent}"${missingFields.length ? ` and required fields ${missingFields.join(', ')}` : ''}; local submit handlers cannot claim success.`,

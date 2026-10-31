@@ -1,9 +1,11 @@
 # Roadmap
 
 ## Active: Starter completeness and AI enrichment separation
-- [ ] Enforce sealed page archetypes, legal variants and every planned section in builds without AI, preserving repeated sections and objects.
-- [ ] Prevent AI authoring from accepting or projecting untouched starter sections as AI-enriched output.
-- [ ] Run focused generation regressions and render checks; report any live generation/session limitation.
+- [x] Restore concise, early AI enrichment/design-fit instructions and certified prop contracts; remove the recipe declaration cutoff. Adopt authored native forms instead of duplicating them and place missing forms inside main, never footer. Preserve timeout, checkpoint and saving fixes.
+- [x] Enforce sealed page order and archetype family/variant-trait checks against actual source objects; correct archetype profile inputs before sealing. Starters use eligible pins, declared geometry and stable seed variations, preserving repeated sections and uncapped starter content collections.
+- [x] AI acceptance requires an authored outcome for every requested page; missing outcomes and kept-baseline results cannot be accepted as AI enrichment.
+- [x] 130 focused checks and 91 neighboring checks pass (overlapping suites); both authority lints and preview build OK. Isolated desktop/mobile starter fixture renders all five planned sections, with no runtime errors or horizontal mobile overflow. Fixture uses existing sample images; one external sample image failed to load. Unison visual QA covered this fixture, not a production AI design.
+- [ ] Verify fresh live AI generation → saved preview → reopen and repair the already-saved SHIMMER design; requires an authoritative UNISON session. No paid provider request, saved-site mutation or backend deployment performed.
 
 ## Active: Remaining App Builder intent wiring
 - [x] Native contact/lead/quote/newsletter CTAs focus their form instead of dispatching empty submissions; missing forms show a warning. Booking validates native fields, prevents in-flight duplicate submissions and requires explicit backend acknowledgment. Runtime sessions are site-scoped; unhandled intent-exec actions fail instead of falsely claiming completion. No shared enquiry recipient configured.
