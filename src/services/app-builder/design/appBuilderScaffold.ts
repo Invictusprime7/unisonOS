@@ -1,6 +1,9 @@
 import type { AppBuildContract } from '../appBuilderContracts';
 import type { SectionType } from '@/sections/types';
 import { verifiedPhotosFor } from './pageStructureGate';
+import { resolvePageCompositionProfile } from '@/services/composition/industryCompositionRegistry';
+import { getIndustryContext } from '@/sections/references/industryContext';
+import { getIndustrySeeds } from '../../../../supabase/functions/install-system/industrySeeds';
 
 export interface AppBuilderScaffoldImplementation {
   modulePath: string;
@@ -49,67 +52,48 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
     });
 }
 
+  type ScaffoldItem = { title: string; description: string; imageUrl?: string };
+  const money = (cents: number) => `$${Math.round(cents / 100)}`;
+  const sentence = (text: string) => text ? text[0].toUpperCase() + text.slice(1) : text;
+
+  /** Section copy from Unison registries: composition profile, industry context and industry catalog seeds. */
   function sectionContent(contract: AppBuildContract, page: AppBuildContract['topology']['sitePlan']['pages'][number], family: SectionType, pageTitle: string, imageUrl?: string) {
+    const industry = String(contract.business.industry ?? contract.design.resolvedSiteDesignContext?.contract.industry ?? '');
+    const name = contract.business.businessName;
     const planned = contract.design.compositionPlan.pages.find((candidate) => candidate.pageId === page.id);
-    const vocabulary = planned?.profile.domainVocabulary ?? [];
-    const vocabularyHint = vocabulary.length ? vocabulary[0] : page.title.toLowerCase();
-    const isPortfolio = String(contract.business.industry ?? '').toLowerCase().includes('portfolio');
-    if (family === 'features') {
-      return {
-        eyebrow: isPortfolio ? 'Selected practice' : `About ${vocabularyHint}`,
-        title: isPortfolio ? 'A point of view, made tangible' : 'Thoughtful by design',
-        description: isPortfolio
-          ? 'A focused approach to ideas, form, and the details that make each project distinct.'
-          : 'A clear foundation, carefully considered details, and a result built to last.',
-        items: isPortfolio
-          ? [
-              { title: 'Identity', description: 'Distinctive visual systems with a clear point of view.' },
-              { title: 'Digital', description: 'Useful, expressive experiences shaped around real people.' },
-              { title: 'Story', description: 'A consistent voice across every place your work appears.' },
-            ]
-          : [
-              { title: 'Clarity', description: 'A strong direction before the details take shape.' },
-              { title: 'Craft', description: 'Careful choices in every part of the experience.' },
-              { title: 'Continuity', description: 'A coherent result from first impression to follow-through.' },
-            ],
-      };
+    const profile = planned?.profile ?? resolvePageCompositionProfile(industry, page.role);
+    const vocabulary = profile.domainVocabulary ?? [];
+    const goals = profile.narrativeGoals ?? [];
+    const context = getIndustryContext(industry as never);
+    const seeds = getIndustrySeeds(industry);
+    const owner = contract.business.businessProfile.description?.trim() || contract.business.parameters.description?.trim();
+    const intro = owner || (context ? `${context.label} by ${name}. ${goals[0] ? sentence(goals[0]) + '.' : ''}`.trim() : `${name} — ${pageTitle}.`);
+    const catalog: ScaffoldItem[] = [
+      ...(seeds.services ?? []).map((s) => ({ title: s.name, description: `${s.description} ${s.duration_minutes} min · from ${money(s.price_cents)}` })),
+      ...(seeds.menu_items ?? []).map((s) => ({ title: s.name, description: `${s.description} · ${money(s.price_cents)}` })),
+      ...(seeds.products ?? []).map((s) => ({ title: s.name, description: s.description ?? `$${s.price}` })),
+      ...(seeds.pricing_plans ?? []).map((s) => ({ title: s.name, description: s.description })),
+    ];
+    const trust: ScaffoldItem[] = (context?.trustSignals ?? []).map((signal) => ({ title: signal, description: `${name}: ${signal.toLowerCase()}.` }));
+    const goalItems: ScaffoldItem[] = goals.map((goal, index) => ({ title: sentence(vocabulary[index] ?? goal), description: `${sentence(goal)}.` }));
+    const heading = sentence(vocabulary[0] ?? pageTitle);
+    const pick = (...lists: ScaffoldItem[][]) => (lists.find((list) => list.length >= 2) ?? lists.flat()).slice(0, 6);
+    switch (family) {
+      case 'hero':
+        return { eyebrow: context?.label ?? pageTitle, title: page.isHome ? name : `${pageTitle} at ${name}`, description: intro, items: pick(catalog, trust) };
+      case 'services': case 'pricing': case 'features':
+        return { eyebrow: heading, title: family === 'features' ? `Why ${name}` : `${heading} at ${name}`, description: goals[0] ? `${sentence(goals[0])}.` : intro, items: family === 'features' ? pick(trust, goalItems) : pick(catalog, goalItems) };
+      case 'gallery':
+        return { eyebrow: heading, title: `Inside ${name}`, description: intro, items: imageUrl ? pick(catalog, trust).slice(0, 3).map((item) => ({ ...item, imageUrl })) : [] };
+      case 'testimonials':
+        return { eyebrow: 'Client words', title: `What people say about ${name}`, description: 'Replace with approved client reviews.', items: trust.slice(0, 3) };
+      case 'faq':
+        return { eyebrow: 'Questions', title: `Before you visit ${name}`, description: intro, items: pick(goalItems, catalog) };
+      case 'cta': case 'contact':
+        return { eyebrow: context?.conversionGoals[0] ?? pageTitle, title: context?.conversionGoals[0] ? `${context.conversionGoals[0]} with ${name}` : `Get in touch with ${name}`, description: intro, items: (context?.conversionGoals ?? []).map((goal) => ({ title: goal, description: `${goal} with ${name}.` })) };
+      default:
+        return { eyebrow: heading, title: family === 'about' ? `About ${name}` : `${heading} — ${name}`, description: intro, items: pick(trust, goalItems, catalog) };
     }
-    if (family === 'services') {
-      return {
-        eyebrow: isPortfolio ? 'How we work' : 'The approach',
-        title: isPortfolio ? 'From first sketch to final detail' : 'A considered process, start to finish',
-        description: 'Each step has a purpose, keeping the work clear and moving forward.',
-        items: [
-          { title: 'Discover', description: 'Find the right questions and a useful starting point.' },
-          { title: 'Shape', description: 'Turn the direction into a thoughtful, usable experience.' },
-          { title: 'Refine', description: 'Bring the details together and prepare the work to meet the world.' },
-        ],
-      };
-    }
-    if (family === 'gallery') {
-      return {
-        eyebrow: 'Selected work',
-        title: `A closer look at ${vocabularyHint}`,
-        description: 'A visual introduction to the details, materials, and character behind the work.',
-        items: imageUrl ? [
-          { title: 'Featured work', description: 'A considered detail from the collection.', imageUrl },
-          { title: 'In context', description: 'A closer view of the finished experience.', imageUrl },
-          { title: 'The details', description: 'Small choices shape the whole.', imageUrl },
-        ] : [],
-      };
-    }
-    return {
-      eyebrow: family === 'hero' ? 'Welcome' : family,
-      title: family === 'hero' ? `Welcome to ${contract.business.businessName}` : `${pageTitle}: ${vocabularyHint}`,
-      description: contract.business.businessProfile.description?.trim()
-        || contract.business.parameters.description?.trim()
-        || `A starter page for ${contract.business.businessName}.`,
-      items: [
-        { title: 'Start here', description: `Add the key ${vocabularyHint} details for your business.` },
-        { title: 'The details', description: 'Shape this section around the information visitors need.' },
-        { title: 'Next steps', description: 'Connect this content to the owner-approved workflow.' },
-      ],
-    };
   }
 
   function resolvePageSections(
@@ -154,9 +138,8 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
     if (['brand', 'businessName', 'siteName'].includes(key)) return contract.business.businessName;
     if (['items', 'features', 'services', 'projects', 'cards', 'images'].includes(key)) return content.items;
     if (['testimonials', 'reviews'].includes(key)) return content.items.map((item) => ({
-      quote: 'Owner-provided testimonial goes here.',
-      author: 'Owner-provided',
-      role: 'Add an approved attribution',
+      quote: item.description,
+      author: item.title,
       ...item,
     }));
     if (['faqs', 'questions'].includes(key)) return content.items.map((item) => ({
@@ -188,11 +171,11 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
           const isOptional = rawField.endsWith('?');
           if (['title', 'name', 'label'].includes(field)) return [[field, item.title]];
           if (['description', 'text', 'answer', 'body'].includes(field)) return [[field, item.description]];
-          if (['question'].includes(field)) return [[field, `What should visitors know about ${contract.business.businessName}?`]];
-          if (['quote'].includes(field)) return [[field, 'Owner-provided testimonial goes here.']];
-          if (['author'].includes(field)) return [[field, 'Owner-provided']];
+          if (['question'].includes(field)) return [[field, `${item.title}?`]];
+          if (['quote'].includes(field)) return [[field, item.description]];
+          if (['author'].includes(field)) return [[field, item.title]];
           if (['alt', 'caption'].includes(field)) return [[field, `${item.title} for ${contract.business.businessName}`]];
-          if (['value'].includes(field)) return [[field, `Add ${index + 1}`]];
+          if (['value'].includes(field)) return [[field, String(index + 1)]];
           if (['src', 'image', 'imageUrl', 'url'].includes(field)) return imageUrl ? [[field, imageUrl]] : [];
           if (isOptional) return [];
           return [[field, item.description]];
@@ -251,7 +234,7 @@ import { SiteFooter } from "@/project-components/site/SiteFooter";
   ${sectionImports}
 
 export default function ${page.isHome ? 'Home' : `Page${pageId.replace(/[^a-zA-Z0-9]/g, '')}`}() {
-  return <><SiteNav /><main className="mx-auto w-full max-w-6xl space-y-10 px-6 py-10">
+  return <><SiteNav /><main>
       ${sectionMarkup.join('\n    ')}
   </main><SiteFooter /></>;
 }
