@@ -1,6 +1,7 @@
 import type { AppBuildContract } from './appBuilderContracts';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 import { missingNativeFormFields, selectedNativeFormTemplate } from './nativeFormContract';
+import { parse } from '@babel/parser';
 
 const APP_BUILDER_SOURCE_PATH = /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/;
 
@@ -84,6 +85,58 @@ function repairNativeFormWithinHost(
 ): string | null {
   const templateForm = selectedNativeFormTemplate(component)?.match(/<form\b[\s\S]*?<\/form>/i)?.[0];
   if (!templateForm) return null;
+  // JSX handlers can contain > characters and paired tags; source spans,
+  // rather than HTML regexes, own replacement in an authored React module.
+  try {
+    const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    let repaired: string | null = null;
+    const visit = (node: unknown): void => {
+      if (repaired !== null || !node || typeof node !== 'object') return;
+      const value = node as Record<string, unknown>;
+      if (value.type === 'JSXElement') {
+        const opening = value.openingElement as { start?: number; end?: number; selfClosing?: boolean };
+        const closing = value.closingElement as { start?: number } | null;
+        if (typeof opening.start === 'number' && typeof opening.end === 'number') {
+          const tag = source.slice(opening.start, opening.end);
+          if (hasAttributeValue(tag, 'data-ut-component-slug', component.runtime.componentSlug)
+            || hasAttributeValue(tag, 'data-ut-component-instance-id', component.runtime.instanceId)) {
+            const forms: Array<{ start: number; end: number }> = [];
+            const collect = (child: unknown): void => {
+              if (!child || typeof child !== 'object') return;
+              const item = child as Record<string, unknown>;
+              const opener = item.openingElement as { name?: { name?: string } } | undefined;
+              if (item.type === 'JSXElement' && opener?.name?.name === 'form'
+                && typeof item.start === 'number' && typeof item.end === 'number') {
+                forms.push({ start: item.start, end: item.end });
+                return;
+              }
+              for (const next of Object.values(item)) {
+                if (Array.isArray(next)) next.forEach(collect);
+                else if (next && typeof next === 'object') collect(next);
+              }
+            };
+            collect(value.children);
+            const canonical = stampIntentMarkers(templateForm, component.runtime.instanceId, contract.business.intentBindings);
+            const form = forms[0];
+            if (form) {
+              const existing = source.slice(form.start, form.end);
+              repaired = nativeFormSatisfiesContract(existing, component) ? source
+                : source.slice(0, form.start) + canonical + source.slice(form.end);
+            } else if (closing && typeof closing.start === 'number') {
+              repaired = source.slice(0, closing.start) + canonical + source.slice(closing.start);
+            }
+            if (repaired !== null) return;
+          }
+        }
+      }
+      for (const child of Object.values(value)) {
+        if (Array.isArray(child)) child.forEach(visit);
+        else if (child && typeof child === 'object') visit(child);
+      }
+    };
+    visit(ast.program);
+    if (repaired !== null) return repaired;
+  } catch { /* Legacy source fragments use the bounded host fallback below. */ }
   const tags = /<([A-Za-z][\w:.-]*)\b[^>]*>/gs;
   for (let match = tags.exec(source); match; match = tags.exec(source)) {
     const tag = match[0];
@@ -181,13 +234,13 @@ export function materializeRegisteredComponents(
         }
       }
 
-      if (hostHasInstance && !hostHasSlug) {
+      if (hostHasInstance && !hostHasSlug && component.targetType !== 'form' && component.targetType !== 'calendar') {
         materializedInstanceIds.push(instanceId);
         continue;
       }
 
       const updatedHost = attachInstanceIdToRegisteredHost(source, component.runtime.componentSlug, instanceId);
-      if (updatedHost) {
+      if (updatedHost && component.targetType !== 'form' && component.targetType !== 'calendar') {
         files[hostPath] = updatedHost;
         materializedInstanceIds.push(instanceId);
         continue;
