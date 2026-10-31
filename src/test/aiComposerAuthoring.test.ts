@@ -263,6 +263,17 @@ describe('site authoring orchestrator', () => {
   it('orders Home first deterministically', () => {
     expect(orderAuthoringPages(pages, 'home').map((p) => p.pageId)).toEqual(['home', 'about']);
   });
+  it('does not re-author a valid secondary page for cosmetic layout repetition', async () => {
+    const invoke = vi.fn(async (turn: { messages: Array<{ content: string }> }) => {
+      const sent = JSON.parse(turn.messages[0].content);
+      return good(sent.page.filePath, '<section data-ut-variant="hero:centered">Same layout</section>');
+    });
+    const result = await authorSitePages({ pages, homePageId: 'home', designContext: null,
+      businessName: 'Efficient pages', files: base, invoke: invoke as never, commitPage: async files => ({ files }),
+    });
+    expect(result.outcomes.map(outcome => outcome.status)).toEqual(['authored', 'authored']);
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
 
   it('hands projected Home sidecar and source to later pages before invoking them', async () => {
     const sidecarPath = '/.unison/compositions/pages/Home.json';

@@ -145,6 +145,44 @@ function contactCrmContract(): AppBuildContract {
 const contactCrmPage = '<section data-ut-component-slug="contact-form"><form data-intent-form="contact.submit"><input name="name" /><input name="email" /><button type="submit" data-ut-cta="cta.form-submit">Send</button></form></section>';
 
 describe('App Builder candidate closure', () => {
+  it('repairs selected contact controls deterministically through JSX handler spans', async () => {
+    const value = contract();
+    value.business.capabilities = ['contact'];
+    const component = registeredComponentFixture('contact-form', 'cmp-custom', 'contact', { formId: 'form-custom' });
+    value.business.registeredComponents = [{ ...component, formFields: [
+      { fieldId: 'field_F0EFea', label: 'Project details', type: 'text', required: true, sortOrder: 4 },
+      { fieldId: 'field_lBxDTO', label: 'Budget', type: 'number', required: true, sortOrder: 5 },
+    ] }];
+    const files = { ...initialFiles,
+      '/src/pages/Contact.tsx': 'export default function Contact(){return <main><section data-ut-component-slug="contact-form" onClick={() => {}}><h1>Contact us</h1><form onSubmit={() => true}><button>Send</button></form></section></main>}',
+    };
+    const projected = materializeRegisteredComponents(value, files);
+    const source = projected.files['/src/pages/Contact.tsx'];
+    const report = await validateAppBuildCandidate({ contract: value, files: projected.files, initialFiles });
+    expect(source).toContain('name="field_F0EFea" required');
+    expect(source).toContain('name="field_lBxDTO" required');
+    expect(source).not.toContain('onSubmit=');
+    expect(source.match(/<form\b/g)).toHaveLength(1);
+    expect(report.issues.some(issue => issue.code === 'registered-component-native-form-incomplete')).toBe(false);
+    expect(materializeRegisteredComponents(value, projected.files).files).toEqual(projected.files);
+  });
+
+  it('allows pending contact setup but still rejects locally claimed submission success', async () => {
+    const value = contract();
+    value.business.capabilities = ['contact'];
+    const component = registeredComponentFixture('contact-form', 'cmp-pending', 'contact', {});
+    component.runtime.status = 'blocked';
+    component.runtime.blockers = ['Missing component binding: formId.'];
+    value.business.registeredComponents = [component];
+    const files = materializeRegisteredComponents(value, initialFiles).files;
+    const report = await validateAppBuildCandidate({ contract: value, files, initialFiles });
+    expect(report.ok, JSON.stringify(report.issues)).toBe(true);
+    expect(report.issues).toContainEqual(expect.objectContaining({ severity: 'advisory', code: 'registered-component-not-ready' }));
+    const invalid = { ...files, '/src/pages/Contact.tsx': files['/src/pages/Contact.tsx'].replace('<form ', '<form onSubmit={() => true} ') };
+    const rejected = await validateAppBuildCandidate({ contract: value, files: invalid, initialFiles });
+    expect(rejected.ok).toBe(false);
+    expect(rejected.issues).toContainEqual(expect.objectContaining({ severity: 'blocker', code: 'registered-component-native-form-incomplete' }));
+  });
   it('reports missing page bodies without cascading source-dependent binding blockers', async () => {
     const missingPageSources = contract();
     missingPageSources.business.bindingGuide = '- Page Home (/), slot hero.primary-cta: label "Contact", marker data-ut-cta="cta.hero", intent contact.submit, target /contact';

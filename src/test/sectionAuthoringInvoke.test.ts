@@ -14,6 +14,12 @@ const reply = (source: string) => ({ data: { content: JSON.stringify({ summary: 
 
 describe('bounded page-section authoring', () => {
   beforeEach(() => clearSectionAuthoringCheckpoints());
+  it('does not pay for a corrective batch without a full usable request window', async () => {
+    const invoke = vi.fn().mockResolvedValue(reply('<section>fragment</section>'));
+    const result = await createSectionAuthoringInvoke(invoke as ComposerInvoke, ['hero', 'services', 'contact'])(turn, { timeoutMs: 60_000 });
+    expect(result.error).toMatchObject({ status: 400 });
+    expect(invoke).toHaveBeenCalledOnce();
+  });
   it('sizes a page for all batches and site for Home plus parallel waves', () => {
     const order = ['hero', 'services', 'gallery', 'testimonials', 'cta'];
     expect(sectionPageBudgetMs(order)).toBe(255_000);
