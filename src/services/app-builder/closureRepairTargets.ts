@@ -2,6 +2,12 @@ import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 import { isProtectedComposerPath, APP_BUILDER_GENERATION_PREFIXES } from '@/contracts/aiComposerContract';
 import type { AuthoringPage } from '@/services/launch/siteAuthoringOrchestrator';
 
+const CONTRACT_SETUP_CODES = new Set([
+  'intent-binding-guide-missing', 'intent-binding-component-unregistered',
+  'intent-binding-component-intent-mismatch', 'required-capability-host-missing',
+  'registered-component-not-ready', 'registered-component-intent-mismatch',
+]);
+
 /** Resolve a diagnostic to its source owner, never to every page in the site. */
 export function closureRepairTargets(
   files: Record<string, string>,
@@ -12,6 +18,7 @@ export function closureRepairTargets(
   const closures = pages.map(page => ({ page, paths: collectLocalImportClosure(files, page.filePath) }));
   for (const issue of issues) {
     if (issue.severity !== 'blocker') continue;
+    if (CONTRACT_SETUP_CODES.has(issue.code)) continue;
     const path = issue.path?.startsWith('/src/') ? issue.path
       : pages.find(page => page.route === issue.path)?.filePath;
     const target = path ?? Object.keys(files).find(path => issue.message.includes(path));

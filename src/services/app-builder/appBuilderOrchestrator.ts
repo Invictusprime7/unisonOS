@@ -23,6 +23,7 @@ import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
 import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import { sectionSiteBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 import { closureRepairTargets } from './closureRepairTargets';
+import { isBindingOperationallyPending } from './bindingAvailability';
 
 export interface AppBuilderOrchestratorDependencies {
   authorSite: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
@@ -90,7 +91,7 @@ export async function orchestrateAppBuild(
   let latestSectionMaterialization: AppBuilderSectionMaterializationResult | undefined;
   let closureRepairFailure: { reason: ComposerStopReason; errors: string[] } | undefined;
   const markerRequirements = input.contract.business.intentBindings
-    .filter((binding) => binding.missingCapabilities.length === 0 && binding.ctaMarkers.length > 0)
+    .filter((binding) => !isBindingOperationallyPending(input.contract, binding) && binding.ctaMarkers.length > 0)
     .map((binding) => {
       const targetPage = binding.targetType === 'page'
         ? input.contract.topology.pageRegistry.pages[binding.targetId]
@@ -122,6 +123,7 @@ export async function orchestrateAppBuild(
       [{ id: page.pageId, filePath: page.filePath, route: page.route }], sectionImplementations,
       generation.designSources.eligibleByPage, sharedShellImplementationIds);
     return { files: sections.files, errors: [
+      ...markers.unresolvedBindingIds.map(id => `Canonical binding ${id} has no matching generated control on ${page.filePath}.`),
       ...sections.diagnostics.map(diagnostic => diagnostic.message),
     ] };
   };
@@ -213,7 +215,7 @@ export async function orchestrateAppBuild(
       requireAppBuilderSectionModels: true,
     });
     const bindingIssues = unresolvedMarkerBindingIds.map((bindingId) => ({
-      severity: 'advisory' as const,
+      severity: 'blocker' as const,
       code: 'binding-marker-unresolved',
       path: input.contract.business.intentBindings.find((binding) => binding.bindingId === bindingId)?.route,
       message: `Canonical binding ${bindingId} has no matching generated control in its registered page surface.`,
@@ -232,7 +234,7 @@ export async function orchestrateAppBuild(
       })));
     return {
       ...report,
-      ok: report.ok && pageIssues.length === 0 && sectionModelIssues.length === 0,
+      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0 && sectionModelIssues.length === 0,
       issues: [...report.issues, ...bindingIssues, ...sectionModelIssues, ...pageIssues],
     };
   };

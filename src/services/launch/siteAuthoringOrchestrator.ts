@@ -34,7 +34,6 @@ import {
 import {
   createSiteVisualMemory,
   extractCompositionSignature,
-  findRedundancy,
   planSiteComposition,
   renderCompositionBrief,
   type RedundancyIssue,

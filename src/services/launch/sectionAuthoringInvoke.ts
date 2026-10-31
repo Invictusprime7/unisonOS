@@ -154,7 +154,8 @@ export function createSectionAuthoringInvoke(
           if (typeof result.data === 'object') lastData = { ...result.data };
           break;
         }
-        if (attempt === 0 && deadline - Date.now() > SECTION_PROVIDER_TIMEOUT_MS + SECTION_TRANSPORT_RESERVE_MS) {
+        if (attempt === 0) {
+          if (deadline - Date.now() <= SECTION_PROVIDER_TIMEOUT_MS + SECTION_TRANSPORT_RESERVE_MS) break;
           instruction = `CORRECTION: the previous batch was rejected: ${violations.join('; ')}. Return complete corrected source for the same sections only.\n${instruction}`;
         }
       }

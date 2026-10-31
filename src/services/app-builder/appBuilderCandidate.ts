@@ -15,6 +15,7 @@ import { enforceSiteDesignContract } from '@/services/launch/homepageFirstContra
 import { assertSiteShellClosure, buildSiteShellTopology } from '@/services/siteShellTopology';
 import { CANONICAL_COMPONENT_DEFINITIONS } from '@/services/canonicalComponentRegistry';
 import { missingNativeFormFields } from './nativeFormContract';
+import { isBindingOperationallyPending } from './bindingAvailability';
 import { collectResolvedCompositions, RESOLVED_COMPOSITION_ROOT, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import {
   getAppBuilderSharedShellImplementationIds,
@@ -371,7 +372,7 @@ export async function validateAppBuildCandidate(input: {
   const guideRequirements = canonicalBindings.length === 0
     ? allGuideRequirements
     : allGuideRequirements.filter((requirement) => canonicalBindings.some((binding) =>
-      binding.missingCapabilities.length === 0
+      !isBindingOperationallyPending(input.contract, binding)
       && binding.route === requirement.route
       && binding.domIntent === requirement.intent,
     ));
@@ -397,9 +398,10 @@ export async function validateAppBuildCandidate(input: {
 
   for (const binding of canonicalBindings) {
     if (binding.missingCapabilities.length > 0) continue;
+    const pending = isBindingOperationallyPending(input.contract, binding);
     const bindingPage = pages.find((page) => page.id === binding.pageId);
     const bindingPageMissingSource = Boolean(bindingPage && !files[bindingPage.filePath]?.trim());
-    if (!bindingPageMissingSource
+    if (!pending && !bindingPageMissingSource
       && !guideRequirements.some((requirement) => requirement.route === binding.route && requirement.intent === binding.domIntent)) {
       issues.push({
         severity: 'blocker',
@@ -448,7 +450,7 @@ export async function validateAppBuildCandidate(input: {
       issues.push({
         severity: 'advisory',
         code: 'registered-component-not-ready',
-        message: `Registered ${component.runtime.componentSlug} is not ready: ${component.runtime.blockers.join(' ') || `instance status is ${component.instanceStatus ?? 'unset'}`}`,
+        message: `Draft connection pending for ${component.runtime.componentSlug}: ${component.runtime.blockers.join(' ') || `instance status is ${component.instanceStatus ?? 'unset'}`}. This action is not ready for publishing.`,
       });
     }
     const configuredFields = new Set(input.contract.business.configuredBusinessFields);
