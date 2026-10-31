@@ -10,7 +10,31 @@ const NON_DOM_INTENTS = new Set(['nav.goto']);
 
 function hasIntent(source: string, intent: string): boolean {
   const escapedIntent = intent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`data-ut-intent\\s*=\\s*(?:["']${escapedIntent}["']|\\{\\s*["']${escapedIntent}["']\\s*\\})`).test(source);
+  const value = `(?:["']${escapedIntent}["']|\\{\\s*["']${escapedIntent}["']\\s*\\})`;
+  return new RegExp(`(?:data-ut-intent|data-intent|data-intent-form|data-intent-trigger)\\s*=\\s*${value}`).test(source)
+    // Certified design props: props={{ submitIntent: "x" }} or submitIntent="x".
+    || new RegExp(`["']?submitIntent["']?\\s*[:=]\\s*${value}`).test(source);
+}
+
+/** Submission intents a single lead form on the site already serves. */
+const LEAD_FORM_INTENTS = new Set(['contact.submit', 'lead.capture', 'quote.request']);
+
+/** A rendered lead form: native form, registered host or certified Contact design. */
+function hasLeadForm(source: string): boolean {
+  return [...LEAD_FORM_INTENTS].some((intent) => hasIntent(source, intent) && /<form\b|data-ut-component-slug|submitIntent/.test(source))
+    || /data-ut-component-slug\s*=\s*["'](?:contact-form|request-quote)["']/.test(source)
+    || /from\s+['"]@\/unison\/design-sources\/Contact['"]/.test(source);
+}
+
+/** Inside <main>, before the shared footer — never after it. */
+function bodyInsertionIndex(source: string): number {
+  const mainClose = source.lastIndexOf('</main>');
+  if (mainClose >= 0) return mainClose;
+  const footer = /<(?:SiteFooter|footer)\b/.exec(source);
+  if (footer) return footer.index;
+  const layoutClose = source.lastIndexOf('</SiteLayout>');
+  if (layoutClose >= 0) return layoutClose;
+  return Math.max(source.lastIndexOf('</section>'), source.lastIndexOf('</div>'));
 }
 
 function labelForIntent(intent: string): string {
@@ -78,8 +102,9 @@ function renderIntentForm(intent: string): string {
 function injectIntentSurface(source: string, intent: string): string | null {
   // Canonical pages have a repeated SectionRenderer. Inject once at the page
   // boundary so a required action is not duplicated inside every section.
-  const layoutClose = source.lastIndexOf('</SiteLayout>');
-  const closeIndex = layoutClose >= 0 ? layoutClose : Math.max(source.lastIndexOf('</main>'), source.lastIndexOf('</section>'), source.lastIndexOf('</div>'));
+  // A page that already renders a form never receives a second one.
+  if (FORM_INTENTS[intent] && /<form\b|from\s+['"]@\/unison\/design-sources\/Contact['"]/.test(source)) return null;
+  const closeIndex = bodyInsertionIndex(source);
   if (closeIndex < 0) return null;
 
   const label = labelForIntent(intent);
@@ -114,6 +139,8 @@ export function closeRequiredIndustryIntents(
 
   for (const intent of required) {
     if (tsxPaths.some((path) => hasIntent(next[path], intent))) continue;
+    // One lead form serves contact, lead and quote enquiries; never add a second.
+    if (LEAD_FORM_INTENTS.has(intent) && tsxPaths.some((path) => hasLeadForm(next[path]))) continue;
 
     const paths = preferredFilePaths(intent)
       .flatMap((pattern) => tsxPaths.filter((path) => pattern.test(path)))
