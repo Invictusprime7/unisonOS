@@ -17,3 +17,16 @@ it('probe', () => {
     }
   }
 });
+import { renderPageBrief } from '@/services/launch/siteAuthoringOrchestrator';
+import { renderCompositionBrief } from '@/services/composition';
+it('brief', () => {
+  for (const id of ['salon-premium', 'agency-consulting']) {
+    const c = curateMarketplaceTemplate(ALL_COMPOSITIONS.find(x => x.id === id)!, THEME_PRESETS[0]);
+    for (const p of c.contract.topology.sitePlan.pages) {
+      const planned = c.contract.design.compositionPlan.pages.find(x => x.pageId === p.id);
+      const a = renderCompositionBrief(planned as never, [], null);
+      const b = renderPageBrief(c.contract.design.resolvedSiteDesignContext as never, { pageId: p.id, role: p.role, title: p.title, route: p.route, filePath: p.filePath } as never, 'X');
+      console.log('BRIEF', id, p.role, 'composition', a.length, 'page', b.length, 'sum', a.length + b.length + 1);
+    }
+  }
+});
