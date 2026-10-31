@@ -13,6 +13,7 @@
  * (launch orchestrator / Builder) and must go through commitMutation.
  */
 
+import { COMPOSER_CONTEXT_LIMIT } from '@/services/app-builder/contextBudget';
 import { AI_AUTHORED_MARKER } from '@/contracts/aiComposerContract';
 import type { ResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import { projectSiteDesignContract } from '@/services/launch/siteDesignContract';
@@ -101,7 +102,7 @@ export interface SiteAuthoringInput {
   /** Extra runtime facts for every page turn (e.g. certified design-source modules with prop contracts). */
   runtimeContext?: string;
   /** Per-page override of runtimeContext (trimmed to the modules that page can use). */
-  runtimeContextForPage?: (pageId: string, files: Readonly<Record<string, string>>, homePageId?: string) => string;
+  runtimeContextForPage?: (pageId: string, files: Readonly<Record<string, string>>, homePageId?: string, budget?: number) => string;
   /** Canonical in-memory projection only; never accepts or persists a revision. */
   preparePage?: (files: Record<string, string>, page: AuthoringPage) => Record<string, string>;
   /** Per-page design-source check run inside each page's repair loop. */
@@ -291,8 +292,11 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
         const photos = isImageLedRole(page.role)
           ? `PHOTO LIBRARY (required — this page is image-led and is rejected without photos): render at least one <img src="..."> in the page file itself using these verified URLs, copied exactly; never invent other image URLs:\n${verifiedPhotosFor(input.designContext?.contract.industry).join('\n')}`
           : '';
-        const room = 8000 - (vision ? vision.length + 1 : 0) - (photos ? photos.length + 1 : 0);
-        return [photos, layout.slice(0, Math.max(5500, room)), vision].filter(Boolean).join('\n').slice(0, 8000);
+        // The design contract must arrive whole; the vision is the only part that yields space.
+        const room = COMPOSER_CONTEXT_LIMIT - (photos ? photos.length + 1 : 0);
+        const fitted = layout.slice(0, Math.max(5500, room));
+        const visionRoom = COMPOSER_CONTEXT_LIMIT - fitted.length - (photos ? photos.length + 1 : 0) - 1;
+        return [photos, fitted, visionRoom > 200 ? vision.slice(0, visionRoom) : ''].filter(Boolean).join('\n').slice(0, COMPOSER_CONTEXT_LIMIT);
       })(),
       knowledgeQuery: `${input.businessName} ${page.role} ${page.title} ${page.route}`,
       baseFiles,
@@ -303,13 +307,18 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       routes,
       priorPages: priorPages.slice(-20),
       registryContext: input.registryContext,
-      runtimeContext: [
-        input.runtimeContextForPage?.(page.pageId, baseFiles, establishedLanguage?.sourcePageId) ?? input.runtimeContext ?? '',
-        referenceHomePath ? `Existing homepage ${referenceHomePath} is read-only design/API reference. Reuse its shared chrome, semantic tokens and imported component contracts; do not rewrite it or change the site's art direction.` : '',
-        input.designContext
-          ? `Industry ${input.designContext.contract.industry}; experience ${input.designContext.contract.experience}; forbidden implementations ${JSON.stringify(input.designContext.hardLegality.forbiddenImplementations)}.`
-          : '',
-      ].filter(Boolean).join('\n').slice(0, 12000) || undefined,
+      runtimeContext: (() => {
+        // Small fixed facts lead so the packed page vocabulary that follows is never cut off.
+        const fixed = [
+          referenceHomePath ? `Existing homepage ${referenceHomePath} is read-only design/API reference. Reuse its shared chrome, semantic tokens and imported component contracts; do not rewrite it or change the site's art direction.` : '',
+          input.designContext
+            ? `Industry ${input.designContext.contract.industry}; experience ${input.designContext.contract.experience}; forbidden implementations ${JSON.stringify(input.designContext.hardLegality.forbiddenImplementations)}.`
+            : '',
+        ].filter(Boolean).join('\n');
+        const room = COMPOSER_CONTEXT_LIMIT - fixed.length - 1;
+        const pageContext = input.runtimeContextForPage?.(page.pageId, baseFiles, establishedLanguage?.sourcePageId, room) ?? input.runtimeContext ?? '';
+        return [fixed, pageContext].filter(Boolean).join('\n').slice(0, COMPOSER_CONTEXT_LIMIT) || undefined;
+      })(),
     })).request;
     // Reserve one turn for each remaining worker wave. Home must not consume
     // the time needed to author the other selected pages.
