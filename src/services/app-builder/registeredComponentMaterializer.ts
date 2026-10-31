@@ -1,6 +1,6 @@
 import type { AppBuildContract } from './appBuilderContracts';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
-import { missingNativeFormFields, selectedNativeFormTemplate } from './nativeFormContract';
+import { missingNativeFormFields, nativeFormSources, selectedNativeFormFields, selectedNativeFormTemplate } from './nativeFormContract';
 import { parse } from '@babel/parser';
 
 const APP_BUILDER_SOURCE_PATH = /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/;
@@ -89,6 +89,130 @@ function adoptNativeForm(source: string, component: AppBuildContract['business']
   if (form.index === undefined) return null;
   const host = `<div data-ut-component-slug="${escapeAttributeValue(component.runtime.componentSlug)}" data-ut-component-instance-id="${escapeAttributeValue(component.runtime.instanceId)}">${form[0]}</div>`;
   return source.slice(0, form.index) + host + source.slice(form.index + form[0].length);
+}
+
+const CONTACT_DISPATCHER_IMPORT = /import\s+([A-Z][\w$]*)\s+from\s+['"]@\/unison\/design-sources\/Contact['"]/;
+
+/**
+ * Certified Contact variants render their own form. When the page renders one,
+ * that section is the registered host; appending a platform form duplicated it.
+ */
+export function adoptContactSectionHost(
+  source: string,
+  component: AppBuildContract['business']['registeredComponents'][number],
+): string | null {
+  const intent = component.runtime.writeIntent;
+  if (!intent || component.targetType !== 'form') return null;
+  const dispatcher = CONTACT_DISPATCHER_IMPORT.exec(source)?.[1];
+  if (!dispatcher || !new RegExp(`<${dispatcher}\\b`).test(source)) return null;
+  // The variant form submits its submitIntent prop (default contact.submit).
+  const escapedIntent = intent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (intent !== 'contact.submit' && !new RegExp(`submitIntent["']?\\s*:\\s*["']${escapedIntent}["']`).test(source)) return null;
+  if (!/<section\b[^>]*\bdata-ut-section-type\s*=\s*["']contact["']/.test(source)) return null;
+  const withFields = withContactFormFields(source, dispatcher, component) ?? source;
+  // Section roots stay design sections; the host is an inner element around the dispatcher.
+  const host = `data-ut-component-slug="${escapeAttributeValue(component.runtime.componentSlug)}" data-ut-component-instance-id="${escapeAttributeValue(component.runtime.instanceId)}"`;
+  if (withFields.includes(host)) return withFields;
+  const span = dispatcherElementSpan(withFields, dispatcher);
+  if (!span) return null;
+  return `${withFields.slice(0, span.start)}<div ${host}>${withFields.slice(span.start, span.end)}</div>${withFields.slice(span.end)}`;
+}
+
+function dispatcherElementSpan(source: string, dispatcher: string): { start: number; end: number } | null {
+  try {
+    const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    let span: { start: number; end: number } | null = null;
+    const visit = (node: unknown): void => {
+      if (span || !node || typeof node !== 'object') return;
+      const value = node as Record<string, any>;
+      if (value.type === 'JSXElement' && value.openingElement?.name?.name === dispatcher
+        && typeof value.start === 'number' && typeof value.end === 'number') {
+        span = { start: value.start, end: value.end };
+        return;
+      }
+      for (const child of Object.values(value)) {
+        if (Array.isArray(child)) child.forEach(visit);
+        else if (child && typeof child === 'object') visit(child);
+      }
+    };
+    visit(ast.program);
+    return span;
+  } catch {
+    return null;
+  }
+}
+
+/** The variant form renders props.fields; project the site's selected fields there (one form, real names). */
+function withContactFormFields(
+  source: string,
+  dispatcher: string,
+  component: AppBuildContract['business']['registeredComponents'][number],
+): string | null {
+  const defaults: Record<string, { type: string; placeholder: string }> = {
+    name: { type: 'text', placeholder: 'Your name' },
+    email: { type: 'email', placeholder: 'you@example.com' },
+    message: { type: 'textarea', placeholder: 'How can we help?' },
+  };
+  const fields = new Map<string, { name: string; type: string; placeholder: string; label: string; required: boolean }>();
+  for (const name of component.requiredNativeFormFields ?? []) {
+    const known = defaults[name] ?? { type: 'text', placeholder: name };
+    fields.set(name, { name, type: known.type, placeholder: known.placeholder, label: name.charAt(0).toUpperCase() + name.slice(1), required: true });
+  }
+  for (const field of selectedNativeFormFields(component)) {
+    const type = field.type === 'phone' ? 'tel' : field.type === 'select' ? 'text' : field.type;
+    fields.set(field.name, { name: field.name, type, placeholder: field.label, label: field.label, required: Boolean(field.required) || fields.get(field.name)?.required === true });
+  }
+  if (!fields.size) return null;
+  try {
+    const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    let span: { objectStart: number; fieldsStart?: number; fieldsEnd?: number; hasIntent: boolean } | null = null;
+    const visit = (node: unknown): void => {
+      if (span || !node || typeof node !== 'object') return;
+      const value = node as Record<string, any>;
+      if (value.type === 'JSXOpeningElement' && value.name?.name === dispatcher) {
+        const props = (value.attributes ?? []).find((attribute: any) => attribute.name?.name === 'props');
+        const object = props?.value?.expression;
+        if (object?.type === 'ObjectExpression' && typeof object.start === 'number') {
+          const keyOf = (property: any) => property.key?.name ?? property.key?.value;
+          const existing = object.properties.find((property: any) => keyOf(property) === 'fields');
+          span = { objectStart: object.start, fieldsStart: existing?.start, fieldsEnd: existing?.end,
+            hasIntent: object.properties.some((property: any) => keyOf(property) === 'submitIntent') };
+        }
+        return;
+      }
+      for (const child of Object.values(value)) {
+        if (Array.isArray(child)) child.forEach(visit);
+        else if (child && typeof child === 'object') visit(child);
+      }
+    };
+    visit(ast.program);
+    if (!span) return null;
+    const found = span as { objectStart: number; fieldsStart?: number; fieldsEnd?: number; hasIntent: boolean };
+    const literal = `"fields":${JSON.stringify([...fields.values()])}`;
+    const intent = !found.hasIntent && component.runtime.writeIntent ? `,"submitIntent":${JSON.stringify(component.runtime.writeIntent)}` : '';
+    if (typeof found.fieldsStart === 'number' && typeof found.fieldsEnd === 'number') {
+      return source.slice(0, found.fieldsStart) + literal + intent + source.slice(found.fieldsEnd);
+    }
+    const body = source.slice(found.objectStart + 1).trimStart();
+    const separator = body.startsWith('}') ? '' : ',';
+    return `${source.slice(0, found.objectStart + 1)}${literal}${intent}${separator}${body}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Business content belongs in <main>, before the shared footer — never after it. */
+export function bodyInsertionIndex(source: string): number | null {
+  let mainClose: RegExpExecArray | null = null;
+  const mainPattern = /<\/main\s*>/gi;
+  for (let match = mainPattern.exec(source); match; match = mainPattern.exec(source)) mainClose = match;
+  if (mainClose) return mainClose.index;
+  const footer = /<(?:SiteFooter|footer)\b/.exec(source);
+  if (footer) return footer.index;
+  let rootClose: RegExpExecArray | null = null;
+  const rootPattern = /<\/(?:div|section|article)\s*>/gi;
+  for (let match = rootPattern.exec(source); match; match = rootPattern.exec(source)) rootClose = match;
+  return rootClose ? rootClose.index : null;
 }
 
 function repairNativeFormWithinHost(
@@ -218,6 +342,15 @@ export function materializeRegisteredComponents(
           || source.includes(`data-ut-component-instance-id='${instanceId}'`)
       };
       const nativePath = surfacePaths.find(path => adoptNativeForm(files[path] ?? '', component) !== null);
+      const hasNativeForm = (path: string) => nativeFormSources(files[path] ?? '', component.runtime.writeIntent ?? '').length > 0;
+      if (!surfacePaths.some(hasNativeForm)) {
+        const contactPath = surfacePaths.find(path => adoptContactSectionHost(files[path] ?? '', component) !== null);
+        if (contactPath) {
+          files[contactPath] = adoptContactSectionHost(files[contactPath], component)!;
+          materializedInstanceIds.push(instanceId);
+          continue;
+        }
+      }
       const hostPath = surfacePaths.find(hasSlug) ?? surfacePaths.find(hasInstance) ?? nativePath ?? pagePath;
       if (!hasSlug(hostPath) && !hasInstance(hostPath)) {
         const adopted = adoptNativeForm(files[hostPath], component);
@@ -265,16 +398,8 @@ export function materializeRegisteredComponents(
       }
 
       // Main owns page content. Never append business forms inside/after site footer.
-      const mainClose = /<\/main\s*>/gi;
-      let mainRoot: RegExpExecArray | null = null;
-      for (let match = mainClose.exec(source); match; match = mainClose.exec(source)) mainRoot = match;
-      const rootClosePattern = /<\/(?:div|section|article)\s*>/gi;
-      let rootClose: RegExpExecArray | null = null;
-      for (let match = rootClosePattern.exec(source); match; match = rootClosePattern.exec(source)) {
-        rootClose = match;
-      }
-      rootClose = mainRoot ?? rootClose;
-      if (!rootClose || rootClose.index === undefined) continue;
+      const insertAt = bodyInsertionIndex(source);
+      if (insertAt === null) continue;
       const registeredTemplate = stampIntentMarkers(
         stampComponentInstance(
           template.replace(/\{\{businessId\}\}/g, escapeAttributeValue(contract.identity.businessId)),
@@ -285,7 +410,7 @@ export function materializeRegisteredComponents(
         contract.business.intentBindings,
       );
       const componentHost = `${registeredTemplate}\n`;
-      files[hostPath] = `${source.slice(0, rootClose.index)}${componentHost}${source.slice(rootClose.index)}`;
+      files[hostPath] = `${source.slice(0, insertAt)}${componentHost}${source.slice(insertAt)}`;
       materializedInstanceIds.push(instanceId);
     }
   }

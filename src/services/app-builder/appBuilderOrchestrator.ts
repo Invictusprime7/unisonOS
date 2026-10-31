@@ -1,5 +1,6 @@
 /** Candidate-only full-application orchestration behind UnisonAppBuilder. */
 
+import { COMPOSER_CONTEXT_LIMIT } from './contextBudget';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import type { ComposerLoopInput, ComposerLoopResult, ComposerStopReason } from '@/services/builder/aiRepairLoop';
 import type { AuthoringPage, SiteAuthoringInput, SiteAuthoringResult } from '@/services/launch/siteAuthoringOrchestrator';
@@ -183,10 +184,14 @@ export async function orchestrateAppBuild(
     compositionPlan: input.contract.design.compositionPlan,
     registryContext: input.contract.design.registryContext,
     runtimeContext: input.runtimeContext ?? '',
-    runtimeContextForPage: (pageId, files, homePageId) => [
-      homePageId && homePageId !== pageId ? renderHomeObjectContext(input.contract, files, homePageId) : '',
-      input.runtimeContext, generation.runtimeContextForPage(pageId),
-    ].filter(Boolean).join('\n'),
+    // Fixed blocks first; the page's design vocabulary is packed into what remains, never tail-cut.
+    runtimeContextForPage: (pageId, files, homePageId, budget = COMPOSER_CONTEXT_LIMIT) => {
+      const fixed = [
+        homePageId && homePageId !== pageId ? renderHomeObjectContext(input.contract, files, homePageId) : '',
+        input.runtimeContext ?? '',
+      ].filter(Boolean).join('\n');
+      return [fixed, generation.runtimeContextForPage(pageId, Math.max(4000, budget - fixed.length - 1))].filter(Boolean).join('\n');
+    },
     preparePage: (files, page) => {
       const projected = projectPage(files, page);
       if (projected.errors.length) throw new Error(projected.errors.join('\n'));
@@ -304,7 +309,7 @@ export async function orchestrateAppBuild(
         sourceScope: { scoped: true },
         routes: pages.map((page) => ({ title: page.title, route: page.route })),
         registryContext: input.contract.design.registryContext,
-        runtimeContext: [input.runtimeContext, generation.runtimeContextForPage(group.page.pageId)].filter(Boolean).join('\n').slice(0, 12000),
+        runtimeContext: [input.runtimeContext, generation.runtimeContextForPage(group.page.pageId, COMPOSER_CONTEXT_LIMIT - (input.runtimeContext?.length ?? 0) - 1)].filter(Boolean).join('\n').slice(0, COMPOSER_CONTEXT_LIMIT),
         diagnostics: group.diagnostics.slice(0, 30),
       });
       if (!assembled.evidence.sourceContextComplete) break;

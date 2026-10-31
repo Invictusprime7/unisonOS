@@ -9,6 +9,10 @@ import { listCatalogSurfaces } from '@/platform/core/catalogSurfaceRegistry';
 import { listResources, type ContentTypeRow } from '@/services/resources/resourceRegistry';
 import { listTopologyPageRoleAliases } from '@/platform/core/siteTopologyPlanner';
 import { collectResolvedCompositions } from '@/platform/core/resolvedComposition';
+import { COMPOSER_CONTEXT_LIMIT, packContextBlocks } from './contextBudget';
+
+/** Home references stay compact so later pages keep room for their own design vocabulary. */
+export const HOME_OBJECT_CONTEXT_LIMIT = 2_500;
 
 /** Read-only Home object references; source data stays in its canonical composition sidecar. */
 export function renderHomeObjectContext(contract: AppBuildContract, files: Readonly<Record<string, string>>, homePageId: string): string {
@@ -17,25 +21,36 @@ export function renderHomeObjectContext(contract: AppBuildContract, files: Reado
   const composition = collectResolvedCompositions({ ...files })[home.filePath];
   if (!composition || composition.compiledBy !== 'app-builder') return '';
   const bindings = contract.business.intentBindings.filter(binding => binding.pageId === homePageId);
+  const objects = composition.sections.map(section => ({
+    sectionId: section.sectionId, family: section.semanticType, variantId: section.variantId,
+    sourcePath: section.sourcePath, sourceModulePath: section.sourceModulePath,
+    dataFields: Object.keys(section.data ?? {}),
+  }));
+  const full = {
+    pageId: homePageId, pageFilePath: home.filePath, objects,
+    bindings: bindings.map(binding => ({
+      bindingId: binding.bindingId, sourceSection: binding.sourceSection, sourceSlot: binding.sourceSlot,
+      coreIntent: binding.coreIntent, domIntent: binding.domIntent, targetType: binding.targetType,
+      targetId: binding.targetId, componentInstanceId: binding.componentInstanceId,
+      requiredCapabilities: binding.requiredCapabilities, missingCapabilities: binding.missingCapabilities,
+      businessFieldBindings: binding.businessFieldBindings,
+    })),
+    enabledCapabilities: contract.business.capabilities,
+  };
+  let payload = JSON.stringify(full);
+  if (payload.length > HOME_OBJECT_CONTEXT_LIMIT) {
+    // Identities only; the sidecar remains the authority for full object data.
+    payload = JSON.stringify({
+      pageId: homePageId, pageFilePath: home.filePath,
+      objects: objects.map(({ sectionId, family, variantId }) => ({ sectionId, family, variantId })),
+      bindings: bindings.map(({ bindingId, coreIntent, componentInstanceId }) => ({ bindingId, coreIntent, componentInstanceId })),
+      enabledCapabilities: contract.business.capabilities,
+    });
+  }
   return [
     'HOME OBJECT CONTRACT (read-only canonical reference; not new authorization):',
-    JSON.stringify({
-      pageId: homePageId, pageFilePath: home.filePath,
-      objects: composition.sections.map(section => ({
-        sectionId: section.sectionId, family: section.semanticType, variantId: section.variantId,
-        sourcePath: section.sourcePath, sourceModulePath: section.sourceModulePath,
-        dataFields: Object.keys(section.data ?? {}),
-      })),
-      bindings: bindings.map(binding => ({
-        bindingId: binding.bindingId, sourceSection: binding.sourceSection, sourceSlot: binding.sourceSlot,
-        coreIntent: binding.coreIntent, domIntent: binding.domIntent, targetType: binding.targetType,
-        targetId: binding.targetId, componentInstanceId: binding.componentInstanceId,
-        requiredCapabilities: binding.requiredCapabilities, missingCapabilities: binding.missingCapabilities,
-        businessFieldBindings: binding.businessFieldBindings,
-      })),
-      enabledCapabilities: contract.business.capabilities,
-    }),
-    'Read the supplied Home composition sidecar for established content and object data. Preserve shared resource, component, field and intent identities. Reuse these contracts only where this page has its own canonical binding; never copy Home binding IDs onto other pages or invent capabilities. Keep the current page role and sealed composition. Pending business setup does not authorize a success claim.',
+    payload,
+    'Read the supplied Home composition sidecar for established content and object data. Preserve shared resource, component, field and intent identities. Reuse these contracts only where this page has its own canonical binding; never copy Home binding IDs onto other pages or invent capabilities. Keep the current page role and sealed composition, and choose different listed variants than Home where the plan allows. Pending business setup does not authorize a success claim.',
   ].join('\n');
 }
 
@@ -44,8 +59,8 @@ export interface AppBuilderGenerationContext {
   designSources: DesignSourceBundle;
   materialization: DesignSourceMaterialization;
   runtimeContext: string;
-  /** Same facts with design-source modules trimmed to what one page may use. */
-  runtimeContextForPage: (pageId: string) => string;
+  /** Same facts with design-source modules trimmed to what one page may use, packed into `budget` chars. */
+  runtimeContextForPage: (pageId: string, budget?: number) => string;
 }
 
 export interface IndustrySeedDataTarget {
@@ -208,11 +223,22 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     return `REGISTERED COMPONENT CONTRACT: ${components.length ? components.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; pages ${component.runtime.usedOnPages.join(', ') || 'site-wide'}; target ${component.targetType}; status ${component.runtime.status}; write intent ${component.runtime.writeIntent ?? 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required native form fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this page.'}`;
   };
   // Keep identity concise, not generic: source-owned projection supplies fields.
-  const registeredComponentBlueprints = (pageId?: string) => [
-    ...componentsForPage(pageId).filter(component => component.runtime.writeIntent && ['form', 'calendar'].includes(component.targetType))
-      .map(component => `Compose exactly one ${component.runtime.componentSlug} host data-ut-component-slug="${component.runtime.componentSlug}" with native <form data-intent-form="${component.runtime.writeIntent}"> inside its intended body section. Use the site's selected field purpose, not generic replacements. Preserve your authored layout; platform projection adds selected fields. No local onSubmit success handler.`),
-    'Use Unison form controls and semantic theme tokens. Do not add a second form or place a form after the footer.',
-  ].join('\n');
+  const registeredComponentTemplates = (pageId?: string) => {
+    const templates = componentsForPage(pageId).filter(component => component.nativeComponentTemplate);
+    return templates.length ? [
+      'REGISTERED COMPONENT BLUEPRINTS: preserve these canonical native hosts, field names, and intent markers exactly; they define behavior, while certified design-source modules define presentation.',
+      ...templates.map(component => `${component.runtime.componentSlug}:\n${component.nativeComponentTemplate}`),
+    ].join('\n') : '';
+  };
+  const registeredComponentBlueprints = (pageId?: string) => {
+    const hosts = componentsForPage(pageId).filter(component => component.runtime.writeIntent && ['form', 'calendar'].includes(component.targetType));
+    if (!hosts.length) return 'FORMS: this page hosts no registered form. Do not add forms; certified Contact variants already render their own form, so only use a Contact section where the plan requires it.';
+    return [
+      'FORM PLACEMENT (one form per purpose, inside <main>, before the shared footer):',
+      ...hosts.map(component => `- ${component.runtime.componentSlug}: if the page renders a Contact family section, that section's built-in form IS the registered form — wrap that one Contact dispatcher (inside its section) in <div data-ut-component-slug="${component.runtime.componentSlug}">, pass submitIntent "${component.runtime.writeIntent}" and the selected fields in its props, and add no other form. Otherwise compose exactly one host data-ut-component-slug="${component.runtime.componentSlug}" with native <form data-intent-form="${component.runtime.writeIntent}"> inside its planned body section. No local onSubmit success handler.`),
+      'Never place a form after the footer and never render a second form for the same purpose.',
+    ].join('\n');
+  };
   const canonicalIntentBindings = (pageId?: string) => {
     const bindings = bindingsForPage(pageId);
     return [
@@ -252,38 +278,40 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
       `For each certified root section, use section ID stable across copy/layout edits; emit data-ut-entity-id="section:${page.id}:<sectionId>", data-ut-page-id="${page.id}", and data-ut-page-path="${page.route}". Never use titles, array indexes, or source offsets as persisted IDs.`,
     ].join('\n');
   };
-  const compose = (modules: string, pageId?: string) => [
-    pageId ? pageIdentityContext(pageId) : '',
-    'AI ENRICHMENT: author business-specific copy, complete object collections, purposeful media and working interactions through the registered contracts. The deterministic starter is not an AI response: do not retain baseline filler, generic field substitutions or empty sections. Preserve every planned section, including repeated families. Platform projection wires objects; it never supplies missing creative content.',
-    `PAGE DESIGN FIT: ${designSources.implementations.filter(impl => !pageId || designSources.eligibleByPage[pageId]?.includes(impl.implementationId))
-      .map(impl => `${impl.implementationId}: ${impl.visualSignature ? `${impl.visualSignature.geometry}, ${impl.visualSignature.mediaDominance} media, ${impl.visualSignature.density}, ${impl.visualSignature.experienceLevel}` : impl.name}`).join('; ')}. Choose designs that realize the target geometry and media dominance; do not default every section to the first listed variant.`,
-    modules,
-    !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '',
-    'PERSISTABLE SECTION CONTRACT: every page-level body <section>, shared <header> navbar, and shared <footer> must carry literal stable data-ut-section-id, data-ut-section-type, and data-ut-variant values. Use site:navbar and site:footer as the shared chrome IDs across pages. For a listed certified variant, import its default family dispatcher from @/unison/design-sources/<Family> and render exactly one per root with matching sectionId/variantId and JSON-serializable props={{...}}. For a unique authored body component that has no suitable listed variant, use data-ut-variant="custom:<kebab-slug>" on a known non-chrome section family and render exactly one default component imported from @/project-components/ or @/components/generated/ inside that root; keep all JSX props literal and serializable. Never use custom variants for navbar/footer. Keep existing data-ut-intent, data-ut-cta, data-ut-resource, slot, and registered component markers inside the root; never replace or regenerate those bindings when changing visual layout.',
-    'CANONICAL SHARED SHELL: import and render the existing named SiteNav from @/project-components/site/SiteNav and SiteFooter from @/project-components/site/SiteFooter exactly once on every page, outside <main>. These wrappers are compiler-materialized from the canonical route registry and shared eligible design variants; do not inline, duplicate, or re-author page-local navigation or footer.',
-    registeredComponentContext(pageId),
-    registeredComponentBlueprints(pageId),
-    `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}.`,
-    industryContext,
-    iconContext,
-    buildRegisteredResourceContext(contentTypes),
-    logoContext,
-    businessParameterContext,
-    canonicalIntentBindings(pageId),
-    `Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.`,
-    commerceSetupContext,
-    interactiveSurfaceContract,
-    `Protected paths: ${runtime.protectedPaths.join(', ')}.`,
-    `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.`,
-    'Portable recipe identity: pass stable sectionId from the page composition and componentInstanceId only from an existing canonical functional instance; never invent cmp_ IDs or substitute an implementation ID for an instance ID. Local toggles are component state, not data-ut-intent. Auth submit forms use data-intent-form="auth.login"/"auth.register"; auth.login/auth.register click bindings only open/focus auth.',
-    `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.`,
-  ].filter(Boolean).join('\n');
+  // Priority 1 blocks carry the design vocabulary and placement rules and are never dropped.
+  const compose = (modules: string, pageId?: string, budget = COMPOSER_CONTEXT_LIMIT) => packContextBlocks([
+    { priority: 1, text: !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '' },
+    { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
+    { priority: 1, text: 'AI ENRICHMENT: author business-specific copy, complete object collections, purposeful media and working interactions through the registered contracts. The deterministic starter is not an AI response: do not retain baseline filler, generic field substitutions or empty sections. Preserve every planned section, including repeated families, in the planned order. CTA sections need specific, business-worded headlines and actions, never generic "Get started" copy. Platform projection wires objects; it never supplies missing creative content.' },
+    { priority: 1, text: registeredComponentBlueprints(pageId) },
+    { priority: 3, text: registeredComponentTemplates(pageId) },
+    { priority: 1, text: modules },
+    { priority: 2, text: `PAGE DESIGN FIT: ${designSources.implementations.filter(impl => !pageId || designSources.eligibleByPage[pageId]?.includes(impl.implementationId))
+      .map(impl => `${impl.implementationId}: ${impl.visualSignature ? `${impl.visualSignature.geometry}, ${impl.visualSignature.mediaDominance} media, ${impl.visualSignature.density}` : impl.name}`).join('; ')}. Variants are listed best-fit first per family. Choose designs that realize the target geometry and media dominance, and do not reuse one variant for different sections of a page or repeat the previous page's choices when another listed variant fits.` },
+    { priority: 2, text: 'PERSISTABLE SECTION CONTRACT: every page-level body <section>, shared <header> navbar, and shared <footer> must carry literal stable data-ut-section-id, data-ut-section-type, and data-ut-variant values. Use site:navbar and site:footer as the shared chrome IDs across pages. For a listed certified variant, import its default family dispatcher from @/unison/design-sources/<Family> and render exactly one per root with matching sectionId/variantId and JSON-serializable props={{...}}. For a unique authored body component that has no suitable listed variant, use data-ut-variant="custom:<kebab-slug>" on a known non-chrome section family and render exactly one default component imported from @/project-components/ or @/components/generated/ inside that root; keep all JSX props literal and serializable. Never use custom variants for navbar/footer. Keep existing data-ut-intent, data-ut-cta, data-ut-resource, slot, and registered component markers inside the root; never replace or regenerate those bindings when changing visual layout.' },
+    { priority: 1, text: 'CANONICAL SHARED SHELL: import and render the existing named SiteNav from @/project-components/site/SiteNav and SiteFooter from @/project-components/site/SiteFooter exactly once on every page, outside <main>: SiteNav first, then <main> holding every body section, then SiteFooter last. Nothing renders after SiteFooter. These wrappers are compiler-materialized from the canonical route registry and shared eligible design variants; do not inline, duplicate, or re-author page-local navigation or footer.' },
+    { priority: 2, trimmable: true, text: canonicalIntentBindings(pageId) },
+    { priority: 3, trimmable: true, text: registeredComponentContext(pageId) },
+    { priority: 3, text: businessParameterContext },
+    { priority: 4, text: interactiveSurfaceContract },
+    { priority: 2, text: commerceSetupContext },
+    { priority: 4, text: 'Portable recipe identity: pass stable sectionId from the page composition and componentInstanceId only from an existing canonical functional instance; never invent cmp_ IDs or substitute an implementation ID for an instance ID. Local toggles are component state, not data-ut-intent. Auth submit forms use data-intent-form="auth.login"/"auth.register"; auth.login/auth.register click bindings only open/focus auth.' },
+    { priority: 3, text: `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}. Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.` },
+    { priority: 4, text: industryContext },
+    { priority: 4, text: logoContext },
+    { priority: 4, text: iconContext },
+    { priority: 3, text: buildRegisteredResourceContext(contentTypes) },
+    { priority: 4, text: `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.` },
+    { priority: 5, text: `Protected paths: ${runtime.protectedPaths.join(', ')}.` },
+    { priority: 5, text: `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.` },
+  ], budget).text;
   return {
     contract,
     designSources,
     materialization,
-    runtimeContext: compose(renderDesignSourceModules(materialization)),
-    runtimeContextForPage: (pageId) => compose(renderDesignSourceModules(materialization, new Set(designSources.eligibleByPage[pageId] ?? [])), pageId),
+    // Site-wide reference is not a request payload; only per-page context is budgeted.
+    runtimeContext: compose(renderDesignSourceModules(materialization), undefined, Number.POSITIVE_INFINITY),
+    runtimeContextForPage: (pageId, budget) => compose(renderDesignSourceModules(materialization, new Set(designSources.eligibleByPage[pageId] ?? [])), pageId, budget),
   };
 }
 
