@@ -84,7 +84,7 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
       case 'services': case 'pricing': case 'features':
         return { eyebrow: heading, title: family === 'features' ? `Why ${name}` : `${heading} at ${name}`, description: goals[0] ? `${sentence(goals[0])}.` : intro, items: family === 'features' ? pick(trust, goalItems) : pick(catalog, goalItems) };
       case 'gallery':
-        return { eyebrow: heading, title: `Inside ${name}`, description: intro, items: imageUrl ? pick(catalog, trust).slice(0, 3).map((item) => ({ ...item, imageUrl })) : [] };
+        return { eyebrow: heading, title: `Inside ${name}`, description: intro, items: imageUrl ? pick(catalog, trust).slice(0, 6).map((item, index) => { const photos = verifiedPhotosFor(industry); return { ...item, imageUrl: photos[index % Math.max(1, photos.length)] ?? imageUrl }; }) : [] };
       case 'testimonials':
         return { eyebrow: 'Client words', title: `What people say about ${name}`, description: 'Replace with approved client reviews.', items: trust.slice(0, 3) };
       case 'faq':
@@ -132,7 +132,7 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
   ): unknown {
     if (['eyebrow', 'kicker', 'label'].includes(key)) return content.eyebrow;
     if (['title', 'headline', 'heading'].includes(key)) return content.title;
-    if (['description', 'subtitle', 'subheading', 'body', 'copy', 'text'].includes(key)) return content.description;
+    if (['description', 'subtitle', 'subheadline', 'subheading', 'body', 'copy', 'text'].includes(key)) return content.description;
     if (['headingLevel', 'headingTag'].includes(key)) return headingLevel;
     if (['image', 'imageUrl', 'src', 'url', 'backgroundImage'].includes(key)) return imageUrl;
     if (['brand', 'businessName', 'siteName'].includes(key)) return contract.business.businessName;
@@ -156,6 +156,7 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
     contract: AppBuildContract,
     headingLevel: 'h1' | 'h2',
     imageUrl?: string,
+    family?: string,
   ): Record<string, unknown> {
     const props: Record<string, unknown> = {};
     for (const token of (hint ?? '').split(/,\s*/).filter(Boolean)) {
@@ -176,7 +177,7 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
           if (['author'].includes(field)) return [[field, item.title]];
           if (['alt', 'caption'].includes(field)) return [[field, `${item.title} for ${contract.business.businessName}`]];
           if (['value'].includes(field)) return [[field, String(index + 1)]];
-          if (['src', 'image', 'imageUrl', 'url'].includes(field)) return imageUrl ? [[field, imageUrl]] : [];
+          if (['src', 'image', 'imageUrl', 'url'].includes(field)) { const src = (item as { imageUrl?: string }).imageUrl ?? imageUrl; return src ? [[field, src]] : []; }
           if (isOptional) return [];
           return [[field, item.description]];
         })));
@@ -189,6 +190,14 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
       if (value !== undefined) props[name] = value;
       else if (!optional && ['title', 'headline', 'heading'].includes(name)) props[name] = content.title;
       else if (!optional && ['description', 'subtitle', 'body', 'text'].includes(name)) props[name] = content.description;
+    }
+    const hasArray = Object.values(props).some(Array.isArray);
+    if (!hasArray && content.items.length && family !== 'hero' && family !== 'about') {
+      props.items = content.items.map((item) => ({
+        title: item.title, name: item.title, description: item.description,
+        question: item.title, answer: item.description, quote: item.description, author: item.title,
+        ...(item.imageUrl ? { image: item.imageUrl, src: item.imageUrl } : {}),
+      }));
     }
     return props;
   }
@@ -217,7 +226,7 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
       const sectionId = `${pageId}:${family}:${occurrence}`;
       const content = sectionContent(contract, page, family, page.title, imageUrl);
       const headingLevel = page.isHome && index === 0 ? 'h1' : 'h2';
-      const props = propsFromRegistryHint(section.propHint, content, contract, headingLevel, imageUrl);
+      const props = propsFromRegistryHint(section.propHint, content, contract, headingLevel, imageUrl, family);
       if (!Object.keys(props).length) {
         throw new Error(`[AppBuilderScaffold] ${page.filePath} ${section.variantId} has no canonical prop projection.`);
       }
