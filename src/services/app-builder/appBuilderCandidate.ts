@@ -14,7 +14,7 @@ import {
 import { enforceSiteDesignContract } from '@/services/launch/homepageFirstContract';
 import { assertSiteShellClosure, buildSiteShellTopology } from '@/services/siteShellTopology';
 import { CANONICAL_COMPONENT_DEFINITIONS } from '@/services/canonicalComponentRegistry';
-import { missingNativeFormFields, nativeFormSources } from './nativeFormContract';
+import { contactDesignForms, missingContactDesignFields, missingNativeFormFields, nativeFormSources } from './nativeFormContract';
 import { isBindingOperationallyPending } from './bindingAvailability';
 import { collectResolvedCompositions, RESOLVED_COMPOSITION_ROOT, resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import {
@@ -521,7 +521,7 @@ export async function validateAppBuildCandidate(input: {
     if (component.targetType === 'form' || component.targetType === 'calendar') {
       const missingFor = (source: string): string[] | null => {
         const form = nativeFormSources(source, writeIntent)[0];
-        if (form) return /\bonSubmit\s*=/.test(form) ? missingNativeFormFields(form, component) : missingNativeFormFields(form, component);
+        if (form) return missingNativeFormFields(form, component);
         // A certified Contact design renders the native form from its props.
         return missingContactDesignFields(source, component);
       };
