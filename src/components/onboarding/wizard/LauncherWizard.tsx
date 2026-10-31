@@ -816,12 +816,11 @@ export const LauncherWizard = ({
                   </section>}
                 </div>
 
-                {launchError && <div role="alert" className="mt-6 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{launchError}{launchFailure && <details className="mt-2"><summary className="cursor-pointer text-xs font-medium">Technical details</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[10px]">{JSON.stringify(launchFailure, null, 2)}</pre></details>}{launchFailure?.stage === 'app-build' && lastGenerationMode === 'ai' && <Button variant="outline" disabled={isLaunching} onClick={() => handleGenerate('deterministic')} className="mt-3"><PanelsTopLeft />Build without AI</Button>}</div>}
+                {launchError && <div role="alert" className="mt-6 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{launchError}{launchFailure && <details className="mt-2"><summary className="cursor-pointer text-xs font-medium">Technical details</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[10px]">{JSON.stringify(launchFailure, null, 2)}</pre></details>}{launchFailure?.stage === 'app-build' && lastGenerationMode === 'ai' && AI_UNAVAILABLE_PATTERN.test(launchError) && <Button variant="outline" disabled={isLaunching} onClick={() => handleGenerate('deterministic')} className="mt-3"><PanelsTopLeft />Build without AI</Button>}</div>}
 
                 <footer className="mt-8 flex items-center justify-between border-t border-border pt-5">
                   {step === "industry" ? <span /> : <Button variant="ghost" onClick={goBack}><ArrowLeft />Back</Button>}
                   {(isChat ? step === "confirm" : step === "aesthetic") ? <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button variant="outline" disabled={!canContinue || isLaunching} onClick={() => handleGenerate('deterministic')}><PanelsTopLeft />Build without AI</Button>
                     <Button disabled={!canContinue || isLaunching} onClick={() => handleGenerate('ai')}>{isLaunching ? <Loader2 className="animate-spin" /> : <Sparkle />}{isLaunching ? 'Creating…' : 'Create site'}</Button>
                   </div> : <Button disabled={!canContinue || isLaunching} onClick={goNext}>Continue<ArrowRight /></Button>}
                 </footer>
