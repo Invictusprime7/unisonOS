@@ -255,7 +255,7 @@ const GENERIC = build('*', {
     narrativeGoals: ['browse stories and discover useful reading'],
     requiredCapabilities: [], domainVocabulary: ['journal', 'articles'],
     character: { density: 'medium', editoriality: 0.85 },
-    preferredFamilies: ['blog-preview'],
+    preferredFamilies: ['blog-preview', 'cta'],
     heroCandidates: ['none'], geometryCandidates: ['grid', 'asymmetric'],
     preferredCompositionPatterns: ['editorial story index'],
     discouragedCompositionPatterns: ['service catalog', 'checkout form'], noveltyBudget: 0.5,
