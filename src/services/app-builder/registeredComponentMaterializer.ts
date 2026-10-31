@@ -108,17 +108,38 @@ export function adoptContactSectionHost(
   // The variant form submits its submitIntent prop (default contact.submit).
   const escapedIntent = intent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   if (intent !== 'contact.submit' && !new RegExp(`submitIntent["']?\\s*:\\s*["']${escapedIntent}["']`).test(source)) return null;
-  const wrapper = /<section\b[^>]*\bdata-ut-section-type\s*=\s*["']contact["'][^>]*>/.exec(source);
-  if (!wrapper) return null;
-  let tag = wrapper[0];
-  if (!/\bdata-ut-component-slug\s*=/.test(tag)) {
-    tag = tag.replace(/\s*>$/, ` data-ut-component-slug="${escapeAttributeValue(component.runtime.componentSlug)}">`);
-  } else if (!hasAttributeValue(tag, 'data-ut-component-slug', component.runtime.componentSlug)) return null;
-  if (!/\bdata-ut-component-instance-id\s*=/.test(tag)) {
-    tag = tag.replace(/\s*>$/, ` data-ut-component-instance-id="${escapeAttributeValue(component.runtime.instanceId)}">`);
-  } else if (!hasAttributeValue(tag, 'data-ut-component-instance-id', component.runtime.instanceId)) return null;
-  const hosted = source.slice(0, wrapper.index) + tag + source.slice(wrapper.index + wrapper[0].length);
-  return withContactFormFields(hosted, dispatcher, component) ?? hosted;
+  if (!/<section\b[^>]*\bdata-ut-section-type\s*=\s*["']contact["']/.test(source)) return null;
+  const withFields = withContactFormFields(source, dispatcher, component) ?? source;
+  // Section roots stay design sections; the host is an inner element around the dispatcher.
+  const host = `data-ut-component-slug="${escapeAttributeValue(component.runtime.componentSlug)}" data-ut-component-instance-id="${escapeAttributeValue(component.runtime.instanceId)}"`;
+  if (withFields.includes(host)) return withFields;
+  const span = dispatcherElementSpan(withFields, dispatcher);
+  if (!span) return null;
+  return `${withFields.slice(0, span.start)}<div ${host}>${withFields.slice(span.start, span.end)}</div>${withFields.slice(span.end)}`;
+}
+
+function dispatcherElementSpan(source: string, dispatcher: string): { start: number; end: number } | null {
+  try {
+    const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    let span: { start: number; end: number } | null = null;
+    const visit = (node: unknown): void => {
+      if (span || !node || typeof node !== 'object') return;
+      const value = node as Record<string, any>;
+      if (value.type === 'JSXElement' && value.openingElement?.name?.name === dispatcher
+        && typeof value.start === 'number' && typeof value.end === 'number') {
+        span = { start: value.start, end: value.end };
+        return;
+      }
+      for (const child of Object.values(value)) {
+        if (Array.isArray(child)) child.forEach(visit);
+        else if (child && typeof child === 'object') visit(child);
+      }
+    };
+    visit(ast.program);
+    return span;
+  } catch {
+    return null;
+  }
 }
 
 /** The variant form renders props.fields; project the site's selected fields there (one form, real names). */
