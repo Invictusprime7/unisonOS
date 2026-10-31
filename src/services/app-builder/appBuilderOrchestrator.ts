@@ -210,8 +210,12 @@ export async function orchestrateAppBuild(
   const compatibilityMode = Boolean(input.acceptPage);
   // A valid baseline is not an authored application. Preserve terminal provider
   // failures instead of accepting the untouched reference source or retrying it.
-  const terminalAuthoringFailure = authored.outcomes.some((outcome) =>
+  const terminalProviderFailure = authored.outcomes.some((outcome) =>
     outcome.status !== 'authored' && ['credits', 'denied', 'provider', 'rate_limited', 'invalid_response', 'aborted'].includes(outcome.reason));
+  // A failed page with no baseline source is unrecoverable in this build;
+  // surface its own gate errors instead of the downstream missing-file cascade.
+  const terminalAuthoringFailure = terminalProviderFailure || authored.outcomes.some((outcome) =>
+    outcome.status !== 'authored' && !baseFiles[outcome.page.filePath]?.trim());
   const missingAuthorship = generationMode === 'ai' ? pages.filter(page =>
     !authored.outcomes.some(outcome => outcome.page.pageId === page.pageId && outcome.status === 'authored')) : [];
   const incompleteAuthoring = missingAuthorship.length > 0;
