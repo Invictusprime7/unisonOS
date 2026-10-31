@@ -406,7 +406,7 @@ export async function orchestrateAppBuild(
     protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
     candidate,
     candidateFiles,
-    stopReason: cancelled ? 'cancelled' : ready ? 'complete' : terminalAuthoringFailure || closureRepairFailure ? 'provider-error' : closureRepairAttempts ? 'repair-exhausted' : 'validation-failed',
+    stopReason: cancelled ? 'cancelled' : ready ? 'complete' : terminalProviderFailure || closureRepairFailure ? 'provider-error' : closureRepairAttempts ? 'repair-exhausted' : 'validation-failed',
     outcomes: authored.outcomes,
     revisionId: authored.revisionId,
   };
