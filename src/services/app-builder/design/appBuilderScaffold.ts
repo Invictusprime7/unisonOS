@@ -31,6 +31,23 @@ function safeRouteHref(path: string | undefined): string {
   return `#${path.startsWith('/') ? path : `/${path}`}`;
 }
 
+/** Visitor-facing labels when the wizard binding carries no button copy. */
+const ACTION_LABELS: Record<string, string> = {
+  'contact.submit': 'Get in touch',
+  'lead.capture': 'Start a conversation',
+  'quote.request': 'Request a quote',
+  'booking.create': 'Book now',
+  'booking.start': 'Book now',
+  'newsletter.subscribe': 'Subscribe',
+  'cart.add': 'Add to cart',
+  'cart.view': 'View bag',
+  'cart.checkout': 'Checkout',
+  'donation.start': 'Donate',
+  'contact.call': 'Call us',
+  'contact.email': 'Email us',
+  'location.directions': 'Get directions',
+};
+
 function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
   return contract.business.intentBindings
     .filter((binding) => binding.pageId === pageId
@@ -39,7 +56,11 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
     .flatMap((binding) => {
       const marker = binding.ctaMarkers.find((value) => value.startsWith('cta.') || value.startsWith('icon.'));
       if (!marker) return [];
-      const label = binding.sourceLabel?.trim() || marker.slice(marker.indexOf('.') + 1).replace(/[-.]/g, ' ');
+      // A trigger for a form rendered on this same page duplicates that form's own submit.
+      const hostedHere = binding.componentInstanceId && contract.business.registeredComponents.some((component) =>
+        component.runtime.instanceId === binding.componentInstanceId && component.runtime.usedOnPages.includes(pageId));
+      if (hostedHere && binding.targetType !== 'page' && binding.targetType !== 'url') return [];
+      const label = binding.sourceLabel?.trim() || ACTION_LABELS[binding.coreIntent] || sentence(marker.slice(marker.indexOf('.') + 1).replace(/[-._]+/g, ' '));
       const jsxLabel = `{${JSON.stringify(label)}}`;
       const accessibleName = marker.startsWith('icon.') ? ` aria-label=${JSON.stringify(label)}` : '';
       const isNavigation = binding.domIntent === 'nav.goto';
