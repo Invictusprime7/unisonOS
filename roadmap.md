@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Active: Starter completeness and AI enrichment separation
+- [ ] Use the supplied AI-build screenshots to restore advanced, business-specific composition without reverting unrelated recent fixes.
 - [ ] Enforce sealed page archetypes, legal variants and every planned section in builds without AI, preserving repeated sections and objects.
 - [ ] Prevent AI authoring from accepting or projecting untouched starter sections as AI-enriched output.
 - [ ] Run focused generation regressions and render checks; report any live generation/session limitation.
