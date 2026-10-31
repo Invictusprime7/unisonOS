@@ -4,6 +4,9 @@ import { verifiedPhotosFor } from './pageStructureGate';
 import { resolvePageCompositionProfile } from '@/services/composition/industryCompositionRegistry';
 import { getIndustryContext } from '@/sections/references/industryContext';
 import { getIndustrySeeds } from '../../../../supabase/functions/install-system/industrySeeds';
+import { hashSeed } from '@/platform/core/generationSeed';
+import { normalizePageRole } from '@/services/composition/industryCompositionRegistry';
+import { pageArchetypeIssues } from '@/sections/pageArchetypeContract';
 
 export interface AppBuilderScaffoldImplementation {
   modulePath: string;
@@ -77,16 +80,16 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
     const trust: ScaffoldItem[] = (context?.trustSignals ?? []).map((signal) => ({ title: signal, description: `${name}: ${signal.toLowerCase()}.` }));
     const goalItems: ScaffoldItem[] = goals.map((goal, index) => ({ title: sentence(vocabulary[index] ?? goal), description: `${sentence(goal)}.` }));
     const heading = sentence(vocabulary[0] ?? pageTitle);
-    const pick = (...lists: ScaffoldItem[][]) => (lists.find((list) => list.length >= 2) ?? lists.flat()).slice(0, 6);
+    const pick = (...lists: ScaffoldItem[][]) => (lists.find((list) => list.length >= 2) ?? lists.flat());
     switch (family) {
       case 'hero':
         return { eyebrow: context?.label ?? pageTitle, title: page.isHome ? name : `${pageTitle} at ${name}`, description: intro, items: pick(catalog, trust) };
       case 'services': case 'pricing': case 'features':
         return { eyebrow: heading, title: family === 'features' ? `Why ${name}` : `${heading} at ${name}`, description: goals[0] ? `${sentence(goals[0])}.` : intro, items: family === 'features' ? pick(trust, goalItems) : pick(catalog, goalItems) };
       case 'gallery':
-        return { eyebrow: heading, title: `Inside ${name}`, description: intro, items: imageUrl ? pick(catalog, trust).slice(0, 6).map((item, index) => { const photos = verifiedPhotosFor(industry); return { ...item, imageUrl: photos[index % Math.max(1, photos.length)] ?? imageUrl }; }) : [] };
+        return { eyebrow: heading, title: `Inside ${name}`, description: intro, items: pick(catalog, trust, goalItems).map((item, index) => { const photos = verifiedPhotosFor(industry); return { ...item, imageUrl: photos[index % Math.max(1, photos.length)] ?? imageUrl }; }) };
       case 'testimonials':
-        return { eyebrow: 'Client words', title: `What people say about ${name}`, description: 'Replace with approved client reviews.', items: trust.slice(0, 3) };
+        return { eyebrow: 'Sample reviews', title: `What people say about ${name}`, description: 'Replace with approved client reviews.', items: pick(trust, goalItems).map(item => ({ ...item, title: 'Sample reviewer', description: `Sample review — ${item.description}` })) };
       case 'faq':
         return { eyebrow: 'Questions', title: `Before you visit ${name}`, description: intro, items: pick(goalItems, catalog) };
       case 'cta': case 'contact':
@@ -106,9 +109,22 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
       throw new Error(`[AppBuilderScaffold] ${page.filePath} has no canonical composition section order.`);
     }
     const eligibleIds = registry.eligibleByPage[page.id] ?? [];
+    const archetypeErrors = pageArchetypeIssues(normalizePageRole(page.role), planned.target.sectionOrder);
+    if (archetypeErrors.length) throw new Error(`[AppBuilderScaffold] ${page.filePath}: ${archetypeErrors.join('; ')}`);
     const occurrenceByFamily = new Map<string, number>();
     return planned.target.sectionOrder.map((sectionType) => {
-      const variantId = eligibleIds.find((id) => registry.implementations[id]?.sectionType === sectionType);
+      const candidates = eligibleIds.filter(id => registry.implementations[id]?.sectionType === sectionType);
+      const pinned = contract.design.registryContext?.pinnedImplementationIdsByPage?.[page.id] ?? [];
+      const metadata = contract.design.registryContext?.implementations ?? [];
+      const fit = (id: string) => {
+        const geometry = metadata.find(impl => impl.id === id)?.capabilities?.layout?.geometry;
+        return (pinned.includes(id) ? 100 : 0) + (geometry?.includes(planned.target.geometry as never) ? 10 : 0);
+      };
+      const bestFit = Math.max(...candidates.map(fit));
+      const choices = candidates.filter(id => fit(id) === bestFit).sort();
+      const occurrence = occurrenceByFamily.get(sectionType) ?? 0;
+      const choice = hashSeed(`${contract.design.seed ?? contract.design.compositionPlan.seed}:${page.id}:${planned.compositionKey}:${sectionType}`);
+      const variantId = choices[(choice + occurrence) % choices.length];
       const implementation = variantId ? registry.implementations[variantId] : undefined;
       if (!variantId || !implementation) {
         throw new Error(`[AppBuilderScaffold] ${page.filePath} has no page-eligible ${sectionType} implementation from the canonical registry.`);
@@ -217,7 +233,9 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
     const occurrences = new Map<string, number>();
     const sectionMarkup = sections.map((section, index) => {
       const family = section.sectionType;
-      const dispatcherName = section.modulePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? '';
+      const moduleName = section.modulePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? '';
+      // Imported bindings must be PascalCase even when a portable module filename isn't.
+      const dispatcherName = moduleName ? `Section${moduleName.replace(/[^a-zA-Z0-9_$]/g, '')}` : '';
       const importPath = section.modulePath.replace(/^\/src\//, '@/').replace(/\.[^.]+$/, '');
       if (!dispatcherName || !importPath) throw new Error(`[AppBuilderScaffold] Invalid dispatcher for ${section.variantId}.`);
       importByFamily.set(dispatcherName, importPath);
@@ -243,7 +261,7 @@ import { SiteFooter } from "@/project-components/site/SiteFooter";
   ${sectionImports}
 
 export default function ${page.isHome ? 'Home' : `Page${pageId.replace(/[^a-zA-Z0-9]/g, '')}`}() {
-  return <><SiteNav /><main>
+  return <><SiteNav /><main data-ut-page-role=${JSON.stringify(normalizePageRole(page.role))}>
       ${sectionMarkup.join('\n    ')}
   </main><SiteFooter /></>;
 }
