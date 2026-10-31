@@ -159,8 +159,8 @@ describe('App Builder candidate closure', () => {
     const projected = materializeRegisteredComponents(value, files);
     const source = projected.files['/src/pages/Contact.tsx'];
     const report = await validateAppBuildCandidate({ contract: value, files: projected.files, initialFiles });
-    expect(source).toContain('name="field_F0EFea" required');
-    expect(source).toContain('name="field_lBxDTO" required');
+    expect(source).toContain('name="project_details" required');
+    expect(source).toContain('name="budget" required');
     expect(source).not.toContain('onSubmit=');
     expect(source.match(/<form\b/g)).toHaveLength(1);
     expect(report.issues.some(issue => issue.code === 'registered-component-native-form-incomplete')).toBe(false);
