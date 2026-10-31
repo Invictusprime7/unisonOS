@@ -5,39 +5,15 @@ import { ALL_COMPOSITIONS } from '@/sections/templates';
 import { curateMarketplaceTemplate } from '@/marketplace/curateMarketplaceTemplate';
 import { buildAppBuilderGenerationContext } from '@/services/app-builder/appBuilderGenerationContext';
 it('probe', () => {
-  for (const id of ['salon-premium', ALL_COMPOSITIONS[3].id, ALL_COMPOSITIONS[10].id]) {
-    const t = ALL_COMPOSITIONS.find(c => c.id === id)!;
-    const c = curateMarketplaceTemplate(t, THEME_PRESETS[0]);
-    const g = buildAppBuilderGenerationContext(c.contract);
-    for (const p of c.contract.topology.sitePlan.pages) {
-      const s = g.runtimeContextForPage(p.id);
-      const mod = s.indexOf('Certified design-source modules');
-      const after = s.indexOf('REGISTERED COMPONENT CONTRACT');
-      console.log(id, p.role, 'total', s.length, 'modulesAt', mod, 'modulesLen', after - mod, 'eligible', g.designSources.eligibleByPage[p.id]?.length, 'cutAt12k:', s.length > 12000 ? JSON.stringify(s.slice(11900, 12000)) : '-');
-    }
-  }
-});
-import { renderPageBrief } from '@/services/launch/siteAuthoringOrchestrator';
-import { renderCompositionBrief } from '@/services/composition';
-it('brief', () => {
-  for (const id of ['salon-premium', 'agency-consulting']) {
+  for (const id of ['salon-premium', 'agency-consulting', 'restaurant-premium']) {
     const c = curateMarketplaceTemplate(ALL_COMPOSITIONS.find(x => x.id === id)!, THEME_PRESETS[0]);
-    for (const p of c.contract.topology.sitePlan.pages) {
-      const planned = c.contract.design.compositionPlan.pages.find(x => x.pageId === p.id);
-      const a = renderCompositionBrief(planned as never, [], null);
-      const b = renderPageBrief(c.contract.design.resolvedSiteDesignContext as never, { pageId: p.id, role: p.role, title: p.title, route: p.route, filePath: p.filePath } as never, 'X');
-      console.log('BRIEF', id, p.role, 'composition', a.length, 'page', b.length, 'sum', a.length + b.length + 1);
-    }
-  }
-});
-it('show', () => {
-  const c = curateMarketplaceTemplate(ALL_COMPOSITIONS.find(x => x.id === 'agency-consulting')!, THEME_PRESETS[0]);
-  for (const p of c.contract.topology.sitePlan.pages.slice(0, 2)) {
-    const planned = c.contract.design.compositionPlan.pages.find(x => x.pageId === p.id);
-    console.log('COMP\n' + renderCompositionBrief(planned as never, [], null));
-    console.log('PINS', JSON.stringify(c.contract.design.registryContext.pinnedImplementationIdsByPage?.[p.id]));
     const g = buildAppBuilderGenerationContext(c.contract);
-    const s = g.runtimeContextForPage(p.id);
-    console.log('MODS\n' + s.slice(s.indexOf('PAGE DESIGN FIT'), s.indexOf('PAGE DESIGN FIT') + 1500));
+    for (const p of c.contract.topology.sitePlan.pages) {
+      const s = g.runtimeContextForPage(p.id, 9000);
+      const planned = c.contract.design.compositionPlan.pages.find(x => x.pageId === p.id)!;
+      const elig = g.designSources.eligibleByPage[p.id];
+      const fams = [...new Set(planned.target.sectionOrder)].map(f => `${f}:${elig.filter(e => e.startsWith(f + ':')).length}`).join(' ');
+      console.log(id, p.role, 'len', s.length, 'mods', s.includes('Certified design-source modules'), 'forms', s.includes('FORM'), 'bindings', s.includes('CANONICAL INTENT BINDINGS'), '|', fams, '| hero1', elig.find(e => e.startsWith('hero:')));
+    }
   }
 });
