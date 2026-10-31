@@ -3,6 +3,9 @@ import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 import { contactDesignForms, contactDesignIdentifiers, missingNativeFormFields, nativeFormSources, selectedNativeFormFields, selectedNativeFormTemplate } from './nativeFormContract';
 import { parse } from '@babel/parser';
 
+/** Intents a certified Contact design's built-in form can represent. */
+const LEAD_FORM_INTENTS = new Set(['contact.submit', 'lead.capture', 'quote.request']);
+
 const APP_BUILDER_SOURCE_PATH = /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/;
 
 export interface RegisteredComponentMaterializationResult {
@@ -362,6 +365,14 @@ export function materializeRegisteredComponents(
           materializedInstanceIds.push(instanceId);
           continue;
         }
+      }
+      // A rendered Contact design on this page already owns a lead form; a second
+      // platform form beside it is a duplicate, whatever intent it would carry.
+      if (component.targetType === 'form'
+        && surfacePaths.some((path) => contactDesignForms(files[path] ?? '').length > 0)
+        && !surfacePaths.some(hasNativeForm)
+        && LEAD_FORM_INTENTS.has(component.runtime.writeIntent ?? '')) {
+        continue;
       }
       const hostPath = surfacePaths.find(hasSlug) ?? surfacePaths.find(hasInstance) ?? nativePath ?? pagePath;
       if (!hasSlug(hostPath) && !hasInstance(hostPath)) {
