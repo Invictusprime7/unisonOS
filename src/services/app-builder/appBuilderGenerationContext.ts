@@ -224,13 +224,20 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   };
   // Keep identity concise, not generic: source-owned projection supplies fields.
   const registeredComponentBlueprints = (pageId?: string) => {
-    const hosts = componentsForPage(pageId).filter(component => component.runtime.writeIntent && ['form', 'calendar'].includes(component.targetType));
-    if (!hosts.length) return 'FORMS: this page hosts no registered form. Do not add forms; certified Contact variants already render their own form, so only use a Contact section where the plan requires it.';
+    const components = componentsForPage(pageId);
+    const hosts = components.filter(component => component.runtime.writeIntent && ['form', 'calendar'].includes(component.targetType));
+    const templates = components.filter(component => component.nativeComponentTemplate);
+    const blueprints = templates.length ? [
+      'REGISTERED COMPONENT BLUEPRINTS: preserve these canonical native hosts, field names, and intent markers exactly; they define behavior, while certified design-source modules define presentation.',
+      ...templates.map(component => `${component.runtime.componentSlug}:\n${component.nativeComponentTemplate}`),
+    ].join('\n') : '';
+    if (!hosts.length) return [blueprints, 'FORMS: this page hosts no registered form. Do not add forms; certified Contact variants already render their own form, so only use a Contact section where the plan requires it.'].filter(Boolean).join('\n');
     return [
+      blueprints,
       'FORM PLACEMENT (one form per purpose, inside <main>, before the shared footer):',
       ...hosts.map(component => `- ${component.runtime.componentSlug}: if the page renders a Contact family section, that section's built-in form IS the registered form — put data-ut-component-slug="${component.runtime.componentSlug}" on that contact <section> wrapper, pass submitIntent "${component.runtime.writeIntent}" and the selected fields in its props, and add no other form. Otherwise compose exactly one host data-ut-component-slug="${component.runtime.componentSlug}" with native <form data-intent-form="${component.runtime.writeIntent}"> inside its planned body section. No local onSubmit success handler.`),
       'Never place a form after the footer and never render a second form for the same purpose.',
-    ].join('\n');
+    ].filter(Boolean).join('\n');
   };
   const canonicalIntentBindings = (pageId?: string) => {
     const bindings = bindingsForPage(pageId);
