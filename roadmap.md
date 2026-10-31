@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Active: Remaining App Builder intent wiring
-- [ ] Audit and fix concrete gaps in registered action/form bindings; preserve each site's own host configuration, selected fields and canonical intent runtime.
-- [ ] Test action routing, payload preservation and site isolation; never hardcode a shared enquiry recipient or report unconfirmed delivery.
-- [ ] Verify production behavior; requires authoritative UNISON deployment/session and each site's usable business connections.
+- [x] Native contact/lead/quote/newsletter CTAs focus their form instead of dispatching empty submissions; missing forms show a warning. Booking validates native fields, prevents in-flight duplicate submissions and requires explicit backend acknowledgment. Runtime sessions are site-scoped; unhandled intent-exec actions fail instead of falsely claiming completion. No shared enquiry recipient configured.
+- [x] 63 runtime/contract checks and 139 isolated edge checks pass; both authority lints and preview build OK. Existing contact/quote CRM metadata already preserves custom answers; no extra storage pipeline added.
+- [ ] Verify production behavior and provision additional actions (demo/consultation/proposal/coupon/volunteer) per site's actual configured handlers; requires authoritative UNISON deployment/session and each site's usable business connections. They now report unconfigured rather than pretending to persist. No live enquiry/email delivery or booking test performed.
 
 ## Active: Unison Gemini rate-limit recovery
 - [x] Default to one page worker and align whole-site budgets with that concurrency; preserve explicit concurrency overrides and existing provisional checkpoints.
