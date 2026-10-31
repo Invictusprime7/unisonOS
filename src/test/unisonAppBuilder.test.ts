@@ -216,7 +216,7 @@ describe('UnisonAppBuilder facade', () => {
     expect(runComposer).not.toHaveBeenCalled();
   });
   it('fails fast with the true page error when a fresh page was never authored', async () => {
-    const appContract = contract();
+    const appContract = contract('portfolio', ['home', 'blog']);
     const result = await createTestBuilder({
       authorSite: async input => ({
         files: input.files,
