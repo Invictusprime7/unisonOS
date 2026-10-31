@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: AI design recovery (2026-10-31)
+- [x] Stop cutting design-system lists and form rules out of page AI requests
+- [x] Offer several style variants per planned section family, matched to the page target
+- [x] One form per page: Contact designs host the registered form; platform forms land before the footer
+- [ ] Live AI launch check (needs signed-in Unison session and Unison deployment)
+
 ## Active: Starter completeness and AI enrichment separation
 - [x] Restore concise, early AI enrichment/design-fit instructions and certified prop contracts; remove the recipe declaration cutoff. Adopt authored native forms instead of duplicating them and place missing forms inside main, never footer. Preserve timeout, checkpoint and saving fixes.
 - [x] Enforce sealed page order and archetype family/variant-trait checks against actual source objects; correct archetype profile inputs before sealing. Starters use eligible pins, declared geometry and stable seed variations, preserving repeated sections and uncapped starter content collections.
