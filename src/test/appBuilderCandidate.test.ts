@@ -234,6 +234,29 @@ describe('App Builder candidate closure', () => {
     expect(second.files).toEqual(first.files);
   });
 
+  it('adopts an authored native booking form without duplicating or restyling it', () => {
+    const booking = bookingContract();
+    const component = booking.business.registeredComponents[0];
+    const form = component.nativeComponentTemplate?.match(/<form\b[\s\S]*?<\/form>/)?.[0];
+    if (!form) throw new Error('Missing fixture native form');
+    const authored = form.replace('<form ', '<form className="authored-layout" ');
+    const files = { ...initialFiles, '/src/pages/Booking.tsx': `export default function Booking(){return <><main>${authored}</main><footer>Footer</footer></>}` };
+    const result = materializeRegisteredComponents(booking, files);
+    expect(result.files['/src/pages/Booking.tsx'].match(/<form\b/g)).toHaveLength(1);
+    expect(result.files['/src/pages/Booking.tsx']).toContain(authored);
+    expect(result.materializedInstanceIds).toContain(component.runtime.instanceId);
+    expect(materializeRegisteredComponents(booking, result.files).files).toEqual(result.files);
+  });
+
+  it('inserts a missing registered form within main rather than the footer', () => {
+    const booking = bookingContract();
+    const result = materializeRegisteredComponents(booking, { ...initialFiles,
+      '/src/pages/Booking.tsx': 'export default function Booking(){return <><main><h1>Book</h1></main><footer>End</footer></>}' });
+    const source = result.files['/src/pages/Booking.tsx'];
+    expect(source.indexOf('<form')).toBeLessThan(source.indexOf('</main>'));
+    expect(source.slice(source.indexOf('<footer>'))).not.toContain('<form');
+  });
+
   it('repairs an existing registered scheduler host when its native form is missing', () => {
     const booking = bookingContract();
     const files = {

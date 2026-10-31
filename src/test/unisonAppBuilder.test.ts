@@ -294,7 +294,7 @@ describe('UnisonAppBuilder facade', () => {
       const nextContext = input.runtimeContextForPage?.('page-about', homeFiles, 'home') ?? '';
       expect(nextContext).toContain('HOME OBJECT CONTRACT');
       expect(nextContext).toContain(composition.sections[0].sectionId);
-      return { files: homeFiles, outcomes: [] };
+      return { files: homeFiles, outcomes: input.pages.map(page => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })) };
     });
     const result = await createTestBuilder({ authorSite, runComposer: vi.fn() }).generate({
       operationId: 'wired-home-handoff', contract: appContract, initialFiles: baseFiles,
@@ -334,7 +334,7 @@ describe('UnisonAppBuilder facade', () => {
       runComposer: vi.fn(),
     }).generate({ operationId: 'incomplete-home', contract: appContract, initialFiles: baseFiles,
       entryPoint: '/src/main.tsx', budgetMs: 1 });
-    expect(result.candidate.closure.ok).toBe(true);
+    expect(result.candidate.closure.issues.some(issue => issue.code === 'ai-page-not-authored')).toBe(true);
     expect(result.candidate.status).toBe('rejected');
     expect(result.candidate.provenance.authoredPageIds).toEqual([]);
     expect(result.candidate.diagnostics).toContain('Home binding did not pass.');
@@ -682,7 +682,7 @@ describe('UnisonAppBuilder facade', () => {
         }, input.files);
       }
       return {
-        files: input.files, outcomes: [{ page: input.pages[0], status: 'kept-baseline' as const, reason: 'gates_exhausted' as const, attempts: 1, errors: ['Still imports preview'] }],
+        files: input.files, outcomes: [{ page: input.pages[0], status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] }],
       };
     });
     const runComposer = vi.fn(async (): Promise<ComposerLoopResult> => ({
@@ -973,7 +973,7 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
       files: scaffoldAuthoredPages(contract(), { '/src/pages/Home.tsx': { body: '<p>Authored without CMS hints</p>' } }, input.files),
       revisionId: input.revisionId,
-      outcomes: [],
+      outcomes: input.pages.map(page => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
     }));
     const result = await createUnisonAppBuilder({
       authorSite,
