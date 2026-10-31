@@ -1,6 +1,6 @@
 import type { AppBuildContract } from './appBuilderContracts';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
-import { missingNativeFormFields, nativeFormSources, selectedNativeFormTemplate } from './nativeFormContract';
+import { missingNativeFormFields, nativeFormSources, selectedNativeFormFields, selectedNativeFormTemplate } from './nativeFormContract';
 import { parse } from '@babel/parser';
 
 const APP_BUILDER_SOURCE_PATH = /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/;
@@ -117,7 +117,67 @@ export function adoptContactSectionHost(
   if (!/\bdata-ut-component-instance-id\s*=/.test(tag)) {
     tag = tag.replace(/\s*>$/, ` data-ut-component-instance-id="${escapeAttributeValue(component.runtime.instanceId)}">`);
   } else if (!hasAttributeValue(tag, 'data-ut-component-instance-id', component.runtime.instanceId)) return null;
-  return source.slice(0, wrapper.index) + tag + source.slice(wrapper.index + wrapper[0].length);
+  const hosted = source.slice(0, wrapper.index) + tag + source.slice(wrapper.index + wrapper[0].length);
+  return withContactFormFields(hosted, dispatcher, component) ?? hosted;
+}
+
+/** The variant form renders props.fields; project the site's selected fields there (one form, real names). */
+function withContactFormFields(
+  source: string,
+  dispatcher: string,
+  component: AppBuildContract['business']['registeredComponents'][number],
+): string | null {
+  const defaults: Record<string, { type: string; placeholder: string }> = {
+    name: { type: 'text', placeholder: 'Your name' },
+    email: { type: 'email', placeholder: 'you@example.com' },
+    message: { type: 'textarea', placeholder: 'How can we help?' },
+  };
+  const fields = new Map<string, { name: string; type: string; placeholder: string; label: string; required: boolean }>();
+  for (const name of component.requiredNativeFormFields ?? []) {
+    const known = defaults[name] ?? { type: 'text', placeholder: name };
+    fields.set(name, { name, type: known.type, placeholder: known.placeholder, label: name.charAt(0).toUpperCase() + name.slice(1), required: true });
+  }
+  for (const field of selectedNativeFormFields(component)) {
+    const type = field.type === 'phone' ? 'tel' : field.type === 'select' ? 'text' : field.type;
+    fields.set(field.name, { name: field.name, type, placeholder: field.label, label: field.label, required: Boolean(field.required) || fields.get(field.name)?.required === true });
+  }
+  if (!fields.size) return null;
+  try {
+    const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    let span: { objectStart: number; fieldsStart?: number; fieldsEnd?: number; hasIntent: boolean } | null = null;
+    const visit = (node: unknown): void => {
+      if (span || !node || typeof node !== 'object') return;
+      const value = node as Record<string, any>;
+      if (value.type === 'JSXOpeningElement' && value.name?.name === dispatcher) {
+        const props = (value.attributes ?? []).find((attribute: any) => attribute.name?.name === 'props');
+        const object = props?.value?.expression;
+        if (object?.type === 'ObjectExpression' && typeof object.start === 'number') {
+          const keyOf = (property: any) => property.key?.name ?? property.key?.value;
+          const existing = object.properties.find((property: any) => keyOf(property) === 'fields');
+          span = { objectStart: object.start, fieldsStart: existing?.start, fieldsEnd: existing?.end,
+            hasIntent: object.properties.some((property: any) => keyOf(property) === 'submitIntent') };
+        }
+        return;
+      }
+      for (const child of Object.values(value)) {
+        if (Array.isArray(child)) child.forEach(visit);
+        else if (child && typeof child === 'object') visit(child);
+      }
+    };
+    visit(ast.program);
+    if (!span) return null;
+    const found = span as { objectStart: number; fieldsStart?: number; fieldsEnd?: number; hasIntent: boolean };
+    const literal = `fields: ${JSON.stringify([...fields.values()])}`;
+    const intent = !found.hasIntent && component.runtime.writeIntent ? `, submitIntent: ${JSON.stringify(component.runtime.writeIntent)}` : '';
+    if (typeof found.fieldsStart === 'number' && typeof found.fieldsEnd === 'number') {
+      return source.slice(0, found.fieldsStart) + literal + intent + source.slice(found.fieldsEnd);
+    }
+    const body = source.slice(found.objectStart + 1).trimStart();
+    const separator = body.startsWith('}') ? ' ' : ', ';
+    return `${source.slice(0, found.objectStart + 1)} ${literal}${intent}${separator}${source.slice(found.objectStart + 1).trimStart()}`;
+  } catch {
+    return null;
+  }
 }
 
 /** Business content belongs in <main>, before the shared footer — never after it. */
