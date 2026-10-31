@@ -24,6 +24,7 @@ import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition'
 import { sectionSiteBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 import { closureRepairTargets } from './closureRepairTargets';
 import { isBindingOperationallyPending } from './bindingAvailability';
+import { pageCompositionCoverage } from './pageCompositionCoverage';
 
 export interface AppBuilderOrchestratorDependencies {
   authorSite: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
@@ -125,6 +126,8 @@ export async function orchestrateAppBuild(
     return { files: sections.files, errors: [
       ...markers.unresolvedBindingIds.map(id => `Canonical binding ${id} has no matching generated control on ${page.filePath}.`),
       ...sections.diagnostics.map(diagnostic => diagnostic.message),
+      ...sections.pages.flatMap(result => pageCompositionCoverage(
+        input.contract.design.compositionPlan.pages.find(planned => planned.pageId === page.pageId), result)),
     ] };
   };
   const pageCheck = (path: string, source: string, files?: Readonly<Record<string, string>>) => {
@@ -204,8 +207,9 @@ export async function orchestrateAppBuild(
   // failures instead of accepting the untouched reference source or retrying it.
   const terminalAuthoringFailure = authored.outcomes.some((outcome) =>
     outcome.status !== 'authored' && ['credits', 'denied', 'provider', 'rate_limited', 'invalid_response', 'aborted'].includes(outcome.reason));
-  const incompleteAuthoring = generationMode === 'ai' && authored.outcomes.some(outcome =>
-    outcome.status === 'skipped' || outcome.reason === 'commit_failed' || outcome.reason === 'budget');
+  const missingAuthorship = generationMode === 'ai' ? pages.filter(page =>
+    !authored.outcomes.some(outcome => outcome.page.pageId === page.pageId && outcome.status === 'authored')) : [];
+  const incompleteAuthoring = missingAuthorship.length > 0;
   const validateClosure = async (files: Record<string, string>) => {
     const report = await validateAppBuildCandidate({
       contract: input.contract,
@@ -226,6 +230,12 @@ export async function orchestrateAppBuild(
       path: diagnostic.path,
       message: diagnostic.message,
     }));
+    const coverageIssues = (latestSectionMaterialization?.pages ?? []).flatMap(page =>
+      pageCompositionCoverage(input.contract.design.compositionPlan.pages.find(planned => planned.pageId === page.pageId), page)
+        .map(message => ({ severity: 'blocker' as const, code: 'page-composition-incomplete', path: page.filePath, message })));
+    const authorshipIssues = missingAuthorship.map(page => ({ severity: 'blocker' as const,
+      code: 'ai-page-not-authored', path: page.filePath,
+      message: `${page.title} has no completed AI authorship; a baseline cannot count as an AI-enriched page.` }));
     const pageIssues = pages.flatMap((page) =>
       (generationMode === 'deterministic'
         ? pageCheck(page.filePath, files[page.filePath] ?? '', files)
@@ -234,8 +244,8 @@ export async function orchestrateAppBuild(
       })));
     return {
       ...report,
-      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0 && sectionModelIssues.length === 0,
-      issues: [...report.issues, ...bindingIssues, ...sectionModelIssues, ...pageIssues],
+      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0 && sectionModelIssues.length === 0 && coverageIssues.length === 0 && authorshipIssues.length === 0,
+      issues: [...report.issues, ...bindingIssues, ...sectionModelIssues, ...coverageIssues, ...authorshipIssues, ...pageIssues],
     };
   };
   const normalizeCandidateFiles = (files: Record<string, string>) => {

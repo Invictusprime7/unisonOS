@@ -6,6 +6,7 @@ import { resolveTopologyPageRoleAlias } from '@/platform/core/siteTopologyPlanne
 import type { CompositionCharacter, IndustryPageCompositionProfile } from './types';
 import type { CompositionResolution, CompositionResolutionInput } from './types';
 import { hashSeed } from '@/platform/core/generationSeed';
+import { pageArchetypeFor, pageArchetypeIssues } from '@/sections/pageArchetypeContract';
 
 type ProfileSeed = Omit<IndustryPageCompositionProfile, 'industryId' | 'pageRole' | 'compositionCharacter' | 'customCompositionAllowed' | 'customComponentsAllowed'> & {
   character: Partial<CompositionCharacter> & Pick<CompositionCharacter, 'density'>;
@@ -302,9 +303,20 @@ export function resolveComposition(input: CompositionResolutionInput): Compositi
     input.seed,
   ];
   const index = hashSeed(keyParts.join('|')) % candidates.length;
+  // Correct profile inputs before sealing, never trim an already sealed page.
+  // Keep repeated families; archetype normalization's dedupe is not appropriate here.
+  const archetype = pageArchetypeFor(profile.pageRole);
+  const sectionOrder = candidates[index].filter(family => !archetype.forbiddenFamilies.includes(family));
+  for (const family of archetype.requiredFamilies) {
+    if (sectionOrder.includes(family)) continue;
+    const tail = sectionOrder.indexOf('cta');
+    sectionOrder.splice(tail < 0 ? sectionOrder.length : tail, 0, family);
+  }
+  const issues = pageArchetypeIssues(profile.pageRole, sectionOrder);
+  if (issues.length) throw new Error(`[CompositionRegistry] ${issues.join('; ')}`);
   return {
     profile,
-    sectionOrder: [...candidates[index]],
+    sectionOrder,
     compositionKey: `${input.industry}:${profile.pageRole}:${input.artDirection ?? 'default'}:${index}`,
   };
 }

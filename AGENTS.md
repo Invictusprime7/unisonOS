@@ -16,7 +16,7 @@
 - WebBuilder launch-handoff dedupes on `routeHandoffImportedRef`, never `importedRouteStateRef`; why: revision adoption updates the shared ref, replaying original Wizard files over saved edits.
 - `projects` ↔ `builder_drafts` name-sync triggers skip when `pg_trigger_depth() > 1` and write only changed values; why: re-entry raises SQLSTATE 27000 and blocks saves.
 - Persist draft chat in owner-only `builder_chat_history` via debounced `aiHistoryStore.setMessages`; localStorage is a cache. Why: chats survive devices.
-- App Builder pages pass `pageStructureGate.ts` (nav, footer, body, media) via `pageCheck`; briefs lead with own target/archetype. Why: routers add no chrome.
+- Both modes enforce sealed section order/archetypes; AI requires every requested page authored. Starter variants use legal pins, geometry and seed. Why: prevent sparse pages and baseline-as-AI acceptance.
 - Live-VFS commits absorb pending ops recorded before capture and advance the autosave baseline; pending ops conflict only off another base revision. Why: lagging baselines raised false conflicts.
 
 - Chat/Wizard share `src/services/launch/chatLaunchPlan.ts`; chat prefills Wizard; `buildSyncedVisionBrief` prioritizes final selections; page briefs lead with composition target/design contract. Why: prevent input drift and crowded-out design context.
