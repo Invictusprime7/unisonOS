@@ -215,6 +215,24 @@ describe('UnisonAppBuilder facade', () => {
     expect(result.candidate.closure.issues).toContainEqual(expect.objectContaining({ code: 'ai-page-not-authored' }));
     expect(runComposer).not.toHaveBeenCalled();
   });
+  it('fails fast with the true page error when a fresh page was never authored', async () => {
+    const appContract = contract('portfolio', ['home', 'blog']);
+    const result = await createTestBuilder({
+      authorSite: async input => ({
+        files: input.files,
+        outcomes: input.pages
+          .filter(page => page.filePath !== '/src/pages/Home.tsx')
+          .map(page => ({
+            page, status: 'kept-baseline' as const, reason: 'gates_exhausted' as const, attempts: 3,
+            errors: [`${page.filePath}: planned section order blog-preview must be preserved; rendered blog-preview → blog-preview.`],
+          })),
+      }),
+    }).generate({ operationId: 'terminal-fresh-page', contract: appContract, initialFiles: baseFiles, entryPoint: '/src/main.tsx' });
+    expect(result.candidate.status).toBe('rejected');
+    expect(result.stopReason).toBe('validation-failed');
+    expect(result.candidate.diagnostics.join(' ')).toContain('rendered blog-preview → blog-preview');
+    expect(result.candidate.diagnostics.join(' ')).not.toContain('unresolved module');
+  });
   it('materializes a page-matched section sidecar through runtime for every canonical industry', () => {
     const industries = getAllIndustries();
     for (const profile of industries) {

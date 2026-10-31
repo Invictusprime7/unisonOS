@@ -382,6 +382,24 @@ describe('site authoring orchestrator', () => {
     expect(r.outcomes.map((o) => o.status)).toEqual(['authored', 'kept-baseline']);
   }, 30000);
 
+  it('stops the build when a page with no baseline source fails its gates', async () => {
+    const freshPages = [
+      { pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' },
+      { pageId: 'blog', title: 'Journal', route: '/blog', filePath: '/src/pages/Blog.tsx', role: 'blog' },
+      { pageId: 'contact', title: 'Contact', route: '/contact', filePath: '/src/pages/Contact.tsx', role: 'contact' },
+    ];
+    const invoke = vi.fn(async (input: { messages: Array<{ content: string }> }) => {
+      const req = JSON.parse(input.messages[0].content);
+      return req.page.role === 'blog' ? bad(req.page.filePath) : good(req.page.filePath, req.page.title);
+    });
+    const result = await authorSitePages({
+      pages: freshPages, homePageId: 'home', designContext: null, businessName: 'Fail fast',
+      files: base, concurrency: 1, invoke: invoke as never, commitPage: async files => ({ files }),
+    });
+    expect(result.outcomes.map((o) => o.status)).toEqual(['authored', 'kept-baseline', 'skipped']);
+    expect(invoke.mock.calls.filter(([turn]) => JSON.parse(turn.messages[0].content).page.role === 'contact')).toHaveLength(0);
+  }, 30000);
+
   it('keeps planned route operations on Builder-authored page candidates', async () => {
     const page = { pageId: 'focus', title: 'Focus', route: '/focus', filePath: '/src/pages/Focus.tsx', role: 'custom' };
     const routeOp = { type: 'add_page' as const, pageId: 'focus', title: 'Focus', route: '/focus', pageType: 'custom' as const, showInNav: true };

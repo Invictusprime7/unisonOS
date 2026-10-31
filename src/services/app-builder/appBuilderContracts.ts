@@ -349,8 +349,15 @@ function deriveIntentBindings(
       const component = targetKey
         ? components.find((candidate) => candidate.bindings[targetKey] === binding.targetId)
         : undefined;
+      // A binding resolved to a registered form/calendar adopts that component's
+      // write intent: the component owns the write action (e.g. contact.submit),
+      // so industry recipes may name the business goal (lead.capture) without
+      // drifting from the registered owner.
+      const ownedIntent = component?.runtime.writeIntent && component.runtime.writeIntent !== intent.name
+        ? getIntentDef(component.runtime.writeIntent) ?? intent
+        : intent;
       const requiredCapabilities = [...new Set([
-        ...(intent.requiredCapabilities ?? []),
+        ...(ownedIntent.requiredCapabilities ?? []),
         ...(binding.requiredCapabilities ?? []),
       ])].sort();
       return {
@@ -361,10 +368,10 @@ function deriveIntentBindings(
         sourceSection: binding.sourceSection!,
         sourceSlot: binding.sourceSlot!,
         sourceLabel: binding.sourceLabel,
-        coreIntent: intent.name,
+        coreIntent: ownedIntent.name,
         domIntent: resolvePlaygroundBindingDomIntent(binding),
         ctaMarkers: getWizardBindingMarkers(binding),
-        intentHandler: intent.handler,
+        intentHandler: ownedIntent.handler,
         targetType: binding.targetType,
         targetId: binding.targetId,
         requiredCapabilities,

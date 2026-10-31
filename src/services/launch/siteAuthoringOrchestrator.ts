@@ -392,8 +392,13 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
     }
     // Cosmetic repetition is reported by final closure, never another paid
     // full-page turn. The sealed planner already assigns distinct page jobs.
+    // A failed page with no baseline source can never close (every requested
+    // page must be authored); stop the build instead of burning credits on
+    // sibling pages whose candidate would be rejected anyway.
+    const siblingAborted = loop.reason === 'aborted' && authoringController.signal.aborted;
     const terminalPageFailure = ['credits', 'denied', 'rate_limited', 'provider', 'invalid_response'].includes(loop.reason)
-      || (loop.reason === 'aborted' && !authoringController.signal.aborted);
+      || (loop.reason === 'aborted' && !authoringController.signal.aborted)
+      || (!loop.ok && !siblingAborted && !baseFiles[page.filePath]?.trim());
     if (terminalPageFailure) {
       paused = paused ?? loop.reason;
       stopTriggeredByPageIndex = index;
