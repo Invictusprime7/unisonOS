@@ -167,14 +167,14 @@ function withContactFormFields(
     visit(ast.program);
     if (!span) return null;
     const found = span as { objectStart: number; fieldsStart?: number; fieldsEnd?: number; hasIntent: boolean };
-    const literal = `fields: ${JSON.stringify([...fields.values()])}`;
-    const intent = !found.hasIntent && component.runtime.writeIntent ? `, submitIntent: ${JSON.stringify(component.runtime.writeIntent)}` : '';
+    const literal = `"fields":${JSON.stringify([...fields.values()])}`;
+    const intent = !found.hasIntent && component.runtime.writeIntent ? `,"submitIntent":${JSON.stringify(component.runtime.writeIntent)}` : '';
     if (typeof found.fieldsStart === 'number' && typeof found.fieldsEnd === 'number') {
       return source.slice(0, found.fieldsStart) + literal + intent + source.slice(found.fieldsEnd);
     }
     const body = source.slice(found.objectStart + 1).trimStart();
-    const separator = body.startsWith('}') ? ' ' : ', ';
-    return `${source.slice(0, found.objectStart + 1)} ${literal}${intent}${separator}${source.slice(found.objectStart + 1).trimStart()}`;
+    const separator = body.startsWith('}') ? '' : ',';
+    return `${source.slice(0, found.objectStart + 1)}${literal}${intent}${separator}${body}`;
   } catch {
     return null;
   }
