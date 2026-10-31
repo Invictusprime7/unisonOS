@@ -12,7 +12,7 @@ export const ContactCompactCard: React.FC<BaseSectionProps<'contact'>> = ({secti
         {p.description && <p data-ut-slot="contact.description" className="mt-3 text-sm opacity-80">{p.description}</p>}
         <dl className="mt-8 space-y-3 text-sm">{p.email && <div><dt className="opacity-70">Email</dt><dd data-ut-slot="contact.email">{p.email}</dd></div>}{p.phone && <div><dt className="opacity-70">Phone</dt><dd data-ut-slot="contact.phone">{p.phone}</dd></div>}{p.address && <div><dt className="opacity-70">Address</dt><dd data-ut-slot="contact.address">{p.address}</dd></div>}</dl>
       </div>
-      <form data-ut-intent={p.submitIntent||'contact.submit'} className="flex flex-col gap-4 p-8" onSubmit={(e)=>e.preventDefault()}>
+      <form data-demo-form="true" data-ut-intent={p.submitIntent||'contact.submit'} className="flex flex-col gap-4 p-8">
         {fields.map((f)=><label key={f.name} className="flex flex-col gap-1 text-sm" style={{color:hsl(theme.colors.foreground)}}><span className="capitalize">{f.name}</span>{f.type==='textarea'?<textarea name={f.name} required={f.required} placeholder={f.placeholder} rows={4} className="p-3" style={input} />:<input name={f.name} type={f.type} required={f.required} placeholder={f.placeholder} className="min-h-11 px-3" style={input} />}</label>)}
         <button type="submit" data-ut-intent={p.submitIntent||'contact.submit'} className="min-h-11 px-5 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" style={{borderRadius:theme.radius,background:hsl(theme.colors.primary),color:hsl(theme.colors.primaryForeground)}}>{p.submitLabel||'Send'}</button>
       </form></div></div></section>;

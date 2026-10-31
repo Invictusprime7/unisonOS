@@ -137,6 +137,8 @@ const STEP_ORDER: WizardStep[] = [
 
 type SelectionStep = WizardStep | "pages" | "brand" | "confirm";
 const CHAT_STEP_ORDER: SelectionStep[] = ["industry", "goals", "questions", "pages", "aesthetic", "brand", "confirm"];
+/** The no-AI starter is offered only when the AI provider itself could not run (outage, timeout, quota, credits). */
+const AI_UNAVAILABLE_PATTERN = /timed? ?out|timeout|quota|credit|rate.?limit|429|402|unavailable|provider|no managed ai|not configured/i;
 const CHAT_GUIDANCE: Record<SelectionStep, string> = {
   industry: "First, choose the business type that fits your idea. I'll suggest a starting point you can refine.",
   goals: "Let's choose the main outcome for your site. What matters most to your business?",
@@ -620,7 +622,7 @@ export const LauncherWizard = ({
       persistLaunchFailureReport(report);
       setLaunchFailure(report);
       setLaunchError(
-        `[${report.code}] ${report.message} Your selections are preserved.${report.stage === 'app-build' && generationMode === 'ai' ? ' Build without AI creates a clearly labeled deterministic starter.' : ' You can try again.'}`,
+        `[${report.code}] ${report.message} Your selections are preserved.${report.stage === 'app-build' && generationMode === 'ai' && AI_UNAVAILABLE_PATTERN.test(report.message) ? ' The AI is unavailable right now; Build without AI creates a clearly labeled starter.' : ' You can try again.'}`,
       );
       console.error('[LauncherWizard] Generate Site failed', report, error);
       toast.error(`Generate Site failed in ${report.stage}`, {
