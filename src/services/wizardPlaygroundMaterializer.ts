@@ -733,9 +733,18 @@ export function materializePlayground(
   const bookingPageId = getPrimaryPageId(roleToPageId, 'booking', 'home');
   const shopPageId = getPrimaryPageId(roleToPageId, 'shop', 'pricing', 'home');
 
-  for (const form of Object.values(creatorData.forms)) {
+  // One registered host per form slug per page: a page renders a single
+  // contact section, so secondary inquiry forms delegate to the first host.
+  const hostedSlugPages = new Set<string>();
+  for (const form of Object.values(creatorData.forms).sort((a, b) => a.sortOrder - b.sortOrder)) {
     const slug = inferComponentSlugForForm(form.name);
     if (!slug) continue;
+    const hostKey = `${slug}::${slug === 'newsletter-signup' ? homePageId : contactPageId}`;
+    if (hostedSlugPages.has(hostKey)) {
+      warnings.push(`Form "${form.name}" shares the existing ${slug} host instead of registering a duplicate.`);
+      continue;
+    }
+    hostedSlugPages.add(hostKey);
     const component = createCanonicalComponentInstance(slug, {
       label: form.name,
       usedOnPages: [slug === 'newsletter-signup' ? homePageId : contactPageId].filter(Boolean),

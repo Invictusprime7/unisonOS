@@ -478,12 +478,14 @@ export async function validateAppBuildCandidate(input: {
       continue;
     }
 
-    const componentPages = [
-      ...component.runtime.usedOnPages.map((pageId) => pages.find((page) => page.id === pageId)).filter((page) => !!page),
-      ...input.contract.business.intentBindings
-        .filter((binding) => binding.componentInstanceId === component.runtime.instanceId)
-        .map((binding) => pages.find((page) => page.route === binding.route)).filter((page) => !!page),
-    ];
+    // Host pages are where the component renders (usedOnPages). Pages with a
+    // CTA that merely triggers the component are not hosts; only fall back to
+    // binding routes when no host page is declared.
+    const hostPages = component.runtime.usedOnPages
+      .map((pageId) => pages.find((page) => page.id === pageId)).filter((page) => !!page);
+    const componentPages = hostPages.length > 0 ? hostPages : input.contract.business.intentBindings
+      .filter((binding) => binding.componentInstanceId === component.runtime.instanceId)
+      .map((binding) => pages.find((page) => page.route === binding.route)).filter((page) => !!page);
     const uniquePages = [...new Map(componentPages.map((page) => [page!.id, page!])).values()];
     const componentSources = uniquePages.filter((page) => files[page!.filePath]?.trim()).map((page) => {
       const surface = collectLocalImportClosure(files, page.filePath, (path) => APP_BUILDER_SOURCE_PATH.test(path));
