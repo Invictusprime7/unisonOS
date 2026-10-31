@@ -223,6 +223,33 @@ describe('AppBuildContract', () => {
     expect(contactContext).not.toContain(booking!.instanceId);
   });
 
+  it('adopts the registered form write intent for bindings that target it', () => {
+    const input = makeInput();
+    input.capabilities = ['contact'];
+    const contactForm = createCanonicalComponentInstance('contact-form', {
+      usedOnPages: ['page-contact'],
+      bindings: { formId: 'form-contact-1' },
+    });
+    expect(contactForm).not.toBeNull();
+    input.registeredComponentInstances = [contactForm!];
+    // Industry recipes name the business goal (lead.capture); the registered
+    // contact form owns the write action (contact.submit).
+    input.canonicalBindings = [{
+      bindingId: 'binding-hero-inquiry', sourcePageId: 'page-contact', sourceLabel: 'Start Project',
+      intent: 'form.open', targetId: 'form-contact-1', targetType: 'form',
+      confidence: 1, source: 'wizard', isValid: true, sourceSection: 'hero', sourceSlot: 'secondary-cta',
+      coreIntent: 'lead.capture', requiredCapabilities: [],
+    }];
+
+    const contract = buildAppBuildContract(input);
+    expect(contract.business.intentBindings[0]).toMatchObject({
+      coreIntent: 'contact.submit',
+      componentWriteIntent: 'contact.submit',
+      componentInstanceId: contactForm!.instanceId,
+      domIntent: 'form.open',
+    });
+  });
+
   it('projects canonical icon CoreIntent into the App Builder contract despite a legacy UI intent', () => {
     const input = makeInput();
     input.canonicalBindings = [{
