@@ -300,3 +300,6 @@ Fallback production configuration remains unverified; no relay, credential chang
 - [ ] R6-P1 apply trusted-promotion SQL to UNISON (blocked: requires canonical GitHub workflow deployment)
 - [ ] R6-P1 certify designated project 59c5ef14-4fd0-4c57-bedf-6a6659d6cfaf (blocked: authoritative admin session, deployment, source/private-data review, licensed assets, real package build/reimport and preview parity)
 - [ ] R6-P2..P5 certified preview, free-claim install, brand contract, Stripe
+
+- [x] Hide "Build without AI" except when the AI is unavailable; compact contact form now sends enquiries.
+- [ ] Remove hardcoded starter layouts — waiting on owner: the no-AI fallback still needs them.
