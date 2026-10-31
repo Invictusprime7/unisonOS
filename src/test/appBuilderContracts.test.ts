@@ -246,7 +246,7 @@ describe('AppBuildContract', () => {
       coreIntent: 'contact.submit',
       componentWriteIntent: 'contact.submit',
       componentInstanceId: contactForm!.instanceId,
-      domIntent: 'form.open',
+      domIntent: 'lead.capture',
     });
   });
 
