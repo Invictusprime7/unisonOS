@@ -86,7 +86,7 @@ export const INDUSTRY_MATRIX: Record<string, IndustryProfile> = {
     name: 'Salon & Spa',
     systemType: 'booking',
     layoutCategories: ['salon'],
-    defaultCapabilities: ['booking', 'contact', 'newsletter'],
+    defaultCapabilities: ['booking', 'contact', 'newsletter', 'lead-capture'],
     primaryIntent: 'booking.create',
     crmPipeline: {
       name: 'Salon Clients',
@@ -111,7 +111,7 @@ export const INDUSTRY_MATRIX: Record<string, IndustryProfile> = {
     name: 'Restaurant & Food',
     systemType: 'booking',
     layoutCategories: ['restaurant'],
-    defaultCapabilities: ['booking', 'contact', 'newsletter'],
+    defaultCapabilities: ['booking', 'contact', 'newsletter', 'lead-capture'],
     primaryIntent: 'booking.create',
     crmPipeline: {
       name: 'Restaurant Guests',
@@ -208,7 +208,7 @@ export const INDUSTRY_MATRIX: Record<string, IndustryProfile> = {
     name: 'E-Commerce',
     systemType: 'store',
     layoutCategories: ['store'],
-    defaultCapabilities: ['commerce', 'contact', 'newsletter'],
+    defaultCapabilities: ['commerce', 'contact', 'newsletter', 'lead-capture'],
     primaryIntent: 'cart.add',
     crmPipeline: {
       name: 'Customer Pipeline',
@@ -257,7 +257,7 @@ export const INDUSTRY_MATRIX: Record<string, IndustryProfile> = {
     name: 'Nonprofit & Charity',
     systemType: 'content',
     layoutCategories: ['nonprofit'],
-    defaultCapabilities: ['donation', 'contact', 'newsletter'],
+    defaultCapabilities: ['donation', 'contact', 'newsletter', 'lead-capture'],
     primaryIntent: 'donation.start',
     crmPipeline: {
       name: 'Donor Pipeline',
