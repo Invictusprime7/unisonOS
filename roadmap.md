@@ -1,5 +1,10 @@
 # Roadmap
 
+## Active: Native contact-form owner email delivery
+- [ ] Connect canonical contact.submit to owner email notification after existing CRM storage, preserving selected custom fields and backend-confirmed success. Reuse existing canonical delivery adapters; no parallel form writer.
+- [ ] Configure a verified sender domain and confirm the destination inbox; no Lovable email domain is currently configured. Canonical UNISON email configuration must be verified separately from the attached Cloud instance.
+- [ ] Test native submission, stored read-back and confirmed email delivery; requires authoritative UNISON deployment/session and usable sender configuration.
+
 ## Active: Unison Gemini rate-limit recovery
 - [x] Default to one page worker and align whole-site budgets with that concurrency; preserve explicit concurrency overrides and existing provisional checkpoints.
 - [x] Provider loop honors Gemini Retry-After and Google RetryInfo once within the remaining request budget; no nested Gemini/gateway retries, shortened cooldowns, billing retries or timed-out work replay. Retry waits use request cancellation rather than the expired generation timer.
