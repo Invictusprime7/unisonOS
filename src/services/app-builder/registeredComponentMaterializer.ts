@@ -1,6 +1,6 @@
 import type { AppBuildContract } from './appBuilderContracts';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
-import { missingNativeFormFields, selectedNativeFormTemplate } from './nativeFormContract';
+import { missingNativeFormFields, nativeFormSources, selectedNativeFormTemplate } from './nativeFormContract';
 import { parse } from '@babel/parser';
 
 const APP_BUILDER_SOURCE_PATH = /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/;
@@ -317,16 +317,8 @@ export function materializeRegisteredComponents(
       }
 
       // Main owns page content. Never append business forms inside/after site footer.
-      const mainClose = /<\/main\s*>/gi;
-      let mainRoot: RegExpExecArray | null = null;
-      for (let match = mainClose.exec(source); match; match = mainClose.exec(source)) mainRoot = match;
-      const rootClosePattern = /<\/(?:div|section|article)\s*>/gi;
-      let rootClose: RegExpExecArray | null = null;
-      for (let match = rootClosePattern.exec(source); match; match = rootClosePattern.exec(source)) {
-        rootClose = match;
-      }
-      rootClose = mainRoot ?? rootClose;
-      if (!rootClose || rootClose.index === undefined) continue;
+      const insertAt = bodyInsertionIndex(source);
+      if (insertAt === null) continue;
       const registeredTemplate = stampIntentMarkers(
         stampComponentInstance(
           template.replace(/\{\{businessId\}\}/g, escapeAttributeValue(contract.identity.businessId)),
@@ -337,7 +329,7 @@ export function materializeRegisteredComponents(
         contract.business.intentBindings,
       );
       const componentHost = `${registeredTemplate}\n`;
-      files[hostPath] = `${source.slice(0, rootClose.index)}${componentHost}${source.slice(rootClose.index)}`;
+      files[hostPath] = `${source.slice(0, insertAt)}${componentHost}${source.slice(insertAt)}`;
       materializedInstanceIds.push(instanceId);
     }
   }
