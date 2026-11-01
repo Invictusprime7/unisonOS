@@ -502,14 +502,39 @@ serve(async (req) => {
   if (!await authorize(caller, body.businessId, permission)) return jsonError("You do not have permission for this catalog action", 403, corsHeaders);
 
   if (body.action === "list") {
-    const { data, error } = await admin
-      .from(resource.sourceTable)
-      .select("*")
-      .eq("business_id", body.businessId)
-      .or(projectReadFilter(projectId))
-      .order(resource.sortField, { ascending: true });
-    if (error) return jsonError("Could not load CMS records", 500, corsHeaders);
-    return secureJsonResponse({ success: true, resource: resource.resource, records: data ?? [] }, 200, corsHeaders);
+    // Schema drift (a missing project_id or sort column on an older backend) must not
+    // blank the editor: retry with progressively fewer optional clauses.
+    const isMissingColumn = (e: { code?: string; message?: string } | null) =>
+      !!e && (e.code === "42703" || e.code === "PGRST204" || /does not exist|could not find/i.test(e.message ?? ""));
+    const attempts: Array<{ project: boolean; sort: boolean }> = [
+      { project: true, sort: true },
+      { project: true, sort: false },
+      { project: false, sort: true },
+      { project: false, sort: false },
+    ];
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const attempt of attempts) {
+      let query = admin.from(resource.sourceTable).select("*").eq("business_id", body.businessId);
+      if (attempt.project) query = query.or(projectReadFilter(projectId));
+      if (attempt.sort) query = query.order(resource.sortField, { ascending: true });
+      const { data, error } = await query;
+      if (!error) {
+        let records = (data ?? []) as Array<Record<string, unknown>>;
+        // Without the column filter, still keep other sites' rows out when the column exists.
+        if (!attempt.project && projectId) {
+          records = records.filter((row) => row.project_id == null || row.project_id === projectId);
+        }
+        return secureJsonResponse({ success: true, resource: resource.resource, records }, 200, corsHeaders);
+      }
+      lastError = error;
+      if (!isMissingColumn(error)) break;
+    }
+    console.error("[cms-records] list failed", resource.sourceTable, lastError?.code, lastError?.message);
+    return jsonError(
+      `Could not load ${resource.resource} records${lastError?.code ? ` (database error ${lastError.code})` : ""}`,
+      500,
+      corsHeaders,
+    );
   }
 
   if (body.action === "get") {
