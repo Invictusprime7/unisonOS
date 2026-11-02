@@ -68,11 +68,20 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     
     steps:
+      - name: Check deployment credentials
+        run: |
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Add $name in GitHub repository Settings → Secrets and variables → Actions."
+              exit 1
+            fi
+          done
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -93,16 +102,16 @@ jobs:
           mkdir -p .vercel
           cat > .vercel/project.json << EOF
           {
-            "projectId": "${{ secrets.VERCEL_PROJECT_ID }}",
-            "orgId": "${{ secrets.VERCEL_ORG_ID }}"
+            "projectId": "${VERCEL_PROJECT_ID}",
+            "orgId": "${VERCEL_ORG_ID}"
           }
           EOF
         
       - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
         
       - name: Build for production
-        run: npm run build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
         env:
           NODE_ENV: production
           NODE_OPTIONS: "--max_old_space_size=4096"
@@ -111,14 +120,11 @@ jobs:
           VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
           VITE_CLOUDINARY_CLOUD_NAME: ${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
           VITE_CLOUDINARY_UPLOAD_PRESET: ${{ secrets.VITE_CLOUDINARY_UPLOAD_PRESET }}
-          VITE_APP_TITLE: "Unison"
-          VITE_APP_DESCRIPTION: "AI-powered task and project management platform"
-          VITE_BASE_URL: "https://unisonosai-unrealdev02s-projects.vercel.app"
         
       - name: Deploy to Vercel production
         id: deploy
         run: |
-          vercel deploy --prod > deployment-url.txt
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" > deployment-url.txt
           echo "url=$(cat deployment-url.txt)" >> $GITHUB_OUTPUT
         
       - name: Deployment summary

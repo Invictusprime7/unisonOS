@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: GitHub Vercel deployment (2026-11-02)
+- [x] Fix toolbar regression-test hook lint violation; composition variant lookup already uses its typed registry ID.
+- [x] Validate required Vercel credentials, allow manual deployment on main, build with Vercel environment and deploy prebuilt output.
+- [ ] Verify lint and affected regression tests.
+- [ ] Run GitHub production deployment — requires repository Vercel secrets and a workflow run; Lovable secrets do not populate GitHub.
+
 ## Active: Contact page completeness (2026-10-31)
 - [x] One lead form per page: Contact designs host the site form; no extra "Get started" fallback form; fallback forms land before the footer and submit through the site runtime
 - [x] Custom fields captioned by their label (no generated IDs); inline contact design keeps every selected field
