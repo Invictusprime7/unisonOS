@@ -1,4 +1,5 @@
 # Architecture decisions
+- GitHub Vercel deployment uses `vercel pull` → `vercel build` → `vercel deploy --prebuilt` with explicit credentials; push and manual runs deploy main only. Why: use Vercel's environment and avoid rebuilding checked output during deployment.
 - Unset Babel breaking mode: browser.
 - Load Unison tokens last; hero effects opt in via theme bridge. Why: protect vendor skins.
 - Demo counts settle with canonical revisions. Why: count only saved generations.

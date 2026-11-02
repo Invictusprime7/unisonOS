@@ -8,14 +8,16 @@ vi.mock('react', async (original) => ({
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), loading: vi.fn(), dismiss: vi.fn(), success: vi.fn() } }));
 
-import { useToolbarCommands } from '@/components/creatives/web-builder/toolbarCommandAdapter';
+// React's useCallback is mocked above: this exercises the command factory,
+// not React's hook lifecycle. Keep all calls outside mounted React explicit.
+import { useToolbarCommands as createTestToolbarCommands } from '@/components/creatives/web-builder/toolbarCommandAdapter';
 
 function fixture() {
   const handlers = {
     onUpdateStyles: vi.fn(), onUpdateAttributes: vi.fn(), onReplaceImage: vi.fn(),
     onDelete: vi.fn(), onDuplicate: vi.fn(), onMoveUp: vi.fn(), onMoveDown: vi.fn(),
   };
-  return { handlers, run: useToolbarCommands(handlers, { businessId: 'business', projectId: 'site' }) };
+  return { handlers, run: createTestToolbarCommands(handlers, { businessId: 'business', projectId: 'site' }) };
 }
 const target = { selector: '#contact', ownerKind: 'source' as const, sourceLocator: '/src/pages/contact.tsx:2:1' };
 
@@ -39,7 +41,7 @@ describe('floating toolbar action routing', () => {
   });
   it('refuses move when the host has no order handler', async () => {
     const { handlers } = fixture();
-    const run = useToolbarCommands({ ...handlers, onMoveUp: undefined }, {});
+    const run = createTestToolbarCommands({ ...handlers, onMoveUp: undefined }, {});
     expect((await run({ type: 'move', target, direction: 'up' })).ok).toBe(false);
   });
   it('keeps unknown selections read-only for every action', async () => {
