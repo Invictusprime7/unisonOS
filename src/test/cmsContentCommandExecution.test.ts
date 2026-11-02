@@ -68,7 +68,11 @@ describe('CMS content command execution', () => {
       safeParseBody: async (request: Request) => ({ data: await request.json(), error: null }),
       isValidUUID: (value: unknown) => typeof value === 'string' && /^[\da-f-]{36}$/i.test(value),
     };
-    new Function(...Object.keys(dependencies), executable)(...Object.values(dependencies));
+    new Function('exports', 'module', ...Object.keys(dependencies), executable)(
+      {},
+      { exports: {} },
+      ...Object.values(dependencies),
+    );
     if (!handler) throw new Error('CMS handler was not registered');
     const response = await handler(new Request('https://cms.example.test', {
       method: 'POST', headers: { Authorization: 'Bearer test-session', 'Content-Type': 'application/json' },
