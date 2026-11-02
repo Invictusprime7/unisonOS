@@ -24,7 +24,8 @@ describe('R6 — legacy AI page generator surface stays deleted', () => {
 
   it('page transport delegates to the existing canonical authenticated handler', () => {
     const source = readFileSync('supabase/functions/generate-page/index.ts', 'utf8');
-    expect(source).toContain('handleAssistant(req, true)');
+    expect(source).toContain('x-unison-page-generation-only');
+    expect(source).toContain('/functions/v1/ai-code-assistant');
     expect(source).not.toContain('PageRenderer');
     expect(source).not.toContain('commitMutation');
   });
@@ -38,8 +39,9 @@ describe('R6 — legacy AI page generator surface stays deleted', () => {
 
   it('keeps the legacy Edge Function as a canonical-handler adapter only', () => {
     const source = readFileSync('supabase/functions/generate-page/index.ts', 'utf8');
-    expect(source).toContain("from '../ai-code-assistant/handler.ts'");
-    expect(source).toContain('handleAssistant(req, true)');
+    expect(source).toContain('x-unison-page-generation-only');
+    expect(source).toContain('/functions/v1/ai-code-assistant');
+    expect(source).not.toContain("from '../ai-code-assistant/handler.ts'");
     expect(source).not.toMatch(/(?:commitMutation|site_revisions|buildCanonicalLaunchArtifacts)/);
   });
 

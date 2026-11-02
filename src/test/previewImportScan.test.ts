@@ -48,9 +48,9 @@ export default function App() { return <main>${whitespace}<Hero /></main>; }`,
       '/src/components/Widget.tsx': 'export function Widget(){return <h1>Rendered node</h1>}',
     });
 
-    expect(files['/App.tsx']).toMatch(/<main data-ut-source-locator="[^"]+"><Widget\s*\/>/);
+    expect(files['/App.tsx']).toMatch(/<main data-ut-source-locator="[^"]+"[^>]*><Widget\s*\/>/);
     expect(files['/App.tsx']).not.toMatch(/<Widget[^>]*data-ut-source-locator/);
-    expect(files['/components/Widget.tsx']).toMatch(/<h1 data-ut-source-locator="[^"]+">Rendered node<\/h1>/);
+    expect(files['/components/Widget.tsx']).toMatch(/<h1 data-ut-source-locator="[^"]+"[^>]*>Rendered node<\/h1>/);
   });
 
   it('removes multiline self imports after a side-effect import without leaving invalid source', () => {
