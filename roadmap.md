@@ -3,7 +3,7 @@
 ## Active: GitHub Vercel deployment (2026-11-02)
 - [x] Fix toolbar regression-test hook lint violation; composition variant lookup already uses its typed registry ID.
 - [x] Validate required Vercel credentials, allow manual deployment on main, build with Vercel environment and deploy prebuilt output.
-- [ ] Verify lint and affected regression tests.
+- [x] Lint passes with zero errors (80 existing warnings); all 10 toolbar/layout regressions pass; preview build OK.
 - [ ] Run GitHub production deployment — requires repository Vercel secrets and a workflow run; Lovable secrets do not populate GitHub.
 
 ## Active: Contact page completeness (2026-10-31)
