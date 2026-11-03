@@ -166,6 +166,9 @@ const DESIGN_RESOLUTION_ALLOWLIST = new Set([
   'src/services/design/equivalenceLedger.ts',
   // Read-only verification of already-materialized design source identities.
   'src/services/app-builder/design/designSourceMaterializer.ts',
+  // Read-only composition validation consumes variant tags without resolving
+  // or compiling a variant into canonical output.
+  'src/services/app-builder/pageCompositionCoverage.ts',
   'src/services/launch/twentyFirstCoverageGate.ts',
   'src/services/requestAIPageComposition.ts',
   // Read-only launch-context projection. It filters registry metadata for the
