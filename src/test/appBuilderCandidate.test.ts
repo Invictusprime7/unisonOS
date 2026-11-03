@@ -142,7 +142,7 @@ function contactCrmContract(): AppBuildContract {
   return value;
 }
 
-const contactCrmPage = '<section data-ut-component-slug="contact-form"><form data-intent-form="contact.submit"><input name="name" /><input name="email" /><button type="submit" data-ut-cta="cta.form-submit">Send</button></form></section>';
+const contactCrmPage = '<section data-ut-component-slug="contact-form"><form data-intent-form="contact.submit"><input name="name" required /><input name="email" required /><textarea name="message" required /><button type="submit" data-ut-cta="cta.form-submit">Send</button></form></section>';
 
 describe('App Builder candidate closure', () => {
   it('repairs selected contact controls deterministically through JSX handler spans', async () => {
@@ -476,6 +476,44 @@ describe('App Builder candidate closure', () => {
     expect(report.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'wizard-binding-marker-missing', path: '/src/pages/Home.tsx' }),
     ]));
+  });
+
+  it('accepts a statically inspectable canonical form contract', async () => {
+    const files = {
+      ...initialFiles,
+      '/src/pages/Contact.tsx': [
+        'export default function Contact(){ return <form data-intent-form="contact.submit">',
+        '<input name="name" required />',
+        '<input name="email" type="email" required />',
+        '<textarea name="message" required />',
+        '<button type="submit">Send</button></form>; }',
+      ].join(''),
+    };
+    const report = await validateAppBuildCandidate({ contract: contract(), files, initialFiles });
+
+    expect(report.issues.filter((issue) => issue.code.startsWith('form-'))).toEqual([]);
+  });
+
+  it('blocks ambiguous form props and unregistered form intents', async () => {
+    const ambiguous = await validateAppBuildCandidate({
+      contract: contract(),
+      files: {
+        ...initialFiles,
+        '/src/pages/Contact.tsx': 'export default function Contact(){return <form data-intent-form="contact.submit"><input name={fieldName} required /></form>}',
+      },
+      initialFiles,
+    });
+    expect(ambiguous.issues).toContainEqual(expect.objectContaining({ code: 'form-contract-ambiguous' }));
+
+    const unauthorized = await validateAppBuildCandidate({
+      contract: contract(),
+      files: {
+        ...initialFiles,
+        '/src/pages/Contact.tsx': 'export default function Contact(){return <form data-intent-form="crm.submit"><input name="email" required /></form>}',
+      },
+      initialFiles,
+    });
+    expect(unauthorized.issues).toContainEqual(expect.objectContaining({ code: 'form-intent-unauthorized' }));
   });
 
   it('accepts a candidate that carries the requested binding marker', async () => {

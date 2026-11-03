@@ -242,7 +242,31 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   };
   const canonicalIntentBindings = (pageId?: string) => {
     const bindings = bindingsForPage(pageId);
+    const components = componentsForPage(pageId);
+    const eligibleIds = pageId
+      ? designSources.eligibleByPage[pageId] ?? []
+      : [...new Set(Object.values(designSources.eligibleByPage).flat())].slice(0, 24);
+    const eligibleSources = designSources.implementations
+      .filter((implementation) => eligibleIds.includes(implementation.implementationId))
+      .map((implementation) => `${implementation.implementationId} (${implementation.sectionType}; ${implementation.certification})`);
+    const projection = [
+      `${pageId ? `PAGE ${pageId} ` : ''}VERIFIED COMPONENT-CAPABILITY PROJECTION (derived from the sealed AppBuildContract; visual implementations do not grant runtime authority):`,
+      `Eligible presentation only: ${eligibleSources.join(', ') || 'none'}.`,
+      ...components.map((component) => {
+        const instanceBindings = bindings.filter((binding) => binding.componentInstanceId === component.runtime.instanceId);
+        const resolvedBindings = Object.entries(component.bindings).map(([key, value]) => `${key}=${value}`).join(', ') || 'none';
+        return `- ${component.runtime.instanceId} ${component.runtime.componentSlug}: pages ${component.runtime.usedOnPages.join(', ') || 'site-wide'}; status ${component.runtime.status}; required capabilities ${component.runtime.requiredCapabilities.join(', ') || 'none'}; reads ${component.runtime.catalogSurfaces.join(', ') || 'none'}; write intent ${component.runtime.writeIntent ?? 'none'}; target ${component.targetType}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; resolved bindings ${resolvedBindings}; required fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; attached binding IDs ${instanceBindings.map((binding) => binding.bindingId).join(', ') || 'none'}${component.runtime.blockers.length ? `; blockers ${component.runtime.blockers.join(' ')}` : ''}.`;
+      }),
+      ...bindings.map((binding) => {
+        const owner = binding.componentInstanceId
+          ? components.find((component) => component.runtime.instanceId === binding.componentInstanceId)
+          : undefined;
+        return `- ${binding.bindingId}: page ${binding.pageId} section ${binding.sourceSection}.${binding.sourceSlot}; component owner ${owner ? `${owner.runtime.componentSlug} instance ${owner.runtime.instanceId}` : binding.componentInstanceId ? `unresolved instance ${binding.componentInstanceId}` : 'none'}; intent ${binding.coreIntent}; handler ${binding.intentHandler}; target ${binding.targetType}:${binding.targetId}; missing capabilities ${binding.missingCapabilities.join(', ') || 'none'}.`;
+      }),
+      'Preserve supplied instance, resource and binding IDs exactly. Never infer ownership from a component slug, copy an implementation ID into a functional ID, or use a design variant to authorize an action.',
+    ].join('\n');
     return [
+      projection,
       `${pageId ? 'PAGE ' : ''}CANONICAL INTENT BINDINGS: ${bindings.length ? bindings.map((binding) => `${binding.bindingId}: page ${binding.pageId} ${binding.route} ${binding.sourceSection}.${binding.sourceSlot} -> core intent ${binding.coreIntent}, DOM intent ${binding.domIntent}, required marker ${binding.ctaMarkers.map((marker) => `data-ut-cta="${marker}"`).join(' or ') || 'none'}, handler ${binding.intentHandler}, target ${binding.targetType}:${binding.targetId}${binding.componentSlug ? `, registered ${binding.componentSlug} instance ${binding.componentInstanceId} (write intent ${binding.componentWriteIntent ?? 'none'})` : ''}${binding.missingCapabilities.length ? `, INACTIVE missing capabilities ${binding.missingCapabilities.join(', ')}; omit this interaction` : ''}`).join('\n') : 'none.'}`,
       'Use these supplied IDs only; do not invent binding, target, or component-instance IDs. The platform stamps the canonical intent and component-instance ID after candidate validation from the exact CTA marker and registered component slug.',
       ...bindings.filter((binding) => binding.businessFieldBindings?.length).map((binding) => `${binding.bindingId} business field bindings: ${JSON.stringify(binding.businessFieldBindings)}. Resolve these from the canonical scoped business profile; never copy private destinations or business answers into visitor form values.`),
@@ -283,7 +307,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const compose = (modules: string, pageId?: string, budget = COMPOSER_CONTEXT_LIMIT) => packContextBlocks([
     { priority: 1, text: !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '' },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
-    { priority: 1, text: 'AI ENRICHMENT: author business-specific copy, complete object collections, purposeful media and working interactions through the registered contracts. The deterministic starter is not an AI response: do not retain baseline filler, generic field substitutions or empty sections. Preserve every planned section, including repeated families, in the planned order. CTA sections need specific, business-worded headlines and actions, never generic "Get started" copy. Platform projection wires objects; it never supplies missing creative content.' },
+    { priority: 1, text: 'FREE-FORM AI ENRICHMENT: the deterministic composition is a starting point, not a fixed template. Author original layouts and TSX, reorder sections, replace optional families, or introduce project-local components as needed for this page. Preserve the page archetype required/forbidden families and body-size limit, sealed art direction and shared shell. Preserve the exact canonical page, component-instance, resource and revision identities; emit only the supplied eligible implementation IDs and keep authorized binding IDs, handler choices, intent values and CTA markers unchanged. A new visual treatment never authorizes a new backend action. Do not retain baseline filler, generic field substitutions or empty sections. CTA sections need specific, business-worded headlines and actions, never generic "Get started" copy. Platform projection wires objects; it never supplies missing creative content.' },
     { priority: 1, text: registeredComponentBlueprints(pageId) },
     { priority: 2, trimmable: true, text: canonicalIntentBindings(pageId) },
     { priority: 2, text: registeredComponentTemplates(pageId) },

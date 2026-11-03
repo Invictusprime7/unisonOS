@@ -124,7 +124,7 @@ export function findPageStructureIssues(
   const sectionTags = (source.match(/<section\b/g) ?? []).length;
   const sections = sectionTags + bodyComponents.length;
   if (sections < requirement.minSections) {
-    issues.push(`${path} has only ${sections} body section(s); the ${requirement.role} page needs at least ${requirement.minSections} distinct sections that follow its COMPOSITION TARGET (hero plus the suggested section order, using certified design sources or project-local components).`);
+    issues.push(`${path} has only ${sections} body section(s); the ${requirement.role} page needs at least ${requirement.minSections} distinct body sections for its page job. The composition target is guidance, not a required order; use certified design sources or project-local components.`);
   }
 
   if (requirement.imageLed) {

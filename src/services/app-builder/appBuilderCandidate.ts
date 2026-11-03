@@ -26,6 +26,8 @@ import type {
   AppBuildCandidateClosureReport,
   AppBuildContract,
 } from './appBuilderContracts';
+import { CORE_INTENTS } from '@/platform/core/coreIntents';
+import { inspectNativeForms } from '@/services/app-builder/nativeFormContract';
 
 function stableSourceHash(files: Readonly<Record<string, string>>): string {
   let hash = 0x811c9dc5;
@@ -341,6 +343,16 @@ export async function validateAppBuildCandidate(input: {
   const files = { ...input.files };
   const issues: AppBuildCandidateClosureIssue[] = [];
   const pages = input.contract.topology.sitePlan.pages;
+
+  for (const form of inspectNativeForms(files, CORE_INTENTS)) {
+    if (form.verdict === 'recognized') continue;
+    issues.push({
+      severity: 'blocker',
+      code: form.verdict === 'unauthorized' ? 'form-intent-unauthorized' : 'form-contract-ambiguous',
+      path: form.sourcePath,
+      message: `${form.sourcePath} ${form.reason || 'has an unverified form contract.'}`,
+    });
+  }
 
   // Validate generation scope: App Builder can only generate in allowed directories
   const generatedFiles = Object.keys(files).filter((path) => !input.initialFiles[path]);

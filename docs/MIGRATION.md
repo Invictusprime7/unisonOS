@@ -48,18 +48,14 @@ If GitHub isn't an option, you can manually copy files from Lovable's Dev Mode.
 ## Local Development Setup
 
 ### Prerequisites
-- **Node.js** (v18 or higher) - [Download](https://nodejs.org/)
-- **npm** or **bun** package manager
+- **Bun** (v1.4.4; pinned in `package.json`) - [Install](https://bun.sh/)
+- **Node.js** (v24 or higher) for Node-based functions - [Download](https://nodejs.org/)
 - **Git** - [Download](https://git-scm.com/)
 
 ### Install Dependencies
 
 ```bash
-# Using npm
-npm install
-
-# Or using bun (faster)
-bun install
+bun install --frozen-lockfile
 ```
 
 ---

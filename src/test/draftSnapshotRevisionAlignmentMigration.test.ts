@@ -8,8 +8,15 @@ const align = read('20261004123245_align_canonical_snapshots_with_revision.sql')
 const base = read('20260815032033_ececf37c-f596-4970-b2d1-7d6574725950.sql');
 const buildRecovery = read('20261013144937_canonical_build_row_recovery.sql');
 const pointerIntegrity = read('20261021111258_enforce_builder_draft_revision_pointer_integrity.sql');
+const acceptedRevision = read('20261103211043_stamp_accepted_revision_id_in_site_snapshot.sql');
 
 describe('draft snapshot alignment with stamped revisions', () => {
+  it('stamps the accepted revision ID into the revision snapshot before projection alignment', () => {
+    expect(acceptedRevision).toContain('BEFORE INSERT ON public.site_revisions');
+    expect(acceptedRevision).toContain("'acceptedRevisionId', NEW.id::text");
+    expect(acceptedRevision).toContain("NEW.status = 'committed'");
+  });
+
   it('reproduces the divergence: revision snapshot is mutated on insert while the draft strict-compares it', () => {
     expect(stamp).toContain('NEW.site_bundle_snapshot := COALESCE(NEW.site_bundle_snapshot');
     expect(base).toContain("NEW.metadata->'siteBundleSnapshot' IS DISTINCT FROM v_revision.site_bundle_snapshot");

@@ -9,6 +9,7 @@ import { LogoCloudFrame, LogoMark, normalizeLogos } from './LogoCloudFrame';
 
 export const LogoCloudMarquee: React.FC<BaseSectionProps<'logo-cloud'>> = ({ section, theme }) => {
   const logos = normalizeLogos(section.props.logos, (section.props as { items?: unknown }).items);
+  if (!logos.length) return null;
   const track = logos.length ? [...logos, ...logos] : [];
 
   return (

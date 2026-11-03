@@ -4,18 +4,16 @@ import type { AppBuilderPageSectionMaterialization } from '@/services/app-builde
 import { planSiteComposition } from '@/services/composition';
 
 const actual = (families: string[]) => ({ filePath: '/src/pages/Home.tsx', inspection: { sections: families.map(semanticType => ({ semanticType })) } }) as AppBuilderPageSectionMaterialization;
-describe('sealed page composition coverage', () => {
-  it('rejects an AI page missing an entire planned gallery section', () => {
+describe('page archetype coverage for free-form compositions', () => {
+  it('allows a free-form composition to replace an optional planned section', () => {
     const page = planSiteComposition('salon', [{ pageId: 'home', role: 'home' }], 'coverage').pages[0];
     page.target.sectionOrder = ['hero', 'services', 'gallery', 'cta'];
-    expect(pageCompositionCoverage(page, actual(['hero', 'services', 'cta']))).toHaveLength(1);
-    expect(pageCompositionCoverage(page, actual(page.target.sectionOrder))).toEqual([]);
+    expect(pageCompositionCoverage(page, actual(['hero', 'features', 'cta', 'services']))).toEqual([]);
   });
-  it('preserves repeated objects rather than collapsing a family', () => {
+  it('allows repeated section families when each authored section remains distinct', () => {
     const page = planSiteComposition('salon', [{ pageId: 'home', role: 'home' }], 'coverage').pages[0];
     page.target.sectionOrder = ['hero', 'services', 'services', 'cta'];
-    expect(pageCompositionCoverage(page, actual(['hero', 'services', 'cta']))).toHaveLength(1);
-    expect(pageCompositionCoverage(page, actual(page.target.sectionOrder))).toEqual([]);
+    expect(pageCompositionCoverage(page, actual(['hero', 'services', 'services', 'cta']))).toEqual([]);
   });
   it('rejects a gallery on checkout even if it is claimed by a supplied plan', () => {
     const page = planSiteComposition('ecommerce', [{ pageId: 'checkout', role: 'checkout' }], 'coverage').pages[0];

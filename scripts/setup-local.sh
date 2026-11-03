@@ -10,7 +10,13 @@ echo -e "${GREEN}🚀 Setting up local development environment...${NC}\n"
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
-    echo -e "${RED}❌ Node.js is not installed. Please install Node.js 18+ from https://nodejs.org/${NC}"
+    echo -e "${RED}❌ Node.js is not installed. Please install Node.js 24+ from https://nodejs.org/${NC}"
+    exit 1
+fi
+
+NODE_MAJOR_VERSION="$(node -p 'Number(process.versions.node.split(".")[0])')"
+if [ "$NODE_MAJOR_VERSION" -lt 24 ]; then
+    echo -e "${RED}❌ Node.js 24+ is required; found $(node -v). Please install Node.js 24+ from https://nodejs.org/${NC}"
     exit 1
 fi
 

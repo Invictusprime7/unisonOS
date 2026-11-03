@@ -891,14 +891,15 @@ ${memberPortrait('              ', c.imageSrc, m.name, 'aspect-square rounded-[v
 // Logo Cloud / Blog Preview / Before-After Variants (Phase 3 first-class families)
 // ============================================================================
 
-function logoMarks(c: ExtractedSectionContent, count: number): string[] {
-  const names = c.listItems?.length ? c.listItems : ['Northwind', 'Harbor & Co', 'Atlas Group', 'Meridian', 'Fieldhouse'];
-  return Array.from({ length: Math.max(count, names.length) }, (_, i) => names[i % names.length]);
+function logoMarks(c: ExtractedSectionContent): string[] {
+  return (c.listItems ?? []).filter(name => typeof name === 'string' && name.trim().length > 0);
 }
 
 export function logoCloudGridJSX(c: ExtractedSectionContent): string {
+  const marks = logoMarks(c);
+  if (!marks.length) return '';
   const body = `          <div className="grid grid-cols-2 items-center gap-8 sm:grid-cols-3 md:grid-cols-5">
-${logoMarks(c, 5).map((name) => `            <div className="flex items-center justify-center rounded-[var(--radius)] border border-border py-4">
+${marks.map((name) => `            <div className="flex items-center justify-center rounded-[var(--radius)] border border-border py-4">
               <span className="text-lg font-semibold text-muted-foreground">${esc(name)}</span>
             </div>`).join('\n')}
           </div>`;
@@ -906,7 +907,8 @@ ${logoMarks(c, 5).map((name) => `            <div className="flex items-center j
 }
 
 export function logoCloudMarqueeJSX(c: ExtractedSectionContent): string {
-  const marks = logoMarks(c, 5);
+  const marks = logoMarks(c);
+  if (!marks.length) return '';
   const body = `          <div className="overflow-hidden">
             <div className="flex w-max items-center gap-16 opacity-75">
 ${[...marks, ...marks].map((name) => `              <span className="shrink-0 text-lg font-semibold text-muted-foreground">${esc(name)}</span>`).join('\n')}
@@ -916,10 +918,12 @@ ${[...marks, ...marks].map((name) => `              <span className="shrink-0 te
 }
 
 export function logoCloudBrandLockupJSX(c: ExtractedSectionContent): string {
+  const marks = logoMarks(c);
+  if (!marks.length) return '';
   const body = `          <div className="grid items-center gap-10 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
-            <p className="text-2xl font-semibold text-foreground">${esc(c.heading || 'Trusted by teams who care about the details')}</p>
+            ${c.heading ? `<p className="text-2xl font-semibold text-foreground">${esc(c.heading)}</p>` : ''}
             <div className="grid grid-cols-2 gap-x-10 gap-y-6 sm:grid-cols-3">
-${logoMarks(c, 6).map((name) => `              <span className="border-b border-border pb-3 text-lg font-semibold text-muted-foreground">${esc(name)}</span>`).join('\n')}
+${marks.map((name) => `              <span className="border-b border-border pb-3 text-lg font-semibold text-muted-foreground">${esc(name)}</span>`).join('\n')}
             </div>
           </div>`;
   return sectionShell('logo-cloud:brand-lockup', c, body, 'bg-muted');
@@ -1088,8 +1092,10 @@ ${media}\
 }
 
 export function logoCloudWordmarkRowJSX(c: ExtractedSectionContent): string {
+  const marks = logoMarks(c);
+  if (!marks.length) return '';
   const body = `          <div className="flex w-full flex-wrap items-center justify-center gap-x-10 gap-y-4 border-t border-border pt-8 sm:pt-10">
-${logoMarks(c, 5).map((name) => `            <span className="text-sm font-semibold tracking-tight text-muted-foreground/70">${esc(name)}</span>`).join('\n')}
+${marks.map((name) => `            <span className="text-sm font-semibold tracking-tight text-muted-foreground/70">${esc(name)}</span>`).join('\n')}
           </div>`;
   return sectionShell('logo-cloud:wordmark-row', c, body);
 }

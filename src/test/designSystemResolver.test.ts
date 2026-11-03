@@ -97,4 +97,52 @@ describe('AppBuilderGenerationContext (R0/R1)', () => {
     const bare = reportDesignSourceUsage(contract, ctx.designSources, { '/src/pages/Home.tsx': '<Section/>' });
     expect(bare.primitiveOnlyPages).toEqual(['page-home']);
   });
+
+  it('projects registered component capabilities onto only their bound page', async () => {
+    const { buildAppBuilderGenerationContext } = await import('@/services/app-builder/appBuilderGenerationContext');
+    const contract = buildAppBuildContract(makeInput([
+      impl('hero:home-approved', 'hero', ['home'], 'approved'),
+      impl('hero:pricing-only', 'hero', ['pricing'], 'approved'),
+    ]));
+    contract.business.capabilities = ['contact'];
+    contract.business.registeredComponents = [{
+      runtime: {
+        instanceId: 'cmp-contact', componentSlug: 'contact-form', usedOnPages: ['page-home'],
+        requiredCapabilities: ['contact'], catalogSurfaces: [], writeIntent: 'contact.submit',
+        slotBindings: ['form-submit'], status: 'ready', blockers: [],
+      },
+      label: 'Contact form', targetType: 'form', instanceStatus: 'ready',
+      bindings: { formId: 'form-contact' }, requiredBindingKeys: ['formId'],
+      requiredNativeFormFields: ['name', 'email', 'message'], formFields: [],
+      requiredBusinessFields: [], requiredSetupSteps: [],
+    } as never];
+    contract.business.intentBindings = [{
+      bindingId: 'binding-contact', pageId: 'page-home', route: '/',
+      sourceSection: 'contact', sourceSlot: 'form-submit', sourceLabel: 'Send',
+      coreIntent: 'contact.submit', domIntent: 'contact.submit', ctaMarkers: ['cta.form-submit'],
+      intentHandler: 'intent-exec', targetType: 'form', targetId: 'form-contact',
+      requiredCapabilities: ['contact'], missingCapabilities: [], componentInstanceId: 'cmp-contact',
+      componentSlug: 'contact-form', componentWriteIntent: 'contact.submit',
+    } as never];
+
+    const context = buildAppBuilderGenerationContext(contract);
+    const home = context.runtimeContextForPage('page-home', 12_000);
+    const unrelated = context.runtimeContextForPage('unrelated-page', 12_000);
+
+    expect(home).toContain('VERIFIED COMPONENT-CAPABILITY PROJECTION');
+    expect(home).toContain('FREE-FORM AI ENRICHMENT');
+    expect(home).toContain('reorder sections');
+    expect(home).toContain('cmp-contact');
+    expect(home).toContain('required capabilities contact');
+    expect(home).toContain('form-contact');
+    expect(home).toContain('binding-contact');
+    expect(home).toContain('intent-exec');
+    expect(home).toContain('cta.form-submit');
+    expect(home).not.toContain('Preserve every planned section');
+    expect(home).toContain('Eligible presentation only: hero:home-approved');
+    expect(home).not.toContain('hero:pricing-only');
+    expect(unrelated).not.toContain('cmp-contact');
+    expect(unrelated).not.toContain('form-contact');
+    expect(unrelated).not.toContain('hero:home-approved');
+  });
 });

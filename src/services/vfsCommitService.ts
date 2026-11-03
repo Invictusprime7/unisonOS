@@ -2538,6 +2538,13 @@ async function finalize(args: {
     dryRun,
   });
 
+  if (status === 'committed' && persistedRevisionId && snapshotForRevision) {
+    snapshotForRevision = {
+      ...snapshotForRevision,
+      meta: { ...snapshotForRevision.meta, acceptedRevisionId: persistedRevisionId },
+    };
+  }
+
   const acceptedAuthority = snapshotForRevision && status === 'committed'
     ? authorityAfterAcceptedCommit(
         deriveAuthorshipAuthority({ snapshot: snapshotForRevision, acceptedRevisionId: parentRevisionId }),

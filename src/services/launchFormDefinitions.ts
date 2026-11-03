@@ -1,4 +1,5 @@
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
+import { inspectNativeForms } from '@/services/app-builder/nativeFormContract';
 
 export type PublicFormIntent =
   | 'contact.submit'
@@ -23,15 +24,28 @@ const GENERATED_FORM_DEFINITIONS: readonly PlannedFormDefinition[] = [
 ];
 
 /**
- * Standard generated forms use `data-demo-form`. Only emit definitions when
- * the canonical VFS contains that marker; the form runtime uses the intent as
- * its stable external id, so there is no client-controlled definition lookup.
+ * Intent-bearing forms are projected from JSX into their site-scoped public
+ * contracts. The intent remains the runtime external id; form and component
+ * identities are reported separately by the shared inspector.
  */
 export function planLaunchFormDefinitions(
   siteBundleSnapshot: Pick<SiteBundleSnapshot, 'vfsFiles'> | undefined,
 ): PlannedFormDefinition[] {
-  const hasGeneratedForm = Object.values(siteBundleSnapshot?.vfsFiles ?? {})
-    .some((source) => source.includes('data-demo-form="true"'));
+  const forms = inspectNativeForms(siteBundleSnapshot?.vfsFiles ?? {}, GENERATED_FORM_DEFINITIONS.map(({ intent }) => intent));
+  const byIntent = new Map<PublicFormIntent, PlannedFormDefinition>();
+  for (const form of forms) {
+    if (form.verdict !== 'recognized' || !form.intent) continue;
+    const definition = GENERATED_FORM_DEFINITIONS.find((candidate) => candidate.intent === form.intent);
+    if (!definition) continue;
+    byIntent.set(definition.intent, { ...definition, fields: form.fields });
+  }
 
-  return hasGeneratedForm ? GENERATED_FORM_DEFINITIONS.map((definition) => ({ ...definition })) : [];
+  const hasLegacyUnspecifiedForm = forms.some((form) => form.demoForm && !form.intent);
+  if (hasLegacyUnspecifiedForm) {
+    for (const definition of GENERATED_FORM_DEFINITIONS) {
+      if (!byIntent.has(definition.intent)) byIntent.set(definition.intent, { ...definition });
+    }
+  }
+
+  return [...byIntent.values()];
 }

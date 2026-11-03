@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { compositionToReactFileSet } from '@/sections/compositionToFileSet';
 import { getCompositionById } from '@/sections/templates';
 import { getLayoutForVariantId, getRequiredRadixPrimitives, getVariantsForSection } from '@/sections/variants';
+import { logoCloudBrandLockupJSX } from '@/sections/variants/jsxTemplates';
 import { buildGeneratedUiFoundation } from '@/platform/core/generatedUiFoundation';
 import type { SectionEntry, ThemeTokens } from '@/sections/types';
 
@@ -159,5 +160,23 @@ describe('Gallery registry and emitted renderer parity', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Color' }));
     expect(screen.queryByRole('button', { name: 'First result' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Second result' })).toBeVisible();
+  });
+  it.each(getVariantsForSection('logo-cloud'))('hides empty owner-authored proof for $id', variant => {
+    const Registered = variant.component;
+    const section = {
+      id: 'owner-logo-proof', type: 'logo-cloud', variantId: variant.id,
+      props: { headline: 'Customer and partner marks', logos: [], items: [] },
+    } as SectionEntry;
+    const view = render(<Registered section={section} theme={themeModule.THEME as ThemeTokens} />);
+
+    expect(view.container.querySelector(`[data-ut-variant="${variant.id}"]`)).toBeNull();
+  });
+
+  it('emits only owner-provided marks from the static brand-lockup recipe', () => {
+    expect(logoCloudBrandLockupJSX({ listItems: [] } as never)).toBe('');
+    const authored = logoCloudBrandLockupJSX({ listItems: ['Owner approved mark'] } as never);
+    expect(authored).toContain('Owner approved mark');
+    expect(authored).not.toContain('Northwind');
+    expect(authored).not.toContain('Trusted by teams');
   });
 });

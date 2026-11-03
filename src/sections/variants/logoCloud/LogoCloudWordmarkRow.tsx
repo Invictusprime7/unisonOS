@@ -17,6 +17,7 @@ import { hsl } from '../../themeUtils';
 
 export const LogoCloudWordmarkRow: React.FC<BaseSectionProps<'logo-cloud'>> = ({ section, theme }) => {
   const logos = normalizeLogos(section.props.logos, (section.props as { items?: unknown }).items);
+  if (!logos.length) return null;
 
   return (
     <LogoCloudFrame variantId="logo-cloud:wordmark-row" theme={theme} headline={section.props.headline}>

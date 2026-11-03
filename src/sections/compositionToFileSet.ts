@@ -983,6 +983,7 @@ function RenderedSection({ section, occurrence }: { section: any; occurrence: nu
     <SectionErrorBoundary sectionId={section.id}>
       <div
         data-ut-section-id={section.id}
+        data-section={section.id}
         ${enhancements.source ? "className={section.type !== 'navbar' && section.type !== 'footer' ? 'relative isolate' : undefined}" : ''}
         data-ut-composition-id={${JSON.stringify(template.compositionAlternativeId || null)}}
         data-ut-section-type={section.type}

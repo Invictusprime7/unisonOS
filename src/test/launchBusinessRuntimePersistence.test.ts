@@ -185,7 +185,11 @@ describe('launch business runtime persistence', () => {
   });
 
   it('captures only generated standalone forms through the public submit endpoint', () => {
-    expect(FORM_RUNTIME_MODULE).toContain("form.dataset.demoForm !== 'true'");
+    expect(FORM_RUNTIME_MODULE).toContain("form.dataset.demoForm === 'true'");
+    expect(FORM_RUNTIME_MODULE).toContain('form.dataset.intentForm || form.dataset.utIntent');
+    expect(FORM_RUNTIME_MODULE).toContain('DELEGATED_INTENTS.has(requestedIntent)');
+    expect(FORM_RUNTIME_MODULE).toContain("event.stopImmediatePropagation()");
+    expect(FORM_RUNTIME_MODULE).toContain("form[data-demo-form=\"true\"][data-ut-intent]");
     expect(FORM_RUNTIME_MODULE).toContain("fetch(runtime.formEndpoint");
     expect(FORM_RUNTIME_MODULE).toContain("window.parent !== window");
     expect(FORM_RUNTIME_MODULE).toContain("'Content-Type': 'application/json'");
@@ -227,6 +231,75 @@ describe('launch business runtime persistence', () => {
     expect(resolveComponentRuntimeContract(instance!, [])).toMatchObject({
       status: 'blocked',
       blockers: ['Missing required capability: booking.'],
+    });
+  });
+
+  it('projects a registered component onto its explicit source host and accepted revision', () => {
+    const snapshot = createSnapshot();
+    const instance = createCanonicalComponentInstance('contact-form', {
+      usedOnPages: ['home'],
+      bindings: { formId: 'form-contact', sectionInstanceId: 'contact-section' },
+    });
+    expect(instance).not.toBeNull();
+    snapshot.componentInstances[instance!.instanceId] = instance!;
+    snapshot.meta.acceptedRevisionId = '00000000-0000-4000-8000-000000000042';
+    snapshot.bindings['binding-contact'] = {
+      bindingId: 'binding-contact',
+      componentInstanceId: instance!.instanceId,
+    } as never;
+    snapshot.vfsFiles['/src/pages/Home.tsx'] = `<section data-ut-component-slug="contact-form" data-ut-component-instance-id="${instance!.instanceId}"><form data-intent-form="contact.submit"><input name="name" required /><input name="email" type="email" required /><textarea name="message" required /></form></section>`;
+
+    const manifest = compileGeneratedSiteRuntimeManifest({
+      siteId: 'site-1',
+      snapshot,
+      enabledCapabilities: ['contact'],
+      generatedAt: '2026-07-30T00:00:00.000Z',
+    });
+
+    expect(manifest.components[0].capabilityProjection).toMatchObject({
+      revisionId: '00000000-0000-4000-8000-000000000042',
+      sourcePath: '/src/pages/Home.tsx',
+      pageIds: ['home'],
+      sectionId: 'contact-section',
+      implementationId: null,
+      componentInstanceId: instance!.instanceId,
+      componentSlug: 'contact-form',
+      functional: {
+        writeIntent: 'contact.submit',
+        bindingId: 'binding-contact',
+        formId: 'form-contact',
+        requiredFields: ['email', 'message', 'name'],
+        requiredCapabilities: ['contact'],
+      },
+      validation: {
+        sourceResolved: true,
+        identityVerified: true,
+        capabilityAuthorized: true,
+        bindingResolved: true,
+      },
+    });
+  });
+
+  it('does not infer component source ownership from a matching slug alone', () => {
+    const snapshot = createSnapshot();
+    const instance = createCanonicalComponentInstance('contact-form', {
+      usedOnPages: ['home'],
+      bindings: { formId: 'form-contact' },
+    });
+    expect(instance).not.toBeNull();
+    snapshot.componentInstances[instance!.instanceId] = instance!;
+    snapshot.vfsFiles['/src/pages/Home.tsx'] = '<section data-ut-component-slug="contact-form"><form data-intent-form="contact.submit" /></section>';
+
+    const manifest = compileGeneratedSiteRuntimeManifest({
+      siteId: 'site-1',
+      snapshot,
+      enabledCapabilities: ['contact'],
+    });
+
+    expect(manifest.components[0].capabilityProjection).toMatchObject({
+      revisionId: null,
+      sourcePath: null,
+      validation: { sourceResolved: false, identityVerified: false },
     });
   });
 
@@ -518,6 +591,33 @@ describe('launch business runtime persistence', () => {
       expect.objectContaining({ externalId: 'newsletter.subscribe', intent: 'newsletter.subscribe' }),
     ]));
     expect(planLaunchFormDefinitions({ vfsFiles: {} })).toEqual([]);
+  });
+
+  it('provisions the intent and required fields of a canonical JSX form', () => {
+    const definitions = planLaunchFormDefinitions({
+      vfsFiles: {
+        '/src/pages/Contact.tsx': [
+          'export default function Contact(){ return <form data-intent-form="contact.submit">',
+          '<input name="name" required />',
+          '<input name="email" type="email" required />',
+          '<textarea name="message" required />',
+          '<button type="submit">Send</button></form>; }',
+        ].join(''),
+      },
+    });
+
+    expect(definitions).toEqual([
+      {
+        externalId: 'contact.submit',
+        name: 'Contact request',
+        intent: 'contact.submit',
+        fields: [
+          { name: 'name', required: true },
+          { name: 'email', required: true },
+          { name: 'message', required: true },
+        ],
+      },
+    ]);
   });
 
   it('allows every canonical catalog source in the confirmed launch endpoint', () => {

@@ -15,10 +15,10 @@ export function renderCompositionBrief(
     `PAGE RESPONSIBILITY (${profile.industryId === '*' ? 'generic' : profile.industryId} · ${profile.pageRole}): ${profile.narrativeGoals.join('; ')}.`,
     profile.primaryIntent ? `PRIMARY INTENT: ${profile.primaryIntent}` : '',
     profile.domainVocabulary?.length ? `DOMAIN VOCABULARY: ${profile.domainVocabulary.join(', ')}` : '',
-    `COMPOSITION TARGET (${planned.compositionKey}): hero=${target.hero}; geometry=${target.geometry}; density=${target.density}; required complete sections in order: ${target.sectionOrder.join(' → ')}.`,
+      `COMPOSITION STARTING POINT (${planned.compositionKey}; guidance, not a fixed sequence): hero=${target.hero}; geometry=${target.geometry}; density=${target.density}; suggested families: ${target.sectionOrder.join(' → ')}. Reorder or replace optional sections and author a stronger page-specific composition when it serves the page job; satisfy the page archetype's required and forbidden families.`,
     `CHARACTER: media ${pct(c.mediaDominance)}, typography ${pct(c.typographyDominance)}, editorial ${pct(c.editoriality)}, information ${pct(c.informationDensity)}, conversion ${pct(c.conversionPressure)}.`,
     `PREFER: ${profile.preferredCompositionPatterns.join('; ')}. AVOID: ${profile.discouragedCompositionPatterns.join('; ')}.`,
-    `NOVELTY BUDGET: ${pct(profile.noveltyBudget)} — invent local composition only within the sealed art direction.`,
+    `NOVELTY GUIDANCE (not a limit): ${pct(profile.noveltyBudget)} variation signal; original layouts remain allowed within the sealed art direction and page archetype.`,
   ];
   if (memory.length) {
     lines.push(`ALREADY USED ON OTHER PAGES (do not repeat this topology): ${memory

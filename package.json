@@ -147,6 +147,7 @@
     "tar": "^7.5.11",
     "undici": "^7.10.0"
   },
+  "packageManager": "bun@1.4.4",
   "private": true,
   "scripts": {
     "automation:dev": "concurrently \"npm run dev\" \"npm run inngest:dev\"",
@@ -165,7 +166,7 @@
     "lint:catalog-contracts": "node scripts/lint-catalog-contracts.mjs",
     "lint:pipeline-bypass": "node scripts/lint-pipeline-bypass.mjs",
     "lint:single-source-of-truth": "node scripts/lint-single-source-of-truth.mjs",
-    "prebuild": "npm run recipes:check",
+    "prebuild": "bun run recipes:check",
     "preview": "vite preview",
     "recipes:build": "node scripts/build-stylex-recipes.mjs",
     "recipes:check": "node scripts/build-stylex-recipes.mjs --check",

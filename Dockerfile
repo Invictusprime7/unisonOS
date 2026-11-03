@@ -1,19 +1,19 @@
 # Multi-stage build for optimized production image
-FROM node:24-alpine AS builder
+FROM oven/bun:1.4.4 AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy Bun package files
+COPY package.json bun.lock ./
 
 # Install dependencies
-RUN npm ci
+RUN bun install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN npm run build
+RUN bun run build
 
 # Production stage
 FROM nginx:alpine AS production
@@ -34,15 +34,15 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 CMD ["nginx", "-g", "daemon off;"]
 
 # Development stage
-FROM node:24-alpine AS development
+FROM oven/bun:1.4.4 AS development
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
 COPY . .
 
 EXPOSE 8080
 
-CMD ["npm", "run", "dev"]
+CMD ["bun", "run", "dev"]

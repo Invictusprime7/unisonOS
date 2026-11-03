@@ -400,14 +400,17 @@ function buildRoleComposition(
   plan: GeneratedSitePlan,
   options?: ScaffoldOptions,
 ): TemplateComposition | null {
-  if (page.isHome || role === 'home') return template.sections.length > 0 ? template : null;
-
   const definition = template.pageCompositions?.[role as TemplatePageRole];
+  if ((page.isHome || role === 'home') && !definition) return template.sections.length > 0 ? template : null;
+
   let selectedAlternative: import('@/sections/types').TemplatePageAlternative | undefined;
   if (definition) {
     const alternatives = definition.alternatives.filter(alternative =>
       !alternative.themePresetIds || alternative.themePresetIds.includes(plan.selectedThemePresetId || ''));
-    if (!alternatives.length) throw new PreviewPipelineError('vfs', `No eligible ${role} composition for ${template.id}.`);
+    if (!alternatives.length) {
+      if ((page.isHome || role === 'home') && template.sections.length > 0) return template;
+      throw new PreviewPipelineError('vfs', `No eligible ${role} composition for ${template.id}.`);
+    }
     const seed = options?.designIntervention?.seed || 'default';
     selectedAlternative = alternatives[stableStringHash(`${template.id}:${role}:${plan.selectedThemePresetId || ''}:${seed}`) % alternatives.length];
     const inventorySections = [...template.sections, ...definition.sections];

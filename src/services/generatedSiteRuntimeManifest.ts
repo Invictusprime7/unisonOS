@@ -11,6 +11,8 @@ import { resolveComponentRuntimeContract, type ComponentRuntimeContract } from '
 import type { CreatorComponentInstance } from '@/types/creatorData';
 import { getVariantById } from '@/sections/variants';
 import type { VariantId } from '@/sections/variants';
+import { parse } from '@babel/parser';
+import { getCanonicalComponentDefinition } from '@/services/canonicalComponentRegistry';
 
 export const GENERATED_SITE_RUNTIME_MANIFEST_VERSION = '1.0' as const;
 
@@ -31,6 +33,31 @@ export interface GeneratedRuntimeComponentContract extends ComponentRuntimeContr
   bindings: Record<string, string>;
   pageLess: boolean;
   slots: GeneratedRuntimeSlotBinding[];
+  capabilityProjection: ComponentCapabilityProjection;
+}
+
+export interface ComponentCapabilityProjection {
+  revisionId: string | null;
+  sourcePath: string | null;
+  pageIds: string[];
+  sectionId: string | null;
+  implementationId: string | null;
+  componentInstanceId: string;
+  componentSlug: string;
+  functional: {
+    writeIntent: string | null;
+    bindingId: string | null;
+    formId: string | null;
+    requiredFields: string[];
+    requiredCapabilities: string[];
+    targetResource: string | null;
+  };
+  validation: {
+    sourceResolved: boolean;
+    identityVerified: boolean;
+    capabilityAuthorized: boolean;
+    bindingResolved: boolean;
+  };
 }
 
 export interface GeneratedRuntimeIntent {
@@ -93,9 +120,138 @@ export interface GeneratedSiteRuntimeManifest {
 
 export interface CompileGeneratedSiteRuntimeManifestInput {
   siteId?: string | null;
-  snapshot?: Pick<SiteBundleSnapshot, 'snapshotId' | 'componentInstances'> & Pick<Partial<SiteBundleSnapshot>, 'businessSystem'> | null;
+  snapshot?: Pick<SiteBundleSnapshot, 'snapshotId' | 'componentInstances' | 'vfsFiles' | 'pageRegistry' | 'bindings' | 'businessSystem' | 'meta'> | null;
   enabledCapabilities?: readonly CapabilityId[];
+  /** Only supply a revision ID after its source has been accepted. */
+  acceptedRevisionId?: string | null;
   generatedAt?: string;
+}
+
+interface ComponentSourceHost {
+  sourcePath: string;
+  componentSlug: string | null;
+}
+
+function staticJsxAttribute(attributes: any[], name: string): string | null {
+  const attribute = attributes.find((entry) => entry.type === 'JSXAttribute' && entry.name?.name === name);
+  if (attribute?.value?.type === 'StringLiteral') return attribute.value.value;
+  if (attribute?.value?.type === 'JSXExpressionContainer'
+    && attribute.value.expression?.type === 'StringLiteral') return attribute.value.expression.value;
+  return null;
+}
+
+function findComponentSourceHosts(
+  files: Readonly<Record<string, string>> | undefined,
+  instanceId: string,
+): ComponentSourceHost[] {
+  const hosts: ComponentSourceHost[] = [];
+  for (const [sourcePath, source] of Object.entries(files || {})) {
+    if (!/\.[jt]sx?$/i.test(sourcePath)) continue;
+    let ast: any;
+    try {
+      ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    } catch {
+      continue;
+    }
+    const visit = (node: any): void => {
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'JSXOpeningElement') {
+        const attributes = node.attributes ?? [];
+        if (staticJsxAttribute(attributes, 'data-ut-component-instance-id') === instanceId) {
+          hosts.push({ sourcePath, componentSlug: staticJsxAttribute(attributes, 'data-ut-component-slug') });
+        }
+      }
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) value.forEach(visit);
+        else if (value && typeof value === 'object') visit(value);
+      }
+    };
+    visit(ast.program);
+  }
+  return hosts;
+}
+
+function requiredFieldsForComponent(componentSlug: string): string[] {
+  const definition = getCanonicalComponentDefinition(componentSlug);
+  if (!definition) return [];
+  try {
+    const ast = parse(`const __componentTemplate = <>${definition.htmlTemplate}</>;`, {
+      sourceType: 'module', plugins: ['jsx', 'typescript'],
+    });
+    const required = new Set<string>();
+    const visit = (node: any): void => {
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'JSXOpeningElement') {
+        const tag = node.name?.name?.toLowerCase();
+        const attributes = node.attributes ?? [];
+        const name = staticJsxAttribute(attributes, 'name');
+        const isRequired = attributes.some((attribute: any) =>
+          attribute.type === 'JSXAttribute' && attribute.name?.name === 'required'
+          && (!attribute.value || attribute.value.type === 'StringLiteral' && attribute.value.value !== 'false'),
+        );
+        if (['input', 'textarea', 'select'].includes(tag) && name && isRequired) required.add(name);
+      }
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) value.forEach(visit);
+        else if (value && typeof value === 'object') visit(value);
+      }
+    };
+    visit(ast.program);
+    return [...required].sort();
+  } catch {
+    return [];
+  }
+}
+
+function projectComponentCapability(
+  instance: CreatorComponentInstance,
+  contract: ComponentRuntimeContract,
+  input: CompileGeneratedSiteRuntimeManifestInput,
+  enabledCapabilities: readonly CapabilityId[],
+): ComponentCapabilityProjection {
+  const hosts = findComponentSourceHosts(input.snapshot?.vfsFiles, instance.instanceId);
+  const host = hosts.length === 1 ? hosts[0] : null;
+  const componentSlug = instance.componentSlug || instance.componentType;
+  const usedOnPages = new Set(instance.usedOnPages || []);
+  const pageIds = Object.entries(input.snapshot?.pageRegistry?.pages || {})
+    .filter(([pageId, page]) => usedOnPages.has(pageId) || page.filePath === host?.sourcePath)
+    .map(([pageId]) => pageId)
+    .sort();
+  const bindingId = Object.entries(input.snapshot?.bindings || {}).find(([, binding]) =>
+    (binding as { componentInstanceId?: string }).componentInstanceId === instance.instanceId,
+  )?.[0] ?? null;
+  const definition = getCanonicalComponentDefinition(componentSlug);
+  const bindingResolved = Boolean(definition)
+    && (definition?.requiredBindingKeys ?? []).every((key) => Boolean(instance.bindings?.[key]));
+
+  return {
+    revisionId: input.acceptedRevisionId ?? input.snapshot?.meta.acceptedRevisionId ?? null,
+    sourcePath: host?.sourcePath ?? null,
+    pageIds,
+    sectionId: readIdentity(instance, 'sectionInstanceId'),
+    implementationId: readIdentity(instance, 'variantId'),
+    componentInstanceId: instance.instanceId,
+    componentSlug,
+    functional: {
+      writeIntent: contract.writeIntent,
+      bindingId,
+      formId: instance.bindings?.formId || null,
+      requiredFields: requiredFieldsForComponent(componentSlug),
+      requiredCapabilities: [...contract.requiredCapabilities],
+      targetResource: instance.bindings?.formId
+        || instance.bindings?.calendarId
+        || instance.bindings?.productId
+        || contract.catalogSurfaces[0]
+        || null,
+    },
+    validation: {
+      sourceResolved: Boolean(host),
+      identityVerified: Boolean(definition && host && host.componentSlug === componentSlug),
+      capabilityAuthorized: Boolean(definition)
+        && contract.requiredCapabilities.every((capability) => new Set<string>(enabledCapabilities).has(capability)),
+      bindingResolved,
+    },
+  };
 }
 
 function inferSection(instance: CreatorComponentInstance): SectionType | null {
@@ -186,6 +342,7 @@ function resolveComponentSlots(
 function toComponentContract(
   instance: CreatorComponentInstance,
   enabledCapabilities: CapabilityId[],
+  input: CompileGeneratedSiteRuntimeManifestInput,
 ): GeneratedRuntimeComponentContract {
   const contract = resolveComponentRuntimeContract(instance, enabledCapabilities);
   if (!contract) {
@@ -200,6 +357,17 @@ function toComponentContract(
       writeIntent: null,
       slotBindings: [],
       slots: [],
+      capabilityProjection: projectComponentCapability(instance, {
+        instanceId: instance.instanceId,
+        componentSlug: instance.componentSlug || instance.componentType,
+        usedOnPages: [...(instance.usedOnPages || [])],
+        requiredCapabilities: [],
+        catalogSurfaces: [],
+        writeIntent: null,
+        slotBindings: [],
+        status: 'blocked',
+        blockers: [`Component is not registered for runtime: ${instance.componentSlug || instance.componentType}.`],
+      }, input, enabledCapabilities),
       status: 'blocked',
       blockers: [`Component is not registered for runtime: ${instance.componentSlug || instance.componentType}.`],
     };
@@ -212,6 +380,7 @@ function toComponentContract(
     bindings: { ...(instance.bindings || {}) },
     pageLess: (instance.usedOnPages || []).length === 0,
     slots,
+    capabilityProjection: projectComponentCapability(instance, contract, input, enabledCapabilities),
     status: blockers.length === 0 ? 'ready' : 'blocked',
     blockers,
   };
@@ -226,7 +395,7 @@ export function compileGeneratedSiteRuntimeManifest(
   // Explicit caller selection (including an empty list) wins; hydration reads saved approvals only.
   const enabledCapabilities = Array.from(new Set(input.enabledCapabilities ?? persistedCapabilities)).sort();
   const components = Object.values(input.snapshot?.componentInstances || {})
-    .map((instance) => toComponentContract(instance, enabledCapabilities));
+    .map((instance) => toComponentContract(instance, enabledCapabilities, input));
   const reads = Array.from(new Set(components.flatMap((component) => component.catalogSurfaces))).sort();
   const intentsByName = new Map<string, GeneratedRuntimeIntent>();
 

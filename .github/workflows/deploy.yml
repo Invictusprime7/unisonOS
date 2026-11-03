@@ -30,22 +30,26 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
-          cache: 'npm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Type check
-        run: npm run type-check
+        run: bun run type-check
 
       - name: Lint code
-        run: npm run lint
+        run: bun run lint
 
       - name: Run unit & contract tests (blocking)
-        run: npx vitest run --reporter=default
+        run: bunx vitest run --reporter=default
 
       - name: Build application
-        run: npm run build
+        run: bun run build
         env:
           NODE_ENV: production
           NODE_OPTIONS: "--max_old_space_size=4096"
@@ -89,13 +93,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
-          cache: 'npm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install Vercel CLI
-        run: npm install --global vercel@latest
+        run: bun install --global vercel@latest
 
       - name: Configure Vercel project
         run: |

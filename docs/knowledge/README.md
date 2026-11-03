@@ -15,7 +15,7 @@ Codex CLI performed bounded, read-only repository inspection and produced the [c
 - `selectSourceKnowledgeWithReport` reports missing sources, per-file/transport omissions and unresolved local imports. The existing selector retains its API and behavior. No claim of AST-complete dependency analysis is made.
 - `verifyAuthoredSourcePreservation` compares a final VFS with accepted bytes plus explicit operations. It covers arbitrary paths and deleted-file resurrection, rejects ambiguous path aliases, and emits path/stage/kind diagnostics without source contents. Compiler exceptions must be explicit; it does not infer ownership from AI markers.
 
-Regenerate the portable artifact with `node --experimental-strip-types scripts/build-design-knowledge.mjs`; verify it with the same command plus `--check`. Node 22 must support type stripping (22.6+). Current verification ran on Node 24, outside this repository's declared Node 22 range.
+Regenerate the portable artifact with `node --experimental-strip-types scripts/build-design-knowledge.mjs`; verify it with the same command plus `--check`. Node.js 24 or newer is required by this repository.
 
 ## Rollout boundary
 

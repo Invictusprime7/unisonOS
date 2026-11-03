@@ -208,6 +208,10 @@ vi.mock('@/integrations/supabase/client', () => {
           vfs_files: (payload.p_vfs_files ?? {}) as Record<string, unknown>,
           site_bundle_snapshot: {
             ...((payload.p_site_bundle_snapshot ?? {}) as Record<string, unknown>),
+            meta: {
+              ...(((payload.p_site_bundle_snapshot as Record<string, unknown> | undefined)?.meta ?? {}) as Record<string, unknown>),
+              acceptedRevisionId: id,
+            },
             vfsFiles: runtimeVfs,
           },
           runtime_manifest: (payload.p_runtime_manifest ?? {}) as Record<string, unknown>,
@@ -1138,6 +1142,7 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
 
     expect(result.status).toBe('committed');
     expect(result.persistedRevisionId).toBe(recoveredRevisionId);
+    expect(result.siteBundleSnapshot?.meta.acceptedRevisionId).toBe(recoveredRevisionId);
     expect(revisionStore).toHaveLength(1);
     const persistedPatch = lastCanonicalCommitPayload?.p_patch_json as {
       fileOps?: Array<Record<string, unknown>>;

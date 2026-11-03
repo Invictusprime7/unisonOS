@@ -175,3 +175,145 @@ export function selectedNativeFormTemplate(component: AppBuildRegisteredComponen
   if (markup) template = template.replace(/<button\b/, `${markup}\n<button`);
   return template;
 }
+
+export interface NativeFormInspection {
+  sourcePath: string;
+  intent: string | null;
+  formId: string | null;
+  componentInstanceId: string | null;
+  fields: Array<{ name: string; required: boolean }>;
+  demoForm: boolean;
+  verdict: 'recognized' | 'ambiguous' | 'unauthorized';
+  reason?: string;
+}
+
+interface InspectedAttribute {
+  present: boolean;
+  value: string | null;
+  dynamic: boolean;
+}
+
+function inspectAttribute(attributes: any[], name: string): InspectedAttribute {
+  const attribute = attributes.find((entry) => entry.type === 'JSXAttribute' && entry.name?.name === name);
+  if (!attribute) return { present: false, value: null, dynamic: false };
+  if (!attribute.value) return { present: true, value: 'true', dynamic: false };
+  if (attribute.value.type === 'StringLiteral') return { present: true, value: attribute.value.value, dynamic: false };
+  if (attribute.value.type === 'JSXExpressionContainer') {
+    const expression = attribute.value.expression;
+    if (expression?.type === 'StringLiteral' || expression?.type === 'BooleanLiteral') {
+      return { present: true, value: String(expression.value), dynamic: false };
+    }
+  }
+  return { present: true, value: null, dynamic: true };
+}
+
+function hasSpreadAttribute(attributes: any[]): boolean {
+  return attributes.some((attribute) => attribute.type === 'JSXSpreadAttribute');
+}
+
+function inspectFields(node: any): { fields: Array<{ name: string; required: boolean }>; ambiguous: boolean } {
+  const fields = new Map<string, { name: string; required: boolean }>();
+  let ambiguous = false;
+  const visit = (child: any): void => {
+    if (!child || typeof child !== 'object') return;
+    if (child.type === 'JSXElement') {
+      const tag = child.openingElement?.name?.name?.toLowerCase();
+      const attributes = child.openingElement?.attributes ?? [];
+      if (['input', 'textarea', 'select'].includes(tag)) {
+        const name = inspectAttribute(attributes, 'name');
+        const required = inspectAttribute(attributes, 'required');
+        if (hasSpreadAttribute(attributes) || name.dynamic || required.dynamic) {
+          ambiguous = true;
+        } else if (name.value?.trim()) {
+          fields.set(name.value, { name: name.value, required: required.present && required.value !== 'false' });
+        }
+      }
+    }
+    for (const [key, value] of Object.entries(child)) {
+      if (key === 'parent' || key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === 'object') visit(value);
+    }
+  };
+  node.children?.forEach(visit);
+  return { fields: [...fields.values()], ambiguous };
+}
+
+/** Inspect explicit public form markup once for candidate and launch contracts. */
+export function inspectNativeForms(
+  files: Readonly<Record<string, string>>,
+  allowedIntents: readonly string[],
+): NativeFormInspection[] {
+  const allowed = new Set(allowedIntents);
+  const inspections: NativeFormInspection[] = [];
+
+  for (const [sourcePath, source] of Object.entries(files)) {
+    if (!/\.(?:tsx?|jsx?|html?)$/i.test(sourcePath)) continue;
+    const parseSource = /\.html?$/i.test(sourcePath) ? `<>${source}</>` : source;
+    let ast: any;
+    try {
+      ast = parse(parseSource, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    } catch {
+      if (/<form\b/i.test(source)) {
+        inspections.push({
+          sourcePath, intent: null, formId: null, componentInstanceId: null, fields: [], demoForm: false,
+          verdict: 'ambiguous', reason: 'Form source could not be parsed into a verifiable JSX contract.',
+        });
+      }
+      continue;
+    }
+
+    const visit = (node: any): void => {
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'JSXElement' && node.openingElement?.name?.name?.toLowerCase() === 'form') {
+        const attributes = node.openingElement.attributes ?? [];
+        const intentAttribute = inspectAttribute(attributes, 'data-intent-form').present
+          ? inspectAttribute(attributes, 'data-intent-form')
+          : inspectAttribute(attributes, 'data-ut-intent');
+        const formId = inspectAttribute(attributes, 'data-form-id');
+        const componentInstanceId = inspectAttribute(attributes, 'data-ut-component-instance-id');
+        const demoForm = inspectAttribute(attributes, 'data-demo-form');
+        const intent = intentAttribute.value?.trim() || null;
+        if (!intent && demoForm.value !== 'true') {
+          for (const [key, value] of Object.entries(node)) {
+            if (key === 'parent' || key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
+            if (Array.isArray(value)) value.forEach(visit);
+            else if (value && typeof value === 'object') visit(value);
+          }
+          return;
+        }
+
+        const inspectedFields = inspectFields(node);
+        const ambiguous = intentAttribute.dynamic || formId.dynamic || componentInstanceId.dynamic
+          || hasSpreadAttribute(attributes) || inspectedFields.ambiguous;
+        let verdict: NativeFormInspection['verdict'] = 'recognized';
+        let reason: string | undefined;
+        if (ambiguous) {
+          verdict = 'ambiguous';
+          reason = 'Form intent, identity, or field names depend on unresolved JSX props.';
+        } else if (intent && !allowed.has(intent)) {
+          verdict = 'unauthorized';
+          reason = `Form intent is not registered: ${intent}.`;
+        }
+        inspections.push({
+          sourcePath,
+          intent,
+          formId: formId.value,
+          componentInstanceId: componentInstanceId.value,
+          fields: inspectedFields.fields,
+          demoForm: demoForm.value === 'true',
+          verdict,
+          reason,
+        });
+      }
+      for (const [key, value] of Object.entries(node)) {
+        if (key === 'parent' || key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
+        if (Array.isArray(value)) value.forEach(visit);
+        else if (value && typeof value === 'object') visit(value);
+      }
+    };
+    visit(ast.program);
+  }
+
+  return inspections;
+}

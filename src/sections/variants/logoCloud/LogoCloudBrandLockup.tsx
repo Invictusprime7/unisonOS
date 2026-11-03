@@ -10,6 +10,7 @@ import { hsl } from '../../themeUtils';
 
 export const LogoCloudBrandLockup: React.FC<BaseSectionProps<'logo-cloud'>> = ({ section, theme }) => {
   const logos = normalizeLogos(section.props.logos, (section.props as { items?: unknown }).items);
+  if (!logos.length) return null;
 
   return (
     <LogoCloudFrame variantId="logo-cloud:brand-lockup" theme={theme}>
@@ -22,7 +23,7 @@ export const LogoCloudBrandLockup: React.FC<BaseSectionProps<'logo-cloud'>> = ({
             color: hsl(theme.colors.foreground),
           }}
         >
-          {section.props.headline || 'Trusted by teams who care about the details'}
+          {section.props.headline}
         </p>
         <div className="grid grid-cols-2 gap-x-10 gap-y-6 sm:grid-cols-3">
           {logos.map((logo, i) => (

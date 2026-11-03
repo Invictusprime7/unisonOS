@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "unison-runtime-export/1",
+  "entryPoint": "/src/App.tsx",
+  "backendRequired": true,
+  "previewEngine": "docker",
+  "routes": [
+    "/work",
+    "/about",
+    "/"
+  ],
+  "dependencies": {
+    "clsx": "latest",
+    "cmdk": "latest",
+    "path": "latest",
+    "vaul": "latest",
+    "vite": "latest",
+    "three": "latest",
+    "sonner": "latest",
+    "@/unison": "latest",
+    "recharts": "latest",
+    "input-otp": "latest",
+    "tailwindcss": "latest",
+    "lucide-react": "latest",
+    "framer-motion": "latest",
+    "tailwind-merge": "latest",
+    "react-day-picker": "latest",
+    "react-router-dom": "latest",
+    "@react-three/drei": "latest",
+    "@react-three/fiber": "latest",
+    "@/project-components": "latest",
+    "@radix-ui/react-slot": "latest",
+    "@vitejs/plugin-react": "latest",
+    "embla-carousel-react": "latest",
+    "react-resizable-panels": "latest",
+    "class-variance-authority": "latest"
+  },
+  "envRequirements": [
+    "VITE_SUPABASE_URL",
+    "VITE_SUPABASE_PUBLISHABLE_KEY"
+  ],
+  "industry": "general",
+  "brandName": "DREAM. Design. Eman Amanni"
+}

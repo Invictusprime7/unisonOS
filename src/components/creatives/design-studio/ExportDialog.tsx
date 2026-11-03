@@ -333,6 +333,9 @@ export default function RootLayout({
             name: projectName.toLowerCase().replace(/\s+/g, '-'),
             version: '1.0.0',
             private: true,
+            engines: {
+              node: '>=24.0.0',
+            },
             scripts: {
               dev: 'next dev',
               build: 'next build',
@@ -344,7 +347,7 @@ export default function RootLayout({
               'react-dom': '^18.2.0',
             },
             devDependencies: {
-              '@types/node': '^20.0.0',
+              '@types/node': '^24.0.0',
               '@types/react': '^18.2.0',
               typescript: '^5.0.0',
               tailwindcss: '^3.4.0',

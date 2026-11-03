@@ -187,6 +187,8 @@ export interface SiteBundleSnapshotMeta {
   effectiveComposition?: import('@/services/effectiveCompositionProjector').EffectiveCompositionProjection;
   /** One-way creative-authority lifecycle; commit authority never changes. */
   authorshipAuthority?: import('@/services/authorshipAuthority').AuthorshipAuthority;
+  /** Accepted revision that owns this snapshot's source and runtime projection. */
+  acceptedRevisionId?: string;
   /** Source layer that produced this snapshot. */
   source: 'wizard' | 'recompile' | 'import' | 'manual' | 'clone';
   /** Canonical BusinessSystemType — drives VerticalLaunchContract resolution. */

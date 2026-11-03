@@ -1,0 +1,71 @@
+{
+  "version": "1.0",
+  "compositionScore": 76,
+  "hierarchyScore": 89,
+  "diversityScore": 78,
+  "mediaScore": 73,
+  "repetitionPenalty": 19,
+  "technicalScore": 100,
+  "findings": [
+    "NO_MOTION_COVERAGE",
+    "WEAK_HIERARCHY",
+    "INVALID_H1_COUNT"
+  ],
+  "pages": [
+    {
+      "path": "/src/pages/Work.tsx",
+      "sectionCount": 6,
+      "layoutDiversity": 5,
+      "cardGridCount": 8,
+      "mediaCount": 8,
+      "headingLevels": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "ctaCount": 10,
+      "motionCount": 0,
+      "h1Count": 1,
+      "findings": [
+        "NO_MOTION_COVERAGE"
+      ]
+    },
+    {
+      "path": "/src/pages/About.tsx",
+      "sectionCount": 5,
+      "layoutDiversity": 4,
+      "cardGridCount": 1,
+      "mediaCount": 1,
+      "headingLevels": [
+        2
+      ],
+      "ctaCount": 3,
+      "motionCount": 33,
+      "h1Count": 0,
+      "findings": [
+        "WEAK_HIERARCHY",
+        "INVALID_H1_COUNT"
+      ]
+    },
+    {
+      "path": "/src/pages/Home.tsx",
+      "sectionCount": 5,
+      "layoutDiversity": 5,
+      "cardGridCount": 1,
+      "mediaCount": 2,
+      "headingLevels": [
+        1,
+        2,
+        3
+      ],
+      "ctaCount": 3,
+      "motionCount": 0,
+      "h1Count": 1,
+      "findings": [
+        "NO_MOTION_COVERAGE"
+      ]
+    }
+  ],
+  "refinementDirective": "Keep the page content, copy and business intent unchanged. Preserve every canonical intent binding, capability contract and import path exactly as generated. Apply the briefed motion recipes (staged reveal / stagger) within the sealed motion budget. Establish typographic hierarchy: one h1, supporting h2/h3 levels, and deliberate display-to-body contrast. Restore document hierarchy with exactly one h1 on this page and h2/h3 headings for its body sections. Focus on: /src/pages/Work.tsx, /src/pages/About.tsx, /src/pages/Home.tsx."
+}

@@ -217,6 +217,24 @@ function genericRoleProfile(role: string): ProfileSeed {
   return { ...profile, character: { ...profile.compositionCharacter }, domainVocabulary: [] };
 }
 
+const SAAS = build('saas', {
+  home: {
+    narrativeGoals: ['explain the product job', 'make verified capabilities scannable', 'offer a clear next step'],
+    primaryIntent: 'nav.anchor', requiredCapabilities: [],
+    domainVocabulary: ['workflow', 'capabilities', 'integrations', 'plans', 'setup'],
+    character: { density: 'medium', mediaDominance: 0.25, informationDensity: 0.75, editoriality: 0.35, conversionPressure: 0.55, interactionDepth: 0.35, asymmetry: 0.6, layering: 0.35 },
+    preferredFamilies: ['hero', 'logo-cloud', 'features', 'pricing', 'cta'],
+    sectionOrderCandidates: [
+      ['hero', 'logo-cloud', 'features', 'pricing', 'cta'],
+      ['hero', 'features', 'logo-cloud', 'pricing', 'cta'],
+    ],
+    heroCandidates: ['typographic', 'split-media'], geometryCandidates: ['split', 'asymmetric', 'grid'],
+    preferredCompositionPatterns: ['product outcome followed by owner proof, capabilities, verified pricing and a clear action'],
+    discouragedCompositionPatterns: ['unverified metrics', 'invented customer endorsements', 'unsupported security or SLA claims'],
+    noveltyBudget: 0.5,
+  },
+});
+
 const GENERIC = build('*', {
   home: { ...genericRoleProfile('home'), primaryIntent: undefined, requiredCapabilities: [] },
   services: { ...genericRoleProfile('services'), requiredCapabilities: [] },
@@ -262,7 +280,7 @@ const GENERIC = build('*', {
   },
 });
 
-const REGISTRY: IndustryPageCompositionProfile[] = [...SALON, ...RESTAURANT, ...GENERIC];
+const REGISTRY: IndustryPageCompositionProfile[] = [...SALON, ...RESTAURANT, ...SAAS, ...GENERIC];
 
 const ROLE_ALIASES: Record<string, string> = {
   index: 'home', landing: 'home', 'book-now': 'booking', book: 'booking', reservations: 'booking', reserve: 'booking',

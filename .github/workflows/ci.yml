@@ -27,34 +27,38 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
-          cache: 'npm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Type check
-        run: npm run type-check
+        run: bun run type-check
 
       - name: Lint code
-        run: npm run lint
+        run: bun run lint
 
       - name: Lint pipeline bypass (commitToPipeline enforcement)
-        run: npm run lint:pipeline-bypass
+        run: bun run lint:pipeline-bypass
 
       - name: Lint - no new direct canonical VFS writers
-        run: npm run lint:canonical-vfs-writes
+        run: bun run lint:canonical-vfs-writes
 
       - name: Lint single source of truth (brainstem import guard)
-        run: npm run lint:single-source-of-truth
+        run: bun run lint:single-source-of-truth
 
       - name: 21st generation coverage gate (blocking)
-        run: npx vitest run src/test/twentyFirstCoverageGate.test.ts src/test/twentyFirstGenerationPolicy.test.ts --reporter=default
+        run: bunx vitest run src/test/twentyFirstCoverageGate.test.ts src/test/twentyFirstGenerationPolicy.test.ts --reporter=default
 
       - name: Run unit & contract tests (blocking)
-        run: npx vitest run --reporter=default
+        run: bunx vitest run --reporter=default
 
       - name: Build application
-        run: npm run build
+        run: bun run build
         env:
           NODE_ENV: production
           NODE_OPTIONS: "--max_old_space_size=4096"

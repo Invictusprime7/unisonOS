@@ -26,6 +26,7 @@ const VALID_INTENTS = new Set([
   'newsletter.subscribe',
   'application.submit',
 ]);
+const DELEGATED_INTENTS = new Set(['auth.login', 'auth.register', 'booking.create']);
 
 function setStatus(form: HTMLFormElement, message: string, failed = false) {
   let status = form.querySelector('[data-unison-form-status]') as HTMLElement | null;
@@ -52,9 +53,41 @@ export function usePublishedFormRuntime() {
     if (typeof window === 'undefined' || window.parent !== window) return;
     const runtime = PUBLISHED_RUNTIME_CONFIG;
 
+    const onClick = (event: MouseEvent) => {
+      const origin = event.target as Element | null;
+      const trigger = origin?.closest('[data-ut-intent]') as HTMLElement | null;
+      const intent = trigger?.dataset.utIntent || '';
+      if (!trigger || !intent || trigger.closest('form')) return;
+
+      const form = Array.from(document.querySelectorAll('form[data-intent-form], form[data-demo-form="true"][data-ut-intent]'))
+        .find((candidate) => {
+          const candidateForm = candidate as HTMLFormElement;
+          return (candidateForm.dataset.intentForm || candidateForm.dataset.utIntent) === intent
+            && candidateForm.getClientRects().length > 0
+            && window.getComputedStyle(candidateForm).visibility !== 'hidden';
+        }) as HTMLFormElement | undefined;
+      if (!form) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => {
+        form.querySelector<HTMLElement>('input, textarea, select')?.focus({ preventScroll: true });
+      }, 250);
+    };
+
     const onSubmit = async (event: SubmitEvent) => {
       const form = event.target;
-      if (!(form instanceof HTMLFormElement) || form.dataset.demoForm !== 'true') return;
+      if (!(form instanceof HTMLFormElement)) return;
+      const isDemoForm = form.dataset.demoForm === 'true';
+      const requestedIntent = form.dataset.intentForm || form.dataset.utIntent || '';
+      if (DELEGATED_INTENTS.has(requestedIntent)) return;
+      if (!isDemoForm && !form.dataset.intentForm) return;
+      if (requestedIntent && !VALID_INTENTS.has(requestedIntent)) {
+        event.preventDefault();
+        setStatus(form, 'This form action is not supported.', true);
+        return;
+      }
       event.preventDefault();
       if (!runtime.siteId || !runtime.businessId || !runtime.projectId || !runtime.formEndpoint) {
         setStatus(form, 'This form is not connected yet.', true);
@@ -62,8 +95,7 @@ export function usePublishedFormRuntime() {
       }
 
       const section = form.closest('[data-ut-section-id]') as HTMLElement | null;
-      const requestedIntent = form.dataset.utIntent || 'contact.submit';
-      const intent = VALID_INTENTS.has(requestedIntent) ? requestedIntent : 'contact.submit';
+      const intent = requestedIntent || 'contact.submit';
       const formId = intent;
       const formData = new FormData(form);
       const data: Record<string, string> = {};
@@ -111,8 +143,10 @@ export function usePublishedFormRuntime() {
       }
     };
 
+    document.addEventListener('click', onClick, true);
     document.addEventListener('submit', onSubmit, true);
     return () => {
+      document.removeEventListener('click', onClick, true);
       document.removeEventListener('submit', onSubmit, true);
     };
   }, []);

@@ -82,12 +82,12 @@ Installed dependencies do not establish active architectural ownership. The runn
 
 ## Local development
 
-Use Node.js `>=22 <23` (see `.nvmrc`) and the repository lockfile.
+Use Bun `1.4.4` (pinned in `package.json`) and Node.js `>=24` (see `.nvmrc`).
 
 ```bash
-npm ci
+bun install --frozen-lockfile
 cp .env.example .env.local
-npm run dev
+bun run dev
 ```
 
 Configure only public browser connection values from your intended backend. Do not copy an old deployment's identifiers from documentation. Provider credentials belong in server-side secret settings, never `VITE_*`, source control or browser storage. Lovable Cloud does not expose its managed database password or service-role key.

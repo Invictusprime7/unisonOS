@@ -403,6 +403,7 @@ function FAQ({ props }) {
 function LogoCloud({ props }) {
   const { headline, logos = [], items = [] } = props;
   const list = (Array.isArray(logos) && logos.length ? logos : items) || [];
+  if (list.length === 0) return null;
   return (
     <section style={{ ...sectionPad, background: hsl(THEME.colors.muted), borderTop: \`1px solid \${hsla(THEME.colors.border, 0.5)}\`, borderBottom: \`1px solid \${hsla(THEME.colors.border, 0.5)}\` }}>
       <div style={containerStyle}>
@@ -500,6 +501,7 @@ export default function App() {
           <div
             key={s.id}
             data-ut-section-id={s.id}
+            data-section={s.id}
             data-ut-section-type={s.type}
             data-ut-layout={layoutToken || undefined}
           >

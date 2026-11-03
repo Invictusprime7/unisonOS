@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build"
+  command = "bun install --frozen-lockfile && bun run build"
   publish = "dist"
 
 [[redirects]]
@@ -28,3 +28,4 @@
 
 [build.environment]
   NODE_VERSION = "24"
+  BUN_VERSION = "1.4.4"

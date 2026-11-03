@@ -535,5 +535,95 @@ export const SAAS_COMPOSITIONS: TemplateComposition[] = [
         },
       },
     ],
+    pageCompositions: {
+      home: {
+        sections: [
+          {
+            id: 'saas-tech-home-nav', type: 'navbar', variantId: 'navbar:floating-pill',
+            props: {
+              brand: 'Your Product', sticky: true,
+              links: [
+                { label: 'Capabilities', href: '#saas-tech-home-features', intent: 'nav.anchor' },
+                { label: 'Plans', href: '#saas-tech-home-pricing', intent: 'nav.anchor' },
+              ],
+              cta: { label: 'View plans', href: '#saas-tech-home-pricing', intent: 'nav.anchor', variant: 'primary' },
+            },
+          },
+          {
+            id: 'saas-tech-home-hero', type: 'hero', variantId: 'hero:launch-showcase',
+            props: {
+              badge: 'Product overview',
+              headline: 'A clearer way to move work forward.',
+              subheadline: 'Explain the verified outcome your product helps customers achieve.',
+              ctas: [
+                { label: 'Explore capabilities', href: '#saas-tech-home-features', intent: 'nav.anchor', variant: 'primary' },
+                { label: 'View plans', href: '#saas-tech-home-pricing', intent: 'nav.anchor', variant: 'outline' },
+              ],
+            },
+          },
+          {
+            id: 'saas-tech-home-proof', type: 'logo-cloud', variantId: 'logo-cloud:brand-lockup',
+            props: { headline: 'Customer and partner marks', logos: [], layout: 'grid' },
+          },
+          {
+            id: 'saas-tech-home-features', type: 'features', variantId: 'features:bento-mosaic',
+            props: {
+              headline: 'A foundation for the work ahead',
+              subheadline: 'Describe the product capabilities customers can verify.',
+              items: [
+                { title: 'Core workflow', description: 'Show the steps customers use to complete an important task.' },
+                { title: 'Connected tools', description: 'Name only the integrations available in this product.' },
+                { title: 'Clear visibility', description: 'Explain what customers can monitor or review.' },
+                { title: 'Team coordination', description: 'Describe how supported roles work together.' },
+              ],
+            },
+          },
+          {
+            id: 'saas-tech-home-pricing', type: 'pricing', variantId: 'pricing:comparison-table',
+            props: {
+              headline: 'Plans that fit the work',
+              subheadline: 'Replace these fields with owner-verified prices, features, and terms before publishing.',
+              tiers: [
+                { name: 'Plan name', price: 'Set verified price', features: ['Add verified feature'], cta: { label: 'Ask about this plan', href: '#saas-tech-home-conversion', intent: 'nav.anchor', variant: 'outline' } },
+                { name: 'Plan name', price: 'Set verified price', features: ['Add verified feature'], cta: { label: 'Ask about this plan', href: '#saas-tech-home-conversion', intent: 'nav.anchor', variant: 'primary' }, highlighted: true },
+              ],
+            },
+          },
+          {
+            id: 'saas-tech-home-conversion', type: 'cta', variantId: 'cta:signal-banner',
+            props: {
+              layout: 'banner',
+              headline: 'Make the next step clear.',
+              description: 'Connect this action to a verified product workflow or destination.',
+              ctas: [
+                { label: 'Review plans', href: '#saas-tech-home-pricing', intent: 'nav.anchor', variant: 'primary' },
+                { label: 'Explore capabilities', href: '#saas-tech-home-features', intent: 'nav.anchor', variant: 'outline' },
+              ],
+            },
+          },
+          {
+            id: 'saas-tech-home-footer', type: 'footer', variantId: 'footer:columns',
+            props: {
+              brand: 'Your Product', newsletter: false,
+              columns: [{ title: 'Product', links: [
+                { label: 'Capabilities', href: '#saas-tech-home-features', intent: 'nav.anchor' },
+                { label: 'Plans', href: '#saas-tech-home-pricing', intent: 'nav.anchor' },
+              ] }],
+              socials: [],
+            },
+          },
+        ],
+        alternatives: [{
+          id: 'saas-tech-home-glass-v1',
+          heroVariantId: 'hero:launch-showcase',
+          themePresetIds: ['glass-tech'],
+          sectionIds: [
+            'saas-tech-home-nav', 'saas-tech-home-hero', 'saas-tech-home-proof',
+            'saas-tech-home-features', 'saas-tech-home-pricing',
+            'saas-tech-home-conversion', 'saas-tech-home-footer',
+          ],
+        }],
+      },
+    },
   },
 ];

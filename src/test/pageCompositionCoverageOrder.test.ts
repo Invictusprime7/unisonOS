@@ -5,15 +5,12 @@ const page = (types: string[]) => ({ filePath: '/src/pages/Blog.tsx', inspection
 const plan = (order: string[]) => ({ role: 'blog', target: { sectionOrder: order } }) as never;
 const orderErrors = (o: string[], a: string[]) => pageCompositionCoverage(plan(o), page(a)).filter(e => e.includes('planned section order'));
 
-describe('page section order', () => {
-  it('accepts a distinct extra closing section after the planned ones', () => {
+describe('composition target is creative guidance', () => {
+  it('accepts author-authored sections after a reordered starting composition', () => {
     expect(orderErrors(['blog-preview'], ['blog-preview', 'cta'])).toEqual([]);
+    expect(orderErrors(['blog-preview', 'cta'], ['cta', 'blog-preview', 'features'])).toEqual([]);
   });
-  it('rejects a repeated section family', () => {
-    expect(orderErrors(['blog-preview'], ['blog-preview', 'blog-preview'])).toHaveLength(1);
-  });
-  it('rejects a missing or reordered planned section', () => {
-    expect(orderErrors(['blog-preview', 'cta'], ['cta', 'blog-preview'])).toHaveLength(1);
-    expect(orderErrors(['blog-preview', 'cta'], ['blog-preview'])).toHaveLength(1);
+  it('does not require optional planned families to survive enrichment', () => {
+    expect(orderErrors(['blog-preview', 'cta'], ['blog-preview'])).toEqual([]);
   });
 });
