@@ -5,7 +5,15 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".vercel/**", ".artifacts/**", "zip_extract/**"] },
+  {
+    ignores: [
+      "dist",
+      ".vercel/**",
+      ".artifacts/**",
+      "zip_extract/**",
+      "docs/knowledge/references/dream-design/**",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
