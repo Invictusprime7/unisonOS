@@ -53,6 +53,33 @@ describe('canonical AI authorship request assembly', () => {
     });
     expect(assembled.evidence.sourceContextComplete).toBe(false);
   });
+  it('accepts a launch page brief larger than the previous Composer limit', async () => {
+    const registryContext = {
+      sections: Array.from({ length: 12 }, (_, section) => ({
+        sectionType: `section-${section}`,
+        generationVariants: Array.from({ length: 6 }, (_, variant) => ({
+          id: `variant-${section}-${variant}`,
+          name: 'Editorial composition',
+          description: 'A distinct responsive section composition for this page role.',
+        })),
+      })),
+    };
+    const assembled = await assembleCanonicalAuthoringRequest({
+      task: 'site_page_author',
+      page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' },
+      brief: 'Sealed page contract. '.repeat(2272),
+      knowledgeQuery: 'home',
+      baseFiles: files,
+      routes: [],
+      registryContext,
+    });
+
+    expect(assembled.request.brief.length).toBeGreaterThan(30_000);
+    expect(assembled.request.brief.length).toBeLessThanOrEqual(60_000);
+    expect(assembled.request.brief).toContain('Sealed page contract.');
+    expect(assembled.request.brief).toContain('[source-authority@');
+    expect(aiComposerRequestSchema.safeParse(assembled.request).success).toBe(true);
+  });
   it('keeps uploaded document links and extracted text ahead of optional runtime context', async () => {
     const attachmentContext = '[Attached file: brief.md]\nOwner-written brief\nurl: https://example.test/brief.md';
     const assembled = await assembleCanonicalAuthoringRequest({

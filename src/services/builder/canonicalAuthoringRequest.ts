@@ -1,4 +1,4 @@
-import { aiComposerRouteOpSchema, type AIComposerRequest, type AIComposerTask } from '@/contracts/aiComposerContract';
+import { AI_COMPOSER_BRIEF_LIMIT, aiComposerRouteOpSchema, type AIComposerRequest, type AIComposerTask } from '@/contracts/aiComposerContract';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { designKnowledgeManifest, selectDesignKnowledge } from '@/services/knowledge/designKnowledge';
 import { scopeForInstruction, selectSourceKnowledgeWithReport, type SourceKnowledgeScope } from './sourceKnowledgeContext';
@@ -8,7 +8,7 @@ import { INTENT_REGISTRY } from '@/platform/core/intentSurfaceRegistry';
 import { resolveSiteDependencyRuntime } from '@/utils/dependencyExtractor';
 
 /** Mirrors `aiComposerRequestSchema.brief.max` on the edge function. */
-const COMPOSER_BRIEF_LIMIT = 12000;
+const COMPOSER_BRIEF_LIMIT = AI_COMPOSER_BRIEF_LIMIT;
 
 export const CANONICAL_AUTHORING_OPERATIONS = [
   'create_source',

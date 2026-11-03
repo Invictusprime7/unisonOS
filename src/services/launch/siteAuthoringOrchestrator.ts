@@ -13,7 +13,7 @@
  * (launch orchestrator / Builder) and must go through commitMutation.
  */
 
-import { COMPOSER_CONTEXT_LIMIT } from '@/services/app-builder/contextBudget';
+import { COMPOSER_CONTEXT_LIMIT, COMPOSER_PAGE_BRIEF_LIMIT } from '@/services/app-builder/contextBudget';
 import { AI_AUTHORED_MARKER } from '@/contracts/aiComposerContract';
 import type { ResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import { projectSiteDesignContract } from '@/services/launch/siteDesignContract';
@@ -293,10 +293,10 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
           ? `PHOTO LIBRARY (required — this page is image-led and is rejected without photos): render at least one <img src="..."> in the page file itself using these verified URLs, copied exactly; never invent other image URLs:\n${verifiedPhotosFor(input.designContext?.contract.industry).join('\n')}`
           : '';
         // The design contract must arrive whole; the vision is the only part that yields space.
-        const room = COMPOSER_CONTEXT_LIMIT - (photos ? photos.length + 1 : 0);
+        const room = COMPOSER_PAGE_BRIEF_LIMIT - (photos ? photos.length + 1 : 0);
         const fitted = layout.slice(0, Math.max(5500, room));
-        const visionRoom = COMPOSER_CONTEXT_LIMIT - fitted.length - (photos ? photos.length + 1 : 0) - 1;
-        return [photos, fitted, visionRoom > 200 ? vision.slice(0, visionRoom) : ''].filter(Boolean).join('\n').slice(0, COMPOSER_CONTEXT_LIMIT);
+        const visionRoom = COMPOSER_PAGE_BRIEF_LIMIT - fitted.length - (photos ? photos.length + 1 : 0) - 1;
+        return [photos, fitted, visionRoom > 200 ? vision.slice(0, visionRoom) : ''].filter(Boolean).join('\n').slice(0, COMPOSER_PAGE_BRIEF_LIMIT);
       })(),
       knowledgeQuery: `${input.businessName} ${page.role} ${page.title} ${page.route}`,
       baseFiles,

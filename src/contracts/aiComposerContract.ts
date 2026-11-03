@@ -267,10 +267,12 @@ export const aiComposerImageSchema = z.object({
   data: z.string().max(8_000_000).regex(/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/),
 }).strict();
 
+export const AI_COMPOSER_BRIEF_LIMIT = 60_000;
+
 export const aiComposerRequestSchema = z.object({
   task: z.enum(AI_COMPOSER_TASKS),
   page: z.object({ role: z.string().max(60), title: z.string().max(120), route: z.string().max(200), filePath: pathSchema }),
-  brief: z.string().max(12000),
+  brief: z.string().max(AI_COMPOSER_BRIEF_LIMIT),
   instruction: z.string().max(4000).optional(),
   files: z.record(z.string(), z.string().max(60000)),
   availableRuntimeDependencies: z.array(z.string().min(1).max(214)).max(300).optional(),
