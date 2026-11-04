@@ -54,9 +54,9 @@ describe('marketplace App Builder convergence', () => {
     expect(generation.materialization.manifest.implementations).toHaveProperty('about:statement');
     expect(generation.materialization.manifest.implementations).toHaveProperty('contact:editorial-form');
     expect(generation.materialization.manifest.implementations).toHaveProperty('cta:inset-panel');
-    expect(generation.runtimeContextForPage('treatments')).toContain('services:product-cards');
-    expect(generation.runtimeContextForPage('treatments')).toContain('faq:accordion');
-    expect(generation.runtimeContextForPage('treatments')).toContain('navbar:minimal-dark');
+    const pageContext = generation.runtimeContextForPage('treatments');
+    expect(pageContext).toContain('READ-ONLY REGISTRY VOCABULARY');
+    expect(pageContext).not.toContain('services:product-cards');
   });
 
   it('passes preview material and sealed topology to App Builder before compilation', async () => {

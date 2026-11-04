@@ -99,8 +99,8 @@ jobs:
           if [ -z "${SUPABASE_DB_PASSWORD}" ]; then
             echo "::error::SUPABASE_DB_PASSWORD secret is required to apply migrations."; exit 1
           fi
-          supabase link --project-ref "${SUPABASE_PROJECT_ID}" --password "${SUPABASE_DB_PASSWORD}"
-          supabase db push --linked --password "${SUPABASE_DB_PASSWORD}"
+          supabase link --project-ref "${SUPABASE_PROJECT_ID}" --password "${SUPABASE_DB_PASSWORD}" --yes
+          supabase db push --linked --password "${SUPABASE_DB_PASSWORD}" --yes
 
       - name: Deploy Edge Functions
         if: steps.changes.outputs.functions != ''
@@ -108,7 +108,7 @@ jobs:
           set -euo pipefail
           for f in ${{ steps.changes.outputs.functions }}; do
             echo "Deploying $f"
-            supabase functions deploy "$f" --project-ref "${SUPABASE_PROJECT_ID}"
+            supabase functions deploy "$f" --project-ref "${SUPABASE_PROJECT_ID}" --yes
           done
 
       - name: Summary

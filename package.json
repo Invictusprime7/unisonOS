@@ -166,7 +166,7 @@
     "lint:catalog-contracts": "node scripts/lint-catalog-contracts.mjs",
     "lint:pipeline-bypass": "node scripts/lint-pipeline-bypass.mjs",
     "lint:single-source-of-truth": "node scripts/lint-single-source-of-truth.mjs",
-    "prebuild": "bun run recipes:check",
+    "prebuild": "npm run recipes:check",
     "preview": "vite preview",
     "recipes:build": "node scripts/build-stylex-recipes.mjs",
     "recipes:check": "node scripts/build-stylex-recipes.mjs --check",
