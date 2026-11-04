@@ -19,14 +19,14 @@ const sitePlan: GeneratedSitePlan = {
 const impl = (id: string, sectionType: string, pageRoles: string[] = ['home'], certification: 'approved' | 'portable' = 'portable') =>
   ({ id, sectionType, name: id, certification, pageRoles, vocabularyRefs: [], radixPrimitives: [] }) as unknown as WizardRegistryImplementationSummary;
 
-function makeInput(implementations: WizardRegistryImplementationSummary[]): BuildAppBuildContractInput {
+function makeInput(implementations: WizardRegistryImplementationSummary[], seed = 'seed'): BuildAppBuildContractInput {
   const designContext = compileResolvedSiteDesignContext({ designSeed: 'seed', businessModel: 'service_booking' as never, industry: 'salon', roles: ['home'] });
   const artDirection = projectResolvedArtDirection({ themePresetId: 'editorial', artDirectionPackId: designContext.contract.artDirectionPackId });
   if (!artDirection) throw new Error('art direction');
   return {
     identity: { projectId: 'p', businessId: 'b', siteId: 's', systemType: 'appointments' },
     sitePlan, pageRegistry, industry: 'salon', businessName: 'N', goals: [], intents: [], capabilities: [], bindingGuide: '',
-    seed: 'seed', themePresetId: 'editorial', themeTokens: {} as never, artDirection, designContext,
+    seed, themePresetId: 'editorial', themeTokens: {} as never, artDirection, designContext,
     uiFoundation: { version: '1.12', manifestPath: '/.unison/ui-manifest.json', importRoot: '@/unison/ui', runtimeProfile: 'react-18', experienceCapabilities: [] } as never,
     registryContext: {
       version: '2.0', generatedAt: at, industry: 'salon', templateId: 't', themePresetId: 'editorial', designRegistrySignature: 'sig',
@@ -72,13 +72,13 @@ describe('DesignSystemResolver', () => {
 });
 
 describe('AppBuilderGenerationContext (R0/R1)', () => {
-  it('keeps generated forms on the design system and chat opt-in', async () => {
+  it('requires original body design while keeping forms on-system and chat opt-in', async () => {
     const { buildAppBuilderGenerationContext } = await import('@/services/app-builder/appBuilderGenerationContext');
     const context = buildAppBuilderGenerationContext(buildAppBuildContract(makeInput([])));
 
     expect(context.runtimeContext).toContain('@/unison/ui/form-fields');
-    expect(context.runtimeContext).toContain('certified @/unison/design-sources modules listed for this page');
-    expect(context.runtimeContext).toContain('Registered 21st.dev-derived designs may only be used through certified');
+    expect(context.runtimeContext).toContain('ORIGINAL BODY DESIGN IS REQUIRED');
+    expect(context.runtimeContext).toContain('Do not import or render registry design-source modules');
     expect(context.runtimeContext).toContain('A contact, quote, newsletter, or lead-capture form does not imply a floating chat widget');
     expect(context.runtimeContext).toContain('registered intents and exact Wizard CTA markers');
   });
@@ -96,6 +96,29 @@ describe('AppBuilderGenerationContext (R0/R1)', () => {
     expect(used.referencedPerPage['page-home']).toEqual(['hero:prisma-cinematic']);
     const bare = reportDesignSourceUsage(contract, ctx.designSources, { '/src/pages/Home.tsx': '<Section/>' });
     expect(bare.primitiveOnlyPages).toEqual(['page-home']);
+  });
+
+  it('keeps seeded variant eligibility deterministic without exposing renderable registry variants', async () => {
+    const { buildAppBuilderGenerationContext } = await import('@/services/app-builder/appBuilderGenerationContext');
+    const implementations = [
+      impl('hero:alpha', 'hero'), impl('hero:beta', 'hero'), impl('hero:gamma', 'hero'),
+      impl('services:alpha', 'services'), impl('services:beta', 'services'),
+    ];
+    const contextFor = (seed: string) => buildAppBuilderGenerationContext(
+      buildAppBuildContract(makeInput(implementations, seed)),
+    );
+    const heroEligibility = (seed: string) => contextFor(seed).designSources.eligibleByPage['page-home']
+      .filter(id => id.startsWith('hero:'));
+    const first = contextFor('project-seed-a');
+    const firstPrompt = first.runtimeContextForPage('page-home', 12_000);
+
+    expect(firstPrompt).toContain('READ-ONLY REGISTRY VOCABULARY');
+    expect(firstPrompt).toContain('ORIGINAL BODY DESIGN IS REQUIRED');
+    expect(firstPrompt).not.toContain('hero:alpha');
+    expect(new Set(heroEligibility('project-seed-a'))).toEqual(new Set(['hero:alpha', 'hero:beta', 'hero:gamma']));
+    expect(heroEligibility('project-seed-a')).toEqual(heroEligibility('project-seed-a'));
+    expect(new Set(['project-seed-a', 'project-seed-b', 'project-seed-c', 'project-seed-d', 'project-seed-e']
+      .map(seed => heroEligibility(seed).join(','))).size).toBeGreaterThan(1);
   });
 
   it('projects registered component capabilities onto only their bound page', async () => {
@@ -130,8 +153,9 @@ describe('AppBuilderGenerationContext (R0/R1)', () => {
     const unrelated = context.runtimeContextForPage('unrelated-page', 12_000);
 
     expect(home).toContain('VERIFIED COMPONENT-CAPABILITY PROJECTION');
-    expect(home).toContain('FREE-FORM AI ENRICHMENT');
-    expect(home).toContain('reorder sections');
+    expect(home).toContain('ORIGINAL BODY DESIGN IS REQUIRED');
+    expect(home).toContain('custom:<kebab-slug>');
+    expect(home).toContain('Do not import or render registry design-source modules');
     expect(home).toContain('cmp-contact');
     expect(home).toContain('required capabilities contact');
     expect(home).toContain('form-contact');
@@ -139,7 +163,7 @@ describe('AppBuilderGenerationContext (R0/R1)', () => {
     expect(home).toContain('intent-exec');
     expect(home).toContain('cta.form-submit');
     expect(home).not.toContain('Preserve every planned section');
-    expect(home).toContain('Eligible presentation only: hero:home-approved');
+    expect(home).toContain('READ-ONLY REGISTRY VOCABULARY: available semantic families are hero');
     expect(home).not.toContain('hero:pricing-only');
     expect(unrelated).not.toContain('cmp-contact');
     expect(unrelated).not.toContain('form-contact');

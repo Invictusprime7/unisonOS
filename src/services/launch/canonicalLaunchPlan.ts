@@ -142,7 +142,7 @@ export function resolveCanonicalLaunchContracts(
     primaryGoal: selections.primaryGoal,
     secondaryGoals: selections.secondaryGoals,
     requestedPages: selections.requestedPages,
-    projectId: selections.businessId,
+    projectId: selections.projectId ?? selections.businessId,
     needsBooking: selections.needsBooking,
     sellsProducts: selections.sellsProducts,
     wantsLeadCapture: selections.wantsLeadCapture,
@@ -177,7 +177,7 @@ export function resolveCanonicalLaunchContracts(
     themePresetId,
     seed: designIntervention.seed,
     businessId: selections.businessId,
-    projectId: selections.businessId,
+    projectId: selections.projectId ?? selections.businessId,
     designSelection: selections.designSelection,
   });
   const uiFoundationContract: AppBuilderUIFoundation = {

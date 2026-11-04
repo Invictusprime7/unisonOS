@@ -40,6 +40,15 @@ describe('Phase 1 — deterministic design seed', () => {
     expect(designPlanSignature(seedA)).toBe(designPlanSignature(seedB));
   });
 
+  it('keeps project designs reproducible while distinguishing projects under one business', () => {
+    const firstProject = deriveGenerationSeed({ ...SELECTIONS, projectId: 'project-a' });
+    const sameProject = deriveGenerationSeed({ ...SELECTIONS, projectId: 'project-a' });
+    const secondProject = deriveGenerationSeed({ ...SELECTIONS, projectId: 'project-b' });
+
+    expect(firstProject).toBe(sameProject);
+    expect(firstProject).not.toBe(secondProject);
+  });
+
   it('is stable across repeated evaluation and independent of the wall clock', () => {
     const seed = deriveGenerationSeed({ ...SELECTIONS, launchNonce: 'seed-clock' });
     const first = designPlanSignature(seed);
@@ -84,8 +93,13 @@ describe('Phase 1 — deterministic design seed', () => {
     const designAt = launcher.indexOf('const seed = deriveDesignSeed(');
     expect(seedAt).toBeGreaterThan(-1);
     expect(designAt).toBeGreaterThan(seedAt);
+    expect(launcher).toContain('projectId: confirmed.projectId');
+    expect(launcher).not.toContain('projectId: plannedBusinessId');
     expect(launcher).toContain('regenerationNonce: input.regenerationNonce ?? null');
     expect(launcher).not.toContain('launchNonce: wizardSeedId');
+
+    const canonicalPlan = readFileSync('src/services/launch/canonicalLaunchPlan.ts', 'utf8');
+    expect(canonicalPlan).toContain('projectId: selections.projectId ?? selections.businessId');
   });
 
   it('never feeds the random launch identity into a design decision', () => {

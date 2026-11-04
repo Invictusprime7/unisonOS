@@ -6,6 +6,7 @@ import { curateMarketplaceTemplate } from '@/marketplace/curateMarketplaceTempla
 import { buildAppBuilderGenerationContext } from '@/services/app-builder/appBuilderGenerationContext';
 import { COMPOSER_CONTEXT_LIMIT, packContextBlocks } from '@/services/app-builder/contextBudget';
 import { adoptContactSectionHost, bodyInsertionIndex } from '@/services/app-builder/registeredComponentMaterializer';
+import { materializeAppBuilderSectionModelsWithDiagnostics } from '@/services/app-builder/appBuilderSectionModel';
 
 const curated = (id: string) => curateMarketplaceTemplate(ALL_COMPOSITIONS.find((c) => c.id === id)!, THEME_PRESETS[0]);
 
@@ -28,7 +29,10 @@ describe('App Builder context recovery', () => {
       for (const page of c.contract.topology.sitePlan.pages) {
         const context = generation.runtimeContextForPage(page.id);
         expect(context.length).toBeLessThanOrEqual(COMPOSER_CONTEXT_LIMIT);
-        expect(context).toContain('Certified design-source modules');
+        expect(context).toContain('ORIGINAL BODY DESIGN IS REQUIRED');
+        expect(context).toContain('custom:<kebab-slug>');
+        expect(context).toContain('Do not import or render registry design-source modules');
+        expect(context).not.toContain('use only listed IDs');
         expect(context).toContain('FORM');
         expect(context).toContain('CANONICAL INTENT BINDINGS');
       }
@@ -43,6 +47,32 @@ describe('App Builder context recovery', () => {
     for (const family of ['hero', 'services', 'cta']) {
       expect(eligible.filter((id) => id.startsWith(`${family}:`)).length).toBeGreaterThanOrEqual(3);
     }
+  });
+
+  it('persists an authored custom body component through the canonical section sidecar', () => {
+    const implementations = {
+      'navbar:test': { modulePath: '/src/project-components/site/Nav.tsx', sectionType: 'navbar' },
+      'footer:test': { modulePath: '/src/project-components/site/Footer.tsx', sectionType: 'footer' },
+    };
+    const files = {
+      '/src/pages/Home.tsx': `import Nav from '@/project-components/site/Nav';
+import Footer from '@/project-components/site/Footer';
+import HeroStory from '@/project-components/hero/HeroStory';
+export default function Home() { return <><nav data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:test"><Nav /></nav><main><section data-ut-section-id="home:hero:0" data-ut-section-type="hero" data-ut-variant="custom:hero-story"><HeroStory sectionId="home:hero:0" variantId="custom:hero-story" props={{ headline: 'A new story' }} /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:test"><Footer /></footer></>; }`,
+      '/src/project-components/site/Nav.tsx': 'export default function Nav() { return <a href="/">Home</a>; }',
+      '/src/project-components/site/Footer.tsx': 'export default function Footer() { return <small>Northstar</small>; }',
+      '/src/project-components/hero/HeroStory.tsx': 'export default function HeroStory({ headline }: { headline: string }) { return <div><h1>{headline}</h1></div>; }',
+    };
+    const result = materializeAppBuilderSectionModelsWithDiagnostics(
+      files,
+      [{ id: 'home', filePath: '/src/pages/Home.tsx', route: '/' }],
+      implementations,
+      { home: ['navbar:test', 'footer:test'] },
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files['/.unison/compositions/pages/Home.json']).toContain('custom:hero-story');
+    expect(result.files['/.unison/compositions/pages/Home.json']).toContain('"semanticType": "hero"');
   });
 });
 

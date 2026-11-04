@@ -158,9 +158,9 @@ describe('AppBuildContract', () => {
       .toContain('data-ut-component-slug="booking-scheduler"');
     expect(registeredComponents.find((component) => component.runtime.componentSlug === 'booking-scheduler')?.nativeComponentTemplate)
       .toContain('name="serviceId"');
-      const modelContext = buildAppBuilderGenerationContext(contract).runtimeContext.slice(0, 12_000);
+      const modelContext = buildAppBuilderGenerationContext(contract).runtimeContextForPage('page-home');
       expect(modelContext).toContain('booking-scheduler');
-      expect(modelContext).toContain('name="serviceId"');
+      expect(modelContext).toContain('required fields: serviceId, slotId, customerName, customerEmail');
       expect(modelContext).toContain('contact-form');
       expect(modelContext).toContain('newsletter-signup');
       expect(modelContext).toContain('PERSISTABLE SECTION CONTRACT');

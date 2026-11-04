@@ -193,6 +193,7 @@ export interface WizardSelections {
    * the correct `projects.business_id` on first persist.
    */
   businessId?: string;
+  projectId?: string;
 }
 
 

@@ -23,24 +23,24 @@ async function compileAIPlan() {
     pageRegistry: [{ id: home.pageId, filePath: home.filePath, route: '/', title: 'Home', requiredIntents: ['contact.submit'] }],
     currentPageSources: { [home.pageId]: { filePath: home.filePath, content: snapshot.vfsFiles[home.filePath!] } },
   } as WizardLaneBEnrichmentRequest;
-  return { snapshot, request, homePath: home.filePath! };
+  return { snapshot, request, homePath: home.filePath!, plan };
 }
 
 const candidate = 'import React from "react"; export default function Home(){return <main><h1>Care made personal</h1><button data-ut-intent="contact.submit">Contact the studio</button></main>}';
 
 describe('required composition followed by independent refinement', () => {
   it.each([true, false])('keeps the AI plan and compiler ownership with refinement enabled=%s', async enabled => {
-    const { snapshot, request, homePath } = await compileAIPlan();
+    const { snapshot, request, homePath, plan } = await compileAIPlan();
     const original = snapshot.vfsFiles[homePath];
     const invoke = vi.fn().mockResolvedValue({ data: { content: JSON.stringify({ version: '1.0', wizardSeedId: request.wizardSeedId, snapshotId: request.snapshotId, designRegistrySignature: request.designRegistrySignature, fileOps: [{ type: 'replace', path: homePath, content: candidate }] }) }, error: null });
     const result = await enrichWizardPageBatch({ request, files: snapshot.vfsFiles, uiFoundationManifest: { primitiveImports: [], requirements: [] }, signal: new AbortController().signal, enabled }, invoke);
-    expect(snapshot.meta.designIntervention?.compositionPlan).toEqual(compositionPlan);
+    expect(snapshot.meta.designIntervention?.compositionPlan).toEqual(plan);
     expect(result.files[homePath]).toBe(enabled ? candidate : original);
     expect(snapshot.vfsFiles[homePath]).toBe(original);
     expect(result.files['/src/App.tsx']).toBe(snapshot.vfsFiles['/src/App.tsx']);
     expect(result.files['/src/index.css']).toBe(snapshot.vfsFiles['/src/index.css']);
     expect(invoke).toHaveBeenCalledTimes(enabled ? 1 : 0);
-    if (enabled) expect(JSON.parse(invoke.mock.calls[0][0].messages[0].content).compositionPlan).toEqual(compositionPlan);
+    if (enabled) expect(JSON.parse(invoke.mock.calls[0][0].messages[0].content).compositionPlan).toEqual(plan);
   });
 
   it.each(['unavailable', 'invalid', 'timeout'])('preserves the compiled AI page on %s refinement', async failure => {

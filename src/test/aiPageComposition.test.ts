@@ -3,7 +3,7 @@ import { runCompositionLane, COMPOSITION_SYSTEM_PROMPT, compositionMatchesCatalo
 import { commitToPipeline } from '@/platform/core/commitToPipeline';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateAIPageComposition, applyAIPageComposition } from '@/sections/aiPageComposition';
-import { requestAIPageComposition } from '@/services/requestAIPageComposition';
+import { applySeededCompositionChoices, buildSeededCompositionGuidance, requestAIPageComposition } from '@/services/requestAIPageComposition';
 import { runBuilderTurn } from '@/services/builderBrainClient';
 import { buildWizardDesignIntervention, readWizardDesignIntervention } from '@/services/wizardDesignIntervention';
 import { getCompositionById } from '@/sections/templates';
@@ -82,16 +82,119 @@ describe('structured AI page composition', () => {
     const descriptor = collectResolvedCompositions(snapshot.vfsFiles)[home.filePath];
     expect(descriptor.sections[2].semanticType).toBe('gallery');
     expect(descriptor.sections.find(section => section.semanticType === 'services')?.variantId).toBe('services:editorial-rows');
+    const restored = commitToPipeline({
+      playground: result.playground,
+      existingVfsFiles: snapshot.vfsFiles,
+      businessName: selections.businessName,
+      industry: selections.industryOverlay,
+      selectedTemplateId: selections.templateId,
+      themePresetId: selections.themePresetId,
+      themeTokens: template.theme,
+    }, 'system-restore');
+    expect(restored.siteBundleSnapshot.meta.designIntervention?.compositionPlan).toEqual(plan);
+    expect(restored.siteBundleSnapshot.pageRegistry).toEqual(snapshot.pageRegistry);
+    expect(restored.siteBundleSnapshot.bindings).toEqual(snapshot.bindings);
+    expect(collectResolvedCompositions(restored.siteBundleSnapshot.vfsFiles)[home.filePath]).toEqual(descriptor);
+  });
+  it('lets composition vary registered layout and variant choices without changing canonical contracts', () => {
+    const alternate = {
+      ...candidate,
+      pages: [{
+        ...candidate.pages[0],
+        sectionOrder: ['navbar', 'hero', 'services', 'gallery', 'footer'],
+        variants: { services: 'services:alternating' },
+      }],
+    };
+    const artDirectionPackId = buildWizardDesignIntervention({
+      ...selections, themePresetId: 'editorial', projectId: 'project-a',
+    }).artDirectionPackId;
+    const firstPlan = validateAIPageComposition(candidate, artDirectionPackId, ['home'])!;
+    const alternatePlan = validateAIPageComposition(alternate, artDirectionPackId, ['home'])!;
+    const compile = (compositionPlan: NonNullable<WizardSelections['compositionPlan']>) => commitToPipeline({
+      selections: { ...selections, compositionPlan, themeTokens: template.theme },
+    }, 'wizard-launch');
+    const first = compile(firstPlan);
+    const second = compile(alternatePlan);
+    const firstHomePath = Object.values(first.siteBundleSnapshot.pageRegistry.pages).find((page: any) => page.isHome)!.filePath;
+    const secondHomePath = Object.values(second.siteBundleSnapshot.pageRegistry.pages).find((page: any) => page.isHome)!.filePath;
+    const firstComposition = collectResolvedCompositions(first.siteBundleSnapshot.vfsFiles)[firstHomePath];
+    const secondComposition = collectResolvedCompositions(second.siteBundleSnapshot.vfsFiles)[secondHomePath];
+
+    expect(secondComposition.sections.find(section => section.semanticType === 'services')?.variantId).toBe('services:alternating');
+    expect(secondComposition.sections.map(section => section.sectionId).sort()).toEqual(firstComposition.sections.map(section => section.sectionId).sort());
+    expect(secondComposition.sections.map(section => section.semanticType)).not.toEqual(firstComposition.sections.map(section => section.semanticType));
+    const { id: _secondCapabilityId, ...secondCapabilityContract } = second.capabilities;
+    const { id: _firstCapabilityId, ...firstCapabilityContract } = first.capabilities;
+    expect(secondCapabilityContract).toEqual(firstCapabilityContract);
+    const topology = (snapshot: typeof first.siteBundleSnapshot) => Object.values(snapshot.pageRegistry.pages)
+      .map(page => ({ pageRole: page.pageRole, path: page.path, filePath: page.filePath, isHome: page.isHome }))
+      .sort((left, right) => left.path.localeCompare(right.path));
+    expect(topology(second.siteBundleSnapshot)).toEqual(topology(first.siteBundleSnapshot));
+    const bindingContracts = (snapshot: typeof first.siteBundleSnapshot) => Object.values(snapshot.bindings)
+      .map(({ bindingId, sourcePageId, targetId, ...binding }) => binding)
+      .sort((left, right) => left.elementKey.localeCompare(right.elementKey));
+    expect(bindingContracts(second.siteBundleSnapshot)).toEqual(bindingContracts(first.siteBundleSnapshot));
+  });
+  it('uses project and regeneration seeds to rank distinct eligible composition choices reproducibly', () => {
+    const variants = [
+      { id: 'hero:launch-showcase', family: 'hero', pageRoles: ['home'] },
+      { id: 'hero:full-bleed', family: 'hero', pageRoles: ['home'] },
+      { id: 'services:editorial-rows', family: 'services', pageRoles: ['home'] },
+      { id: 'services:card-grid', family: 'services', pageRoles: ['home'] },
+      { id: 'gallery:cinematic-grid', family: 'gallery', pageRoles: ['home'] },
+      { id: 'testimonials:columns', family: 'testimonials', pageRoles: ['home'] },
+    ];
+    const guidanceFor = (projectId: string, regenerationNonce?: string) => {
+      const design = buildWizardDesignIntervention({
+        ...selections, themePresetId: 'editorial', projectId, regenerationNonce,
+      });
+      return buildSeededCompositionGuidance(design.seed, ['home'], variants);
+    };
+    const first = guidanceFor('project-a');
+    const repeat = guidanceFor('project-a');
+    const otherProject = guidanceFor('project-b');
+    const regenerated = guidanceFor('project-a', 'take-2');
+    const preferredDecision = (guidance: typeof first) => ({
+      sectionOrder: guidance.pages[0].familyOrder.slice(0, 4),
+      variants: Object.fromEntries(guidance.pages[0].familyOrder.slice(0, 4).map(family => [
+        family, guidance.pages[0].variants[family][0],
+      ])),
+    });
+
+    expect(repeat).toEqual(first);
+    expect(preferredDecision(otherProject)).not.toEqual(preferredDecision(first));
+    expect(preferredDecision(regenerated)).not.toEqual(preferredDecision(first));
+    const modelPlan = validateAIPageComposition(candidate, 'soft-editorial', ['home'])!;
+    const resolvedFor = (guidance: typeof first, pinnedVariants: Record<string, string> = {}) =>
+      applySeededCompositionChoices(modelPlan, guidance, pinnedVariants).pages[0].variants.services;
+    expect(resolvedFor(first)).toBe(first.pages[0].variants.services[0]);
+    expect(resolvedFor(repeat)).toBe(resolvedFor(first));
+    expect(resolvedFor(first, { services: 'services:editorial-rows' })).toBe('services:editorial-rows');
+    expect(new Set(['project-a', 'project-b', 'project-c', 'project-d', 'project-e']
+      .map(projectId => resolvedFor(guidanceFor(projectId)))).size).toBeGreaterThan(1);
+    expect(new Set(['take-1', 'take-2', 'take-3', 'take-4', 'take-5']
+      .map(regenerationNonce => resolvedFor(guidanceFor('project-a', regenerationNonce)))).size).toBeGreaterThan(1);
+    for (const guidance of [first, otherProject, regenerated]) {
+      expect(guidance.pages[0].familyOrder).toHaveLength(4);
+      expect(Object.values(guidance.pages[0].variants).flat().sort()).toEqual(variants.map(variant => variant.id).sort());
+    }
   });
   it('accepts a valid model response without sending source files or credentials', async () => {
     const mockedBuilderTurn = runBuilderTurn as ReturnType<typeof vi.fn>;
     mockedBuilderTurn.mockResolvedValue({ data:{content:JSON.stringify(candidate)}, error:null });
-    expect(await requestAIPageComposition({ ...selections, requestedPages: ['home'] }, new AbortController().signal)).toEqual(candidate);
+    const plan = await requestAIPageComposition({ ...selections, projectId: 'project-a', wizardSeedId: 'per-run-id', requestedPages: ['home'] }, new AbortController().signal);
     const request = mockedBuilderTurn.mock.calls[0][0];
     expect(request.mode).toBe('wizard-site-composition');
     expect(request.vfsFiles).toBeUndefined();
     const brief = JSON.parse(String(request.messages[0].content));
     expect(briefSchema.safeParse(brief).success).toBe(true);
+    expect(plan?.pages[0].sectionOrder).toEqual(candidate.pages[0].sectionOrder);
+    expect(plan?.pages[0].copy).toEqual(candidate.pages[0].copy);
+    expect(plan?.pages[0].variants.services).toBe(brief.compositionGuidance[0].variants.services[0]);
+    expect(brief.compositionSeed).toEqual(expect.any(String));
+    expect(brief.launchSeed).toBe(brief.compositionSeed);
+    expect(brief.compositionGuidance[0].variants).toEqual(expect.objectContaining({ services: expect.any(Array) }));
+    expect(JSON.stringify(brief)).not.toContain('per-run-id');
     expect(brief.variants[0]).not.toHaveProperty('origin');
     expect(brief.variants[0]).not.toHaveProperty('sourceUrl');
     expect(brief.variants[0]).not.toHaveProperty('thumbnail');
@@ -125,22 +228,24 @@ describe('structured AI page composition', () => {
   });
   it('round-trips the backend lane through client validation and canonical compilation', async () => {
     const invoke = vi.fn(async (input: Parameters<typeof runBuilderTurn>[0], _options?: Parameters<typeof runBuilderTurn>[1]) => {
+      const brief = JSON.parse(String(input.messages[0].content));
       const response = await runCompositionLane(String(input.messages[0].content), {}, async messages => {
         expect(messages[0].content.startsWith(COMPOSITION_SYSTEM_PROMPT)).toBe(true);
         expect(messages[0].content).not.toContain('[BUILDER ASSISTANT MODE]');
         return { content: JSON.stringify(candidate) };
-      });
+      }, { brief });
       const body = await response.json();
       expect(response.status).toBe(200);
       expect(body).toMatchObject({ task: 'wizard_composition' });
       return { data: { content: body.content }, error: null };
     });
     const plan = await requestAIPageComposition({ ...selections, requestedPages: ['home'] }, new AbortController().signal, invoke as typeof runBuilderTurn);
-    expect(plan).toEqual(candidate);
+    const brief = JSON.parse(String(invoke.mock.calls[0][0].messages[0].content));
+    expect(plan?.pages[0].variants.services).toBe(brief.compositionGuidance[0].variants.services[0]);
     expect(invoke.mock.calls[0][1]).toMatchObject({ functionName: 'wizard-site-composer' });
     expect(invoke.mock.calls[0][1]).not.toHaveProperty('timeoutMs');
     const result = commitToPipeline({ selections: { ...selections, compositionPlan: plan!, themeTokens: template.theme } }, 'wizard-launch');
-    expect(result.siteBundleSnapshot!.meta.designIntervention!.compositionPlan).toEqual(candidate);
+    expect(result.siteBundleSnapshot!.meta.designIntervention!.compositionPlan).toEqual(plan);
   });
   it('reports incomplete plans and rejects code responses at the backend boundary', async () => {
     const failed = vi.fn();
@@ -182,6 +287,34 @@ describe('composer catalog repair', () => {
     expect(JSON.parse((await response.json()).content)).toEqual(valid);
     expect(generate).toHaveBeenCalledTimes(2);
     expect(generate.mock.calls[1][0].at(-1).content).toContain('Validation issues');
+  });
+  it('applies seeded eligible variants before acceptance and never overrides a user pin', async () => {
+    const seededBrief = {
+      roles: ['home'],
+      variants: [
+        { id: 'hero:launch-showcase', family: 'hero', pageRoles: ['home'] },
+        { id: 'hero:full-bleed', family: 'hero', pageRoles: ['home'] },
+      ],
+      compositionGuidance: [{
+        role: 'home',
+        familyOrder: ['hero'],
+        variants: { hero: ['hero:full-bleed', 'hero:launch-showcase'] },
+      }],
+    };
+    const modelPlan = {
+      version: '1.0',
+      pages: [{ role: 'home', sectionOrder: ['hero'], variants: { hero: 'hero:launch-showcase' } }],
+    };
+    const generate = vi.fn().mockResolvedValue({ content: JSON.stringify(modelPlan) });
+    const response = await runCompositionLane('{}', {}, generate, { brief: seededBrief });
+    expect(response.status).toBe(200);
+    expect(JSON.parse((await response.json()).content).pages[0].variants.hero).toBe('hero:full-bleed');
+
+    const pinnedResponse = await runCompositionLane('{}', {}, generate, {
+      brief: { ...seededBrief, designSelection: { pinnedVariants: { hero: 'hero:launch-showcase' } } },
+    });
+    expect(pinnedResponse.status).toBe(200);
+    expect(JSON.parse((await pinnedResponse.json()).content).pages[0].variants.hero).toBe('hero:launch-showcase');
   });
   it('accepts a catalog-valid plan without forcing AI-authored replacement copy', async () => {
     const withoutCopy = { ...valid, pages: [{ ...valid.pages[0], copy: undefined }] };

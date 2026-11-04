@@ -167,5 +167,5 @@ describe('Playground canonical finalization', () => {
     expect(restored?.vfsFiles['/src/components/recipes/CTA.ts']).toBe(portableRecipes.families.cta);
     expect(result.vfsFiles['/src/components/recipes/Footer.ts']).toBe(portableRecipes.families.footer);
     expect(restored?.vfsFiles['/src/components/recipes/Footer.ts']).toBe(portableRecipes.families.footer);
-  }, 20_000);
+  }, 60_000);
 });

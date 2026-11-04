@@ -227,7 +227,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const registeredComponentTemplates = (pageId?: string) => {
     const templates = componentsForPage(pageId).filter(component => component.nativeComponentTemplate);
     return templates.length ? [
-      'REGISTERED COMPONENT BLUEPRINTS: preserve these canonical native hosts, field names, and intent markers exactly; they define behavior, while certified design-source modules define presentation.',
+      'REGISTERED COMPONENT BLUEPRINTS: preserve these canonical native hosts, field names, and intent markers exactly; they define behavior, while original App Builder-authored sections define presentation.',
       ...templates.map(component => `${component.runtime.componentSlug}:\n${component.nativeComponentTemplate}`),
     ].join('\n') : '';
   };
@@ -255,7 +255,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const interactiveSurfaceContract = [
     'FORM AND CHAT AUTHORING CONTRACT:',
     'Use @/unison/ui/form-fields controls and @/unison/ui/button actions for form UI. Every field needs a visible label and semantic theme tokens.',
-    'Registered 21st.dev-derived designs may only be used through certified @/unison/design-sources modules listed for this page; never import raw 21st.dev components, invent variants, or add unregistered dependencies.',
+    'Do not import or render registry design-source modules or raw 21st.dev components for body sections. Registry entries are reference metadata, not visual templates. Registered functional hosts may be included only when the canonical contract assigns them.',
     'Only emit form actions and data-ut-intent values covered by the registered intents and exact Wizard CTA markers in this contract. A design component does not authorize a new action or intent.',
     'A contact, quote, newsletter, or lead-capture form does not imply a floating chat widget. Add chat only when the owner explicitly requests it, and only wire it to an intent registered in this contract.',
   ].join('\n');
@@ -285,13 +285,12 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 1, text: registeredComponentContext(pageId) },
     { priority: 1, text: modules },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
-    { priority: 3, trimmable: true, text: renderEligiblePresentation(designSources, pageId) },
-    { priority: 1, text: 'PERSISTABLE SECTION CONTRACT: every root uses stable literal data-ut-section-id, data-ut-section-type and data-ut-variant. Shared chrome IDs are site:navbar and site:footer. Use the listed default dispatcher and exact variant ID; custom:<kebab-slug> is only for body components, never chrome. Keep all canonical intent, CTA, resource, slot and component-instance markers unchanged.' },
+    { priority: 1, text: renderEligiblePresentation(designSources, pageId) },
+    { priority: 1, text: 'PERSISTABLE SECTION CONTRACT: every root uses stable literal data-ut-section-id, data-ut-section-type and data-ut-variant. Shared chrome IDs are site:navbar and site:footer. Every body section must use a unique custom:<kebab-slug> variant and one original default-exported component under /src/project-components/ or /src/components/generated/. Keep canonical section families and IDs; never use custom variants for chrome. Keep all canonical intent, CTA, resource, slot and component-instance markers unchanged.' },
     { priority: 1, text: 'CANONICAL SHARED SHELL: render compiler-owned SiteNav then one <main> body then SiteFooter, exactly once. Do not inline, duplicate, or re-author page chrome.' },
     { priority: 1, text: registeredComponentBlueprints(pageId) },
     { priority: 2, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
-    { priority: 3, text: 'FREE-FORM AI ENRICHMENT: the plan is guidance, not a fixed template. Author original TSX and layout; reorder sections or replace optional families within the page archetype, body ceiling, sealed art direction and shared shell. Keep canonical IDs, bindings, handlers, intents and CTA markers exact; use only listed variants and never invent backend actions, business facts or baseline filler.' },
-    { priority: 3, text: renderSeededVariantPreferences(designSources, pageId) },
+    { priority: 1, text: 'ORIGINAL BODY DESIGN IS REQUIRED: treat the Wizard-selected theme tokens, resolved art direction, page composition target, industry and goals as the design authority. Invent the body section composition, layout, typography, spacing and visual treatment from that context. Do not import or render registry design-source modules or raw 21st.dev components for body sections, and do not reproduce their layout, styling, or distinctive visual arrangement. The plan guides section purpose and order; it is not a visual template. Keep the sealed page archetype, body ceiling and compiler-owned shared shell. Preserve canonical IDs, bindings, handlers, intents and CTA markers; never invent backend actions, business facts or baseline filler.' },
     { priority: 4, text: registeredComponentTemplates(pageId) },
     { priority: 3, text: businessParameterContext },
     { priority: 4, text: interactiveSurfaceContract },
@@ -313,7 +312,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     runtimeContext: compose(renderDesignSourceModules(materialization), undefined, Number.POSITIVE_INFINITY),
     runtimeContextForPage: (pageId, budget) => {
       const eligibleIds = designSources.eligibleByPage[pageId] ?? [];
-      return compose(renderDesignSourceModules(materialization, new Set(eligibleIds), eligibleIds), pageId, budget);
+      return compose(renderDesignSourceModules(materialization, new Set(eligibleIds)), pageId, budget);
     },
   };
 }
@@ -334,37 +333,21 @@ function eligibleImplementationsByFamily(designSources: DesignSourceBundle, page
 function renderEligiblePresentation(designSources: DesignSourceBundle, pageId?: string): string {
   if (!pageId) return '';
   const byFamily = eligibleImplementationsByFamily(designSources, pageId);
-  const eligible = [...byFamily.values()].flat();
-  return eligible.length ? `Eligible presentation only: ${eligible.join('; ')}.` : '';
-}
-
-function renderSeededVariantPreferences(designSources: DesignSourceBundle, pageId?: string): string {
-  if (!pageId) return '';
-  const byFamily = eligibleImplementationsByFamily(designSources, pageId);
-  if (!byFamily.size) return '';
-  const preferences = [...byFamily].map(([family, options]) => `${family}: ${options.slice(0, 3).join(' > ')}`);
-  return `PROJECT-SEEDED VARIANT PREFERENCES (stable rank, guidance not whitelist): ${preferences.join('; ')}. The first is a starting preference, not a whitelist; all certified options remain available. Preserve user pins.`;
+  const families = [...byFamily.keys()];
+  return families.length
+    ? `READ-ONLY REGISTRY VOCABULARY: available semantic families are ${families.join(', ')}. These are never body renderers or visual templates; author every body section as an original custom component.`
+    : 'READ-ONLY REGISTRY VOCABULARY: author body sections as original custom components from the Wizard design contract; do not import registry design renderers.';
 }
 
 function renderDesignSourceModules(
   materialization: DesignSourceMaterialization,
   only?: ReadonlySet<string>,
-  preferredOrder: readonly string[] = [],
 ): string {
-  const byModule = new Map<string, string[]>();
-  const exports = new Map<string, string>();
-  const rank = new Map(preferredOrder.map((id, index) => [id, index]));
-  for (const [id, entry] of Object.entries(materialization.manifest.implementations)) {
-    if (only && only.size > 0 && !only.has(id)) continue;
-    if (entry.exportName) exports.set(id, entry.props ? entry.exportName + '(' + entry.props + ')' : entry.exportName);
-    byModule.set(entry.modulePath, [...(byModule.get(entry.modulePath) ?? []), id]);
-  }
-  const lines = [...byModule].sort(([a], [b]) => a.localeCompare(b)).map(([modulePath, ids]) =>
-    `- ${modulePath.replace(/^\/src\//, '@/').replace(/\.tsx$/, '')} (props, variantId): ${ids.sort((left, right) =>
-      (rank.get(left) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right) ?? Number.MAX_SAFE_INTEGER) || left.localeCompare(right),
-    ).slice(0, only ? ids.length : MAX_IDS_PER_MODULE).map((id) => (exports.has(id) ? `${id}={ ${exports.get(id)} }` : id)).join(', ')}`);
-  return lines.length
-    ? `Certified design-source modules: use only listed IDs; order is project-seeded preference, not a whitelist. Import each default family dispatcher, use the same exact ID on data-ut-variant and variantId, and satisfy its prop hints. Never use global IDs, named variant exports, or recipes/.\n${lines.join('\n')}`
+  const families = [...new Set(Object.entries(materialization.manifest.implementations)
+    .filter(([id]) => !only || only.size === 0 || only.has(id))
+    .map(([, entry]) => entry.sectionType))].sort();
+  return families.length
+    ? `Registry implementations are not exposed as renderable templates. Their eligible families (${families.join(', ')}) are read-only semantic references; author body section modules under /src/project-components/ or /src/components/generated/ with custom:<kebab-slug> identities.`
     : '';
 }
 

@@ -364,7 +364,7 @@ async function runReservedLaunchPipeline(
       primaryGoal,
       secondaryGoals: customerNeeds,
       requestedPages,
-      projectId: plannedBusinessId,
+      projectId: confirmed.projectId,
       regenerationNonce: input.regenerationNonce ?? null,
     });
 
@@ -411,6 +411,7 @@ async function runReservedLaunchPipeline(
           : "manual-setup",
       wizardSeedId,
       businessId: plannedBusinessId,
+      projectId: confirmed.projectId,
     };
 
     return {

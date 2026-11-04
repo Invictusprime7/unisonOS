@@ -44,7 +44,7 @@ serve(async req => {
         .catch(() => ({ snippets: [], queriesUsed: [] })),
     ]);
     const task = classifyTask({ mode: 'wizard-composition', editMode: false, navPageGen: false, surgicalEdit: false, behavioralEdit: false, debugMode: false });
-    const providerPlan = buildProviderPlan(task, true, { maxTokens: 10000 }, 'simple', brief.launchSeed);
+    const providerPlan = buildProviderPlan(task, true, { maxTokens: 10000 }, 'simple', brief.compositionSeed ?? brief.launchSeed);
     console.info('[wizard-site-composer] composing', { roles: brief.roles, variants: brief.variants.length, memories: memory.length, research: research.snippets.length });
     const response = await runCompositionLane(JSON.stringify({ ...brief, research: { snippets: research.snippets.slice(0, 4), queries: research.queriesUsed },
       recentCompositions: memory.map(row => row.ai_response),

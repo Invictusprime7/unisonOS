@@ -2864,6 +2864,21 @@ export async function withRebuiltComposition(revision: LoadedRevision): Promise<
 }
 
 function mapRevisionRow(row: Record<string, unknown>): LoadedRevision {
+  const rawSnapshot = row.site_bundle_snapshot && typeof row.site_bundle_snapshot === 'object'
+    ? row.site_bundle_snapshot as Record<string, unknown>
+    : null;
+  const snapshotMeta = rawSnapshot?.meta && typeof rawSnapshot.meta === 'object'
+    ? rawSnapshot.meta as Record<string, unknown>
+    : {};
+  const siteBundleSnapshot = rawSnapshot
+    ? {
+        ...rawSnapshot,
+        meta: {
+          ...snapshotMeta,
+          ...(row.status === 'committed' ? { acceptedRevisionId: String(row.id) } : {}),
+        },
+      }
+    : null;
   return {
     id: String(row.id),
     projectId: String(row.project_id),
@@ -2872,7 +2887,7 @@ function mapRevisionRow(row: Record<string, unknown>): LoadedRevision {
     source: row.source as PatchSource,
     status: row.status as LoadedRevision['status'],
     vfsFiles: (row.vfs_files ?? {}) as Record<string, string>,
-    siteBundleSnapshot: row.site_bundle_snapshot ?? null,
+    siteBundleSnapshot,
     runtimeManifest: row.runtime_manifest ?? null,
     playground: (row.playground_state ?? null) as PlaygroundState | null,
     readinessReport: (row.readiness_report ?? {}) as Record<string, unknown>,
