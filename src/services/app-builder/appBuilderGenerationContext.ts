@@ -235,41 +235,16 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     const hosts = componentsForPage(pageId).filter(component => component.runtime.writeIntent && ['form', 'calendar'].includes(component.targetType));
     if (!hosts.length) return 'FORMS: this page hosts no registered form. Do not add forms; certified Contact variants already render their own form, so only use a Contact section where the plan requires it.';
     return [
-      'FORM PLACEMENT (one form per purpose, inside <main>, before the shared footer):',
-      ...hosts.map(component => `- ${component.runtime.componentSlug}: if the page renders a Contact family section, that section's built-in form IS the registered form — wrap that one Contact dispatcher (inside its section) in <div data-ut-component-slug="${component.runtime.componentSlug}">, pass submitIntent "${component.runtime.writeIntent}" and the selected fields in its props, and add no other form. Otherwise compose exactly one host data-ut-component-slug="${component.runtime.componentSlug}" with native <form data-intent-form="${component.runtime.writeIntent}"> inside its planned body section. No local onSubmit success handler.`),
-      'Never place a form after the footer and never render a second form for the same purpose.',
+      'FORM PLACEMENT: exactly one registered form per purpose, inside <main> before the footer. A Contact variant may host it; otherwise use one native form marked with the registered intent. Preserve all listed field names. Never add duplicate forms or local success handlers.',
+      ...hosts.map(component => `- ${component.runtime.componentSlug}; intent ${component.runtime.writeIntent}; required fields: ${component.requiredNativeFormFields?.join(', ') || 'none'}. Use only its registered instance and form/calendar binding.`),
     ].join('\n');
   };
   const canonicalIntentBindings = (pageId?: string) => {
     const bindings = bindingsForPage(pageId);
-    const components = componentsForPage(pageId);
-    const eligibleIds = pageId
-      ? designSources.eligibleByPage[pageId] ?? []
-      : [...new Set(Object.values(designSources.eligibleByPage).flat())].slice(0, 24);
-    const eligibleSources = designSources.implementations
-      .filter((implementation) => eligibleIds.includes(implementation.implementationId))
-      .map((implementation) => `${implementation.implementationId} (${implementation.sectionType}; ${implementation.certification})`);
-    const projection = [
-      `${pageId ? `PAGE ${pageId} ` : ''}VERIFIED COMPONENT-CAPABILITY PROJECTION (derived from the sealed AppBuildContract; visual implementations do not grant runtime authority):`,
-      `Eligible presentation only: ${eligibleSources.join(', ') || 'none'}.`,
-      ...components.map((component) => {
-        const instanceBindings = bindings.filter((binding) => binding.componentInstanceId === component.runtime.instanceId);
-        const resolvedBindings = Object.entries(component.bindings).map(([key, value]) => `${key}=${value}`).join(', ') || 'none';
-        return `- ${component.runtime.instanceId} ${component.runtime.componentSlug}: pages ${component.runtime.usedOnPages.join(', ') || 'site-wide'}; status ${component.runtime.status}; required capabilities ${component.runtime.requiredCapabilities.join(', ') || 'none'}; reads ${component.runtime.catalogSurfaces.join(', ') || 'none'}; write intent ${component.runtime.writeIntent ?? 'none'}; target ${component.targetType}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; resolved bindings ${resolvedBindings}; required fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; attached binding IDs ${instanceBindings.map((binding) => binding.bindingId).join(', ') || 'none'}${component.runtime.blockers.length ? `; blockers ${component.runtime.blockers.join(' ')}` : ''}.`;
-      }),
-      ...bindings.map((binding) => {
-        const owner = binding.componentInstanceId
-          ? components.find((component) => component.runtime.instanceId === binding.componentInstanceId)
-          : undefined;
-        return `- ${binding.bindingId}: page ${binding.pageId} section ${binding.sourceSection}.${binding.sourceSlot}; component owner ${owner ? `${owner.runtime.componentSlug} instance ${owner.runtime.instanceId}` : binding.componentInstanceId ? `unresolved instance ${binding.componentInstanceId}` : 'none'}; intent ${binding.coreIntent}; handler ${binding.intentHandler}; target ${binding.targetType}:${binding.targetId}; missing capabilities ${binding.missingCapabilities.join(', ') || 'none'}.`;
-      }),
-      'Preserve supplied instance, resource and binding IDs exactly. Never infer ownership from a component slug, copy an implementation ID into a functional ID, or use a design variant to authorize an action.',
-    ].join('\n');
     return [
-      projection,
-      `${pageId ? 'PAGE ' : ''}CANONICAL INTENT BINDINGS: ${bindings.length ? bindings.map((binding) => `${binding.bindingId}: page ${binding.pageId} ${binding.route} ${binding.sourceSection}.${binding.sourceSlot} -> core intent ${binding.coreIntent}, DOM intent ${binding.domIntent}, required marker ${binding.ctaMarkers.map((marker) => `data-ut-cta="${marker}"`).join(' or ') || 'none'}, handler ${binding.intentHandler}, target ${binding.targetType}:${binding.targetId}${binding.componentSlug ? `, registered ${binding.componentSlug} instance ${binding.componentInstanceId} (write intent ${binding.componentWriteIntent ?? 'none'})` : ''}${binding.missingCapabilities.length ? `, INACTIVE missing capabilities ${binding.missingCapabilities.join(', ')}; omit this interaction` : ''}`).join('\n') : 'none.'}`,
-      'Use these supplied IDs only; do not invent binding, target, or component-instance IDs. The platform stamps the canonical intent and component-instance ID after candidate validation from the exact CTA marker and registered component slug.',
-      ...bindings.filter((binding) => binding.businessFieldBindings?.length).map((binding) => `${binding.bindingId} business field bindings: ${JSON.stringify(binding.businessFieldBindings)}. Resolve these from the canonical scoped business profile; never copy private destinations or business answers into visitor form values.`),
+      `${pageId ? `PAGE ${pageId} ` : ''}CANONICAL INTENT BINDINGS: ${bindings.length ? bindings.map((binding) => `${binding.bindingId}: ${binding.sourceSection}.${binding.sourceSlot} -> core intent ${binding.coreIntent}, DOM intent ${binding.domIntent}, marker ${binding.ctaMarkers.map((marker) => `data-ut-cta="${marker}"`).join('|') || 'none'}, handler ${binding.intentHandler}, target ${binding.targetType}:${binding.targetId}${binding.componentSlug ? `, component ${binding.componentSlug} instance ${binding.componentInstanceId}` : ''}${binding.missingCapabilities.length ? `, INACTIVE (${binding.missingCapabilities.join(', ')})` : ''}`).join('\n') : 'none.'}`,
+      'Preserve every supplied page, component, resource, and binding ID exactly. A design variant never grants runtime authority; use only these intents and handlers.',
+      ...bindings.filter((binding) => binding.businessFieldBindings?.length).map((binding) => `${binding.bindingId} profile fields: ${binding.businessFieldBindings!.map(({ field }) => field).join(', ')}. Never copy private destinations or business answers into visitor values.`),
     ].join('\n');
   };
   const businessParameterContext = [
@@ -307,13 +282,13 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const compose = (modules: string, pageId?: string, budget = COMPOSER_CONTEXT_LIMIT) => packContextBlocks([
     { priority: 1, text: !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '' },
     { priority: 1, text: canonicalIntentBindings(pageId) },
+    { priority: 1, text: modules },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
-    { priority: 1, text: renderEligiblePresentation(designSources, pageId) },
+    { priority: 3, trimmable: true, text: renderEligiblePresentation(designSources, pageId) },
     { priority: 1, text: 'PERSISTABLE SECTION CONTRACT: every root uses stable literal data-ut-section-id, data-ut-section-type and data-ut-variant. Shared chrome IDs are site:navbar and site:footer. Use the listed default dispatcher and exact variant ID; custom:<kebab-slug> is only for body components, never chrome. Keep all canonical intent, CTA, resource, slot and component-instance markers unchanged.' },
     { priority: 1, text: 'CANONICAL SHARED SHELL: render compiler-owned SiteNav then one <main> body then SiteFooter, exactly once. Do not inline, duplicate, or re-author page chrome.' },
     { priority: 1, text: registeredComponentBlueprints(pageId) },
     { priority: 2, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
-    { priority: 2, trimmable: true, text: modules },
     { priority: 3, text: 'FREE-FORM AI ENRICHMENT: the plan is guidance, not a fixed template. Author original TSX and layout; reorder sections or replace optional families within the page archetype, body ceiling, sealed art direction and shared shell. Keep canonical IDs, bindings, handlers, intents and CTA markers exact; use only listed variants and never invent backend actions, business facts or baseline filler.' },
     { priority: 3, text: renderSeededVariantPreferences(designSources, pageId) },
     { priority: 3, trimmable: true, text: registeredComponentContext(pageId) },
