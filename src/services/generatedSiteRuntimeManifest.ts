@@ -225,7 +225,7 @@ function projectComponentCapability(
     && (definition?.requiredBindingKeys ?? []).every((key) => Boolean(instance.bindings?.[key]));
 
   return {
-    revisionId: input.acceptedRevisionId ?? input.snapshot?.meta.acceptedRevisionId ?? null,
+    revisionId: input.acceptedRevisionId ?? input.snapshot?.meta?.acceptedRevisionId ?? null,
     sourcePath: host?.sourcePath ?? null,
     pageIds,
     sectionId: readIdentity(instance, 'sectionInstanceId'),

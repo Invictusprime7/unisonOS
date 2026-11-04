@@ -35,6 +35,8 @@ vi.mock('@/integrations/supabase/client', () => ({
       if (meta && effectiveComposition) {
         snapshot.meta = { ...meta, effectiveComposition: { ...effectiveComposition, revisionId } };
       }
+      const persistedMeta = (snapshot.meta && typeof snapshot.meta === 'object' ? snapshot.meta : {}) as Record<string, unknown>;
+      snapshot.meta = { ...persistedMeta, acceptedRevisionId: revisionId };
       const row = Object.fromEntries(Object.entries(payload).map(([key, value]) => [key.replace(/^p_/, ''), value]));
       row.vfs_files = vfsFiles;
       row.site_bundle_snapshot = snapshot;

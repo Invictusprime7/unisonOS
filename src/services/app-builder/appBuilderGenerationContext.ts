@@ -306,17 +306,18 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   // Priority 1 blocks carry the design vocabulary and placement rules and are never dropped.
   const compose = (modules: string, pageId?: string, budget = COMPOSER_CONTEXT_LIMIT) => packContextBlocks([
     { priority: 1, text: !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '' },
+    { priority: 1, text: canonicalIntentBindings(pageId) },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
-    { priority: 1, text: 'FREE-FORM AI ENRICHMENT: the deterministic composition is a starting point, not a fixed template. Author original layouts and TSX, reorder sections, replace optional families, or introduce project-local components as needed for this page. Preserve the page archetype required/forbidden families and body-size limit, sealed art direction and shared shell. Preserve the exact canonical page, component-instance, resource and revision identities; emit only the supplied eligible implementation IDs and keep authorized binding IDs, handler choices, intent values and CTA markers unchanged. A new visual treatment never authorizes a new backend action. Do not retain baseline filler, generic field substitutions or empty sections. CTA sections need specific, business-worded headlines and actions, never generic "Get started" copy. Platform projection wires objects; it never supplies missing creative content.' },
+    { priority: 1, text: renderEligiblePresentation(designSources, pageId) },
+    { priority: 1, text: 'PERSISTABLE SECTION CONTRACT: every root uses stable literal data-ut-section-id, data-ut-section-type and data-ut-variant. Shared chrome IDs are site:navbar and site:footer. Use the listed default dispatcher and exact variant ID; custom:<kebab-slug> is only for body components, never chrome. Keep all canonical intent, CTA, resource, slot and component-instance markers unchanged.' },
+    { priority: 1, text: 'CANONICAL SHARED SHELL: render compiler-owned SiteNav then one <main> body then SiteFooter, exactly once. Do not inline, duplicate, or re-author page chrome.' },
     { priority: 1, text: registeredComponentBlueprints(pageId) },
-    { priority: 2, trimmable: true, text: canonicalIntentBindings(pageId) },
-    { priority: 2, text: registeredComponentTemplates(pageId) },
-    { priority: 1, text: modules },
-    { priority: 3, text: `PAGE DESIGN FIT: ${designSources.implementations.filter(impl => !pageId || designSources.eligibleByPage[pageId]?.includes(impl.implementationId))
-      .map(impl => `${impl.implementationId}: ${impl.visualSignature ? `${impl.visualSignature.geometry}, ${impl.visualSignature.mediaDominance} media, ${impl.visualSignature.density}` : impl.name}`).join('; ')}. Variants are listed best-fit first per family. Choose designs that realize the target geometry and media dominance, and do not reuse one variant for different sections of a page or repeat the previous page's choices when another listed variant fits.` },
-    { priority: 3, text: 'PERSISTABLE SECTION CONTRACT: every page-level body <section>, shared <header> navbar, and shared <footer> must carry literal stable data-ut-section-id, data-ut-section-type, and data-ut-variant values. Use site:navbar and site:footer as the shared chrome IDs across pages. For a listed certified variant, import its default family dispatcher from @/unison/design-sources/<Family> and render exactly one per root with matching sectionId/variantId and JSON-serializable props={{...}}. For a unique authored body component that has no suitable listed variant, use data-ut-variant="custom:<kebab-slug>" on a known non-chrome section family and render exactly one default component imported from @/project-components/ or @/components/generated/ inside that root; keep all JSX props literal and serializable. Never use custom variants for navbar/footer. Keep existing data-ut-intent, data-ut-cta, data-ut-resource, slot, and registered component markers inside the root; never replace or regenerate those bindings when changing visual layout.' },
-    { priority: 1, text: 'CANONICAL SHARED SHELL: import and render the existing named SiteNav from @/project-components/site/SiteNav and SiteFooter from @/project-components/site/SiteFooter exactly once on every page, outside <main>: SiteNav first, then <main> holding every body section, then SiteFooter last. Nothing renders after SiteFooter. These wrappers are compiler-materialized from the canonical route registry and shared eligible design variants; do not inline, duplicate, or re-author page-local navigation or footer.' },
+    { priority: 2, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
+    { priority: 2, trimmable: true, text: modules },
+    { priority: 3, text: 'FREE-FORM AI ENRICHMENT: the plan is guidance, not a fixed template. Author original TSX and layout; reorder sections or replace optional families within the page archetype, body ceiling, sealed art direction and shared shell. Keep canonical IDs, bindings, handlers, intents and CTA markers exact; use only listed variants and never invent backend actions, business facts or baseline filler.' },
+    { priority: 3, text: renderSeededVariantPreferences(designSources, pageId) },
     { priority: 3, trimmable: true, text: registeredComponentContext(pageId) },
+    { priority: 4, text: registeredComponentTemplates(pageId) },
     { priority: 3, text: businessParameterContext },
     { priority: 4, text: interactiveSurfaceContract },
     { priority: 2, text: commerceSetupContext },
@@ -325,7 +326,6 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 4, text: industryContext },
     { priority: 4, text: logoContext },
     { priority: 4, text: iconContext },
-    { priority: 3, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
     { priority: 4, text: `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.` },
     { priority: 5, text: `Protected paths: ${runtime.protectedPaths.join(', ')}.` },
     { priority: 5, text: `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.` },
@@ -336,24 +336,60 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     materialization,
     // Site-wide reference is not a request payload; only per-page context is budgeted.
     runtimeContext: compose(renderDesignSourceModules(materialization), undefined, Number.POSITIVE_INFINITY),
-    runtimeContextForPage: (pageId, budget) => compose(renderDesignSourceModules(materialization, new Set(designSources.eligibleByPage[pageId] ?? [])), pageId, budget),
+    runtimeContextForPage: (pageId, budget) => {
+      const eligibleIds = designSources.eligibleByPage[pageId] ?? [];
+      return compose(renderDesignSourceModules(materialization, new Set(eligibleIds), eligibleIds), pageId, budget);
+    },
   };
 }
 
 const MAX_IDS_PER_MODULE = 12;
 
-function renderDesignSourceModules(materialization: DesignSourceMaterialization, only?: ReadonlySet<string>): string {
+function eligibleImplementationsByFamily(designSources: DesignSourceBundle, pageId: string): Map<string, string[]> {
+  const implementations = new Map(designSources.implementations.map((implementation) => [implementation.implementationId, implementation]));
+  const byFamily = new Map<string, string[]>();
+  for (const id of designSources.eligibleByPage[pageId] ?? []) {
+    const implementation = implementations.get(id);
+    if (!implementation) continue;
+    byFamily.set(implementation.sectionType, [...(byFamily.get(implementation.sectionType) ?? []), id]);
+  }
+  return byFamily;
+}
+
+function renderEligiblePresentation(designSources: DesignSourceBundle, pageId?: string): string {
+  if (!pageId) return '';
+  const byFamily = eligibleImplementationsByFamily(designSources, pageId);
+  const eligible = [...byFamily.values()].flat();
+  return eligible.length ? `Eligible presentation only: ${eligible.join('; ')}.` : '';
+}
+
+function renderSeededVariantPreferences(designSources: DesignSourceBundle, pageId?: string): string {
+  if (!pageId) return '';
+  const byFamily = eligibleImplementationsByFamily(designSources, pageId);
+  if (!byFamily.size) return '';
+  const preferences = [...byFamily].map(([family, options]) => `${family}: ${options.slice(0, 3).join(' > ')}`);
+  return `PROJECT-SEEDED VARIANT PREFERENCES (stable rank, guidance not whitelist): ${preferences.join('; ')}. The first is a starting preference, not a whitelist; all certified options remain available. Preserve user pins.`;
+}
+
+function renderDesignSourceModules(
+  materialization: DesignSourceMaterialization,
+  only?: ReadonlySet<string>,
+  preferredOrder: readonly string[] = [],
+): string {
   const byModule = new Map<string, string[]>();
   const exports = new Map<string, string>();
+  const rank = new Map(preferredOrder.map((id, index) => [id, index]));
   for (const [id, entry] of Object.entries(materialization.manifest.implementations)) {
     if (only && only.size > 0 && !only.has(id)) continue;
     if (entry.exportName) exports.set(id, entry.props ? entry.exportName + '(' + entry.props + ')' : entry.exportName);
     byModule.set(entry.modulePath, [...(byModule.get(entry.modulePath) ?? []), id]);
   }
   const lines = [...byModule].sort(([a], [b]) => a.localeCompare(b)).map(([modulePath, ids]) =>
-    `- ${modulePath.replace(/^\/src\//, '@/').replace(/\.tsx$/, '')} (props, variantId): ${ids.sort().slice(0, only ? ids.length : MAX_IDS_PER_MODULE).map((id) => (exports.has(id) ? `${id}={ ${exports.get(id)} }` : id)).join(', ')}`);
+    `- ${modulePath.replace(/^\/src\//, '@/').replace(/\.tsx$/, '')} (props, variantId): ${ids.sort((left, right) =>
+      (rank.get(left) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right) ?? Number.MAX_SAFE_INTEGER) || left.localeCompare(right),
+    ).slice(0, only ? ids.length : MAX_IDS_PER_MODULE).map((id) => (exports.has(id) ? `${id}={ ${exports.get(id)} }` : id)).join(', ')}`);
   return lines.length
-    ? `Certified design-source modules (read-only; the IDs listed below are the only eligible variants for this page; copy each ID exactly into both root data-ut-variant and nested dispatcher variantId, and never choose a global or inferred variant. Import the default family dispatcher, e.g. import Services from '@/unison/design-sources/Services'; <Services variantId="services:editorial-rows" props={{ headline: "..", items: [...] }} />. The listed registry exports and prop hints identify available variants, but do not render named variant exports directly. Props marked [] are required, non-empty arrays (name?[] is optional and may be omitted) and {a|b|c?} lists the fields every item needs (? = optional; fill every non-? field with real business copy); headline/subheadline are plain strings, never nested <h1>/<h2>. Never import from recipes/ or REGISTERED_VARIANTS):\n${lines.join('\n')}`
+    ? `Certified design-source modules: use only listed IDs; order is project-seeded preference, not a whitelist. Import each default family dispatcher, use the same exact ID on data-ut-variant and variantId, and satisfy its prop hints. Never use global IDs, named variant exports, or recipes/.\n${lines.join('\n')}`
     : '';
 }
 
