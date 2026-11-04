@@ -291,7 +291,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 2, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
     { priority: 3, text: 'FREE-FORM AI ENRICHMENT: the plan is guidance, not a fixed template. Author original TSX and layout; reorder sections or replace optional families within the page archetype, body ceiling, sealed art direction and shared shell. Keep canonical IDs, bindings, handlers, intents and CTA markers exact; use only listed variants and never invent backend actions, business facts or baseline filler.' },
     { priority: 3, text: renderSeededVariantPreferences(designSources, pageId) },
-    { priority: 3, trimmable: true, text: registeredComponentContext(pageId) },
+    { priority: 1, text: registeredComponentContext(pageId) },
     { priority: 4, text: registeredComponentTemplates(pageId) },
     { priority: 3, text: businessParameterContext },
     { priority: 4, text: interactiveSurfaceContract },
