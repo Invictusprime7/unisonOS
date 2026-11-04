@@ -221,7 +221,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   };
   const registeredComponentContext = (pageId?: string) => {
     const components = componentsForPage(pageId);
-    return `REGISTERED COMPONENT CONTRACT: ${components.length ? components.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; pages ${component.runtime.usedOnPages.join(', ') || 'site-wide'}; target ${component.targetType}; status ${component.runtime.status}; write intent ${component.runtime.writeIntent ?? 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required native form fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this page.'}`;
+    return `VERIFIED COMPONENT-CAPABILITY PROJECTION: ${components.length ? components.map((component) => `${component.runtime.componentSlug} (instance ${component.runtime.instanceId}; pages ${component.runtime.usedOnPages.join(', ') || 'site-wide'}; target ${component.targetType}; status ${component.runtime.status}; required capabilities ${component.runtime.requiredCapabilities.join(', ') || 'none'}; write intent ${component.runtime.writeIntent ?? 'none'}; required bindings ${component.requiredBindingKeys.join(', ') || 'none'}; required native form fields ${component.requiredNativeFormFields?.join(', ') || 'none'}; bindings ${JSON.stringify(component.bindings)})`).join('\n') : 'no canonical functional components are provisioned for this page.'}`;
   };
   // Keep identity concise, not generic: source-owned projection supplies fields.
   const registeredComponentTemplates = (pageId?: string) => {
@@ -282,6 +282,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const compose = (modules: string, pageId?: string, budget = COMPOSER_CONTEXT_LIMIT) => packContextBlocks([
     { priority: 1, text: !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '' },
     { priority: 1, text: canonicalIntentBindings(pageId) },
+    { priority: 1, text: registeredComponentContext(pageId) },
     { priority: 1, text: modules },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
     { priority: 3, trimmable: true, text: renderEligiblePresentation(designSources, pageId) },
@@ -291,7 +292,6 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 2, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
     { priority: 3, text: 'FREE-FORM AI ENRICHMENT: the plan is guidance, not a fixed template. Author original TSX and layout; reorder sections or replace optional families within the page archetype, body ceiling, sealed art direction and shared shell. Keep canonical IDs, bindings, handlers, intents and CTA markers exact; use only listed variants and never invent backend actions, business facts or baseline filler.' },
     { priority: 3, text: renderSeededVariantPreferences(designSources, pageId) },
-    { priority: 1, text: registeredComponentContext(pageId) },
     { priority: 4, text: registeredComponentTemplates(pageId) },
     { priority: 3, text: businessParameterContext },
     { priority: 4, text: interactiveSurfaceContract },
