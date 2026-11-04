@@ -1,8 +1,8 @@
 {
-  "buildCommand": "bun run build",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "devCommand": "bun run dev",
-  "installCommand": "bun install --frozen-lockfile",
+  "installCommand": "npm ci",
   "framework": "vite",
   "regions": ["iad1"],
   "functions": {
