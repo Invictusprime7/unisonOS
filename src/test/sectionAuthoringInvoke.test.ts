@@ -77,6 +77,28 @@ describe('bounded page-section authoring', () => {
     expect(JSON.parse(invoke.mock.calls[2][0].messages[0].content).instruction).toContain('CORRECTION');
     expect(JSON.parse(result.data?.content as string).fileOps[0].content).toBe(final);
   });
+  it('requires complete target page source and retries a component-only batch', async () => {
+    const first = 'export default function Home(){return <main><section>Hero</section></main>}';
+    const final = first.replace('</main>', '<section>Features</section></main>');
+    const component = 'export default function Features(){return <section>Features</section>}';
+    const invoke = vi.fn()
+      .mockResolvedValueOnce(reply(first))
+      .mockResolvedValueOnce({ data: { content: JSON.stringify({ summary: 'Feature component', fileOps: [{ type: 'create', path: '/src/project-components/Features.tsx', content: component }] }) }, error: null })
+      .mockResolvedValueOnce({ data: { content: JSON.stringify({ summary: 'Complete page', fileOps: [
+        { type: 'replace', path, content: final },
+        { type: 'create', path: '/src/project-components/Features.tsx', content: component },
+      ] }) }, error: null });
+
+    const result = await createSectionAuthoringInvoke(invoke as ComposerInvoke, ['hero', 'services', 'gallery', 'contact'])(turn);
+
+    expect(result.error).toBeNull();
+    expect(invoke).toHaveBeenCalledTimes(3);
+    const secondRequest = JSON.parse(invoke.mock.calls[1][0].messages[0].content);
+    const correctionRequest = JSON.parse(invoke.mock.calls[2][0].messages[0].content);
+    expect(secondRequest.instruction).toContain(`Every batch MUST return the complete target page source at ${path}`);
+    expect(correctionRequest.instruction).toContain('Batch must return the complete target page source');
+    expect(JSON.parse(result.data?.content as string).fileOps.find((op: { path: string }) => op.path === path).content).toBe(final);
+  });
   it('keeps completed sections immutable and leaves failed batch out of the checkpoint', async () => {
     const first = 'export default function Home(){return <main><section>Five products</section></main>}';
     const corrupt = first.replace('Five products', 'One product');

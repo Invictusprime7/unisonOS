@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AIMessage } from "@/components/ai/AIAssistantCore";
-import { buildSyncedVisionBrief, deriveChatLaunchPlan } from "@/services/launch/chatLaunchPlan";
+import { buildSyncedVisionBrief, deriveChatLaunchPlan, projectUniversalCreationInput } from "@/services/launch/chatLaunchPlan";
 import { resolveLaunchCapabilities } from "@/services/launch/launchCapabilities";
 import { buildIndustryAuthoringContext } from "@/services/app-builder/appBuilderGenerationContext";
 import {
@@ -80,6 +80,32 @@ describe("homepage site confirmation", () => {
 
   it("strips only the internal confirmation marker from the visible reply", () => {
     expect(stripSiteConfirmationMarker(`Summary\n${SITE_CONFIRMATION_MARKER}`)).toBe("Summary");
+  });
+});
+
+describe("open-ended page resolution", () => {
+  it("uses industry topology routes and preserves additional aliased pages", () => {
+    const plan = deriveChatLaunchPlan(
+      "I run a restaurant. Please include a menu page, a reservations page, a news page, a careers page, and a privacy policy.",
+    );
+    const plannedRoutes = plan.creationInput.pages.map((page) => page.route);
+
+    expect(plan.industry).toBe("restaurant");
+    expect(plannedRoutes).toEqual(expect.arrayContaining([
+      "/menu",
+      "/booking",
+      "/news",
+      "/careers",
+      "/privacy-policy",
+    ]));
+    expect(new Set(plannedRoutes).size).toBe(plannedRoutes.length);
+    expect(plannedRoutes).not.toContain("/privacy");
+
+    const projectedRoutes = projectUniversalCreationInput(plan, ["services"])
+      ?.pages.map((page) => page.route);
+    expect(projectedRoutes).toEqual(expect.arrayContaining(["/", "/menu", "/careers", "/privacy-policy"]));
+    expect(projectedRoutes).not.toContain("/booking");
+    expect(projectedRoutes).not.toContain("/news");
   });
 });
 

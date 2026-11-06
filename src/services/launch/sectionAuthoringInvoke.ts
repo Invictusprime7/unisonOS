@@ -117,6 +117,7 @@ export function createSectionAuthoringInvoke(
         index === 0
           ? 'Create the page shell using the existing shared site nav and footer. Replace baseline body content with only this batch; later batches add the remaining sections.'
           : 'Continue the paid draft in FILES. Preserve every completed section, shared chrome, literal section ID, image, item and binding. Add only this batch immediately before the shared footer. Prefer SEARCH/REPLACE hunks; never re-author completed sections.',
+        `Every batch MUST return the complete target page source at ${request.page.filePath}: use FILE replace if it exists in FILES, otherwise FILE create. Include all previously completed sections plus this batch; a component-only response or section fragment is invalid.`,
         'FILE create/replace blocks must contain COMPLETE exported modules, not fragments or patch text. EDIT blocks are structured SEARCH/REPLACE instructions applied by Composer before fileOps are returned; never put unapplied patches in fileOps.content.',
         'The full design brief is reference for the completed page, NOT a request to write other batches now. Partial section counts are intentional; final page checks run after all batches. Do not change routes or other pages. Preserve all planned content quantities; do not shorten lists to fit.',
       ].join('\n');

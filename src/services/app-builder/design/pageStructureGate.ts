@@ -5,6 +5,7 @@
  * page-local landmarks are not substitutes.
  */
 
+import * as ts from 'typescript';
 import { CONTEXTUAL_IMAGES } from '@/utils/sandpackFilePrep';
 
 export interface PageStructureRequirement {
@@ -49,6 +50,56 @@ const LOCAL_IMPORT = /import\s+(?:(\w+)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*['"](
 const IMAGE_SIGNAL = /<img\b|\bbackgroundImage\b|url\(\s*['"`]?https?:|['"`]https?:\/\/[^'"`\s]+\.(?:jpe?g|png|webp|avif)|['"`]https?:\/\/images\.unsplash\.com|\b(?:image|imageUrl|imageSrc|src|images|photo|photos|media|cover|poster)\s*[:=]\s*[{'"`[]/i;
 const NAV_NAME = /(?:Nav|Navbar|Navigation|Header|Menu)\b/;
 const FOOTER_NAME = /Footer\b/;
+const STRUCTURAL_TAGS = new Set(['div', 'section', 'main', 'header', 'footer', 'nav', 'span', 'label', 'ul', 'ol']);
+
+function meaningfulBodyChild(node: ts.JsxChild): boolean {
+  if (ts.isJsxText(node)) return Boolean(node.text.trim());
+  if (ts.isJsxExpression(node)) {
+    if (!node.expression) return false;
+    if (node.expression.kind === ts.SyntaxKind.FalseKeyword || node.expression.kind === ts.SyntaxKind.NullKeyword) return false;
+    return !(ts.isStringLiteral(node.expression) && !node.expression.text.trim());
+  }
+  if (ts.isJsxFragment(node)) return node.children.some(meaningfulBodyChild);
+  if (ts.isJsxSelfClosingElement(node)) {
+    const name = node.tagName.getText();
+    if (/form/i.test(name) || /^(?:input|textarea|select|option)$/i.test(name)) return false;
+    return !STRUCTURAL_TAGS.has(name.toLowerCase());
+  }
+  if (ts.isJsxElement(node)) {
+    const name = node.openingElement.tagName.getText();
+    if (/form/i.test(name)) return false;
+    if (STRUCTURAL_TAGS.has(name.toLowerCase())) return node.children.some(meaningfulBodyChild);
+    return true;
+  }
+  return false;
+}
+
+function bodySectionCounts(path: string, source: string): { total: number; meaningful: number } {
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let total = 0;
+  let meaningful = 0;
+  const visit = (node: ts.Node, insideMain: boolean): void => {
+    if (ts.isJsxElement(node)) {
+      const name = node.openingElement.tagName.getText();
+      if (name.toLowerCase() === 'main') {
+        node.children.forEach((child) => visit(child, true));
+        return;
+      }
+      if (insideMain && name.toLowerCase() === 'section') {
+        total += 1;
+        if (node.children.some(meaningfulBodyChild)) meaningful += 1;
+        return;
+      }
+    } else if (insideMain && ts.isJsxSelfClosingElement(node)
+      && node.tagName.getText().toLowerCase() === 'section') {
+      total += 1;
+      return;
+    }
+    ts.forEachChild(node, (child) => visit(child, insideMain));
+  };
+  visit(file, false);
+  return { total, meaningful };
+}
 
 function resolveImport(specifier: string, from: string, files: Readonly<Record<string, string>>): string | undefined {
   let base: string;
@@ -120,9 +171,15 @@ export function findPageStructureIssues(
     issues.push(`${path} renders no site footer from the canonical shared SiteFooter at @/project-components/site/SiteFooter exactly once after </main>.`);
   }
 
-  const bodyComponents = used.filter((c) => !NAV_NAME.test(c.name) && !FOOTER_NAME.test(c.name) && !/\/(?:components|unison)\/ui(?:\/|$)|\/lib\//.test(c.specifier));
-  const sectionTags = (source.match(/<section\b/g) ?? []).length;
-  const sections = sectionTags + bodyComponents.length;
+  const bodyComponents = used.filter((c) => !NAV_NAME.test(c.name) && !FOOTER_NAME.test(c.name)
+    && !/form/i.test(c.name)
+    && !/\/(?:components|unison)\/ui(?:\/|$)|\/lib\//.test(c.specifier));
+  const { total: sectionTags, meaningful: meaningfulSections } = bodySectionCounts(path, source);
+  const emptySections = sectionTags - meaningfulSections;
+  if (emptySections > 0) {
+    issues.push(`${path} contains ${emptySections} empty or form-only body section(s); each section must render purposeful content, with forms embedded inside a designed section.`);
+  }
+  const sections = meaningfulSections + bodyComponents.length;
   if (sections < requirement.minSections) {
     issues.push(`${path} has only ${sections} body section(s); the ${requirement.role} page needs at least ${requirement.minSections} distinct body sections for its page job. The composition target is guidance, not a required order; use certified design sources or project-local components.`);
   }

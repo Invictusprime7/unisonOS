@@ -42,7 +42,7 @@ import {
 } from '@/platform/core/commitToPipeline';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import { restampSealedSourceAuthority } from '@/platform/core/snapshotSeal';
-import { collectResolvedCompositions, compilerOwnershipHash, resolvedCompositionPathFor, serializeResolvedComposition, RESOLVED_COMPOSITION_ROOT } from '@/platform/core/resolvedComposition';
+import { collectResolvedCompositions, compilerOwnershipHash, resolvedCompositionPathFor, restoreMissingResolvedCompositionFiles, serializeResolvedComposition, RESOLVED_COMPOSITION_ROOT } from '@/platform/core/resolvedComposition';
 import type { RuntimeManifest } from '@/platform/core/runtimeManifest';
 import type { PlaygroundState } from '@/platform/core/playground';
 import type { CompiledContract } from '@/platform/core/contractCompiler';
@@ -904,7 +904,10 @@ async function commitMutationInner(
   }
 
   // 3. Apply fileOps to working VFS -----------------------------------------
-  const workingFiles: Record<string, string> = { ...(input.current.vfsFiles ?? {}) };
+  const workingFiles = restoreMissingResolvedCompositionFiles(
+    (input.current.siteBundleSnapshot as SiteBundleSnapshot | null | undefined)?.vfsFiles,
+    input.current.vfsFiles,
+  );
   for (const op of patch.fileOps) {
     if (op.type === 'delete') {
       delete workingFiles[op.path];

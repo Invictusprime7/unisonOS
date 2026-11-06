@@ -249,7 +249,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     const hosts = componentsForPage(pageId).filter(component => component.runtime.writeIntent && ['form', 'calendar'].includes(component.targetType));
     if (!hosts.length) return 'FORMS: this page hosts no registered form. Do not add forms; certified Contact variants already render their own form, so only use a Contact section where the plan requires it.';
     return [
-      'FORM PLACEMENT: exactly one registered form per purpose, inside <main> before the footer. A Contact variant may host it; otherwise use one native form marked with the registered intent. Preserve all listed field names. Never add duplicate forms or local success handlers.',
+      'FORM PLACEMENT: exactly one registered form per purpose, inside <main> before the footer. A certified Contact variant may host it; otherwise use one native form marked with the registered intent. Preserve all listed field names. Never add duplicate forms or local success handlers.',
       ...hosts.map(component => `- ${component.runtime.componentSlug}; intent ${component.runtime.writeIntent}; required fields: ${component.requiredNativeFormFields?.join(', ') || 'none'}. Use only its registered instance and form/calendar binding.`),
     ].join('\n');
   };
@@ -268,6 +268,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   ].join('\n');
   const interactiveSurfaceContract = [
     'FORM AND CHAT AUTHORING CONTRACT:',
+    'Forms are interaction widgets, not body-section layouts: never use a bare <form>, Form, or *Form component as a standalone section or the only content on a page. Embed form controls within a purposeful, planned section that includes visible context and authored layout.',
     'Use @/unison/ui/form-fields controls and @/unison/ui/button actions for form UI. Every field needs a visible label and semantic theme tokens.',
     'Do not import or render registry design-source modules or raw 21st.dev components for body sections. Registry entries are reference metadata, not visual templates. Registered functional hosts may be included only when the canonical contract assigns them.',
     'Only emit form actions and data-ut-intent values covered by the registered intents and exact Wizard CTA markers in this contract. A design component does not authorize a new action or intent.',
@@ -300,7 +301,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 1, text: modules },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
     { priority: 1, text: renderEligiblePresentation(designSources, pageId) },
-    { priority: 1, text: 'PERSISTABLE SECTION CONTRACT: every root uses stable literal data-ut-section-id, data-ut-section-type and data-ut-variant. Shared chrome IDs are site:navbar and site:footer. Every body section must use a unique custom:<kebab-slug> variant and one original default-exported component under /src/project-components/ or /src/components/generated/. Keep canonical section families and IDs; never use custom variants for chrome. Keep all canonical intent, CTA, resource, slot and component-instance markers unchanged.' },
+    { priority: 1, text: 'PERSISTABLE SECTION CONTRACT: every root uses stable literal data-ut-section-id, data-ut-section-type and data-ut-variant. Shared chrome IDs are site:navbar and site:footer. Every body section must use a unique custom:<kebab-slug> variant and one original default-exported component under /src/project-components/ or /src/components/generated/. Every section must render meaningful visible content; empty wrappers and form-only wrappers are invalid. Keep canonical section families and IDs; never use custom variants for chrome. Keep all canonical intent, CTA, resource, slot and component-instance markers unchanged.' },
     { priority: 1, text: 'CANONICAL SHARED SHELL: render compiler-owned SiteNav then one <main> body then SiteFooter, exactly once. Do not inline, duplicate, or re-author page chrome.' },
     { priority: 1, text: registeredComponentBlueprints(pageId) },
     { priority: 2, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
@@ -359,11 +360,16 @@ function renderDesignSourceModules(
   only?: ReadonlySet<string>,
 ): string {
   const families = [...new Set(Object.entries(materialization.manifest.implementations)
-    .filter(([id]) => !only || only.size === 0 || only.has(id))
+    .filter(([id]) => !only || only.has(id))
     .map(([, entry]) => entry.sectionType))].sort();
+  if (!only) {
+    return families.length
+      ? `Registry implementations are not exposed as renderable templates. Their eligible families (${families.join(', ')}) are read-only semantic references; author body section modules under /src/project-components/ or /src/components/generated/ with custom:<kebab-slug> identities.`
+      : '';
+  }
   return families.length
-    ? `Registry implementations are not exposed as renderable templates. Their eligible families (${families.join(', ')}) are read-only semantic references; author body section modules under /src/project-components/ or /src/components/generated/ with custom:<kebab-slug> identities.`
-    : '';
+    ? `PAGE-SCOPED REGISTRY CONTEXT (exhaustive): only these eligible families are available on this page (${families.join(', ')}). Never use a registered variant or implementation from another page; author body sections as original local components with custom:<kebab-slug> identities.`
+    : 'PAGE-SCOPED REGISTRY CONTEXT: no certified design-source implementations are eligible for this page. Do not use registered variants from other pages; author body sections as original local components with custom:<kebab-slug> identities.';
 }
 
 export interface DesignSourceUsageReport {

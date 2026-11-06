@@ -64,14 +64,26 @@ const PAGE_ROLE_SPECS: Partial<Record<PageRole, PageSpec>> = {
   immersive:{ title: 'Experience', path: '/experience', purpose: 'immersive', expectedSections: [] },
 };
 const PAGE_ROLE_ALIASES: Record<string, PageRole> = {
-  index: 'home', landing: 'services', service: 'services', room: 'services', rooms: 'services',
+  index: 'home', landing: 'services', service: 'services', services: 'services', room: 'services', rooms: 'services',
   accommodation: 'services', accommodations: 'services', stay: 'services', stays: 'services',
-  portfolio: 'gallery', work: 'gallery', listings: 'gallery',
-  visit: 'contact',
-  book: 'booking', 'book-now': 'booking', reserve: 'booking', reservations: 'booking',
+  menu: 'services', menus: 'services', offerings: 'services', treatments: 'services', solutions: 'services',
+  portfolio: 'gallery', work: 'gallery', listings: 'gallery', projects: 'gallery', 'case-study': 'gallery', 'case-studies': 'gallery',
+  visit: 'contact', location: 'contact', locations: 'contact', directions: 'contact', quote: 'contact', estimates: 'contact',
+  book: 'booking', 'book-now': 'booking', reserve: 'booking', reservations: 'booking', appointment: 'booking', appointments: 'booking',
+  rates: 'pricing', plans: 'pricing', packages: 'pricing', fees: 'pricing',
+  help: 'faq', support: 'faq', questions: 'faq',
+  news: 'blog', journal: 'blog', articles: 'blog', press: 'blog', updates: 'blog', stories: 'blog',
+  store: 'shop', products: 'shop', catalogue: 'shop', catalog: 'shop', collections: 'shop',
+  events: 'custom', careers: 'custom', jobs: 'custom', resources: 'custom', team: 'custom', testimonials: 'custom', reviews: 'custom',
+  legal: 'custom', privacy: 'custom', 'privacy-policy': 'custom', terms: 'custom', 'terms-of-service': 'custom', 'cookie-policy': 'custom',
   thankyou: 'thank_you', 'thank-you': 'thank_you', 'booking-confirmation': 'thank_you', booking_confirmation: 'thank_you',
   experience: 'immersive',
 };
+
+export interface TopologyPageAliasMatch {
+  alias: string;
+  role: PageRole;
+}
 
 /** Resolve legacy route/page-type spellings to the topology's canonical role. */
 export function resolveTopologyPageRoleAlias(value: string): PageRole | null {
@@ -93,6 +105,27 @@ export function listTopologyPageRoleAliases(value: string): string[] {
   return [canonical, ...Object.entries(PAGE_ROLE_ALIASES)
     .filter(([, target]) => target === canonical)
     .map(([alias]) => alias)];
+}
+
+export function matchTopologyPageAliases(text: string): TopologyPageAliasMatch[] {
+  const normalizedText = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()} `;
+  const candidates: TopologyPageAliasMatch[] = [
+    ...Object.keys(PAGE_ROLE_SPECS).map((role) => ({ alias: role, role: role as PageRole })),
+    ...Object.entries(PAGE_ROLE_ALIASES).map(([alias, role]) => ({ alias, role })),
+  ];
+  const matched = candidates.filter(({ alias }) => {
+    const normalizedAlias = alias.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    return normalizedAlias && normalizedText.includes(` ${normalizedAlias} `);
+  });
+  return matched.filter(({ alias, role }) => {
+    const normalizedAlias = alias.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    return !matched.some((candidate) => {
+      if (candidate.role !== role || candidate.alias === alias) return false;
+      const normalizedCandidate = candidate.alias.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      return normalizedCandidate.length > normalizedAlias.length
+        && ` ${normalizedCandidate} `.includes(` ${normalizedAlias} `);
+    });
+  });
 }
 
 export function resolvePageSpecsForRoles(

@@ -155,6 +155,25 @@ export function collectResolvedCompositions(
   return map;
 }
 
+/** Restore only accepted compiler-owned descriptors missing from a partial live VFS capture. */
+export function restoreMissingResolvedCompositionFiles(
+  acceptedFiles: Readonly<Record<string, string>> | null | undefined,
+  liveFiles: Readonly<Record<string, string>> | null | undefined,
+): Record<string, string> {
+  const merged = { ...(liveFiles ?? {}) };
+  if (!acceptedFiles) return merged;
+  for (const [path, content] of Object.entries(acceptedFiles)) {
+    if (!path.startsWith(`${RESOLVED_COMPOSITION_ROOT}/`) || !path.endsWith('.json')
+      || typeof merged[path] === 'string' || typeof content !== 'string') continue;
+    try {
+      if (isResolvedPageComposition(JSON.parse(content))) merged[path] = content;
+    } catch {
+      // An invalid accepted descriptor is not safe to restore.
+    }
+  }
+  return merged;
+}
+
 /**
  * Declared authority check: does Stage 4b own the design of this page?
  *

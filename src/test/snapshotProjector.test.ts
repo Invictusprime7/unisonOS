@@ -6,6 +6,8 @@ import {
   getPendingVfsSequenceWatermark,
   clearPendingVfsOperations,
   getPendingVfsOperations,
+  assertNoMinimalFallbackPreview,
+  assertSnapshotPreviewRouteReachability,
   projectSnapshotVfsFiles,
   recordPendingVfsMutation,
   restorePendingVfsOperations,
@@ -56,6 +58,32 @@ function snapshotWith(files: Record<string, string>): SiteBundleSnapshot {
 }
 
 describe('snapshot projector', () => {
+  it('uses the router-imported source when a saved registry path is stale', () => {
+    const files = {
+      '/src/App.tsx': `import Home from './pages/Home.tsx';\nimport Journal from './pages/Journal.tsx';\n<Route path="/" element={<Home />} />\n<Route path="/news" element={<Journal />} />`,
+      '/src/pages/Home.tsx': '<main><h1>Home</h1></main>',
+      '/src/pages/Journal.tsx': '<main><h1>News</h1></main>',
+    };
+    const snapshot = snapshotWith(files);
+    snapshot.pageRegistry = {
+      pages: {
+        news: { pageId: 'news', path: '/news', filePath: '/src/pages/News.tsx' },
+      },
+    } as SiteBundleSnapshot['pageRegistry'];
+    const resolution: SnapshotResolution = {
+      snapshot,
+      isWizardDraft: true,
+      themePresetId: 'restaurant-warm',
+    };
+
+    expect(() => assertNoMinimalFallbackPreview(files, resolution)).not.toThrow();
+    expect(() => assertSnapshotPreviewRouteReachability({
+      '/App.tsx': files['/src/App.tsx'],
+      '/pages/Home.tsx': files['/src/pages/Home.tsx'],
+      '/pages/Journal.tsx': files['/src/pages/Journal.tsx'],
+    }, resolution)).not.toThrow();
+  });
+
   it('keeps scoped pending creates, replacements and deletes over a stale snapshot', () => {
     const snapshot = snapshotWith({
       '/src/App.tsx': 'router',

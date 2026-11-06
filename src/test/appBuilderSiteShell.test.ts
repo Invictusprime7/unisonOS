@@ -62,7 +62,7 @@ describe('App Builder shared site shell', () => {
     });
     const page = `import { SiteNav } from "@/project-components/site/SiteNav";
 import { SiteFooter } from "@/project-components/site/SiteFooter";
-export default function About(){return <><SiteNav/><main><section/><section/></main><SiteFooter/></>}`;
+export default function About(){return <><SiteNav/><main><section><h2>Our approach</h2></section><section><p>Thoughtful work for every client.</p></section></main><SiteFooter/></>}`;
     const files = {
       ...shell,
       '/src/pages/About.tsx': page,

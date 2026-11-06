@@ -23,6 +23,7 @@ import { PreviewPipelineError } from './previewPipelineError';
 import { CanonicalRuntimeError } from '@/platform/core/canonicalRuntimeError';
 import { assertSnapshotThemeSeed, assertThemeSeed } from '@/platform/core/themeSeedAssert';
 import { isSealedSnapshot } from '@/platform/core/snapshotSeal';
+import { resolveRouteSourceFile } from '@/utils/routeSourceResolver';
 
 const SNAPSHOT_VFS_PATH = '/.unison/site-bundle-snapshot.json';
 const WIZARD_SEED_VFS_PATH = '/.unison/wizard-seed.json';
@@ -279,16 +280,10 @@ export function assertNoMinimalFallbackPreview(
     const filePath = (page as { filePath?: string }).filePath;
     if (!filePath) continue;
     const normalized = filePath.startsWith('/') ? filePath : `/${filePath}`;
-    const flattened = normalized.replace(/^\/src\//, '/');
-    const variants = [
-      normalized,
-      normalized.slice(1),
-      flattened,
-      flattened.slice(1),
-    ];
-    const source = variants
-      .map((candidate) => files[candidate])
-      .find((value): value is string => typeof value === 'string');
+    const routedPath = resolvePageSourcePath(files, page.path);
+    const source = routedPath
+      ? files[routedPath]
+      : getRegisteredPageSource(files, normalized);
 
     if (!source || !source.trim()) {
       throw new PreviewPipelineError(
@@ -334,8 +329,9 @@ export function assertSnapshotPreviewRouteReachability(
     const filePath = (page as { filePath?: string }).filePath;
     if (!filePath) continue;
     const normalizedPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
-    const flattenedPath = normalizedPath.replace(/^\/src\//, '/');
-    const source = files[flattenedPath] || files[flattenedPath.slice(1)];
+    const routedPath = resolvePageSourcePath(files, page.path);
+    const sourcePath = routedPath || normalizedPath.replace(/^\/src\//, '/');
+    const source = files[sourcePath] || files[sourcePath.slice(1)];
     if (!source || !source.trim()) {
       throw new PreviewPipelineError(
         'sandpack',
@@ -344,7 +340,9 @@ export function assertSnapshotPreviewRouteReachability(
       );
     }
 
-    const importPath = normalizedPath.replace(/^\/src\//, './').replace(/\.(tsx|jsx)$/i, '');
+    if (routedPath) continue;
+
+    const importPath = sourcePath.replace(/^\//, './').replace(/\.(tsx|jsx)$/i, '');
     const escapedImportPath = importPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     if (!new RegExp(`from\\s*["']${escapedImportPath}(?:\\.(?:tsx|jsx))?["']`).test(app)) {
       throw new PreviewPipelineError(
@@ -354,6 +352,19 @@ export function assertSnapshotPreviewRouteReachability(
       );
     }
   }
+}
+
+function resolvePageSourcePath(files: Record<string, string>, route: string): string | null {
+  const appPath = ['/src/App.tsx', 'src/App.tsx', '/App.tsx', 'App.tsx', '/src/App.jsx', '/App.jsx']
+    .find((candidate) => typeof files[candidate] === 'string');
+  return appPath ? resolveRouteSourceFile(files, route, appPath) : null;
+}
+
+function getRegisteredPageSource(files: Record<string, string>, normalizedPath: string): string | undefined {
+  const flattened = normalizedPath.replace(/^\/src\//, '/');
+  return [normalizedPath, normalizedPath.slice(1), flattened, flattened.slice(1)]
+    .map((candidate) => files[candidate])
+    .find((value): value is string => typeof value === 'string');
 }
 
 function getSandpackDestinationPath(path: string): string | null {

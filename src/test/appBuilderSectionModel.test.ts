@@ -7,6 +7,7 @@ import {
 } from '@/services/app-builder/appBuilderSectionModel';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 import { buildSystemGraph } from '@/services/agent-runtime/systemGraph';
+import { restoreMissingResolvedCompositionFiles } from '@/platform/core/resolvedComposition';
 
 const implementations = {
   'navbar:standard': {
@@ -22,6 +23,31 @@ const implementations = {
     sectionType: 'footer',
   },
 };
+
+describe('accepted composition sidecar restoration', () => {
+  it('restores a missing descriptor without replacing live page or descriptor bytes', () => {
+    const sidecarPath = '/.unison/compositions/pages/Home.json';
+    const acceptedDescriptor = JSON.stringify({
+      version: '1.0',
+      compiledBy: 'app-builder',
+      pageFilePath: '/src/pages/Home.tsx',
+      sections: [],
+    });
+    const livePage = 'export default function Home(){return <main>Live source</main>}';
+
+    const restored = restoreMissingResolvedCompositionFiles(
+      { [sidecarPath]: acceptedDescriptor, '/src/pages/Home.tsx': 'Snapshot source' },
+      { '/src/pages/Home.tsx': livePage },
+    );
+
+    expect(restored[sidecarPath]).toBe(acceptedDescriptor);
+    expect(restored['/src/pages/Home.tsx']).toBe(livePage);
+    expect(restoreMissingResolvedCompositionFiles(
+      { [sidecarPath]: acceptedDescriptor },
+      { [sidecarPath]: 'Live descriptor' },
+    )[sidecarPath]).toBe('Live descriptor');
+  });
+});
 
 describe('App Builder section model', () => {
   it('replaces unavailable variants with the first eligible implementation of the same family', () => {
@@ -368,6 +394,31 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
         sourceModulePath: '/src/project-components/FeaturePanel.tsx',
         componentOwnerId: 'site-component:/src/project-components/FeaturePanel.tsx',
       });
+  });
+
+  it.each([
+    ['empty section', 'export default function FeaturePanel(){return <section/>}'],
+    ['form-only renderer', 'export default function FeaturePanel(){return <form><input name="email"/><button>Subscribe</button></form>}'],
+  ])('does not certify a custom section with a %s body', (_label, renderer) => {
+    const files = {
+      '/src/pages/Home.tsx': `import Navbar from "@/unison/design-sources/Navbar";
+import Footer from "@/unison/design-sources/Footer";
+import FeaturePanel from "@/project-components/FeaturePanel";
+export default function Home(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{links:[]}} /></header><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="custom:service-panel"><FeaturePanel /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer></>}`,
+      '/src/project-components/FeaturePanel.tsx': renderer,
+    };
+
+    const result = materializeAppBuilderSectionModelsWithDiagnostics(
+      files,
+      [{ id: 'home', filePath: '/src/pages/Home.tsx' }],
+      implementations,
+      { home: ['navbar:standard', 'footer:columns'] },
+      ['navbar:standard', 'footer:columns'],
+    );
+
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'section-model-invalid' }));
+    expect(result.pages[0].inspection.issues.join(' ')).toContain('uses unavailable services variant "custom:service-panel"');
+    expect(result.files['/.unison/compositions/pages/Home.json']).toBeUndefined();
   });
 
   it('rejects custom sections without exactly one authorized local component import', () => {

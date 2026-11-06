@@ -59,6 +59,32 @@ describe('V4 M8 — both AI layers share one canonical registry projection', () 
     expect(bounded.capabilityRequirements).toBeDefined();
   });
 
+  it('filters page-ineligible variant IDs from the scoped Composer registry', () => {
+    const base = canonical();
+    const ids = ['hero:launch-showcase', 'hero:blog-editorial', 'cta:split-card', 'cta:blog-subscribe'];
+    const implementation = (id: string, sectionType: string, pageRoles: string[]) => ({
+      id, sectionType, name: id, certification: 'approved', pageRoles, vocabularyRefs: [], radixPrimitives: [],
+    });
+    const context = {
+      ...base,
+      sections: base.sections.map((section) => section.type === 'hero' || section.type === 'cta'
+        ? { ...section, allowedVariantIds: ids.filter((id) => id.startsWith(`${section.type}:`)) }
+        : section),
+      implementations: [
+        implementation(ids[0], 'hero', ['home', 'services', 'pricing']),
+        implementation(ids[1], 'hero', ['blog']),
+        implementation(ids[2], 'cta', ['home', 'services', 'about', 'booking']),
+        implementation(ids[3], 'cta', ['blog']),
+      ],
+    } as unknown as typeof base;
+
+    const bounded = boundRegistryContext(context, { pageRole: 'blog' });
+
+    expect(bounded.sections.find((section) => section.type === 'hero')?.allowedVariantIds).toEqual(['hero:blog-editorial']);
+    expect(bounded.sections.find((section) => section.type === 'cta')?.allowedVariantIds).toEqual(['cta:blog-subscribe']);
+    expect(bounded.implementations.map((entry) => entry.id)).toEqual(['hero:blog-editorial', 'cta:blog-subscribe']);
+  });
+
   it('resolves from the draft VFS and matches the aggregated context', () => {
     const context = canonical();
     const fromVfs = resolveBuilderRegistryContext({

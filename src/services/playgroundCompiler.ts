@@ -27,6 +27,8 @@ import { updateResolvedCompositionVariants } from '@/sections/compositionToFileS
 import { materializeAppBuilderSectionModels } from '@/services/app-builder/appBuilderSectionModel';
 
 export interface CompilePlaygroundOptions {
+  /** Recompile existing sites without replacing accepted page sources with template scaffolds. */
+  preservePageSources?: boolean;
   /** Selected template used to generate real role-filtered page scaffolds. */
   selectedTemplateId?: string;
   /** Selected theme id retained for pipeline compatibility. */
@@ -310,6 +312,14 @@ export function compilePlayground(
           const composition = collectResolvedCompositions({ [descriptor]: preserved[descriptor] })[fp];
           preserved[descriptor] = JSON.stringify({ ...composition, templateName: `${businessName} · ${node.title}` }, null, 2) + '\n';
         }
+        continue;
+      }
+      if (options?.preservePageSources && existingVfsFiles[fp]) {
+        // Existing pages without a reconstructable sidecar are still the accepted source.
+        // A non-launch edit must not replace them with a template scaffold.
+        Object.assign(preserved, collectReachableFiles(existingVfsFiles, [fp]));
+        const descriptor = resolvedCompositionPathFor(fp);
+        if (typeof existingVfsFiles[descriptor] === 'string') preserved[descriptor] = existingVfsFiles[descriptor];
         continue;
       }
       // Multi-file emit: page module + per-section components under

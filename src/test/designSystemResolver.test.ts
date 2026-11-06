@@ -113,12 +113,39 @@ describe('AppBuilderGenerationContext (R0/R1)', () => {
     const firstPrompt = first.runtimeContextForPage('page-home', 12_000);
 
     expect(firstPrompt).toContain('READ-ONLY REGISTRY VOCABULARY');
+    expect(firstPrompt).toContain('PAGE-SCOPED REGISTRY CONTEXT');
+    expect(firstPrompt).toContain('Do not use registered variants from other pages');
     expect(firstPrompt).toContain('ORIGINAL BODY DESIGN IS REQUIRED');
+    expect(firstPrompt).toContain('Forms are interaction widgets, not body-section layouts');
+    expect(firstPrompt).toContain('Every section must render meaningful visible content');
     expect(firstPrompt).not.toContain('hero:alpha');
     expect(new Set(heroEligibility('project-seed-a'))).toEqual(new Set(['hero:alpha', 'hero:beta', 'hero:gamma']));
     expect(heroEligibility('project-seed-a')).toEqual(heroEligibility('project-seed-a'));
     expect(new Set(['project-seed-a', 'project-seed-b', 'project-seed-c', 'project-seed-d', 'project-seed-e']
       .map(seed => heroEligibility(seed).join(','))).size).toBeGreaterThan(1);
+  });
+
+  it('does not expose another page\'s implementations when this page has no eligible sources', async () => {
+    const { buildAppBuilderGenerationContext } = await import('@/services/app-builder/appBuilderGenerationContext');
+    const contract = buildAppBuildContract(makeInput([impl('hero:home-only', 'hero', ['home'])]));
+    const homePage = contract.topology.sitePlan.pages[0];
+    contract.topology.sitePlan.pages.push({
+      ...homePage,
+      id: 'page-blog',
+      name: 'blog',
+      title: 'Blog',
+      route: '/blog',
+      filePath: '/src/pages/Blog.tsx',
+      role: 'blog',
+      visibleInNav: true,
+      isHome: false,
+    });
+
+    const pageContext = buildAppBuilderGenerationContext(contract).runtimeContextForPage('page-blog');
+
+    expect(pageContext).toContain('no certified design-source implementations are eligible for this page');
+    expect(pageContext).not.toContain('eligible families (hero)');
+    expect(pageContext).not.toContain('hero:home-only');
   });
 
   it('projects registered component capabilities onto only their bound page', async () => {

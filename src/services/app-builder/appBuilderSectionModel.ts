@@ -62,6 +62,80 @@ interface EligibleImplementation {
 const CUSTOM_VARIANT_ID = /^custom:[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CUSTOM_COMPONENT_PATH = /^\/src\/(?:project-components|components\/generated)\/.+\.[jt]sx?$/i;
 
+type JSXContentNode = ts.JsxElement | ts.JsxSelfClosingElement | ts.JsxFragment;
+
+function meaningfulJsxChild(node: ts.JsxChild): boolean {
+  if (ts.isJsxText(node)) return Boolean(node.text.trim());
+  if (ts.isJsxExpression(node)) {
+    if (!node.expression) return false;
+    if (node.expression.kind === ts.SyntaxKind.FalseKeyword || node.expression.kind === ts.SyntaxKind.NullKeyword) return false;
+    return !(ts.isStringLiteral(node.expression) && !node.expression.text.trim());
+  }
+  if (ts.isJsxFragment(node)) return node.children.some(meaningfulJsxChild);
+  if (ts.isJsxSelfClosingElement(node)) {
+    const tag = tagName(node.tagName) ?? '';
+    return !/form/i.test(tag) && !/^(?:div|section|article|main|header|footer|nav|span|label|ul|ol)$/i.test(tag);
+  }
+  if (ts.isJsxElement(node)) {
+    const tag = tagName(node.openingElement.tagName) ?? '';
+    if (/form/i.test(tag)) return false;
+    if (/^(?:div|section|article|main|header|footer|nav|span|label|ul|ol)$/i.test(tag)) {
+      return node.children.some(meaningfulJsxChild);
+    }
+    return true;
+  }
+  return false;
+}
+
+function hasRenderableCustomSectionBody(source: string, exportName?: string): boolean {
+  const sourceFile = ts.createSourceFile('site-component.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const hasMeaningfulReturn = (node: ts.Node): boolean => {
+    if (ts.isArrowFunction(node) && (ts.isJsxElement(node.body) || ts.isJsxSelfClosingElement(node.body) || ts.isJsxFragment(node.body))) {
+      return meaningfulJsxChild(node.body as JSXContentNode);
+    }
+    let found = false;
+    const visit = (child: ts.Node) => {
+      if (found) return;
+      if (ts.isReturnStatement(child) && child.expression
+        && (ts.isJsxElement(child.expression) || ts.isJsxSelfClosingElement(child.expression) || ts.isJsxFragment(child.expression))) {
+        found = meaningfulJsxChild(child.expression as JSXContentNode);
+        return;
+      }
+      ts.forEachChild(child, visit);
+    };
+    visit(node);
+    return found;
+  };
+
+  let defaultExport: ts.Expression | null = null;
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportAssignment(statement) && !statement.isExportEquals) defaultExport = statement.expression;
+    if (ts.isFunctionDeclaration(statement) && statement.body
+      && ((exportName && statement.name?.text === exportName)
+        || (!exportName && statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)))) {
+      return hasMeaningfulReturn(statement);
+    }
+    if (ts.isVariableStatement(statement)) {
+      const isDefault = statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false;
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+        const matches = exportName ? declaration.name.text === exportName : isDefault;
+        if (matches && hasMeaningfulReturn(declaration.initializer)) return true;
+      }
+    }
+  }
+  if (!exportName && defaultExport) {
+    if (ts.isIdentifier(defaultExport)) {
+      const declaration = sourceFile.statements.flatMap((statement) => ts.isVariableStatement(statement)
+        ? statement.declarationList.declarations
+        : []).find((candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === defaultExport!.getText(sourceFile));
+      return Boolean(declaration?.initializer && hasMeaningfulReturn(declaration.initializer));
+    }
+    return hasMeaningfulReturn(defaultExport);
+  }
+  return false;
+}
+
 function findCustomSectionImplementations(
   pagePath: string,
   files: Readonly<Record<string, string>>,
@@ -102,7 +176,8 @@ function findCustomSectionImplementations(
                 const rawPath = imported?.modulePath;
                 if (imported && rawPath?.startsWith('@/')) {
                   const modulePath = resolveRelativeModule(path, `/src/${rawPath.slice(2)}`, existingPaths);
-                  if (modulePath && CUSTOM_COMPONENT_PATH.test(modulePath)) {
+                  if (modulePath && CUSTOM_COMPONENT_PATH.test(modulePath)
+                    && hasRenderableCustomSectionBody(files[modulePath] ?? '', imported.importedName ?? undefined)) {
                     const exportName = imported.importedName === null ? undefined : imported.importedName;
                     customModules.set(`${modulePath}#${exportName ?? 'default'}`, {
                       modulePath,

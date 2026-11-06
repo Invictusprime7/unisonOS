@@ -590,6 +590,7 @@ export function recompileFromPlayground(
     throw new Error('[canonicalPipeline] Recompile Stage 4b did not produce the canonical shadcn stylesheet.');
   }
   const compileResult = compilePlayground(playground, existingVfsFiles, businessName, {
+    preservePageSources: options.preservePageSources,
     selectedTemplateId: options?.selectedTemplateId,
     selectedThemeId: options?.selectedThemeId,
     themePresetId,

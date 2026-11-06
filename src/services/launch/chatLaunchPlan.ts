@@ -11,6 +11,12 @@ import { classifyPromptForWizard } from "@/components/onboarding/wizard/wizardPr
 import type { CustomerNeed, PageChoice, PrimaryGoal } from "@/components/onboarding/wizard/wizardCatalog";
 import type { BusinessSystemType } from "@/data/templates/types";
 import type { UniversalCreationInput } from "@/platform/core/universalCreation";
+import { getIndustryProfile } from "@/platform/core/industryMatrix";
+import {
+  matchTopologyPageAliases,
+  resolvePageSpecsForRoles,
+  resolveTopologyPageRoleAlias,
+} from "@/platform/core/siteTopologyPlanner";
 
 export interface ChatLaunchPlan {
   creationInput: UniversalCreationInput;
@@ -61,6 +67,69 @@ const PAGE_DETAILS: Record<PageChoice, { route: string; title: string; purpose: 
 
 const hit = (text: string, words: string[]) => words.some((w) => new RegExp(`\\b${w}\\b`, "i").test(text));
 
+function pageForTopologyRole(role: string, industry: string | null): NonNullable<ReturnType<typeof resolvePageSpecsForRoles>[number]> | null {
+  const profile = industry ? getIndustryProfile(industry) : undefined;
+  const industryPage = profile?.defaultPages.find((page) => page.path !== '/' &&
+    resolveTopologyPageRoleAlias(page.suggestedRole || page.purpose) === role,
+  );
+  if (industryPage) return industryPage;
+
+  const wizardChoice = (Object.keys(PAGE_DETAILS) as PageChoice[])
+    .map((choice) => PAGE_DETAILS[choice])
+    .find((page) => page.role === role);
+  if (wizardChoice) {
+    return {
+      title: wizardChoice.title,
+      path: wizardChoice.route,
+      purpose: 'landing',
+      customPurpose: wizardChoice.purpose,
+      suggestedRole: role,
+      expectedSections: [],
+    };
+  }
+  return resolvePageSpecsForRoles([role])[0] ?? null;
+}
+
+function pageDetailsForChoice(choice: PageChoice, industry: string | null) {
+  const generic = PAGE_DETAILS[choice];
+  const role = resolveTopologyPageRoleAlias(generic.role) ?? generic.role;
+  const spec = pageForTopologyRole(role, industry);
+  return spec ? { ...generic, route: spec.path, title: spec.title } : generic;
+}
+
+function topologyPagesFromPrompt(text: string, industry: string | null): UniversalCreationInput['pages'] {
+  return matchTopologyPageAliases(text).flatMap(({ alias, role }) => {
+    if (role === 'home') return [];
+    if (role === 'custom') {
+      const slug = alias.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const title = alias.replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+      return slug ? [{ route: `/${slug}`, title, purpose: `A dedicated ${title.toLowerCase()} page requested by the visitor.`, suggestedRole: 'custom' }] : [];
+    }
+    const spec = pageForTopologyRole(role, industry);
+    if (!spec || spec.path === '/') return [];
+    const title = spec.title;
+    const details = (Object.keys(PAGE_DETAILS) as PageChoice[])
+      .map((choice) => PAGE_DETAILS[choice])
+      .find((page) => page.role === role);
+    return [{
+      route: spec.path,
+      title,
+      purpose: details?.purpose ?? `Present ${title.toLowerCase()} information requested by the visitor.`,
+      suggestedRole: role,
+    }];
+  });
+}
+
+function uniquePagesByRoute(pages: UniversalCreationInput['pages']): UniversalCreationInput['pages'] {
+  const seen = new Set<string>();
+  return pages.filter((page) => {
+    const key = page.route.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function deriveExplicitRoutePages(text: string): UniversalCreationInput['pages'] {
   const knownRoutes = new Set(['/', ...Object.values(PAGE_DETAILS).map((page) => page.route)]);
   const pages: UniversalCreationInput['pages'] = [];
@@ -95,15 +164,22 @@ export function deriveChatLaunchPlan(brief: string): ChatLaunchPlan {
   )?.[1]?.trim();
   const analysis = classifyPromptForWizard(confirmedDirection || text);
   const confident = Boolean(analysis?.industryIdentityMatched && analysis.confidence > 0.55);
-  const mentionedPages = (Object.keys(PAGE_KEYWORDS) as PageChoice[]).filter((p) => hit(text, PAGE_KEYWORDS[p]));
+  const topologyAliases = matchTopologyPageAliases(text);
+  const topologyRoles = new Set<string>(topologyAliases.map(({ role }) => role));
+  const mentionedPages = (Object.keys(PAGE_KEYWORDS) as PageChoice[]).filter((page) =>
+    hit(text, PAGE_KEYWORDS[page]) || topologyRoles.has(PAGE_DETAILS[page].role),
+  );
   const family = Object.keys(FAMILY_KEYWORDS).find((f) => hit(text, FAMILY_KEYWORDS[f])) ?? null;
   const defaults = confident ? analysis!.selectedPages : [];
   const focusedGoal = FOCUSED_GOALS.find(({ pattern }) => pattern.test(text))?.goal;
   const focusedNeed = focusedGoal ? GOAL_CUSTOMER_NEED[focusedGoal] : undefined;
-  const creationPages = [
-    ...mentionedPages.map((page) => PAGE_DETAILS[page]),
-    ...deriveExplicitRoutePages(text),
-  ];
+  const resolvedIndustry = confident ? analysis!.industry : null;
+  const profileRoutes = resolvedIndustry ? getIndustryProfile(resolvedIndustry)?.defaultPages.map((page) => page.path) ?? [] : [];
+  const creationPages = uniquePagesByRoute([
+    ...mentionedPages.map((page) => pageDetailsForChoice(page, resolvedIndustry)),
+    ...topologyPagesFromPrompt(text, resolvedIndustry),
+    ...deriveExplicitRoutePages(text).filter((page) => !profileRoutes.some((route) => route.toLowerCase() === page.route.toLowerCase())),
+  ]);
   const visualRequirements = [
     ...(family ? [`Visual direction: ${family}`] : []),
     ...[...text.matchAll(/\b(?:#[0-9a-f]{3,8}|(?:red|orange|yellow|green|blue|black|white|gold|teal|pink|maroon|navy|crimson|emerald))\b/gi)].map(([color]) => `Preserve the requested color: ${color}`),
@@ -156,13 +232,21 @@ export interface FinalLaunchSelections {
 
 export function projectUniversalCreationInput(plan: ChatLaunchPlan | null, selectedPages: readonly PageChoice[]): UniversalCreationInput | undefined {
   if (!plan) return undefined;
-  const standardRoutes = new Set(['/', ...Object.values(PAGE_DETAILS).map((page) => page.route)]);
+  const industryPages = plan.industry ? getIndustryProfile(plan.industry)?.defaultPages ?? [] : [];
+  const wizardRoles = new Set(Object.values(PAGE_DETAILS).map((page) => page.role));
+  const standardRoutes = new Set([
+    '/',
+    ...Object.values(PAGE_DETAILS).map((page) => page.route.toLowerCase()),
+    ...industryPages
+      .filter((page) => wizardRoles.has(resolveTopologyPageRoleAlias(page.suggestedRole || page.purpose) || ''))
+      .map((page) => page.path.toLowerCase()),
+  ]);
   return {
     ...plan.creationInput,
     pages: [
       { route: '/', title: 'Home', purpose: 'Introduce the subject and purpose stated in the original prompt.', suggestedRole: 'home' },
-      ...selectedPages.map((page) => PAGE_DETAILS[page]),
-      ...plan.creationInput.pages.filter((page) => !standardRoutes.has(page.route)),
+      ...selectedPages.map((page) => pageDetailsForChoice(page, plan.industry)),
+      ...plan.creationInput.pages.filter((page) => !standardRoutes.has(page.route.toLowerCase())),
     ],
   };
 }

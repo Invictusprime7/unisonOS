@@ -39,6 +39,23 @@ export default function Home(){return <><main><SiteNav/><section/><section/><Sit
     expect(issues.join(' ')).toMatch(/SiteFooter.*exactly once after <\/main>/);
   });
 
+  it('rejects empty and form-only sections as page composition', () => {
+    const page = `import { SiteNav } from "@/project-components/site/SiteNav";
+import { SiteFooter } from "@/project-components/site/SiteFooter";
+import NewsletterForm from "@/project-components/NewsletterForm";
+export default function Home(){return <><SiteNav/><main><section/><section><form><input name="email"/><button>Subscribe</button></form></section><NewsletterForm/></main><SiteFooter/></>}`;
+    const files = {
+      '/src/pages/Home.tsx': page,
+      '/src/project-components/site/SiteNav.tsx': 'export function SiteNav(){return <header/>}',
+      '/src/project-components/site/SiteFooter.tsx': 'export function SiteFooter(){return <footer/>}',
+      '/src/project-components/NewsletterForm.tsx': 'export default function NewsletterForm(){return <form><input name="email"/><button>Subscribe</button></form>}',
+    };
+    const issues = findPageStructureIssues('/src/pages/Home.tsx', page, files, pageStructureRequirement('home', 3));
+
+    expect(issues.join(' ')).toMatch(/2 empty or form-only body section\(s\)/);
+    expect(issues.join(' ')).toMatch(/only 0 body section\(s\)/);
+  });
+
   it('accepts a composed page whose chrome, sections and imagery live in shared components', () => {
     const files = {
       '/src/pages/Home.tsx': `import { SiteNav } from '../project-components/site/SiteNav';

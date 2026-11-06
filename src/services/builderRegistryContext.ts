@@ -133,18 +133,13 @@ export function boundRegistryContext(
   options?: { sectionTypes?: readonly string[]; pageRole?: string },
 ): BuilderRegistryContext {
   const focus = options?.sectionTypes?.length ? new Set(options.sectionTypes) : null;
-  const sections = context.sections
+  const sectionCandidates = context.sections
     .filter((section) => !focus || focus.has(section.type))
-    .slice(0, MAX_SECTIONS)
-    .map((section) => ({
-      type: section.type,
-      isFirstClass: section.isFirstClass,
-      artifactId: section.artifactId ?? null,
-      allowedVariantIds: (section.allowedVariantIds ?? []).slice(0, MAX_VARIANTS_PER_SECTION),
-    }));
-  const allowed = new Set(sections.map((section) => section.type));
+    .slice(0, MAX_SECTIONS);
+  const allowed = new Set(sectionCandidates.map((section) => section.type));
   const implementations = (context.implementations ?? [])
-    .filter((implementation) => allowed.has(implementation.sectionType))
+    .filter((implementation) => allowed.has(implementation.sectionType)
+      && (!options?.pageRole || implementation.pageRoles.length === 0 || implementation.pageRoles.includes(options.pageRole)))
     .sort((a, b) => {
       if (!options?.pageRole) return 0;
       return Number(b.pageRoles.includes(options.pageRole)) - Number(a.pageRoles.includes(options.pageRole));
@@ -164,6 +159,15 @@ export function boundRegistryContext(
       compatibleExperiencePreferences: implementation.compatibleExperiencePreferences,
       artifactContract: implementation.artifactContract,
     })) as BuilderRegistryContext['implementations'];
+  const includedImplementationIds = new Set(implementations.map((implementation) => implementation.id));
+  const sections = sectionCandidates.map((section) => ({
+    type: section.type,
+    isFirstClass: section.isFirstClass,
+    artifactId: section.artifactId ?? null,
+    allowedVariantIds: (section.allowedVariantIds ?? [])
+      .filter((id) => !options?.pageRole || includedImplementationIds.has(id))
+      .slice(0, MAX_VARIANTS_PER_SECTION),
+  }));
   return {
     version: context.version,
     generationPolicy: context.generationPolicy,
