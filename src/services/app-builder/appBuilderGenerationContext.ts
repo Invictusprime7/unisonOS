@@ -282,7 +282,6 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const compose = (modules: string, pageId?: string, budget = COMPOSER_CONTEXT_LIMIT) => packContextBlocks([
     { priority: 1, text: !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '' },
     { priority: 1, text: canonicalIntentBindings(pageId) },
-    { priority: 1, text: registeredComponentContext(pageId) },
     { priority: 1, text: modules },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
     { priority: 1, text: renderEligiblePresentation(designSources, pageId) },
@@ -291,6 +290,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 1, text: registeredComponentBlueprints(pageId) },
     { priority: 2, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
     { priority: 1, text: 'ORIGINAL BODY DESIGN IS REQUIRED: treat the Wizard-selected theme tokens, resolved art direction, page composition target, industry and goals as the design authority. Invent the body section composition, layout, typography, spacing and visual treatment from that context. Do not import or render registry design-source modules or raw 21st.dev components for body sections, and do not reproduce their layout, styling, or distinctive visual arrangement. The plan guides section purpose and order; it is not a visual template. Keep the sealed page archetype, body ceiling and compiler-owned shared shell. Preserve canonical IDs, bindings, handlers, intents and CTA markers; never invent backend actions, business facts or baseline filler.' },
+    { priority: 1, text: registeredComponentContext(pageId) },
     { priority: 4, text: registeredComponentTemplates(pageId) },
     { priority: 3, text: businessParameterContext },
     { priority: 4, text: interactiveSurfaceContract },
@@ -312,7 +312,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     runtimeContext: compose(renderDesignSourceModules(materialization), undefined, Number.POSITIVE_INFINITY),
     runtimeContextForPage: (pageId, budget) => {
       const eligibleIds = designSources.eligibleByPage[pageId] ?? [];
-      return compose(renderDesignSourceModules(materialization, new Set(eligibleIds)), pageId, budget);
+      return compose(renderDesignSourceModules(materialization, new Set(eligibleIds), eligibleIds), pageId, budget);
     },
   };
 }

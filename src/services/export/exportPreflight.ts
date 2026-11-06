@@ -67,17 +67,33 @@ function packageName(specifier: string): string | null {
   return first.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : first;
 }
 
+function isTypeImportQuery(contents: string, matchEnd: number): boolean {
+  const afterImport = contents.slice(matchEnd);
+  const member = afterImport.match(/^\s*\.\s*([A-Za-z_$][\w$]*)/);
+  if (!member) return false;
+
+  // `import('./module').Type` is erased by TypeScript; Promise methods are runtime imports.
+  if (/^(?:then|catch|finally)$/.test(member[1])) return false;
+  return !/^\s*\(/.test(afterImport.slice(member[0].length));
+}
+
 function importSpecifiers(contents: string): string[] {
   const specs = new Set<string>();
   const patterns = [
     /\b(?:import|export)\s+(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/g,
-    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
     /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
   ];
   for (const pattern of patterns) {
     pattern.lastIndex = 0;
     for (const match of contents.matchAll(pattern)) specs.add(match[1]);
   }
+
+  const dynamicImport = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  for (const match of contents.matchAll(dynamicImport)) {
+    const matchEnd = (match.index ?? 0) + match[0].length;
+    if (!isTypeImportQuery(contents, matchEnd)) specs.add(match[1]);
+  }
+
   return [...specs];
 }
 

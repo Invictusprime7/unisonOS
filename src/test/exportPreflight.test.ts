@@ -2,6 +2,37 @@ import { describe, expect, it } from 'vitest';
 import { runExportPreflight } from '@/services/export/exportPreflight';
 
 describe('runExportPreflight', () => {
+  it('ignores unresolved TypeScript import type queries', () => {
+    const result = runExportPreflight({
+      files: {
+        '/src/main.ts': "type Variant = import('./components/types').VariantId; export {};",
+      },
+      entryPoint: '/src/main.ts',
+      packageJson: JSON.stringify({ dependencies: {} }),
+      hasLockfile: true,
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.issues).toEqual([]);
+  });
+
+  it('still reports unresolved runtime dynamic imports', () => {
+    const result = runExportPreflight({
+      files: {
+        '/src/main.ts': "void import('./missing-runtime-module');",
+      },
+      entryPoint: '/src/main.ts',
+      packageJson: JSON.stringify({ dependencies: {} }),
+      hasLockfile: true,
+    });
+
+    expect(result.issues).toContainEqual({
+      code: 'unresolved-local-import',
+      path: '/src/main.ts',
+      reference: './missing-runtime-module',
+    });
+  });
+
   it('passes a closed source graph and reports reproducibility warnings separately', () => {
     const result = runExportPreflight({
       files: {
