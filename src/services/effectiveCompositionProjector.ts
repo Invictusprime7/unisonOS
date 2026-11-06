@@ -4,6 +4,7 @@ import { fileProvenanceMatchesContent, type FileProvenanceRecord } from '@/servi
 import { getDesignImplementation } from '@/services/designImplementationRegistry';
 import { getAllSections } from '@/sections/registry';
 import { getCanonicalComponentDefinition } from '@/services/canonicalComponentRegistry';
+import { createComponentOwnerId } from '@/services/editor/sourceIdentity';
 
 export type EffectiveComponentOrigin =
   | 'compiler-generated'
@@ -46,6 +47,7 @@ export interface EffectiveCompositionComponentUse {
   moduleSpecifier: string | null;
   sourcePath: string | null;
   sourceDirectory: string | null;
+  ownerId: string | null;
   origin: EffectiveComponentOrigin;
 }
 
@@ -226,6 +228,7 @@ export async function projectEffectiveComposition(input: {
         moduleSpecifier: specifier,
         sourcePath: resolvedPath,
         sourceDirectory: resolvedPath?.slice(0, resolvedPath.lastIndexOf('/')) || null,
+        ownerId: resolvedPath?.startsWith('/src/') ? createComponentOwnerId(resolvedPath) : null,
         origin: owner,
       });
       if (clause?.name) {
@@ -272,6 +275,7 @@ export async function projectEffectiveComposition(input: {
               moduleSpecifier: null,
               sourcePath,
               sourceDirectory: sourcePath.slice(0, sourcePath.lastIndexOf('/')) || null,
+              ownerId: createComponentOwnerId(sourcePath),
               origin: sourceOrigin ?? 'unverified',
             });
             if (!sourceOrigin) uncertain.push(`component-origin-unverified:${sourcePath}:${name}`);

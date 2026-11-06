@@ -681,6 +681,35 @@ const AUTOMATION_FOLLOW_UP_PACK: CapabilityPack = {
   },
 };
 
+const CMS_CONTENT_PACK: CapabilityPack = {
+  id: 'cms.content',
+  name: 'Site Content Management',
+  description: 'Owner-managed, site-scoped articles served through the published content reader.',
+  provides: ['cms.content'],
+  dependsOn: ['business_profile'],
+  relatedOperationalPacks: [],
+  database: { tables: [] },
+  backend: {
+    functions: ['cms-records', 'site-runtime-read'],
+    events: [],
+    permissions: ['business.content.manage', 'visitor.content.read'],
+  },
+  frontend: {
+    components: ['BusinessContent', 'PublishedArticleList'],
+    dataSources: ['content:articles'],
+    slots: ['blog-grid.list', 'article-page.content'],
+  },
+  intents: { provided: [], required: [] },
+  settings: { accountFields: [], projectFields: [] },
+  readiness: {
+    assertions: [
+      { id: 'cms-content-table-exists', kind: 'table-exists', target: 'content_entries', description: 'CMS entries are available to the owner editor.', blocking: true },
+      { id: 'cms-public-reader-installed', kind: 'handler-installed', target: 'site-runtime-read', description: 'Published articles use the site-scoped public reader.', blocking: true },
+    ],
+    fixtures: ['published-article'],
+  },
+};
+
 // ============================================================================
 // Registry + dependency resolution
 // ============================================================================
@@ -695,6 +724,7 @@ export const CAPABILITY_PACKS: CapabilityPack[] = [
   COMMERCE_CART_PACK,
   COMMERCE_CHECKOUT_PACK,
   AUTOMATION_FOLLOW_UP_PACK,
+  CMS_CONTENT_PACK,
 ];
 
 

@@ -242,6 +242,12 @@ export const PACK_DATABASE_CONTRACTS: PackDatabaseContract[] = [
       },
     ],
   },
+  {
+    id: 'cms.content',
+    dependsOn: ['business_profile'],
+    provides: ['cms.content'],
+    tables: [],
+  },
 ];
 
 

@@ -9,6 +9,7 @@ import {
 import type { ResolvedSection } from '@/platform/core/resolvedComposition';
 import { getSectionTypesWithVariants } from '@/sections/variants/registry';
 import { collectLocalImportClosure, resolveRelativeModule } from '@/services/laneBCompanionModules';
+import { createComponentOwnerId } from '@/services/editor/sourceIdentity';
 
 export interface AppBuilderSectionRecord extends ResolvedSection {
   data: Record<string, unknown>;
@@ -55,6 +56,7 @@ interface EligibleImplementation {
   modulePath: string;
   sectionType: string;
   exportName?: string;
+  componentOwnerId?: string;
 }
 
 const CUSTOM_VARIANT_ID = /^custom:[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -88,7 +90,7 @@ function findCustomSectionImplementations(
           const root = ts.isJsxSelfClosingElement(node)
             ? node
             : ts.isJsxElement(node.parent) ? node.parent : undefined;
-          const customModules = new Set<string>();
+          const customModules = new Map<string, { modulePath: string; exportName?: string }>();
           if (root) {
             const rootOpening = ts.isJsxElement(root) ? root.openingElement : root;
             const inspectRenderer = (child: ts.Node) => {
@@ -98,9 +100,15 @@ function findCustomSectionImplementations(
                 const component = tagName(child.tagName);
                 const imported = component ? imports.get(component) : undefined;
                 const rawPath = imported?.modulePath;
-                if (imported?.importedName === null && rawPath?.startsWith('@/')) {
+                if (imported && rawPath?.startsWith('@/')) {
                   const modulePath = resolveRelativeModule(path, `/src/${rawPath.slice(2)}`, existingPaths);
-                  if (modulePath && CUSTOM_COMPONENT_PATH.test(modulePath)) customModules.add(modulePath);
+                  if (modulePath && CUSTOM_COMPONENT_PATH.test(modulePath)) {
+                    const exportName = imported.importedName === null ? undefined : imported.importedName;
+                    customModules.set(`${modulePath}#${exportName ?? 'default'}`, {
+                      modulePath,
+                      ...(exportName ? { exportName } : {}),
+                    });
+                  }
                 }
               }
               ts.forEachChild(child, inspectRenderer);
@@ -108,10 +116,16 @@ function findCustomSectionImplementations(
             inspectRenderer(root);
           }
           if (customModules.size === 1) {
-            const [modulePath] = customModules;
-            if (discovered[variantId] && (discovered[variantId].modulePath !== modulePath
-              || discovered[variantId].sectionType !== sectionType)) ambiguous.add(variantId);
-            else discovered[variantId] = { modulePath, sectionType };
+            const [implementation] = customModules.values();
+            const candidate: EligibleImplementation = {
+              ...implementation,
+              sectionType,
+              componentOwnerId: createComponentOwnerId(implementation.modulePath),
+            };
+            if (discovered[variantId] && (discovered[variantId].modulePath !== candidate.modulePath
+              || discovered[variantId].sectionType !== sectionType
+              || discovered[variantId].exportName !== candidate.exportName)) ambiguous.add(variantId);
+            else discovered[variantId] = candidate;
           }
         }
       }
@@ -759,6 +773,7 @@ export function inspectAppBuilderPageSections(
               primitiveId: renderer.name,
               sourceModulePath: implementation.modulePath,
               sourcePath: pagePath,
+              ...(implementation.componentOwnerId ? { componentOwnerId: implementation.componentOwnerId } : {}),
               ...(legacyRendererName ? { legacyRendererName } : {}),
               variantId,
               data: renderer.props,

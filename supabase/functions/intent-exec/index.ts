@@ -31,6 +31,7 @@ import { safeParseBody, sanitizeString, isValidUUID } from "../_shared/validate.
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 import { createCrmActivity, createCrmContact, createCrmLead } from "../_shared/canonicalCrm.ts";
 import { unsupportedIntentResult } from "../_shared/unsupportedIntent.ts";
+import { hasRequiredSiteCapabilities, requiredSiteCapabilitiesForIntent } from "../_shared/siteCapabilityPolicy.ts";
 
 // ============================================================================
 // Types
@@ -1022,6 +1023,43 @@ serve(async (req: Request) => {
         }),
         { status: 403, headers: { ...publicCorsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    const requiredSiteCapabilities = requiredSiteCapabilitiesForIntent(intentId);
+    if (requiredSiteCapabilities) {
+      const { data: enabledCapabilities, error: capabilityError } = siteId
+        ? await supabase
+          .from("site_capabilities")
+          .select("capability_id")
+          .eq("site_id", siteId)
+          .in("capability_id", requiredSiteCapabilities)
+          .eq("status", "enabled")
+        : { data: null, error: null };
+      const enabledIds = (enabledCapabilities ?? []).map((capability: { capability_id: string }) => capability.capability_id);
+      if (capabilityError || !hasRequiredSiteCapabilities(enabledIds, requiredSiteCapabilities)) {
+        const durationMs = Date.now() - startTime;
+        const reason = "The site does not have every required capability enabled for this operation.";
+        await logIntentEvent(supabase, {
+          siteId,
+          businessId,
+          intentId,
+          bindingId,
+          pageId,
+          ok: false,
+          durationMs,
+          params,
+          errorCode: "SITE_CAPABILITY_REQUIRED",
+          errorMessage: reason,
+          sessionId: context?.sessionId,
+          userId: context?.userId,
+          ipAddress,
+          userAgent,
+        });
+        return secureJsonResponse({
+          ok: false,
+          error: { code: "SITE_CAPABILITY_REQUIRED", message: reason },
+        }, 403, publicCorsHeaders);
+      }
     }
     
     // Execute intent

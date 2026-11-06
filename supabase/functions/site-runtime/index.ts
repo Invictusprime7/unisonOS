@@ -5,6 +5,7 @@ import { safeParseBody } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 import { CanonicalBookingError, createCanonicalBooking } from "../_shared/canonicalBooking.ts";
 import { dispatchBookingNotifications, type BookingEmailStatus } from "../_shared/bookingNotifications.ts";
+import { hasAnySiteCapability } from "../_shared/siteCapabilityPolicy.ts";
 
 const RATE_LIMIT_CONFIG = { maxRequests: 60, windowSeconds: 60 };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -276,8 +277,11 @@ async function bookingCapabilityIsEnabled(
     .eq("site_id", siteId)
     .in("capability_id", ["booking", "booking.appointments"])
     .eq("status", "enabled")
-    .maybeSingle();
-  return !error && Boolean(data);
+    .limit(2);
+  return !error && hasAnySiteCapability(
+    (data ?? []).map((capability: { capability_id: string }) => capability.capability_id),
+    ["booking", "booking.appointments"],
+  );
 }
 
 async function configuredBookingOwnerEmail(

@@ -39,6 +39,12 @@ function runtime(intent: string, result: Record<string, unknown>, valid = true, 
 }
 
 describe('native action ownership', () => {
+  it('scopes the dedicated checkout request to the published site', () => {
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toMatch(
+      /if \(controller\.functionName === 'create-order-checkout'\) \{\s*return \{[\s\S]*?businessId: runtime\.businessId,\s*siteId: runtime\.siteId,/,
+    );
+  });
+
   it.each(['contact.submit', 'lead.capture', 'quote.request', 'newsletter.subscribe'])('%s CTA focuses the native form without an empty backend write', intent => {
     const page = runtime(intent, { ok: true });
     page.click();

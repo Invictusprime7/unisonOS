@@ -13,7 +13,7 @@ import {
 import { planBusinessCapabilities } from '@/services/businessCapabilityPlanner';
 
 describe('capability pack contracts', () => {
-  it('ships the foundational packs plus the commerce/menu/automation packs', () => {
+  it('ships foundational, commerce, automation, and CMS packs', () => {
     expect(CAPABILITY_PACKS.map((p) => p.id)).toEqual([
       'business_profile',
       'catalog.services',
@@ -24,13 +24,18 @@ describe('capability pack contracts', () => {
       'commerce.cart',
       'commerce.checkout',
       'automation.follow_up',
+      'cms.content',
     ]);
   });
 
 
   it('gives every pack a complete full-stack contract', () => {
     for (const pack of CAPABILITY_PACKS) {
-      expect(pack.database.tables.length, `${pack.id} tables`).toBeGreaterThan(0);
+      if (pack.id === 'cms.content') {
+        expect(pack.database.tables).toEqual([]);
+      } else {
+        expect(pack.database.tables.length, `${pack.id} tables`).toBeGreaterThan(0);
+      }
       expect(pack.frontend.components.length, `${pack.id} components`).toBeGreaterThan(0);
       expect(pack.frontend.slots.length, `${pack.id} slots`).toBeGreaterThan(0);
       expect(pack.readiness.assertions.length, `${pack.id} assertions`).toBeGreaterThan(0);
@@ -54,6 +59,7 @@ describe('capability pack contracts', () => {
     expect(packForCapability('forms.contact')?.id).toBe('crm.leads');
     expect(packForCapability('commerce.checkout')?.id).toBe('commerce.checkout');
     expect(packForCapability('auth.customer')).toBeNull();
+    expect(packForCapability('cms.content')?.id).toBe('cms.content');
     expect(getCapabilityPack('booking.appointments')?.name).toBe('Booking & Availability');
   });
 
@@ -69,6 +75,13 @@ describe('resolveCapabilityPacks', () => {
       'booking.appointments',
     ]);
     expect(unsupported).toEqual([]);
+  });
+
+  it('installs CMS enablement after the business profile pack', () => {
+    const { order, unsupported } = resolveCapabilityPacks(['cms.content']);
+    expect(order.map((pack) => pack.id)).toEqual(['business_profile', 'cms.content']);
+    expect(unsupported).toEqual([]);
+    expect(order.find((pack) => pack.id === 'cms.content')?.frontend.dataSources).toContain('content:articles');
   });
 
   it('does not duplicate a pack requested twice or reached via two paths', () => {

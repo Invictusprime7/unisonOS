@@ -221,6 +221,7 @@ function requestBody(controller: RuntimeController, intent: string, element: HTM
       ...params,
       ...(intent === 'cart.checkout' ? { items: readCart().map((item) => ({ productId: item.productId, quantity: item.quantity })) } : {}),
       businessId: runtime.businessId,
+      siteId: runtime.siteId,
       sessionId,
       successUrl: window.location.origin + '/thank-you',
       cancelUrl: window.location.href,

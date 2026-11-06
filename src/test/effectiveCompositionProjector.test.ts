@@ -133,7 +133,7 @@ describe('effective composition projection', () => {
     expect(projection.pages.home.componentUses).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'Hero', origin: 'compiler-generated' }),
       expect.objectContaining({ name: 'Button', origin: 'imported' }),
-      expect.objectContaining({ name: 'Card', origin: 'ai-authored' }),
+      expect.objectContaining({ name: 'Card', origin: 'ai-authored', ownerId: 'site-component:/src/pages/Card.tsx' }),
       expect.objectContaining({ name: 'OtherCard', origin: 'wizard-generated' }),
       expect.objectContaining({ name: 'UnverifiedCard', origin: 'unverified', sourceDirectory: '/src/pages' }),
       expect.objectContaining({ name: 'UserCard', origin: 'user-authored' }),

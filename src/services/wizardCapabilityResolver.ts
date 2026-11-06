@@ -510,6 +510,11 @@ export function resolveCapabilities(selections: WizardSelections): CapabilityPac
   // 3. Forms
   const formSet = new Set<string>(openEnded ? [] : MODEL_FORMS[model] || MODEL_FORMS.general);
   if (augment.extraForms) augment.extraForms.forEach(f => formSet.add(f));
+  if (openEnded) {
+    const requested = new Set(selections.universalCreation?.requestedCapabilities ?? []);
+    if (requested.has('booking')) formSet.add('booking_intake');
+    if (requested.has('lead-capture')) formSet.add('contact');
+  }
 
   // 4. Calendars
   const calendarSet = new Set<string>(openEnded ? [] : MODEL_CALENDARS[model] || []);

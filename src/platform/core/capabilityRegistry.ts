@@ -39,6 +39,7 @@ export type BusinessCapability =
   | 'forms.quote'
   | 'auth.customer'
   | 'portal.customer'
+  | 'cms.content'
   | 'automation.follow_up'
   | 'notifications.email';
 

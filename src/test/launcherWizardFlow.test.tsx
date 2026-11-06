@@ -18,6 +18,51 @@ vi.mock("@/components/onboarding/wizard/DesignContractInspector", () => ({ Desig
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
 
 describe("Launcher Wizard guided flow", () => {
+  it('switches an open-ended brief back to guided mode when a guided industry is selected', async () => {
+    vi.mocked(runLaunchPipeline).mockRejectedValueOnce(new Error('stop after launch input'));
+    render(<MemoryRouter><LauncherWizard open onOpenChange={vi.fn()} /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: /Open-ended/ }));
+    fireEvent.change(screen.getByLabelText('Describe the site you want to create'), {
+      target: { value: 'A publication with online booking for editorial events' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Salon & Spa/ }));
+    expect(screen.getByRole('button', { name: /Salon & Spa/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Open-ended/ })).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: /Book Appointments/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(screen.getByLabelText('Business name'), { target: { value: 'Studio Glow' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create site' }));
+
+    await waitFor(() => expect(runLaunchPipeline).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(runLaunchPipeline).mock.calls[0][0].universalCreation?.mode).toBe('guided');
+  });
+
+  it('switches a guided Wizard into open-ended mode and launches the open-ended contract', async () => {
+    vi.mocked(runLaunchPipeline).mockRejectedValueOnce(new Error('stop after launch input'));
+    render(<MemoryRouter><LauncherWizard open onOpenChange={vi.fn()} /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: /Salon & Spa/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Open-ended/ }));
+    fireEvent.change(screen.getByLabelText('Describe the site you want to create'), {
+      target: { value: 'A multi-page journal with articles and custom routes' },
+    });
+    expect(screen.getByRole('button', { name: /Open-ended/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Salon & Spa/ })).toHaveAttribute('aria-pressed', 'false');
+
+    for (let step = 0; step < 6 && !screen.queryByLabelText('Business name'); step += 1) {
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    }
+    fireEvent.change(await screen.findByLabelText('Business name'), { target: { value: 'Northstar Journal' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create site' }));
+
+    await waitFor(() => expect(runLaunchPipeline).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(runLaunchPipeline).mock.calls[0][0].universalCreation?.mode).toBe('open-ended');
+  });
+
   it('offers the deterministic starter after AI App Builder fails', async () => {
     vi.mocked(runLaunchPipeline)
       .mockRejectedValueOnce(new LaunchFatalError('AI provider timed out.', { stage: 'app-build', code: 'app-build.failed' }))

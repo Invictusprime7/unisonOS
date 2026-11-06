@@ -31,6 +31,7 @@ export interface BusinessRuntimeContract {
     version: typeof BUSINESS_CAPABILITY_MANIFEST_VERSION;
     source: 'capability_pack_registry';
     requestedCapabilities: BusinessCapability[];
+    requestedResources: string[];
     packs: RuntimeCapabilityDeclaration[];
     unsupportedCapabilities: BusinessCapability[];
   };
@@ -56,6 +57,7 @@ export function buildBusinessRuntimeContract({
   siteId,
   locationId = null,
   requestedCapabilities = [],
+  requestedResources = [],
   profile,
   snapshotId,
   expectedBindingCount,
@@ -67,6 +69,7 @@ export function buildBusinessRuntimeContract({
   siteId: string;
   locationId?: string | null;
   requestedCapabilities?: readonly BusinessCapability[];
+  requestedResources?: readonly string[];
   profile: BusinessProfileDTO;
   snapshotId: string;
   expectedBindingCount: number;
@@ -107,6 +110,7 @@ export function buildBusinessRuntimeContract({
       version: BUSINESS_CAPABILITY_MANIFEST_VERSION,
       source: 'capability_pack_registry',
       requestedCapabilities: requested,
+      requestedResources: [...new Set(requestedResources)],
       packs: capabilityPacks,
       unsupportedCapabilities: resolution.unsupported,
     },

@@ -61,6 +61,8 @@ export interface ResolvedSection {
   sourceModulePath?: string;
   /** VFS module containing the section root JSX; defaults to the page file. */
   sourcePath?: string;
+  /** Stable path identity for a site-local TSX implementation, independent of global registry membership. */
+  componentOwnerId?: string;
   /** Old directly rendered named variant export, present only until first swap. */
   legacyRendererName?: string;
   /** Registry-owned variant id (e.g. `hero:full-bleed`), when one was resolved. */

@@ -6,6 +6,7 @@ import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.t
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { safeParseBody } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
+import { hasRequiredSiteCapabilities } from "../_shared/siteCapabilityPolicy.ts";
 
 const RATE_LIMIT_CONFIG = { maxRequests: 60, windowSeconds: 60 };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -229,7 +230,10 @@ Deno.serve(async (req) => {
       .eq("capability_id", "cms.content")
       .eq("status", "enabled")
       .maybeSingle();
-    if (!cmsCapability) return errorResponse("Published articles are unavailable", 404, publicCorsHeaders);
+    if (!hasRequiredSiteCapabilities(
+      cmsCapability ? [String(cmsCapability.capability_id)] : [],
+      ["cms.content"],
+    )) return errorResponse("Published articles are unavailable", 404, publicCorsHeaders);
 
     const requestedSlug = typeof body.slug === "string" ? body.slug.trim().slice(0, 120) : "";
     const slug = requestedSlug || null;

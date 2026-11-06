@@ -337,11 +337,37 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
       semanticType: 'services',
       variantId: 'custom:service-panel',
       sourceModulePath: '/src/project-components/FeaturePanel.tsx',
+      componentOwnerId: 'site-component:/src/project-components/FeaturePanel.tsx',
       data: { title: 'Care, made personal' },
     });
     expect(sidecar.sections.find((section: { sectionId: string }) => section.sectionId === 'home:services:0'))
       .toMatchObject({ variantId: 'custom:service-panel', data: { title: 'Care, made personal' } });
     expect(sidecar.sections).toEqual(inspection.sections);
+  });
+
+  it('certifies a named site-local component export with a stable source owner', () => {
+    const files = {
+      '/src/pages/Home.tsx': `import Navbar from "@/unison/design-sources/Navbar";
+import Footer from "@/unison/design-sources/Footer";
+import { FeaturePanel } from "@/project-components/FeaturePanel";
+export default function Home(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{links:[]}} /></header><main><section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="custom:service-panel"><FeaturePanel title="Care" /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer></>}`,
+      '/src/project-components/FeaturePanel.tsx': `export function FeaturePanel({title}:{title:string}){return <article>{title}</article>}`,
+    };
+    const result = materializeAppBuilderSectionModelsWithDiagnostics(
+      files,
+      [{ id: 'home', filePath: '/src/pages/Home.tsx' }],
+      implementations,
+      { home: ['navbar:standard', 'footer:columns'] },
+      ['navbar:standard', 'footer:columns'],
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.pages[0].inspection.issues).toEqual([]);
+    expect(result.pages[0].inspection.sections.find((section) => section.sectionId === 'home:services:0'))
+      .toMatchObject({
+        sourceModulePath: '/src/project-components/FeaturePanel.tsx',
+        componentOwnerId: 'site-component:/src/project-components/FeaturePanel.tsx',
+      });
   });
 
   it('rejects custom sections without exactly one authorized local component import', () => {

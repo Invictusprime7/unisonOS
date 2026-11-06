@@ -14,6 +14,7 @@ import {
   isNonEmptyString,
 } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
+import { hasRequiredSiteCapabilities, requiredSiteCapabilitiesForIntent } from "../_shared/siteCapabilityPolicy.ts";
 
 /**
  * create-order-checkout — Guest-friendly ecommerce checkout.
@@ -45,6 +46,7 @@ interface CheckoutItem {
 
 interface CreateOrderCheckoutRequest {
   businessId?: string;
+  siteId?: string;
   sessionId?: string;
   userId?: string;
   items?: CheckoutItem[];
@@ -113,6 +115,7 @@ serve(async (req) => {
 
     const {
       businessId,
+      siteId,
       sessionId,
       userId,
       items,
@@ -122,6 +125,7 @@ serve(async (req) => {
     } = payload;
 
     const normalizedBusinessId = typeof businessId === "string" ? sanitizeString(businessId, 100) : "";
+    const normalizedSiteId = typeof siteId === "string" ? sanitizeString(siteId, 100) : "";
     const normalizedSessionId = typeof sessionId === "string" ? sanitizeString(sessionId, 200) : "";
     // The order owner comes only from the verified sign-in, never the body.
     void userId;
@@ -145,8 +149,39 @@ serve(async (req) => {
     if (!normalizedBusinessId || !isValidUUID(normalizedBusinessId)) {
       return errorResponse("Invalid businessId format", 400, publicCorsHeaders);
     }
+    if (!normalizedSiteId || !isValidUUID(normalizedSiteId)) {
+      return errorResponse("A valid siteId is required", 400, publicCorsHeaders);
+    }
     if (!normalizedSessionId) {
       return errorResponse("sessionId is required", 400, publicCorsHeaders);
+    }
+
+    const { data: site, error: siteError } = await supabase
+      .from("sites")
+      .select("id,business_id")
+      .eq("id", normalizedSiteId)
+      .maybeSingle();
+    if (siteError || !site || site.business_id !== normalizedBusinessId) {
+      return errorResponse("The site does not match this business", 403, publicCorsHeaders);
+    }
+    const { data: project, error: projectError } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("site_id", normalizedSiteId)
+      .eq("business_id", normalizedBusinessId)
+      .maybeSingle();
+    if (projectError || !project) return errorResponse("The site project is unavailable", 404, publicCorsHeaders);
+
+    const requiredCapabilities = requiredSiteCapabilitiesForIntent("cart.checkout") ?? [];
+    const { data: enabledCapabilities, error: capabilityError } = await supabase
+      .from("site_capabilities")
+      .select("capability_id")
+      .eq("site_id", normalizedSiteId)
+      .in("capability_id", requiredCapabilities)
+      .eq("status", "enabled");
+    const enabledIds = (enabledCapabilities ?? []).map((capability) => String(capability.capability_id));
+    if (capabilityError || !hasRequiredSiteCapabilities(enabledIds, requiredCapabilities)) {
+      return errorResponse("This site has not enabled checkout", 403, publicCorsHeaders);
     }
     if (normalizedUserId && !isValidUUID(normalizedUserId)) {
       return errorResponse("Invalid userId format", 400, publicCorsHeaders);
@@ -181,6 +216,7 @@ serve(async (req) => {
       .select("id, name, description, price, is_active, business_id")
       .in("id", productIds)
       .eq("business_id", normalizedBusinessId)
+      .or(`project_id.eq.${project.id},project_id.is.null`)
       .eq("is_active", true);
     if (productsError) {
       console.error("Product lookup error:", productsError);

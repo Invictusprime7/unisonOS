@@ -58,7 +58,12 @@ describe('preview source resolution', () => {
     expect(at('/src/pages/Home.tsx:4:29', { instanceIndex: 2 })).toMatchObject({ mode: 'inspect-only', reason: 'repeated-source-template', instanceIndex: 2 });
   });
   it('marks nodes from imported components as shared', () => {
-    expect(at('/src/components/Card.tsx:2:10')).toMatchObject({ mode: 'editable', sharedComponent: true, ownerPath: '/src/components/Card.tsx' });
+    expect(at('/src/components/Card.tsx:2:10')).toMatchObject({
+      mode: 'editable',
+      sharedComponent: true,
+      ownerPath: '/src/components/Card.tsx',
+      componentOwnerId: 'site-component:/src/components/Card.tsx',
+    });
   });
   it('falls back to inspect-only for protected owners, missing files and stale locators', () => {
     expect(at('/src/App.tsx:1:22').reason).toBe('protected-owner');

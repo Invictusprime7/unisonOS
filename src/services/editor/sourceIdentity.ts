@@ -5,6 +5,11 @@ export interface SourceNodeIdentity {
   astIdentity: string;
 }
 
+export function createComponentOwnerId(path: string): string {
+  const normalizedPath = path.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/\/$/, '');
+  return `site-component:${normalizedPath}`;
+}
+
 export function hashSourceIdentity(path: string, source: string): string {
   let first = 0x811c9dc5;
   let second = 0x9e3779b9;

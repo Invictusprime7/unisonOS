@@ -406,6 +406,12 @@ export const LauncherWizard = ({
     setCustomerNeeds(getIndustryCustomerNeeds(industry));
     setSelectedPages(getIndustryDefaultPageChoices(industry));
     pageChoicesTouchedRef.current = false;
+    if (chatPlanRef.current) {
+      chatPlanRef.current = {
+        ...chatPlanRef.current,
+        creationInput: { ...chatPlanRef.current.creationInput, mode: 'guided' },
+      };
+    }
   };
 
   const selectOpenEnded = () => {

@@ -119,6 +119,7 @@ const OPERATIONAL_PACKS: Record<BusinessCapability, CapabilityId[]> = {
   'forms.quote': ['quoting'],
   'auth.customer': ['auth'],
   'portal.customer': ['auth'],
+  'cms.content': [],
   'automation.follow_up': ['lead-capture'],
   'notifications.email': [],
 };
@@ -158,6 +159,7 @@ const CAPABILITY_PHRASE: Record<BusinessCapability, string> = {
   'forms.quote': 'quote request handling',
   'auth.customer': 'customer accounts',
   'portal.customer': 'a customer portal',
+  'cms.content': 'site-scoped article management and publishing',
   'automation.follow_up': 'automated follow-ups',
   'notifications.email': 'email notifications',
 };

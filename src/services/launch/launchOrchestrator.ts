@@ -129,6 +129,7 @@ import {
 } from '@/services/launch/canonicalLaunchPlan';
 import { createWizardCompileArtifact } from '@/platform/core/snapshotSeal';
 import { resolveBusinessLaunchPlan } from '@/services/launch/launchCapabilities';
+import { planUniversalCreation } from '@/services/launch/universalCreationPlanner';
 
 export interface LaunchOrchestratorInput {
   generationMode?: AppBuildGenerationMode;
@@ -253,13 +254,22 @@ async function runReservedLaunchPipeline(
   demoOperationId?: string,
 ): Promise<LaunchOrchestratorResult> {
   const openEnded = submitted.universalCreation?.mode === 'open-ended';
+  let universalCreation = submitted.universalCreation;
+  if (openEnded && universalCreation?.originalPrompt.trim()) {
+    callbacks.onStatus?.('Planning pages and requested capabilities');
+    try {
+      universalCreation = await planUniversalCreation(universalCreation);
+    } catch {
+      callbacks.onStatus?.('Using the Wizard plan; AI planning was unavailable');
+    }
+  }
   const baseline = submitted.template || (openEnded
     ? undefined
     : getDefaultTemplateCardForIndustry(submitted.industry) || getDefaultTemplateCardFor(submitted.systemId));
   if (!baseline && !openEnded) throw new LaunchFatalError('No content baseline is available for this industry.');
   const template = baseline ?? {
     id: 'open-ended',
-    label: submitted.universalCreation?.sitePurpose || 'Open-ended site',
+    label: universalCreation?.sitePurpose || 'Open-ended site',
     description: 'Visitor-authored site composition.',
     industry: 'general',
     sectionTypes: [],
@@ -267,7 +277,7 @@ async function runReservedLaunchPipeline(
     traits: [],
   };
   const templateId = baseline?.id ?? 'open-ended';
-  const input = { ...submitted, template };
+  const input = { ...submitted, universalCreation, template };
   const run: LaunchRun = createLaunchRun({ onChange: callbacks.onProgress });
   const status = (message: string) => {
     callbacks.onStatus?.(message);
@@ -326,6 +336,7 @@ async function runReservedLaunchPipeline(
       primaryGoal: openEnded ? null : input.primaryGoal,
       customerNeeds: openEnded ? [] : input.customerNeeds,
       selectedPages: input.selectedPages,
+      requestedCapabilities: input.universalCreation?.requestedCapabilities,
     });
     // Only an unknown industry is fatal; choices the industry can't support
     // (e.g. quotes for SaaS) are dropped from the plan instead of failing launch.
@@ -345,7 +356,7 @@ async function runReservedLaunchPipeline(
       'donation.start', 'quote.request', 'lead.capture', 'contact.submit', 'contact.call', 'contact.email',
     ]);
     const canonicalIntents = openEnded
-      ? ['nav.goto']
+      ? uniqueValues<string>(['nav.goto', ...requestedIntentSet, ...getAllowedIntents(launchCapabilities)])
       : uniqueValues<string>([
           ...(industryProfile ? getAllowedIntents(launchCapabilities) : system.intents),
           ...(compositionMeta?.intents || []),
@@ -416,9 +427,9 @@ async function runReservedLaunchPipeline(
       systemType: input.systemId,
       primaryGoal,
       secondaryGoals: customerNeeds as string[],
-      needsBooking: !openEnded && (launchContract.forcedNeeds.booking || requestedIntentSet.has('booking.create')),
-      sellsProducts: !openEnded && (launchContract.forcedNeeds.products || !!goalNeeds.sellsProducts || customerNeeds.includes("buy_offer")),
-      wantsLeadCapture: !openEnded && (launchContract.forcedNeeds.leadCapture || !!goalNeeds.wantsLeadCapture || customerNeeds.includes("request_quote") || customerNeeds.includes("fill_form")),
+      needsBooking: (!openEnded && launchContract.forcedNeeds.booking) || launchCapabilities.includes('booking'),
+      sellsProducts: (!openEnded && (launchContract.forcedNeeds.products || !!goalNeeds.sellsProducts || customerNeeds.includes("buy_offer"))) || launchCapabilities.includes('commerce'),
+      wantsLeadCapture: (!openEnded && (launchContract.forcedNeeds.leadCapture || !!goalNeeds.wantsLeadCapture || customerNeeds.includes("request_quote") || customerNeeds.includes("fill_form"))) || launchCapabilities.includes('lead-capture') || launchCapabilities.includes('quoting'),
       templateId: input.template.id,
       themeId: input.theme.id,
       themePresetId: input.theme.id,
@@ -724,6 +735,9 @@ async function runReservedLaunchPipeline(
         customerNeeds: plan.businessLaunchPlan.customerNeeds,
         operationalCapabilities: plan.businessLaunchPlan.operationalCapabilities,
         businessCapabilities: plan.businessLaunchPlan.businessCapabilities,
+        requestedCapabilities: plan.businessLaunchPlan.requestedCapabilities,
+        requestedResources: plan.businessLaunchPlan.requestedResources,
+        blockedRequests: plan.businessLaunchPlan.blockedRequests,
       },
     },
     generation: {
@@ -743,6 +757,7 @@ async function runReservedLaunchPipeline(
     siteId: plan.confirmed.siteId,
     locationId: null,
     requestedCapabilities: plan.businessLaunchPlan.businessCapabilities,
+    requestedResources: plan.businessLaunchPlan.requestedResources,
     profile: businessProfile,
     snapshotId: siteBundleSnapshot.snapshotId,
     expectedBindingCount: plannedDataBindings.length,
@@ -1027,6 +1042,7 @@ async function runReservedLaunchPipeline(
     siteId: commit.confirmed.siteId,
     locationId: null,
     requestedCapabilities: plan.businessLaunchPlan.businessCapabilities,
+    requestedResources: plan.businessLaunchPlan.requestedResources,
     profile: businessProfile,
     snapshotId: siteBundleSnapshot.snapshotId,
     expectedBindingCount: plannedDataBindings.length,

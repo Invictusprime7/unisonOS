@@ -42,6 +42,11 @@ describe('capability migration SQL', () => {
     expect(policies.every((s) => !s.sql.includes('USING (true) WITH CHECK (true)'))).toBe(true);
   });
 
+  it('keeps the CMS no-DDL site capability install contract mirrored', () => {
+    const packs = resolveCapabilityPacks(['cms.content']).order;
+    expect(buildContractMigration(resolveDatabaseContracts(['cms.content']).order)).toEqual(buildCapabilityMigration(packs));
+  });
+
   it('never widens anon beyond what the contract allows', () => {
     const migration = buildCapabilityMigration(CAPABILITY_PACKS);
     const anonGrants = migration.statements.filter(

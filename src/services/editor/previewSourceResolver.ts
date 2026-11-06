@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
 import { classifyVfsProtection, type VfsProtectionDecision } from '@/services/vfsProtectionMatrix';
-import { createAstIdentityForOpening, hashSourceIdentity } from '@/services/editor/sourceIdentity';
+import { createAstIdentityForOpening, createComponentOwnerId, hashSourceIdentity } from '@/services/editor/sourceIdentity';
 
 /**
  * P2 — universal preview selection.
@@ -30,6 +30,7 @@ export interface PreviewSourceResolution {
   mode: 'editable' | 'inspect-only';
   reason: PreviewSourceReason;
   ownerPath: string | null;
+  componentOwnerId: string | null;
   tagName: string | null;
   /** True when the node renders inside a `.map(...)` callback (one source node, many preview nodes). */
   repeated: boolean;
@@ -66,7 +67,7 @@ export function resolvePreviewSource(input: {
   acceptedRevisionId?: string | null;
 }): PreviewSourceResolution {
   const empty: PreviewSourceResolution = {
-    mode: 'inspect-only', reason: 'malformed-locator', ownerPath: null, tagName: null, repeated: false,
+    mode: 'inspect-only', reason: 'malformed-locator', ownerPath: null, componentOwnerId: null, tagName: null, repeated: false,
     instanceIndex: null, sharedComponent: false, dynamicText: false, protection: null, span: null,
     sourceHash: null, astIdentity: null, revisionId: null,
     rebased: false,
@@ -133,6 +134,9 @@ export function resolvePreviewSource(input: {
   });
   const base: PreviewSourceResolution = {
     mode: 'editable', reason: 'static-node', ownerPath: parsed.path,
+    componentOwnerId: input.pagePath && input.pagePath !== parsed.path && parsed.path.startsWith('/src/')
+      ? createComponentOwnerId(parsed.path)
+      : null,
     tagName: opening.tagName.getText(file), repeated,
     instanceIndex: repeated ? input.instanceIndex ?? null : null,
     sharedComponent: !!input.pagePath && input.pagePath !== parsed.path,
