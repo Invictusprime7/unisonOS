@@ -5855,6 +5855,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             }
             openBuilderFile(resolvedAction.vfsPath);
             sendResultToIframe({ success: true });
+          } else if (resolvedAction.action === 'unavailable') {
+            const error = `Could not resolve the source file for ${resolvedAction.route}.`;
+            toast.error(error);
+            sendResultToIframe({ success: false, error });
           } else if (resolvedAction.action !== 'acknowledge') {
             const targetName = classification.suggestedPageType || buttonLabel || 'page';
             triggerPageGenRef.current(targetName, buttonLabel || targetName, source, requestId);
@@ -6044,6 +6048,13 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           openBuilderFile(resolvedAction.vfsPath);
           toast(`Navigated to ${buttonLabel || resolvedAction.route}`);
           sendResultToIframe({ success: true });
+          return;
+        }
+
+        case 'unavailable': {
+          const error = `Could not resolve the source file for ${resolvedAction.route}.`;
+          toast.error(error);
+          sendResultToIframe({ success: false, error });
           return;
         }
 

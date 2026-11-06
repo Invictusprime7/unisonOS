@@ -14,7 +14,7 @@
  */
 
 import type { ClassificationResult } from './redirectLabelClassifier';
-import { extractRenderedRoutes } from '@/components/creatives/web-builder/previewRouteTabs';
+import { extractRenderedRoutes, resolveRouteSourceFile } from '@/components/creatives/web-builder/previewRouteTabs';
 import {
   hasInlineIntentTarget,
   resolveDeterministicIntentSurface,
@@ -29,6 +29,7 @@ export type PageInventory = PreviewIntentInventory;
 export type ResolvedAction =
   | { action: 'scroll';      command: string }
   | { action: 'navigate';    route: string; vfsPath: string }
+  | { action: 'unavailable'; route: string }
   | { action: 'overlay';     overlayId: string }
   | { action: 'cart';        step: 'cart' | 'checkout' }
   | { action: 'acknowledge' }
@@ -101,6 +102,12 @@ function normalise(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+function routeFromHref(href: string): string {
+  const path = (href.startsWith('#') ? href.slice(1) : href).split(/[?#]/, 1)[0].trim();
+  if (!path || path === '/') return '/';
+  return `/${path.replace(/^\/+|\/+$/g, '')}`;
+}
+
 /**
  * Given a page name (e.g. "checkout", "products"), return the VFS path
  * that would hold it, and check whether it exists in the current VFS.
@@ -129,19 +136,19 @@ function resolveToExistingPage(
   candidates: string[],
   navHrefs: string[],
   vfsFiles: Record<string, string>,
-): { route: string; vfsPath: string } | null {
+): { route: string; vfsPath?: string } | null {
   for (const candidate of candidates) {
     const norm = normalise(candidate);
     // Check nav hrefs first (page is already in the site)
     const href = navHrefs.find(h => normalise(h) === norm) ?? navHrefs.find(h => normalise(h).startsWith(norm));
     if (href) {
-      const hrefNorm = normalise(href);
-      const vfsPath = findVfsPath(hrefNorm, vfsFiles) ?? findVfsPath(norm, vfsFiles) ?? `/src/pages/${candidate.replace(/^\w/, c => c.toUpperCase())}.tsx`;
-      return { route: `/${hrefNorm}`, vfsPath };
+      const route = routeFromHref(href);
+      const vfsPath = resolveRouteSourceFile(vfsFiles, route) ?? findVfsPath(normalise(href), vfsFiles);
+      return vfsPath ? { route, vfsPath } : { route };
     }
     // Check VFS directly
     const vfsPath = findVfsPath(norm, vfsFiles);
-    if (vfsPath) return { route: `/${norm}`, vfsPath };
+    if (vfsPath) return { route: routeFromHref(norm), vfsPath };
   }
   return null;
 }
@@ -201,7 +208,11 @@ export function resolvePreviewAction(
     return { action: 'overlay', overlayId: surface.overlayId };
   }
   const affinityMatch = resolveToExistingPage(affinityCandidates, inv.navHrefs, vfsFiles);
-  if (affinityMatch) return { action: 'navigate', ...affinityMatch };
+  if (affinityMatch) {
+    return affinityMatch.vfsPath
+      ? { action: 'navigate', route: affinityMatch.route, vfsPath: affinityMatch.vfsPath }
+      : { action: 'unavailable', route: affinityMatch.route };
+  }
 
   // 3b. For redirect-classified labels, check suggestedPageType from classifier
   if (classification.category === 'redirect' && classification.suggestedPageType) {
@@ -210,15 +221,21 @@ export function resolvePreviewAction(
       inv.navHrefs,
       vfsFiles,
     );
-    if (labelMatch) return { action: 'navigate', ...labelMatch };
+    if (labelMatch) {
+      return labelMatch.vfsPath
+        ? { action: 'navigate', route: labelMatch.route, vfsPath: labelMatch.vfsPath }
+        : { action: 'unavailable', route: labelMatch.route };
+    }
   }
 
   // 3c. Try matching the button label itself as a page name (nav links)
   if (buttonLabel) {
     const normLabel = normalise(buttonLabel);
-    if (inv.navHrefs.some(h => normalise(h) === normLabel)) {
-      const vfsPath = findVfsPath(normLabel, vfsFiles) ?? `/src/pages/${normLabel}.tsx`;
-      return { action: 'navigate', route: `/${normLabel}`, vfsPath };
+    const directMatch = resolveToExistingPage([buttonLabel], inv.navHrefs, vfsFiles);
+    if (directMatch) {
+      return directMatch.vfsPath
+        ? { action: 'navigate', route: directMatch.route, vfsPath: directMatch.vfsPath }
+        : { action: 'unavailable', route: directMatch.route };
     }
     // Direct VFS hit by label
     const labelVfsPath = findVfsPath(normLabel, vfsFiles);
