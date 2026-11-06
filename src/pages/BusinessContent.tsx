@@ -37,6 +37,8 @@ export default function BusinessContent() {
   const navigate = useNavigate();
   const [businesses, setBusinesses] = useState<Array<{ id: string; name: string }>>([]);
   const [businessId, setBusinessId] = useState<string>();
+  const [siteProjects, setSiteProjects] = useState<Array<{ id: string; siteId: string; name: string }>>([]);
+  const [projectId, setProjectId] = useState<string>();
   const [types, setTypes] = useState<Row[]>([]);
   const [typeId, setTypeId] = useState<string>();
   const [entries, setEntries] = useState<Row[]>([]);
@@ -47,6 +49,12 @@ export default function BusinessContent() {
   const [newType, setNewType] = useState(false);
   const [typeDraft, setTypeDraft] = useState({ apiKey: '', displayName: '', fieldSchema: '{\n  "fields": []\n}' });
   const [entryDraft, setEntryDraft] = useState<{ title: string; slug: string; locale: string; data: Record<string, unknown> }>({ title: '', slug: '', locale: 'en', data: {} });
+  const siteId = siteProjects.find((project) => project.id === projectId)?.siteId;
+  const resetEntryDraft = () => {
+    setSelected(undefined);
+    setRevisions([]);
+    setEntryDraft({ title: '', slug: '', locale: 'en', data: {} });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -62,22 +70,49 @@ export default function BusinessContent() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!businessId) {
+      setSiteProjects([]);
+      setProjectId(undefined);
+      return () => { cancelled = true; };
+    }
+    void supabase.from('projects').select('id,name,site_id').eq('business_id', businessId).not('site_id', 'is', null).order('name')
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          toast.error('Could not load site scopes');
+          setSiteProjects([]);
+          setProjectId(undefined);
+          return;
+        }
+        const next = (data ?? []).flatMap((project) => project.site_id
+          ? [{ id: project.id, siteId: project.site_id, name: project.name }]
+          : []);
+        setSiteProjects(next);
+        setProjectId((current) => next.some((project) => project.id === current)
+          ? current
+          : next.length === 1 ? next[0].id : undefined);
+      });
+    return () => { cancelled = true; };
+  }, [businessId]);
+
   const loadTypes = useCallback(async () => {
     if (!businessId) return setTypes([]);
     try {
-      const next = await listContentTypes({ businessId });
+      const next = await listContentTypes({ businessId, projectId, siteId });
       setTypes(next);
       setTypeId((current) => current && next.some((type) => type.id === current) ? current : String(next[0]?.id ?? ''));
     } catch {
       toast.error('Could not load content types');
     }
-  }, [businessId]);
+  }, [businessId, projectId, siteId]);
 
   const loadEntries = useCallback(async () => {
     if (!businessId || !typeId) return setEntries([]);
-    try { setEntries(await listContentRecords({ businessId, contentTypeId: typeId })); }
+    try { setEntries(await listContentRecords({ businessId, projectId, siteId, contentTypeId: typeId })); }
     catch { toast.error('Could not load content entries'); }
-  }, [businessId, typeId]);
+  }, [businessId, projectId, siteId, typeId]);
 
   useEffect(() => { void loadTypes(); }, [loadTypes]);
   useEffect(() => { void loadEntries(); }, [loadEntries]);
@@ -92,16 +127,17 @@ export default function BusinessContent() {
       title: String(entry.title ?? ''), slug: String(entry.slug ?? ''), locale: String(entry.locale ?? 'en'), data: (entry.data as Record<string, unknown>) ?? {},
     } : { title: '', slug: '', locale: 'en', data: {} });
     if (entry?.id && businessId) {
-      try { setRevisions(await listContentRevisions({ businessId, recordId: String(entry.id) })); }
+      try { setRevisions(await listContentRevisions({ businessId, projectId, siteId, recordId: String(entry.id) })); }
       catch { toast.error('Could not load revision history'); }
     }
   };
 
   const saveEntry = async () => {
     if (!businessId || !typeId || !entryDraft.title.trim()) return toast.error('A title is required');
+    if (activeType?.api_key === 'articles' && !siteId) return toast.error('Select a site before editing articles');
     setSaving(true);
     try {
-      const input = { businessId, contentTypeId: typeId, recordId: selected ? String(selected.id) : undefined, values: entryDraft };
+      const input = { businessId, projectId, siteId, contentTypeId: typeId, recordId: selected ? String(selected.id) : undefined, values: entryDraft };
       const saved = selected
         ? await updateContentRecord({ ...input, expectedUpdatedAt: String(selected.updated_at ?? '') })
         : await createContentRecord(input);
@@ -119,6 +155,8 @@ export default function BusinessContent() {
     try {
       const saved = await transitionContentRecord({
         businessId,
+        projectId,
+        siteId,
         recordId: String(selected.id),
         status,
         expectedUpdatedAt: String(selected.updated_at ?? ''),
@@ -136,7 +174,7 @@ export default function BusinessContent() {
     if (!businessId) return;
     try {
       const fieldSchema = JSON.parse(typeDraft.fieldSchema) as Record<string, unknown>;
-      const type = await mutateContentRecord({ action: 'content-type-create', businessId, values: { apiKey: typeDraft.apiKey, displayName: typeDraft.displayName, fieldSchema } });
+      const type = await mutateContentRecord({ action: 'content-type-create', businessId, projectId, siteId, values: { apiKey: typeDraft.apiKey, displayName: typeDraft.displayName, fieldSchema } });
       toast.success('Collection created');
       setNewType(false);
       await loadTypes();
@@ -144,9 +182,43 @@ export default function BusinessContent() {
     } catch { toast.error('Use a valid key, name, and field schema'); }
   };
 
+  const createArticlesType = async () => {
+    if (!businessId) return;
+    const existing = types.find((type) => type.api_key === 'articles');
+    if (existing) {
+      setTypeId(String(existing.id));
+      return;
+    }
+    if (!siteId || !projectId) return toast.error('Select a site before creating an Articles collection');
+    try {
+      const result = await mutateContentRecord({
+        action: 'content-type-create',
+        businessId,
+        projectId,
+        siteId,
+        values: {
+          apiKey: 'articles',
+          displayName: 'Articles',
+          description: 'Published articles for this site.',
+          fieldSchema: { fields: [
+            { key: 'excerpt', type: 'textarea' },
+            { key: 'body', type: 'textarea', required: true },
+            { key: 'cover_image_url', type: 'image' },
+            { key: 'author', type: 'text' },
+          ] },
+        },
+      });
+      toast.success('Articles collection created');
+      await loadTypes();
+      setTypeId(String(result.record?.id ?? ''));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not create Articles collection');
+    }
+  };
+
   if (loading) return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-5 w-5 animate-spin" /></div>;
   return <div className="min-h-screen bg-background"><main className="mx-auto max-w-7xl px-4 py-8 sm:px-6"><header className="mb-6 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back"><ArrowLeft className="h-4 w-4" /></Button><div><h1 className="text-2xl font-semibold">Collections</h1><p className="text-sm text-muted-foreground">Manage structured records, publication status, and revision history.</p></div></div><Link to="/business/records" className="text-sm text-muted-foreground hover:text-foreground">Open all records</Link></header>
-    <div className="mb-6 flex flex-wrap gap-3">{businesses.length > 1 && <Select value={businessId} onValueChange={setBusinessId}><SelectTrigger className="w-60"><SelectValue placeholder="Select business" /></SelectTrigger><SelectContent>{businesses.map((business) => <SelectItem key={business.id} value={business.id}>{business.name}</SelectItem>)}</SelectContent></Select>}<Select value={typeId} onValueChange={(value) => { setTypeId(value); setSelected(undefined); }}><SelectTrigger className="w-60"><SelectValue placeholder="Select collection" /></SelectTrigger><SelectContent>{types.map((type) => <SelectItem key={String(type.id)} value={String(type.id)}>{String(type.display_name)}</SelectItem>)}</SelectContent></Select><Button variant="outline" onClick={() => setNewType(true)} disabled={!businessId}><Plus className="mr-2 h-4 w-4" />Collection</Button><Button onClick={() => openEntry()} disabled={!typeId}><Plus className="mr-2 h-4 w-4" />Record</Button></div>
+    <div className="mb-6 flex flex-wrap gap-3">{businesses.length > 1 && <Select value={businessId} onValueChange={(value) => { setBusinessId(value); setProjectId(undefined); setSiteProjects([]); setTypeId(undefined); resetEntryDraft(); }}><SelectTrigger className="w-60"><SelectValue placeholder="Select business" /></SelectTrigger><SelectContent>{businesses.map((business) => <SelectItem key={business.id} value={business.id}>{business.name}</SelectItem>)}</SelectContent></Select>}{siteProjects.length > 0 && <Select value={projectId ?? 'all-sites'} onValueChange={(value) => { setProjectId(value === 'all-sites' ? undefined : value); resetEntryDraft(); }}><SelectTrigger className="w-60"><SelectValue placeholder="Select site" /></SelectTrigger><SelectContent><SelectItem value="all-sites">All sites</SelectItem>{siteProjects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent></Select>}<Select value={typeId} onValueChange={(value) => { setTypeId(value); resetEntryDraft(); }}><SelectTrigger className="w-60"><SelectValue placeholder="Select collection" /></SelectTrigger><SelectContent>{types.map((type) => <SelectItem key={String(type.id)} value={String(type.id)}>{String(type.display_name)}</SelectItem>)}</SelectContent></Select><Button variant="outline" onClick={() => setNewType(true)} disabled={!businessId}><Plus className="mr-2 h-4 w-4" />Collection</Button><Button variant="outline" onClick={() => void createArticlesType()} disabled={!businessId || !siteId}><FileText className="mr-2 h-4 w-4" />Articles</Button><Button onClick={() => void openEntry()} disabled={!typeId || (activeType?.api_key === 'articles' && !siteId)}><Plus className="mr-2 h-4 w-4" />Record</Button></div>
     {newType && <Card className="mb-6"><CardHeader><CardTitle className="text-base">New collection</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><Input placeholder="api_key" value={typeDraft.apiKey} onChange={(event) => setTypeDraft({ ...typeDraft, apiKey: event.target.value })} /><Input placeholder="Display name" value={typeDraft.displayName} onChange={(event) => setTypeDraft({ ...typeDraft, displayName: event.target.value })} /><Textarea className="md:col-span-2 font-mono text-xs" rows={6} value={typeDraft.fieldSchema} onChange={(event) => setTypeDraft({ ...typeDraft, fieldSchema: event.target.value })} /><div className="flex gap-2"><Button onClick={createType}>Create collection</Button><Button variant="ghost" onClick={() => setNewType(false)}>Cancel</Button></div></CardContent></Card>}
     <div className="grid gap-6 lg:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.4fr)_minmax(16rem,0.65fr)]"><Card><CardHeader><CardTitle className="text-base">Records</CardTitle></CardHeader><CardContent className="space-y-2">{entries.length ? entries.map((entry) => <button key={String(entry.id)} onClick={() => void openEntry(entry)} className="w-full border-b py-3 text-left last:border-0"><div className="flex items-center justify-between gap-2"><span className="font-medium">{String(entry.title)}</span><Badge variant={statusTone(entry.status)}>{String(entry.status)}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{String(entry.locale)} {entry.slug ? `/${String(entry.slug)}` : ''}</p></button>) : <p className="text-sm text-muted-foreground">Choose a collection, then create a record.</p>}</CardContent></Card>
       <Card><CardHeader><CardTitle className="text-base">{selected ? 'Edit record' : 'New record'}</CardTitle></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 sm:grid-cols-2"><div><Label>Title</Label><Input value={entryDraft.title} onChange={(event) => setEntryDraft({ ...entryDraft, title: event.target.value })} /></div><div><Label>Slug</Label><Input value={entryDraft.slug} onChange={(event) => setEntryDraft({ ...entryDraft, slug: event.target.value })} /></div></div><div><Label>Locale</Label><Input value={entryDraft.locale} onChange={(event) => setEntryDraft({ ...entryDraft, locale: event.target.value })} /></div>{fields.map((field) => <div key={field.key}><Label>{field.key}{field.required ? ' *' : ''}</Label>{field.type === 'textarea' ? <Textarea value={String(entryDraft.data[field.key] ?? '')} onChange={(event) => setEntryDraft({ ...entryDraft, data: { ...entryDraft.data, [field.key]: event.target.value } })} /> : <Input type={field.type === 'number' ? 'number' : 'text'} value={String(entryDraft.data[field.key] ?? '')} onChange={(event) => setEntryDraft({ ...entryDraft, data: { ...entryDraft.data, [field.key]: field.type === 'number' ? Number(event.target.value) : event.target.value } })} />}</div>)}<div className="flex flex-wrap gap-2"><Button onClick={() => void saveEntry()} disabled={saving || !typeId}><Save className="mr-2 h-4 w-4" />Save draft</Button>{selected?.status === 'draft' && <Button variant="outline" onClick={() => void transition('review')} disabled={saving}><Send className="mr-2 h-4 w-4" />Submit</Button>}{selected?.status === 'review' && <Button onClick={() => void transition('published')} disabled={saving}><Upload className="mr-2 h-4 w-4" />Publish</Button>}</div></CardContent></Card>
