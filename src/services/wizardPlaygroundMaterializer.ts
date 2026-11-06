@@ -470,7 +470,8 @@ export function materializePlayground(
   capabilities: CapabilityPack,
 ): PlaygroundMaterializationResult {
   const warnings: string[] = [];
-  const industryKey = OVERLAY_TO_INDUSTRY[selections.industryOverlay];
+  const openEnded = selections.universalCreation?.mode === 'open-ended';
+  const industryKey = OVERLAY_TO_INDUSTRY[selections.industryOverlay] || (openEnded ? selections.industryOverlay : undefined);
   if (!industryKey) {
     throw new Error(
       `[WizardMaterializer] Unsupported industry overlay "${selections.industryOverlay}". ` +
@@ -485,7 +486,10 @@ export function materializePlayground(
   const scaffoldMode = 'selected-pages';
 
   const selectedPageRoles = new Set<string>(selections.requestedPages ?? []);
-  const additionalPages = resolvePageSpecsForRoles(selections.requestedPages ?? [], industryKey);
+  const additionalPages = openEnded ? [] : resolvePageSpecsForRoles(selections.requestedPages ?? [], industryKey);
+  const explicitPages = openEnded
+    ? selections.universalCreation?.pages
+    : selections.universalCreation?.pages.filter((page) => page.suggestedRole === 'custom');
 
   // 1. Generate site topology plan → PageRegistry
   const sitePlan = planSiteTopology(industryKey, selections.businessName, {
@@ -494,6 +498,7 @@ export function materializePlayground(
     selectedTemplateId: selections.templateId,
     selectedThemePresetId: selections.themePresetId || selections.themeId,
     restrictToAdditionalPages: true,
+    explicitPages,
   });
   const pageRegistry = populateRegistryFromTopology(sitePlan);
 
@@ -894,7 +899,7 @@ function ensureRequiredPages(
   }
 
   // Page role → route/title/filePath defaults
-  const PAGE_DEFAULTS: Record<string, { title: string; route: string; filePath: string; pageType: string; showInNav: boolean }> = {
+  const PAGE_DEFAULTS: Record<string, { title: string; route: string; filePath: string; pageType: string; showInNav: boolean; purpose?: string }> = {
     shop:                  { title: 'Shop',         route: '/shop',         filePath: '/src/pages/Shop.tsx',        pageType: 'shop',      showInNav: true },
     checkout:              { title: 'Checkout',     route: '/checkout',     filePath: '/src/pages/Checkout.tsx',    pageType: 'checkout',  showInNav: false },
     thankyou:              { title: 'Thank You',    route: '/thank-you',    filePath: '/src/pages/ThankYou.tsx',    pageType: 'thankyou',  showInNav: false },
@@ -963,6 +968,7 @@ function ensureRequiredPages(
       title: defaults.title,
       route: defaults.route,
       role: canonicalRole as any,
+      purpose: defaults.purpose ?? String(canonicalRole),
       filePath: defaults.filePath,
       visibleInNav: defaults.showInNav,
       isHome: false,

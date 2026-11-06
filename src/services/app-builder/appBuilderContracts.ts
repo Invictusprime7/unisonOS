@@ -28,6 +28,9 @@ import {
 import { resolveComponentRuntimeContract, type ComponentRuntimeContract } from '@/services/componentRuntimeContract';
 import { getWizardBindingMarkers } from '@/services/wizardBindingBridge';
 import { getArtifact } from '@/platform/core/artifactRegistry';
+import type { UniversalCreationInput } from '@/platform/core/universalCreation';
+
+export type { CreationMode, UniversalCreationInput } from '@/platform/core/universalCreation';
 
 export const APP_BUILDER_PROTOCOL_VERSION = 'unison-app-builder/3' as const;
 
@@ -96,6 +99,26 @@ function redactPrivateRoutingValues(text: string | undefined, values: readonly s
     const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return result.replace(new RegExp(escaped, 'gi'), '[private routing value omitted]');
   }, text.trim());
+}
+
+function redactUniversalCreation(
+  creation: UniversalCreationInput | undefined,
+  privateValues: readonly string[],
+): UniversalCreationInput | undefined {
+  if (!creation) return undefined;
+  const redact = (value: string) => redactPrivateRoutingValues(value, privateValues) ?? '';
+  return {
+    ...creation,
+    originalPrompt: redact(creation.originalPrompt),
+    sitePurpose: redact(creation.sitePurpose),
+    subject: redact(creation.subject),
+    visualRequirements: creation.visualRequirements.map(redact),
+    pages: creation.pages.map((page) => ({
+      ...page,
+      title: redact(page.title),
+      purpose: redact(page.purpose),
+    })),
+  };
 }
 
 function projectPublicBusinessParameters(
@@ -410,6 +433,8 @@ export interface AppBuildContract {
     branding: AppBuilderLogoContract;
     /** Owner's planning-chat brief carried from WizardSelections.visionPrompt. */
     visionBrief?: string;
+    /** Ephemeral creative intent projection; the accepted snapshot remains authoritative. */
+    universalCreation?: UniversalCreationInput;
     /** Business-provided routing/contact parameters used by registered actions. */
     parameters: AppBuildBusinessParameters;
     businessProfile: AppBuildBusinessProfile;
@@ -453,6 +478,7 @@ export interface BuildAppBuildContractInput {
   industry: string;
   businessName: string;
   visionBrief?: string;
+  universalCreation?: UniversalCreationInput;
   businessParameters?: WizardBusinessParameters;
   businessProfile?: CreatorBusinessInfo;
   canonicalBindings?: readonly PlaygroundBinding[];
@@ -752,6 +778,7 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
       businessName: input.businessName,
       branding: deriveAppBuilderLogoContract(input.businessName),
       visionBrief: redactPrivateRoutingValues(input.visionBrief, privateRoutingValues),
+      universalCreation: redactUniversalCreation(input.universalCreation, privateRoutingValues),
       parameters: Object.fromEntries(
         Object.entries(projectPublicBusinessParameters(input.businessParameters))
           .filter(([, value]) => value !== undefined && value !== '')

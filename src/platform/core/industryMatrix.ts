@@ -47,6 +47,8 @@ export interface PageSpec {
   title: string;
   path: string;
   purpose: 'landing' | 'services' | 'portfolio' | 'contact' | 'about' | 'blog' | 'shop' | 'checkout' | 'booking' | 'pricing' | 'faq' | 'immersive';
+  customPurpose?: string;
+  suggestedRole?: string;
   /** Section types expected on this page */
   expectedSections: string[];
 }

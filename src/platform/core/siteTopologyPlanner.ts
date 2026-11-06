@@ -28,6 +28,7 @@ import {
   inferPageRoleFromType,
 } from '@/types/pageRegistry';
 import { generateUUID } from '@/utils/uuid';
+import type { UniversalCreationPage } from './universalCreation';
 
 // ============================================================================
 // Site Topology Types
@@ -120,6 +121,7 @@ export interface PageRouteNode {
   title: string;
   route: string;
   role: PageRole;
+  purpose?: string;
   filePath: string;
   visibleInNav: boolean;
   isHome: boolean;
@@ -275,9 +277,13 @@ export function planSiteTopology(
      * the preview never renders blank/irrelevant routes.
      */
     restrictToAdditionalPages?: boolean;
+    explicitPages?: UniversalCreationPage[];
   }
 ): GeneratedSitePlan {
-  const profile = getIndustryProfile(industryKey);
+  validateExplicitPages(options?.explicitPages);
+  const profile = getIndustryProfile(industryKey) ?? (options?.explicitPages?.length
+    ? openEndedTopologyProfile(industryKey)
+    : undefined);
   if (!profile) {
     throw new Error(
       `[SiteTopologyPlanner] Unknown industry "${industryKey}" (normalized "${normalizeIndustryKey(industryKey)}"). ` +
@@ -297,6 +303,7 @@ function planFromProfile(
     selectedTemplateId?: string;
     selectedThemePresetId?: string;
     restrictToAdditionalPages?: boolean;
+    explicitPages?: UniversalCreationPage[];
   }
 ): GeneratedSitePlan {
   const siteId = generateUUID();
@@ -318,16 +325,20 @@ function planFromProfile(
   // Deduplicate by path so a user selection matching a default doesn't double-emit.
   const seenPaths = new Set<string>();
   const allPageSpecs: PageSpec[] = [];
-  for (const spec of [...baseSpecs, ...(options?.additionalPages || [])]) {
+  const explicitSpecs = (options?.explicitPages ?? []).map(toExplicitPageSpec);
+  for (const spec of [...baseSpecs, ...(options?.additionalPages || []), ...explicitSpecs]) {
     const key = (spec.path || '').toLowerCase();
-    if (seenPaths.has(key)) continue;
+    if (seenPaths.has(key)) {
+      if (explicitSpecs.includes(spec) && key !== '/') throw new Error(`[SiteTopologyPlanner] Explicit page route "${spec.path}" conflicts with a selected or industry-authored page.`);
+      continue;
+    }
     seenPaths.add(key);
     allPageSpecs.push(spec);
   }
 
   for (const spec of allPageSpecs) {
     const pageId = generateUUID();
-    const role = PURPOSE_TO_ROLE[spec.purpose] || 'custom';
+    const role = isPageRole(spec.suggestedRole) ? spec.suggestedRole : PURPOSE_TO_ROLE[spec.purpose] || 'custom';
     const isHome = spec.path === '/';
     const slug = spec.path.replace(/^\//, '') || 'index';
 
@@ -339,9 +350,8 @@ function planFromProfile(
       title: spec.title,
       route: spec.path,
       role,
-      filePath: isHome
-        ? '/src/pages/Home.tsx'
-        : `/src/pages/${capitalize(slug)}.tsx`,
+      purpose: spec.customPurpose || spec.purpose,
+      filePath: isHome ? '/src/pages/Home.tsx' : pageFilePath(slug),
       visibleInNav: !HIDDEN_ROLES.has(role),
       isHome,
       generatedBy: 'wizard',
@@ -519,6 +529,7 @@ function planFromProfile(
     for (const spec of options.additionalPages || []) {
       allowedPaths.add((spec.path || '').toLowerCase());
     }
+    for (const page of options.explicitPages || []) allowedPaths.add(page.route.toLowerCase());
     const stray = plan.pages
       .map((p) => p.route)
       .filter((route) => !allowedPaths.has((route || '').toLowerCase()));
@@ -532,6 +543,87 @@ function planFromProfile(
   }
 
   return plan;
+}
+
+const PAGE_ROLES = new Set<PageRole>([
+  'home', 'about', 'services', 'contact', 'pricing', 'gallery', 'faq', 'booking',
+  'checkout', 'thank_you', 'blog', 'shop', 'immersive', 'custom',
+]);
+
+function isPageRole(value: string | undefined): value is PageRole {
+  return Boolean(value && PAGE_ROLES.has(value as PageRole));
+}
+
+function validateExplicitPages(pages: readonly UniversalCreationPage[] = []): void {
+  const routes = new Set<string>();
+  const routeShapes = new Map<string, string>();
+  const filePaths = new Set<string>();
+  for (const page of pages) {
+    const route = page.route.trim();
+    if (!page.title.trim() || page.title.length > 120 || !page.purpose.trim()) {
+      throw new Error('Explicit page plans require a title and purpose of at most 120 title characters.');
+    }
+    const segments = route.split('/').slice(1);
+    if (!route.startsWith('/') || route.includes('//') || /[?#\\]/.test(route)
+      || !/^\/(?:[A-Za-z0-9._~:-]+(?:\/[A-Za-z0-9._~:-]+)*)?$/.test(route)
+      || segments.some((segment) => segment === '.' || segment === '..'
+        || (segment.startsWith(':') && !/^:[A-Za-z][A-Za-z0-9_]*$/.test(segment)))) {
+      throw new Error(`Invalid explicit page route: ${page.route}`);
+    }
+    if (/^\/(?:api|src|\.unison|assets)(?:\/|$)/i.test(route)) {
+      throw new Error(`Reserved explicit page route: ${page.route}`);
+    }
+    const key = route.toLowerCase();
+    if (routes.has(key)) throw new Error(`Duplicate explicit page route: ${page.route}`);
+    routes.add(key);
+    const shape = route.split('/').map((segment) => segment.startsWith(':') ? ':' : segment.toLowerCase()).join('/');
+    const conflict = routeShapes.get(shape);
+    if (conflict) throw new Error(`Conflicting explicit routes "${conflict}" and "${route}" resolve to the same router pattern.`);
+    routeShapes.set(shape, route);
+    const filePath = route === '/' ? '/src/pages/Home.tsx' : pageFilePath(route.slice(1));
+    if (filePaths.has(filePath.toLowerCase())) throw new Error(`Conflicting explicit page file path: ${filePath}`);
+    filePaths.add(filePath.toLowerCase());
+  }
+}
+
+function toExplicitPageSpec(page: UniversalCreationPage): PageSpec {
+  const rolePurpose: Partial<Record<PageRole, PageSpec['purpose']>> = {
+    home: 'landing', about: 'about', services: 'services', contact: 'contact',
+    pricing: 'pricing', gallery: 'portfolio', faq: 'faq', booking: 'booking',
+    checkout: 'checkout', thank_you: 'landing', blog: 'blog', shop: 'shop', immersive: 'immersive', custom: 'landing',
+  };
+  const role = isPageRole(page.suggestedRole) ? page.suggestedRole : undefined;
+  return {
+    title: page.title,
+    path: page.route,
+    purpose: (role && rolePurpose[role]) || 'landing',
+    customPurpose: page.purpose,
+    suggestedRole: role,
+    expectedSections: [],
+  };
+}
+
+function pageFilePath(slug: string): string {
+  const segments = slug.split('/').filter(Boolean).map((segment) => {
+    const dynamic = /^:([A-Za-z][A-Za-z0-9_]*)$/.exec(segment);
+    return dynamic ? capitalize(dynamic[1]) : capitalize(segment);
+  });
+  return `/src/pages/${segments.join('/')}.tsx`;
+}
+
+function openEndedTopologyProfile(industry: string): IndustryProfile {
+  return {
+    industry,
+    name: 'Open-ended site',
+    systemType: 'content',
+    layoutCategories: ['content'],
+    defaultCapabilities: [],
+    primaryIntent: 'nav.goto',
+    crmPipeline: { name: '', stages: [], defaultStage: '' },
+    defaultPages: [{ title: 'Home', path: '/', purpose: 'landing', expectedSections: [] }],
+    automationPack: '',
+    seedDataKeys: [],
+  };
 }
 
 
@@ -569,6 +661,7 @@ export function populateRegistryFromTopology(plan: GeneratedSitePlan): PageRegis
       pageType,
       {
         filePath: node.filePath,
+        purpose: node.purpose,
         showInNav: node.visibleInNav,
         navOrder: i * 10,
         isHome: node.isHome,

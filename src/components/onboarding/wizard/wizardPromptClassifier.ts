@@ -34,6 +34,7 @@ export interface WizardPromptAnalysis {
   selectedPages: PageChoice[];
   themePresetId: string;
   confidence: number;
+  industryIdentityMatched: boolean;
   matchedKeywords: string[];
   summary: string;
 }
@@ -232,6 +233,7 @@ export function classifyPromptForWizard(rawPrompt: string): WizardPromptAnalysis
     selectedPages,
     themePresetId: bestRule.suggestedTheme,
     confidence,
+    industryIdentityMatched: Boolean(identity),
     matchedKeywords: matched,
     summary: `Configured for ${bestRule.industry.toUpperCase()} with ${bestRule.systemId} system and ${selectedPages.length + 1} pages.`,
   };

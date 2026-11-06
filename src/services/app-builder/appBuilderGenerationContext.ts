@@ -198,6 +198,20 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const { business, runtime } = contract;
   const designSources = resolveDesignSourceBundle(contract);
   const materialization = materializeDesignSources(designSources);
+  const creation = business.universalCreation;
+  const openEnded = creation?.mode === 'open-ended';
+  const creationContext = creation ? [
+    `VISITOR CREATION SPECIFICATION (${creation.mode}): site purpose: ${creation.sitePurpose}; subject: ${creation.subject}.`,
+    `Explicit page plan: ${creation.pages.map((page) => `${page.route} (${page.title}; role ${page.suggestedRole ?? 'custom'}): ${page.purpose}`).join(' | ') || 'Home only.'}`,
+    `Visual requirements: ${creation.visualRequirements.join('; ') || 'Use the visual direction in the original prompt.'}`,
+    `Requested operational capabilities: ${creation.requestedCapabilities.join(', ') || 'none; do not add unrequested backend behavior.'}`,
+    'Capability authorization: a requested capability is not authorization. Use only registered components and intents in this contract; never simulate backend writes or claim unbound operations are functional.',
+    `Original visitor prompt: ${creation.originalPrompt}`,
+    ...(openEnded ? ['The selected industry is only a compatibility hint; do not replace the visitor subject or purpose with an industry template. Site-local visual TSX is allowed when certified designs do not fit.'] : []),
+    ...(creation.sitePurpose.toLowerCase().includes('editorial')
+      ? ['Editorial pages may render static sample articles. When a published articles content type exists, load it through listPublishedContent from @/components/publishedActionRuntime. If no type or published rows are available, keep a local sample/empty state; do not claim CMS editing or publishing without canonical owner authorization.']
+      : []),
+  ].join('\n') : '';
   const industryContext = buildIndustryAuthoringContext(business.industry, business.capabilities);
   const iconContext = buildIndustryIconContext(business.industry, business.capabilities, business.intents,
     contract.design.compositionPlan.pages.flatMap((page) => page.target.sectionOrder));
@@ -282,6 +296,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const compose = (modules: string, pageId?: string, budget = COMPOSER_CONTEXT_LIMIT) => packContextBlocks([
     { priority: 1, text: !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '' },
     { priority: 1, text: canonicalIntentBindings(pageId) },
+    { priority: 1, text: creationContext },
     { priority: 1, text: modules },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
     { priority: 1, text: renderEligiblePresentation(designSources, pageId) },
@@ -312,7 +327,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     runtimeContext: compose(renderDesignSourceModules(materialization), undefined, Number.POSITIVE_INFINITY),
     runtimeContextForPage: (pageId, budget) => {
       const eligibleIds = designSources.eligibleByPage[pageId] ?? [];
-      return compose(renderDesignSourceModules(materialization, new Set(eligibleIds), eligibleIds), pageId, budget);
+      return compose(renderDesignSourceModules(materialization, new Set(eligibleIds)), pageId, budget);
     },
   };
 }

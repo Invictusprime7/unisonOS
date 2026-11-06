@@ -10,6 +10,7 @@ import type { BuilderPageType, FunnelRole } from '@/types/pageRegistry';
 import type { CreatorData } from '@/types/creatorData';
 import type { PageRegistry } from '@/types/pageRegistry';
 import type { GeneratedSitePlan } from './siteTopologyPlanner';
+import type { UniversalCreationInput } from './universalCreation';
 import type {
   BuilderPageRole,
   BuilderPublishedStatus,
@@ -94,6 +95,7 @@ export interface WizardBusinessParameters {
 
 export interface WizardSelections {
   visionPrompt?: string;
+  universalCreation?: UniversalCreationInput;
   compositionPlan?: import('@/sections/aiPageComposition').AIPageCompositionPlan;
   /** Durable visual direction, experience posture, and optional section pins. */
   designSelection?: import('@/services/wizardDesignSelection').WizardDesignSelection;

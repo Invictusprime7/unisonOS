@@ -412,6 +412,7 @@ function buildScaffoldPlan(
       title: page.title,
       route: page.path,
       role: inferTopologyRole(page),
+      purpose: page.purpose,
       filePath: page.filePath || deriveFilePath(page),
       visibleInNav: page.showInNav,
       isHome: page.isHome,

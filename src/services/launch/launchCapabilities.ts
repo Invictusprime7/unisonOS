@@ -135,6 +135,7 @@ export function resolveLaunchCapabilities(
 
 export function resolveBusinessLaunchPlan(input: {
   industry: string;
+  openEnded?: boolean;
   primaryGoal?: PrimaryGoal | null;
   customerNeeds?: readonly CustomerNeed[];
   selectedPages?: readonly PageChoice[];
@@ -152,13 +153,15 @@ export function resolveBusinessLaunchPlan(input: {
     if (capability) requestedOperational.add(capability);
   }
 
-  const blockedRequests = profile
+  const blockedRequests = input.openEnded
+    ? []
+    : profile
     ? [...requestedOperational].filter((capability) =>
         !profile.defaultCapabilities.includes(capability)
         && !getCapability(capability).supportedIndustries.includes(canonicalIndustryId),
       )
     : ['industry:not-registered'];
-  const operationalCapabilities = profile
+  const operationalCapabilities = profile && !input.openEnded
     ? resolveLaunchCapabilities(profile.defaultCapabilities, canonicalIndustryId, focusedIntent)
     : [];
   // Unsupported goal/need choices are dropped, not fatal.
@@ -171,12 +174,13 @@ export function resolveBusinessLaunchPlan(input: {
     }),
   };
   const requestedIntents = new Set<string>([
+    ...(input.openEnded ? ['nav.goto'] : []),
     ...(supportedIntent.primaryGoal ? GOAL_INTENTS[supportedIntent.primaryGoal] ?? [] : []),
     ...supportedIntent.customerNeeds.flatMap((need) => NEED_INTENTS[need] ?? []),
     ...(input.selectedPages ?? []).flatMap((page) => PAGE_INTENTS[page] ?? []),
   ]);
   const requestedIntentList = [...requestedIntents];
-  const businessCapabilities = profile
+  const businessCapabilities = profile && !input.openEnded
     ? resolveLaunchBusinessCapabilities(supportedIntent)
     : ['business_profile' as const];
 

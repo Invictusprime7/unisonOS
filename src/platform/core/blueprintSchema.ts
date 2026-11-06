@@ -14,6 +14,7 @@
 import type { CapabilityId } from './capabilityRegistry';
 import type { CoreIntent } from './coreIntents';
 import type { BusinessSystemType } from '@/data/templates/types';
+import type { UniversalCreationInput } from './universalCreation';
 
 // ============================================================================
 // Blueprint
@@ -26,7 +27,7 @@ export interface BusinessBlueprint {
   /** Origin metadata */
   origin: {
     /** How was this blueprint created? */
-    mode: 'systems_ai' | 'template_select' | 'manual';
+    mode: 'systems_ai' | 'template_select' | 'manual' | 'open-ended';
     /** Original user prompt (if AI-generated) */
     prompt?: string;
     /** Timestamp of creation */
@@ -48,7 +49,7 @@ export interface BusinessBlueprint {
     /** Capabilities enabled for this business */
     enabled: CapabilityId[];
     /** Primary goal drives CTA defaults and hero messaging */
-    primaryGoal: 'leads' | 'bookings' | 'sales' | 'newsletter' | 'donations';
+    primaryGoal: 'none' | 'leads' | 'bookings' | 'sales' | 'newsletter' | 'donations';
   };
 
   /** Intent contract — canonical intents this site is allowed to emit */
@@ -175,6 +176,41 @@ export function createBlueprintFromIndustry(
       email: options?.email,
       phone: options?.phone,
     },
+  };
+}
+
+export function createBlueprintFromUniversalCreation(input: {
+  creation: UniversalCreationInput;
+  businessName: string;
+  systemType: BusinessSystemType;
+  email?: string;
+}): BusinessBlueprint {
+  const purposeByRole: Record<string, BlueprintPage['purpose']> = {
+    home: 'landing', about: 'about', services: 'services', pricing: 'pricing',
+    gallery: 'portfolio', faq: 'faq', contact: 'contact', booking: 'booking',
+    checkout: 'checkout', blog: 'blog', shop: 'shop', immersive: 'immersive',
+  };
+  const pages = input.creation.pages.map((page) => ({
+    title: page.title,
+    path: page.route,
+    purpose: purposeByRole[page.suggestedRole ?? ''] ?? 'landing',
+    isHome: page.route === '/',
+    expectedSections: [],
+  }));
+  if (!pages.some((page) => page.path === '/')) {
+    pages.unshift({ title: 'Home', path: '/', purpose: 'landing', isHome: true, expectedSections: [] });
+  }
+  return {
+    version: '1.0.0',
+    origin: { mode: 'open-ended', prompt: input.creation.originalPrompt, createdAt: new Date().toISOString() },
+    identity: { businessName: input.businessName, industry: 'general', systemType: input.systemType },
+    capabilities: { enabled: [], primaryGoal: 'none' },
+    intents: { allowed: ['nav.goto'], primaryCta: 'nav.goto' },
+    pages,
+    brand: { colorPreference: input.creation.visualRequirements.join('; ') || undefined },
+    crm: { pipelineName: '', stages: [], defaultStage: '' },
+    automationPack: '',
+    contact: { email: input.email },
   };
 }
 

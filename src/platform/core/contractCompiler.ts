@@ -183,7 +183,7 @@ export function compileContract(
   }
 
   const industryProfile = getIndustryProfile(blueprint.identity.industry);
-  if (!industryProfile) {
+  if (!industryProfile && blueprint.origin.mode !== 'open-ended') {
     issues.push({
       code: 'UNKNOWN_INDUSTRY',
       severity: 'error',
@@ -232,7 +232,8 @@ export function compileContract(
     }
   }
 
-  if (!allowedIntents.includes(blueprint.intents.primaryCta)) {
+  if (!allowedIntents.includes(blueprint.intents.primaryCta)
+    && !(blueprint.origin.mode === 'open-ended' && isNavIntent(blueprint.intents.primaryCta))) {
     issues.push({
       code: 'PRIMARY_CTA_NOT_ALLOWED',
       severity: 'error',

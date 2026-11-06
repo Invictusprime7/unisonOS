@@ -165,6 +165,8 @@ export interface BuilderPage {
   pageType: BuilderPageType;
   /** Canonical operational role used by the Playground control plane */
   pageRole?: BuilderPageRole;
+  /** Visitor-authored purpose, kept distinct from operational page role. */
+  purpose?: string;
 
   /** Funnel role (optional — only set if page is part of a funnel) */
   funnelRole?: FunnelRole;

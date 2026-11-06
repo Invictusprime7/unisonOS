@@ -463,10 +463,11 @@ const MODEL_BINDINGS: Record<BusinessModel, PlaygroundBindingSpec[]> = {
 export function resolveCapabilities(selections: WizardSelections): CapabilityPack {
   const model = selections.businessModel;
   const overlay = selections.industryOverlay;
-  const augment = INDUSTRY_AUGMENTS[overlay] || {};
+  const openEnded = selections.universalCreation?.mode === 'open-ended';
+  const augment = openEnded ? {} : INDUSTRY_AUGMENTS[overlay] || {};
 
   // 1. Pages: model defaults + industry augments + goal-based additions
-  const pageSet = new Set<PlaygroundPageRole>(MODEL_PAGES[model] || MODEL_PAGES.general);
+  const pageSet = new Set<PlaygroundPageRole>(openEnded ? ['home'] : MODEL_PAGES[model] || MODEL_PAGES.general);
   if (augment.extraPages) augment.extraPages.forEach(p => pageSet.add(p));
   if (selections.needsBooking && !pageSet.has('booking')) {
     pageSet.add('booking');
@@ -492,19 +493,26 @@ export function resolveCapabilities(selections: WizardSelections): CapabilityPac
     const role = (raw as PlaygroundPageRole);
     if (VALID_REQUESTED.includes(role)) pageSet.add(role);
   }
+  if (openEnded) {
+    const validRoles = new Set<string>(VALID_REQUESTED);
+    for (const page of selections.universalCreation?.pages ?? []) {
+      if (page.suggestedRole && validRoles.has(page.suggestedRole)) pageSet.add(page.suggestedRole as PlaygroundPageRole);
+      else if (page.route !== '/') pageSet.add('custom');
+    }
+  }
 
   // 2. Funnels
-  const funnelSet = new Set<PlaygroundFunnelGoal>(MODEL_FUNNELS[model] || MODEL_FUNNELS.general);
+  const funnelSet = new Set<PlaygroundFunnelGoal>(openEnded ? [] : MODEL_FUNNELS[model] || MODEL_FUNNELS.general);
   if (selections.needsBooking) funnelSet.add('booking');
   if (selections.sellsProducts) funnelSet.add('purchase');
   if (selections.wantsLeadCapture) funnelSet.add('lead_capture');
 
   // 3. Forms
-  const formSet = new Set<string>(MODEL_FORMS[model] || MODEL_FORMS.general);
+  const formSet = new Set<string>(openEnded ? [] : MODEL_FORMS[model] || MODEL_FORMS.general);
   if (augment.extraForms) augment.extraForms.forEach(f => formSet.add(f));
 
   // 4. Calendars
-  const calendarSet = new Set<string>(MODEL_CALENDARS[model] || []);
+  const calendarSet = new Set<string>(openEnded ? [] : MODEL_CALENDARS[model] || []);
   if (augment.calendars) augment.calendars.forEach((calendar) => calendarSet.add(calendar));
   if (selections.needsBooking && calendarSet.size === 0) calendarSet.add('main_booking');
 
@@ -516,7 +524,7 @@ export function resolveCapabilities(selections: WizardSelections): CapabilityPac
   const popupSet = new Set<string>(augment.popups || []);
 
   // 7. Legacy bindings (backward compat)
-  const bindingSpecs: PlaygroundBindingSpec[] = [
+  const bindingSpecs: PlaygroundBindingSpec[] = openEnded ? [] : [
     ...(MODEL_BINDINGS[model] || MODEL_BINDINGS.general),
   ];
   if (augment.extraBindings) {
@@ -533,7 +541,7 @@ export function resolveCapabilities(selections: WizardSelections): CapabilityPac
   }
 
   // 8. V2 slot-bound bindings (authoritative) — CTA + Icon bindings
-  const bindingSpecsV2: PlaygroundBindingSpecV2[] = [
+  const bindingSpecsV2: PlaygroundBindingSpecV2[] = openEnded ? [] : [
     ...(MODEL_BINDINGS_V2[model] || MODEL_BINDINGS_V2.general),
     // Universal icon bindings (search, user, menu — all models)
     ...UNIVERSAL_ICON_BINDINGS,
@@ -567,8 +575,8 @@ export function resolveCapabilities(selections: WizardSelections): CapabilityPac
   // 9. Industry profile synthesis — strip forbidden intents and stamp any
   // required/primary/secondary intents that no binding spec covers yet.
   // Driven by INDUSTRY_INTENT_PROFILES[industryOverlay].intents (unified shape).
-  const profile = getIndustryIntentProfile(selections.industryOverlay as string);
-  const synth = synthesizeIndustryBindings(profile, bindingSpecsV2, {
+  const profile = openEnded ? undefined : getIndustryIntentProfile(selections.industryOverlay as string);
+  const synth = openEnded ? { kept: [], synthesized: [] } : synthesizeIndustryBindings(profile, bindingSpecsV2, {
     availablePageRoles: pageSet,
   });
   const finalBindingsV2 = [...synth.kept, ...synth.synthesized];

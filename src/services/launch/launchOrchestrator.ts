@@ -24,10 +24,12 @@ import {
   type LayoutCategory,
 } from "@/data/templates/types";
 import type { ThemePreset } from "@/components/onboarding/themePresets";
+import type { TemplateComposition } from '@/sections/types';
 import { themePresetToThemeTokens } from "@/components/onboarding/themePresetToTokens";
 import {
   compileContract,
   createBlueprintFromIndustry,
+  createBlueprintFromUniversalCreation,
   evaluateAllGates,
   getIndustryForCategory,
   getAllowedIntents,
@@ -135,6 +137,7 @@ export interface LaunchOrchestratorInput {
   template?: TemplateCardData;
   industry?: string;
   visionPrompt?: string;
+  universalCreation?: import('@/platform/core/universalCreation').UniversalCreationInput;
   designSelection?: import("@/services/wizardDesignSelection").WizardDesignSelection;
   regenerationNonce?: string | null;
   theme: ThemePreset;
@@ -249,9 +252,22 @@ async function runReservedLaunchPipeline(
   callbacks: LaunchOrchestratorCallbacks,
   demoOperationId?: string,
 ): Promise<LaunchOrchestratorResult> {
-  const baseline = submitted.template || getDefaultTemplateCardForIndustry(submitted.industry) || getDefaultTemplateCardFor(submitted.systemId);
-  if (!baseline) throw new LaunchFatalError('No content baseline is available for this industry.');
-  const input = { ...submitted, template: baseline };
+  const openEnded = submitted.universalCreation?.mode === 'open-ended';
+  const baseline = submitted.template || (openEnded
+    ? undefined
+    : getDefaultTemplateCardForIndustry(submitted.industry) || getDefaultTemplateCardFor(submitted.systemId));
+  if (!baseline && !openEnded) throw new LaunchFatalError('No content baseline is available for this industry.');
+  const template = baseline ?? {
+    id: 'open-ended',
+    label: submitted.universalCreation?.sitePurpose || 'Open-ended site',
+    description: 'Visitor-authored site composition.',
+    industry: 'general',
+    sectionTypes: [],
+    sections: [],
+    traits: [],
+  };
+  const templateId = baseline?.id ?? 'open-ended';
+  const input = { ...submitted, template };
   const run: LaunchRun = createLaunchRun({ onChange: callbacks.onProgress });
   const status = (message: string) => {
     callbacks.onStatus?.(message);
@@ -263,12 +279,21 @@ async function runReservedLaunchPipeline(
   const brand = input.businessName.trim();
   if (!brand) throw new LaunchFatalError("Please enter your business name.");
 
-  const composition = getCompositionById(input.template.id);
-  if (!composition) {
+  const registeredComposition = template.id === 'open-ended' ? null : getCompositionById(template.id);
+  if (!registeredComposition && !openEnded) {
     throw new LaunchFatalError(
       `"${input.template.label}" has no registered composition. Pick another template.`,
     );
   }
+  const composition: TemplateComposition = registeredComposition ?? {
+    id: 'open-ended',
+    name: template.label,
+    category: 'content',
+    industry: 'general',
+    description: 'Visitor-authored open-ended composition.',
+    sections: [],
+    systemType: input.systemId,
+  };
 
   // ── Stage: plan ───────────────────────────────────────────────────────────
   status("Resolving your site plan…");
@@ -282,25 +307,29 @@ async function runReservedLaunchPipeline(
       || input.businessParameters?.notificationEmail?.trim()
       || user.email
       || "";
+    const openEnded = input.universalCreation?.mode === 'open-ended';
 
     const generationCategory = resolveGenerationCategory(system, input.template);
     const industryProfile = getIndustryForCategory(generationCategory);
-    const industryOverlay = resolveWizardIndustryOverlay({
-      templateIndustry: input.template.industry,
-      generationIndustry: industryProfile?.industry || generationCategory,
-      systemIndustry: SYSTEM_TO_INDUSTRY_OVERLAY[input.systemId],
-    });
+    const industryOverlay = openEnded && (!input.industry || input.industry === 'universal')
+      ? 'general'
+      : resolveWizardIndustryOverlay({
+          templateIndustry: openEnded ? undefined : input.template.industry,
+          generationIndustry: openEnded ? input.industry : industryProfile?.industry || generationCategory,
+          systemIndustry: SYSTEM_TO_INDUSTRY_OVERLAY[input.systemId],
+        });
     const compositionMeta = getCompositionMeta(generationCategory);
     const launchContract = resolveVerticalLaunchContract(input.systemId);
     const businessLaunchPlan = resolveBusinessLaunchPlan({
       industry: industryProfile?.industry || input.template.industry,
-      primaryGoal: input.primaryGoal,
-      customerNeeds: input.customerNeeds,
+      openEnded,
+      primaryGoal: openEnded ? null : input.primaryGoal,
+      customerNeeds: openEnded ? [] : input.customerNeeds,
       selectedPages: input.selectedPages,
     });
     // Only an unknown industry is fatal; choices the industry can't support
     // (e.g. quotes for SaaS) are dropped from the plan instead of failing launch.
-    if (businessLaunchPlan.blockedRequests.includes('industry:not-registered')) {
+    if (!openEnded && businessLaunchPlan.blockedRequests.includes('industry:not-registered')) {
       throw new LaunchFatalError('This launch requests an industry Unison does not support yet.');
     }
     const launchCapabilities = businessLaunchPlan.operationalCapabilities;
@@ -315,12 +344,12 @@ async function runReservedLaunchPipeline(
       'booking.create', 'newsletter.subscribe', 'cart.add', 'cart.checkout',
       'donation.start', 'quote.request', 'lead.capture', 'contact.submit', 'contact.call', 'contact.email',
     ]);
-    const canonicalIntents = uniqueValues<string>([
-      ...(industryProfile
-        ? getAllowedIntents(launchCapabilities)
-        : system.intents),
-      ...(compositionMeta?.intents || []),
-    ]).filter((intent) => !userSelectableIntents.has(intent) || activeIntentSet.has(intent));
+    const canonicalIntents = openEnded
+      ? ['nav.goto']
+      : uniqueValues<string>([
+          ...(industryProfile ? getAllowedIntents(launchCapabilities) : system.intents),
+          ...(compositionMeta?.intents || []),
+        ]).filter((intent) => !userSelectableIntents.has(intent) || activeIntentSet.has(intent));
 
     // Reserve stable IDs; reviewed launches register them only after acceptance.
     const requestedIds = createConfirmedLaunchIds(input.existingBusinessId || undefined);
@@ -335,7 +364,7 @@ async function runReservedLaunchPipeline(
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, ""),
       systemType: input.systemId,
-      templateId: input.template.id,
+      templateId: baseline?.id ?? null,
       themePresetId: input.theme.id,
     });
     const confirmed: ConfirmedLaunchIds = callbacks.onReview ? requestedIds : await provision();
@@ -348,9 +377,10 @@ async function runReservedLaunchPipeline(
     const plannedBusinessId = confirmed.businessId;
 
     const preselect = LAUNCHER_PRESELECTS[input.systemId];
-    const primaryGoal: PrimaryGoal =
-      input.primaryGoal || preselect?.primaryGoal || "collect_leads";
-    const customerNeeds = uniqueValues<CustomerNeed>(input.customerNeeds);
+    const primaryGoal: PrimaryGoal = openEnded
+      ? '' as PrimaryGoal
+      : input.primaryGoal || preselect?.primaryGoal || "collect_leads";
+    const customerNeeds = uniqueValues<CustomerNeed>(openEnded ? [] : input.customerNeeds);
     const requestedPages = uniqueValues<string>(["home", ...input.selectedPages]);
     const goalNeeds = GOAL_TO_NEEDS[primaryGoal] || {};
 
@@ -359,7 +389,7 @@ async function runReservedLaunchPipeline(
       businessName: brand,
       businessModel: SYSTEM_TO_BUSINESS_MODEL[input.systemId] || "general",
       industry: industryOverlay,
-      templateId: input.template.id,
+      templateId: openEnded ? undefined : input.template.id,
       themePresetId: input.theme.id,
       primaryGoal,
       secondaryGoals: customerNeeds,
@@ -372,6 +402,7 @@ async function runReservedLaunchPipeline(
     const selections: WizardSelections = {
       regenerationNonce: input.regenerationNonce ?? null,
       visionPrompt: input.visionPrompt?.trim(),
+      universalCreation: input.universalCreation,
       designSelection: input.designSelection,
       businessName: brand,
       businessParameters: {
@@ -385,17 +416,9 @@ async function runReservedLaunchPipeline(
       systemType: input.systemId,
       primaryGoal,
       secondaryGoals: customerNeeds as string[],
-      needsBooking:
-        launchContract.forcedNeeds.booking || requestedIntentSet.has('booking.create'),
-      sellsProducts:
-        launchContract.forcedNeeds.products ||
-        !!goalNeeds.sellsProducts ||
-        customerNeeds.includes("buy_offer"),
-      wantsLeadCapture:
-        launchContract.forcedNeeds.leadCapture ||
-        !!goalNeeds.wantsLeadCapture ||
-        customerNeeds.includes("request_quote") ||
-        customerNeeds.includes("fill_form"),
+      needsBooking: !openEnded && (launchContract.forcedNeeds.booking || requestedIntentSet.has('booking.create')),
+      sellsProducts: !openEnded && (launchContract.forcedNeeds.products || !!goalNeeds.sellsProducts || customerNeeds.includes("buy_offer")),
+      wantsLeadCapture: !openEnded && (launchContract.forcedNeeds.leadCapture || !!goalNeeds.wantsLeadCapture || customerNeeds.includes("request_quote") || customerNeeds.includes("fill_form")),
       templateId: input.template.id,
       themeId: input.theme.id,
       themePresetId: input.theme.id,
@@ -436,11 +459,18 @@ async function runReservedLaunchPipeline(
   }, { timeoutMs: 30_000 });
 
   const design = generateDesignVariation(plan.seed);
-  const blueprint = createBlueprintFromIndustry(
-    plan.industryOverlay,
-    brand,
-    { email: plan.ownerEmail || undefined },
-  );
+  const blueprint = input.universalCreation?.mode === 'open-ended'
+    ? createBlueprintFromUniversalCreation({
+        creation: input.universalCreation,
+        businessName: brand,
+        systemType: input.systemId,
+        email: plan.ownerEmail || undefined,
+      })
+    : createBlueprintFromIndustry(
+        plan.industryOverlay,
+        brand,
+        { email: plan.ownerEmail || undefined },
+      );
   const compiledContract = compileContract(blueprint, { backendInstalled: false });
   const gateVerdicts = evaluateAllGates(compiledContract);
   const themedComposition = { ...composition, theme: plan.themeTokens };
@@ -467,8 +497,8 @@ async function runReservedLaunchPipeline(
       requestedPages: plan.requestedPages,
     },
     template: {
-      id: input.template.id,
-      label: input.template.label,
+      id: templateId,
+      label: template.label,
       sections: composition.sections.filter((section) => !section.hidden).map((section) => section.type),
     },
     theme: { presetId: input.theme.id, label: input.theme.label, tokens: plan.themeTokens },
@@ -489,7 +519,7 @@ async function runReservedLaunchPipeline(
       pages: plan.requestedPages.map(role => ({ role, sectionTypes: composition.sections.filter(section => !section.hidden).map(section => section.type) })),
       artDirectionPack: resolveArtDirectionPack({ sealedPackId: input.designSelection?.artDirectionPackId, industry: plan.industryOverlay, themePresetId: input.theme.id, seed: plan.seed }),
     });
-    if (!coverage.ok) run.degrade('contract', 'coverage.21st-incomplete', summarizeCoverageReport(coverage));
+    if (!openEnded && !coverage.ok) run.degrade('contract', 'coverage.21st-incomplete', summarizeCoverageReport(coverage));
     return buildCanonicalLaunchPlan(plan.selections, {
         "/.unison/wizard-seed.json": JSON.stringify(wizardSeedFile, null, 2),
         [TEMPLATE_DESIGN_CONTRACT_PATH]: JSON.stringify(designContract, null, 2),
@@ -561,6 +591,7 @@ async function runReservedLaunchPipeline(
       followUpChannel: canonicalPlan.playground.creatorData.businessInfo.followUpChannel,
     },
     visionBrief: plan.selections.visionPrompt,
+    universalCreation: plan.selections.universalCreation,
     goals: [plan.selections.primaryGoal, ...plan.selections.secondaryGoals],
     intents: plan.canonicalIntents,
     capabilities: plan.launchCapabilities,
@@ -771,7 +802,7 @@ async function runReservedLaunchPipeline(
         systemName: system.name,
         templateName: `${brand} Site`,
         templateCategory: plan.generationCategory,
-        templateId: input.template.id,
+        templateId: baseline?.id ?? null,
         businessName: brand,
         industry: plan.industryOverlay,
         aesthetic: input.theme.id,
@@ -835,7 +866,7 @@ async function runReservedLaunchPipeline(
   const integrityReport = runIntegrityReport(
     artifacts.siteBundleSnapshot,
     compiledContract,
-    { compositions: [{ label: input.template.id, composition: themedComposition }] },
+    openEnded ? {} : { compositions: [{ label: templateId, composition: themedComposition }] },
   );
 
   const vfsFiles: Record<string, string> = {
@@ -934,7 +965,7 @@ async function runReservedLaunchPipeline(
         compiledContract,
         businessName: brand,
         industry: plan.industryOverlay,
-        selectedTemplateId: input.template.id,
+        selectedTemplateId: openEnded ? undefined : input.template.id,
         themePresetId: input.theme.id,
         selections: plan.selections,
         reviewedArtifact: {
@@ -1092,7 +1123,7 @@ async function runReservedLaunchPipeline(
       vfsFiles: committed.vfsFiles,
       aesthetic: input.theme.id,
       themePresetId: input.theme.id,
-      templateId: input.template.id,
+      templateId: baseline?.id ?? null,
       preloadedIntents: plan.canonicalIntents,
       startInPreview: true,
       intentRuntime: true,
@@ -1121,7 +1152,7 @@ async function runReservedLaunchPipeline(
       draftId: commit.confirmed.draftId,
       revisionId: committed.persistedRevisionId,
       entryPoint: committed.runtimeManifest.entryPoint,
-      templateId: input.template.id,
+      templateId: baseline?.id ?? null,
       themePresetId: input.theme.id,
       preloadedIntents: plan.canonicalIntents,
       launchContract: plan.launchContract,

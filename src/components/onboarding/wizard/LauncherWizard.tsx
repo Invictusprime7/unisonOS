@@ -24,7 +24,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import { deriveChatLaunchPlan, buildSyncedVisionBrief, type ChatLaunchPlan } from "@/services/launch/chatLaunchPlan";
+import { deriveChatLaunchPlan, buildSyncedVisionBrief, projectUniversalCreationInput, type ChatLaunchPlan } from "@/services/launch/chatLaunchPlan";
 import type { ChatWizardStep } from '@/services/launch/chatWizardStep';
 import {
   Dialog,
@@ -214,6 +214,8 @@ export const LauncherWizard = ({
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>(prefill?.socialLinks ?? {});
   const [visionPrompt, setVisionPrompt] = useState("");
   const chatPlanRef = useRef<ChatLaunchPlan | null>(null);
+  const pageChoicesTouchedRef = useRef(false);
+  const isOpenEnded = selectedIndustry === 'universal' || chatPlanRef.current?.creationInput.mode === 'open-ended';
   const seededFromChatRef = useRef(false);
 
   const [isLaunching, setIsLaunching] = useState(false);
@@ -280,6 +282,9 @@ export const LauncherWizard = ({
     setStep("industry");
     setCompletedTurns([]);
     seededFromChatRef.current = false;
+    chatPlanRef.current = null;
+    pageChoicesTouchedRef.current = false;
+    chatPlanRef.current = null;
     setSelectedIndustry(null);
     setSystemId(null);
     setBusinessName("");
@@ -331,6 +336,7 @@ export const LauncherWizard = ({
     // One synced plan: everything the chat settled prefills the Wizard.
     const plan = deriveChatLaunchPlan(initialVisionPrompt);
     chatPlanRef.current = plan;
+    pageChoicesTouchedRef.current = false;
     // Keep the live brief current, but never replay defaults over choices
     // already made in this mounted conversation.
     if (seededFromChatRef.current) {
@@ -399,6 +405,20 @@ export const LauncherWizard = ({
     setPrimaryGoal(getIndustryPrimaryGoal(industry));
     setCustomerNeeds(getIndustryCustomerNeeds(industry));
     setSelectedPages(getIndustryDefaultPageChoices(industry));
+    pageChoicesTouchedRef.current = false;
+  };
+
+  const selectOpenEnded = () => {
+    setSelectedIndustry('universal');
+    setSystemId('content');
+    setPrimaryGoal(null);
+    setCustomerNeeds([]);
+    if (chatPlanRef.current) {
+      chatPlanRef.current = {
+        ...chatPlanRef.current,
+        creationInput: { ...chatPlanRef.current.creationInput, mode: 'open-ended' },
+      };
+    }
   };
 
   const toggle = <T extends string>(list: T[], value: T): T[] =>
@@ -450,20 +470,20 @@ export const LauncherWizard = ({
 
   const canContinue =
     step === "industry"
-      ? Boolean(systemId && selectedIndustry)
+      ? Boolean(isOpenEnded ? visionPrompt.trim() : systemId && selectedIndustry)
       : step === "goals"
-        ? Boolean(primaryGoal)
+        ? Boolean(isOpenEnded || primaryGoal)
         : step === "questions"
-          ? Boolean(primaryGoal)
+          ? Boolean(isOpenEnded || primaryGoal)
           : step === "aesthetic" && isChat
             ? Boolean(theme)
             : step === "pages"
-              ? Boolean(primaryGoal)
+              ? Boolean(isOpenEnded || primaryGoal)
               : Boolean(businessName.trim() && theme);
 
   const selectionSummary = (selectedStep: SelectionStep): string => {
     switch (selectedStep) {
-      case "industry": return INDUSTRY_FOCUS_CARDS.find(card => card.industry === selectedIndustry)?.label ?? selectedIndustry ?? "";
+      case "industry": return selectedIndustry === 'universal' ? 'Open-ended' : INDUSTRY_FOCUS_CARDS.find(card => card.industry === selectedIndustry)?.label ?? selectedIndustry ?? "";
       case "goals": return PRIMARY_GOALS.find(goal => goal.id === primaryGoal)?.label ?? "";
       case "questions": return CUSTOMER_NEEDS.filter(need => customerNeeds.includes(need.id)).map(need => need.label).join(", ") || "No additional visitor actions";
       case "pages": return ["Home", ...pageChoices.filter(page => selectedPages.includes(page.id)).map(page => page.label)].join(", ");
@@ -516,6 +536,10 @@ export const LauncherWizard = ({
 
   const handleGenerate = async (generationMode: AppBuildGenerationMode = 'ai') => {
     if (isLaunching || !systemId || !theme) return;
+    if (isOpenEnded && !visionPrompt.trim()) {
+      setLaunchError('Describe the site you want to create.');
+      return;
+    }
     if (!businessName.trim()) {
       setLaunchError("Please enter your business name.");
       return;
@@ -532,12 +556,16 @@ export const LauncherWizard = ({
     latestProgressRef.current = null;
     setLaunchStatus(generationMode === 'deterministic' ? 'Building starter pages…' : 'Preparing your site…');
 
+    const derivedPlan = chatPlanRef.current ?? (isOpenEnded ? deriveChatLaunchPlan(visionPrompt) : null);
+    const creationPlan = derivedPlan && isOpenEnded && derivedPlan.creationInput.mode !== 'open-ended'
+      ? { ...derivedPlan, creationInput: { ...derivedPlan.creationInput, mode: 'open-ended' as const } }
+      : derivedPlan;
     const input: LaunchOrchestratorInput = {
       generationMode,
       systemId,
       industry: selectedIndustry || undefined,
-      visionPrompt: chatPlanRef.current
-        ? buildSyncedVisionBrief(chatPlanRef.current, {
+      visionPrompt: creationPlan
+        ? buildSyncedVisionBrief(creationPlan, {
             industry: selectedIndustry,
             businessName,
             primaryGoal,
@@ -545,6 +573,7 @@ export const LauncherWizard = ({
             themePresetId: theme?.id ?? null,
           })
         : visionPrompt,
+      universalCreation: projectUniversalCreationInput(creationPlan, selectedPages),
       theme,
       designSelection: createWizardDesignSelection({
         mode: artDirectionPackId ? "guided" : "auto",
@@ -725,13 +754,40 @@ export const LauncherWizard = ({
                   {step === "industry" && (
                     <div className="mx-auto max-w-3xl space-y-7">
                       {!isChat && <StepHeading title="Choose your business type" subtitle="This gives Unison the right starting point. You can fine-tune your site goals and pages next." />}
-                      {visionPrompt && (
+                      {visionPrompt && !(selectedIndustry === 'universal' && !isChat) && (
                         <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
                           <p className="text-xs font-medium text-primary">Your site direction</p>
                           <p className="mt-1 text-sm leading-6 text-foreground/80">{visionPrompt}</p>
                         </div>
                       )}
+                      {selectedIndustry === 'universal' && !isChat && (
+                        <label className="block space-y-2">
+                          <span className="text-sm font-medium">Describe the site you want to create</span>
+                          <Textarea
+                            value={visionPrompt}
+                            onChange={(event) => {
+                              const prompt = event.target.value;
+                              setVisionPrompt(prompt);
+                              if (!prompt.trim()) {
+                                chatPlanRef.current = null;
+                                if (!pageChoicesTouchedRef.current) setSelectedPages([]);
+                                return;
+                              }
+                              const derived = deriveChatLaunchPlan(prompt);
+                              chatPlanRef.current = { ...derived, creationInput: { ...derived.creationInput, mode: 'open-ended' } };
+                              if (!pageChoicesTouchedRef.current) setSelectedPages(derived.selectedPages);
+                            }}
+                            rows={5}
+                            maxLength={12000}
+                            placeholder="A Ghana football publication with news, match coverage, team stories, and Ghanaian colors."
+                            className="resize-y"
+                          />
+                        </label>
+                      )}
                       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        <Button type="button" variant="outline" aria-pressed={selectedIndustry === 'universal'} onClick={selectOpenEnded} className={cn("h-auto min-h-20 justify-start whitespace-normal p-3 text-left", selectedIndustry === 'universal' && "border-primary bg-primary/5 ring-1 ring-primary")}>
+                          <span className="text-lg">✦</span><span><span className="block text-sm font-medium">Open-ended</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">{chatPlanRef.current?.creationInput.sitePurpose ?? 'Describe the site in your own words'}</span></span>
+                        </Button>
                         {INDUSTRY_FOCUS_CARDS.map((card) => (
                           <Button key={card.industry} type="button" variant="outline" aria-pressed={selectedIndustry === card.industry} onClick={() => selectIndustry(card.industry, card.systemId)} className={cn("h-auto min-h-20 justify-start whitespace-normal p-3 text-left", selectedIndustry === card.industry && "border-primary bg-primary/5 ring-1 ring-primary")}>
                             <span className="text-lg">{card.icon}</span><span><span className="block text-sm font-medium">{card.label}</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">{card.tagline}</span></span>
@@ -767,7 +823,7 @@ export const LauncherWizard = ({
 {!isChat &&                       <section className="space-y-3 border-t border-border pt-6">
                         <FieldLabel>Pages to include</FieldLabel>
                         <p className="text-xs text-muted-foreground">Home is included automatically. Select any additional pages you need.</p>
-                        <div className="flex flex-wrap gap-2"><span className="inline-flex items-center rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"><Check className="mr-2 h-3.5 w-3.5" />Home</span>{pageChoices.map((page) => <Chip key={page.id} active={selectedPages.includes(page.id)} onClick={() => setSelectedPages((current) => toggle(current, page.id))}><span>{page.icon}</span>{page.label}</Chip>)}</div>
+                        <div className="flex flex-wrap gap-2"><span className="inline-flex items-center rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"><Check className="mr-2 h-3.5 w-3.5" />Home</span>{pageChoices.map((page) => <Chip key={page.id} active={selectedPages.includes(page.id)} onClick={() => { pageChoicesTouchedRef.current = true; setSelectedPages((current) => toggle(current, page.id)); }}><span>{page.icon}</span>{page.label}</Chip>)}</div>
                       </section>}
                     </div>
                   )}
@@ -805,7 +861,7 @@ export const LauncherWizard = ({
                   )}
                   {step === "pages" && <section className="space-y-3">
                     <FieldLabel>Pages to include</FieldLabel>
-                    <div className="flex flex-wrap gap-2"><span className="inline-flex items-center rounded-md border border-border bg-muted px-3 py-2 text-sm"><Check className="mr-2 h-3.5 w-3.5" />Home</span>{pageChoices.map(page => <Chip key={page.id} active={selectedPages.includes(page.id)} onClick={() => setSelectedPages(current => toggle(current, page.id))}>{page.icon} {page.label}</Chip>)}</div>
+                    <div className="flex flex-wrap gap-2"><span className="inline-flex items-center rounded-md border border-border bg-muted px-3 py-2 text-sm"><Check className="mr-2 h-3.5 w-3.5" />Home</span>{pageChoices.map(page => <Chip key={page.id} active={selectedPages.includes(page.id)} onClick={() => { pageChoicesTouchedRef.current = true; setSelectedPages(current => toggle(current, page.id)); }}>{page.icon} {page.label}</Chip>)}</div>
                   </section>}
                   {step === "brand" && <section className="space-y-5">
                     <label className="block text-sm">Brand name<Input aria-label="Business name" value={businessName} onChange={event => setBusinessName(event.target.value)} placeholder="Northside Studio" className="mt-2" /></label>
