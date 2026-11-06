@@ -145,14 +145,14 @@ function findSurface(sectionType: string): Surface | null {
   ) ?? null;
 }
 
-async function loadRuntimeContext(supabase: RuntimeClient, siteId: string) {
+async function loadRuntimeContext(supabase: RuntimeClient, siteId: string, requireBusinessProfile = true) {
   const [siteResult, runtimeResult, capabilityResult] = await Promise.all([
     supabase.from("sites").select("id,business_id,status").eq("id", siteId).maybeSingle(),
     supabase.from("site_runtime_configs").select("site_id,public_runtime_enabled").eq("site_id", siteId).maybeSingle(),
     supabase.from("site_capabilities").select("capability_id,status").eq("site_id", siteId).eq("capability_id", "business_profile").eq("status", "enabled").maybeSingle(),
   ]);
   if (siteResult.error || runtimeResult.error || capabilityResult.error) return null;
-  if (!siteResult.data || !runtimeResult.data?.public_runtime_enabled || !capabilityResult.data) return null;
+  if (!siteResult.data || !runtimeResult.data?.public_runtime_enabled || (requireBusinessProfile && !capabilityResult.data)) return null;
   if (!['preview', 'published'].includes(siteResult.data.status)) return null;
 
   const projectResult = await supabase
@@ -166,6 +166,7 @@ async function loadRuntimeContext(supabase: RuntimeClient, siteId: string) {
   return {
     businessId: siteResult.data.business_id as string,
     projectId: projectResult.data.id as string,
+    siteStatus: siteResult.data.status as string,
   };
 }
 
@@ -205,7 +206,7 @@ Deno.serve(async (req) => {
   if (bodyError || !body || !isUuid(body.siteId)) {
     return errorResponse("Invalid site runtime request", 400, publicCorsHeaders);
   }
-  if (body.type !== "catalog" && body.type !== "profile" && body.type !== "watch") {
+  if (body.type !== "catalog" && body.type !== "profile" && body.type !== "watch" && body.type !== "articles") {
     return errorResponse("Unsupported site runtime request", 400, publicCorsHeaders);
   }
 
@@ -216,8 +217,77 @@ Deno.serve(async (req) => {
     return errorResponse("Runtime temporarily unavailable", 503, publicCorsHeaders);
   }
   const supabase: RuntimeClient = createClient(supabaseUrl, secretKey);
-  const context = await loadRuntimeContext(supabase, body.siteId);
+  const context = await loadRuntimeContext(supabase, body.siteId, body.type !== "articles");
   if (!context) return errorResponse("Site runtime is unavailable", 404, publicCorsHeaders);
+
+  if (body.type === "articles") {
+    if (context.siteStatus !== "published") return errorResponse("Published articles are unavailable", 404, publicCorsHeaders);
+    const { data: cmsCapability } = await supabase
+      .from("site_capabilities")
+      .select("capability_id")
+      .eq("site_id", body.siteId)
+      .eq("capability_id", "cms.content")
+      .eq("status", "enabled")
+      .maybeSingle();
+    if (!cmsCapability) return errorResponse("Published articles are unavailable", 404, publicCorsHeaders);
+
+    const requestedSlug = typeof body.slug === "string" ? body.slug.trim().slice(0, 120) : "";
+    const slug = requestedSlug || null;
+    const locale = typeof body.locale === "string" && /^[A-Za-z0-9-]{2,35}$/.test(body.locale)
+      ? body.locale
+      : "en";
+    const requestedLimit = typeof body.limit === "number" && Number.isFinite(body.limit) ? Math.floor(body.limit) : 20;
+    const limit = Math.min(Math.max(requestedLimit, 1), 50);
+    const { data: articleType, error: typeError } = await supabase
+      .from("content_types")
+      .select("id")
+      .eq("business_id", context.businessId)
+      .eq("api_key", "articles")
+      .or(`project_id.eq.${context.projectId},project_id.is.null`)
+      .maybeSingle();
+    if (typeError) return errorResponse("Published articles are unavailable", 404, publicCorsHeaders);
+    if (!articleType) return secureJsonResponse({ success: true, articles: [], article: null }, 200, publicCorsHeaders, rateHeaders);
+
+    let query = supabase
+      .from("content_entries")
+      .select("slug,title,locale,data,published_at")
+      .eq("business_id", context.businessId)
+      .or(`project_id.eq.${context.projectId},project_id.is.null`)
+      .eq("site_id", body.siteId)
+      .eq("content_type_id", articleType.id)
+      .eq("status", "published")
+      .eq("locale", locale)
+      .not("slug", "is", null)
+      .not("published_at", "is", null)
+      .or(`scheduled_publish_at.is.null,scheduled_publish_at.lte.${new Date().toISOString()}`)
+      .order("published_at", { ascending: false })
+      .limit(slug ? 1 : limit);
+    if (slug) query = query.eq("slug", slug);
+    const { data: rows, error: rowsError } = await query;
+    if (rowsError) return errorResponse("Published articles are unavailable", 404, publicCorsHeaders);
+
+    const articles = ((rows ?? []) as Array<Record<string, unknown>>).map((row) => {
+      const data = row.data && typeof row.data === "object" && !Array.isArray(row.data)
+        ? row.data as Record<string, unknown>
+        : {};
+      const text = (value: unknown) => typeof value === "string" ? value : null;
+      return {
+        slug: text(row.slug),
+        title: text(row.title) ?? "",
+        locale: text(row.locale) ?? locale,
+        excerpt: text(data.excerpt),
+        body: text(data.body),
+        coverImageUrl: text(data.cover_image_url),
+        author: text(data.author),
+        publishedAt: text(row.published_at),
+      };
+    });
+    return secureJsonResponse({
+      success: true,
+      articles: slug ? [] : articles,
+      article: slug ? articles[0] ?? null : null,
+    }, 200, publicCorsHeaders, rateHeaders);
+  }
 
   if (body.type === "watch") {
     // Long-poll: resolve as soon as any saved catalog/content row for this
