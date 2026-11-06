@@ -28,6 +28,31 @@ import type {
 } from './appBuilderContracts';
 import { CORE_INTENTS } from '@/platform/core/coreIntents';
 import { inspectNativeForms } from '@/services/app-builder/nativeFormContract';
+import * as ts from 'typescript';
+
+function directSupabaseClientImports(source: string): string[] {
+  const sourceFile = ts.createSourceFile('candidate.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const imports = new Set<string>();
+  const isDirectClient = (specifier: string) =>
+    /^\s*(?:npm:)?@supabase\/supabase-js(?:\/|$)/.test(specifier)
+    || /(?:^|\/)integrations\/supabase\/client$/.test(specifier);
+
+  const visit = (node: ts.Node) => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && isDirectClient(node.moduleSpecifier.text)) {
+      imports.add(node.moduleSpecifier.text);
+    }
+    if (ts.isCallExpression(node) && node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0])) {
+      const callee = node.expression;
+      const isDynamicImport = callee.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire = ts.isIdentifier(callee) && callee.text === 'require';
+      if ((isDynamicImport || isRequire) && isDirectClient(node.arguments[0].text)) imports.add(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return [...imports];
+}
 
 function stableSourceHash(files: Readonly<Record<string, string>>): string {
   let hash = 0x811c9dc5;
@@ -343,6 +368,18 @@ export async function validateAppBuildCandidate(input: {
   const files = { ...input.files };
   const issues: AppBuildCandidateClosureIssue[] = [];
   const pages = input.contract.topology.sitePlan.pages;
+
+  for (const [path, source] of Object.entries(files)) {
+    if (!isAllowedGenerationPath(path) || !/\.(?:tsx?|jsx?)$/.test(path) || input.initialFiles[path] === source) continue;
+    for (const importPath of directSupabaseClientImports(source)) {
+      issues.push({
+        severity: 'blocker',
+        code: 'direct-supabase-client-import',
+        path,
+        message: `${path} imports ${importPath} directly. Generated pages must use canonical Resource Runtime and intent bindings instead of creating or calling Supabase clients.`,
+      });
+    }
+  }
 
   for (const form of inspectNativeForms(files, CORE_INTENTS)) {
     if (form.verdict === 'recognized') continue;
