@@ -14,7 +14,13 @@ const page = [
   '}',
 ].join('\n');
 const card = 'export function Card() {\n  return <div>Card</div>;\n}';
-const files = { '/src/pages/Home.tsx': page, '/src/components/Card.tsx': card, '/src/App.tsx': 'export default () => <div>router</div>;' };
+const matchCentre = 'export default function MatchCentre(){\n  return <article>\n    <h2>Latest scores</h2>\n  </article>\n}';
+const files = {
+  '/src/pages/Home.tsx': page,
+  '/src/components/Card.tsx': card,
+  '/src/project-components/football/MatchCentre.tsx': matchCentre,
+  '/src/App.tsx': 'export default () => <div>router</div>;',
+};
 function identityForLocator(locator: string): { sourceHash?: string; astIdentity?: string } {
   const parsed = parseSourceLocator(locator);
   const source = parsed ? files[parsed.path as keyof typeof files] : undefined;
@@ -63,6 +69,27 @@ describe('preview source resolution', () => {
       sharedComponent: true,
       ownerPath: '/src/components/Card.tsx',
       componentOwnerId: 'site-component:/src/components/Card.tsx',
+    });
+  });
+  it('resolves a custom site-local component to its exact source owner and accepted revision', () => {
+    const locator = '/src/project-components/football/MatchCentre.tsx:3:5';
+    const resolved = resolvePreviewSource({
+      locator,
+      files,
+      pagePath: '/src/pages/Matches.tsx',
+      registeredPagePaths: ['/src/pages/Matches.tsx'],
+      ...identityForLocator(locator),
+      sourceRevisionId: 'rev-custom',
+      acceptedRevisionId: 'rev-custom',
+    });
+
+    expect(resolved).toMatchObject({
+      mode: 'editable',
+      reason: 'static-node',
+      ownerPath: '/src/project-components/football/MatchCentre.tsx',
+      componentOwnerId: 'site-component:/src/project-components/football/MatchCentre.tsx',
+      sharedComponent: true,
+      revisionId: 'rev-custom',
     });
   });
   it('falls back to inspect-only for protected owners, missing files and stale locators', () => {

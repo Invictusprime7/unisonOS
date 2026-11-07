@@ -7,7 +7,6 @@ import {
   type ResolvedPageComposition,
 } from '@/platform/core/resolvedComposition';
 import type { ResolvedSection } from '@/platform/core/resolvedComposition';
-import { getSectionTypesWithVariants } from '@/sections/variants/registry';
 import { collectLocalImportClosure, resolveRelativeModule } from '@/services/laneBCompanionModules';
 import { createComponentOwnerId } from '@/services/editor/sourceIdentity';
 
@@ -59,8 +58,18 @@ interface EligibleImplementation {
   componentOwnerId?: string;
 }
 
-const CUSTOM_VARIANT_ID = /^custom:[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const CUSTOM_SECTION_TYPE = /^[a-z][a-z0-9-]{0,63}$/;
 const CUSTOM_COMPONENT_PATH = /^\/src\/(?:project-components|components\/generated)\/.+\.[jt]sx?$/i;
+
+function customVariantIdForSource(modulePath: string, exportName?: string): string {
+  const sourceIdentity = `${modulePath.replace(/^\/src\//, '').replace(/\.[jt]sx?$/i, '')}:${exportName ?? 'default'}`;
+  const slug = sourceIdentity
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `custom:${slug}`;
+}
 
 type JSXContentNode = ts.JsxElement | ts.JsxSelfClosingElement | ts.JsxFragment;
 
@@ -145,7 +154,6 @@ function findCustomSectionImplementations(
     /^\/src\/(?:pages|project-components|components\/generated)\/.+\.[jt]sx?$/i.test(path),
   );
   const existingPaths = new Set(Object.keys(files));
-  const families = new Set<string>(getSectionTypesWithVariants().filter((family) => family !== 'navbar' && family !== 'footer'));
   const discovered: Record<string, EligibleImplementation> = {};
   const ambiguous = new Set<string>();
 
@@ -155,12 +163,11 @@ function findCustomSectionImplementations(
     const visit = (node: ts.Node) => {
       if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
         && tagName(node.tagName) === 'section') {
-        const variantId = readStringAttribute(node, 'variantId', sourceFile)
+        const authoredVariantId = readStringAttribute(node, 'variantId', sourceFile)
           ?? readStringAttribute(node, 'data-ut-variant', sourceFile);
-        const registeredEntry = variantId ? registered[variantId] : undefined;
+        const registeredEntry = authoredVariantId ? registered[authoredVariantId] : undefined;
         const sectionType = readStringAttribute(node, 'data-ut-section-type', sourceFile);
-        if (variantId && CUSTOM_VARIANT_ID.test(variantId) && !registeredEntry
-          && sectionType && families.has(sectionType)) {
+        if (!registeredEntry && sectionType && CUSTOM_SECTION_TYPE.test(sectionType)) {
           const root = ts.isJsxSelfClosingElement(node)
             ? node
             : ts.isJsxElement(node.parent) ? node.parent : undefined;
@@ -192,6 +199,7 @@ function findCustomSectionImplementations(
           }
           if (customModules.size === 1) {
             const [implementation] = customModules.values();
+            const variantId = customVariantIdForSource(implementation.modulePath, implementation.exportName);
             const candidate: EligibleImplementation = {
               ...implementation,
               sectionType,

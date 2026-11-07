@@ -210,6 +210,20 @@ function getProfilePaymentProvider(profile: BusinessProfileDTO | null): string |
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function isProfilePaymentProviderConfigured(profile: BusinessProfileDTO | null): boolean {
+  const settings = profile?.settings;
+  const commerceSettings = settings?.commerce;
+  const nested = commerceSettings && typeof commerceSettings === 'object' && !Array.isArray(commerceSettings)
+    ? commerceSettings as Record<string, unknown>
+    : undefined;
+  return settings?.paymentProviderConfigured === true
+    || settings?.stripeConnected === true
+    || settings?.['commerce.paymentProviderConfigured'] === true
+    || settings?.['commerce.stripeConnected'] === true
+    || nested?.paymentProviderConfigured === true
+    || nested?.stripeConnected === true;
+}
+
 function resolveGenerationCategory(
   system: (typeof businessSystems)[number],
   template: TemplateCardData,
@@ -255,10 +269,14 @@ async function runReservedLaunchPipeline(
 ): Promise<LaunchOrchestratorResult> {
   const openEnded = submitted.universalCreation?.mode === 'open-ended';
   let universalCreation = submitted.universalCreation;
-  if (openEnded && universalCreation?.originalPrompt.trim()) {
-    callbacks.onStatus?.('Planning pages and requested capabilities');
+  if (universalCreation?.originalPrompt.trim()) {
+    callbacks.onStatus?.(openEnded ? 'Planning pages and requested capabilities' : 'Planning additional pages');
     try {
-      universalCreation = await planUniversalCreation(universalCreation);
+      const creationInput = universalCreation;
+      const plannedCreation = await planUniversalCreation(creationInput);
+      universalCreation = openEnded
+        ? plannedCreation
+        : { ...plannedCreation, requestedCapabilities: creationInput.requestedCapabilities };
     } catch {
       callbacks.onStatus?.('Using the Wizard plan; AI planning was unavailable');
     }
@@ -322,7 +340,9 @@ async function runReservedLaunchPipeline(
     const generationCategory = resolveGenerationCategory(system, input.template);
     const industryProfile = getIndustryForCategory(generationCategory);
     const industryOverlay = openEnded && (!input.industry || input.industry === 'universal')
-      ? 'general'
+      ? resolveWizardIndustryOverlay({
+          generationIndustry: 'general',
+        })
       : resolveWizardIndustryOverlay({
           templateIndustry: openEnded ? undefined : input.template.industry,
           generationIndustry: openEnded ? input.industry : industryProfile?.industry || generationCategory,
@@ -331,12 +351,13 @@ async function runReservedLaunchPipeline(
     const compositionMeta = getCompositionMeta(generationCategory);
     const launchContract = resolveVerticalLaunchContract(input.systemId);
     const businessLaunchPlan = resolveBusinessLaunchPlan({
-      industry: industryProfile?.industry || input.template.industry,
+      industry: (openEnded ? input.template.industry : industryProfile?.industry) || input.template.industry,
       openEnded,
       primaryGoal: openEnded ? null : input.primaryGoal,
       customerNeeds: openEnded ? [] : input.customerNeeds,
-      selectedPages: input.selectedPages,
+      selectedPages: openEnded ? [] : input.selectedPages,
       requestedCapabilities: input.universalCreation?.requestedCapabilities,
+      capabilityEvidence: input.universalCreation?.capabilityEvidence,
     });
     // Only an unknown industry is fatal; choices the industry can't support
     // (e.g. quotes for SaaS) are dropped from the plan instead of failing launch.
@@ -392,7 +413,10 @@ async function runReservedLaunchPipeline(
       ? '' as PrimaryGoal
       : input.primaryGoal || preselect?.primaryGoal || "collect_leads";
     const customerNeeds = uniqueValues<CustomerNeed>(openEnded ? [] : input.customerNeeds);
-    const requestedPages = uniqueValues<string>(["home", ...input.selectedPages]);
+    const requestedPageRoles = openEnded
+      ? (input.universalCreation?.pages ?? []).map((page) => page.suggestedRole || 'custom')
+      : input.selectedPages;
+    const requestedPages = uniqueValues<string>(["home", ...requestedPageRoles]);
     const goalNeeds = GOAL_TO_NEEDS[primaryGoal] || {};
 
     const wizardSeedId = newId("ws");
@@ -736,6 +760,9 @@ async function runReservedLaunchPipeline(
         operationalCapabilities: plan.businessLaunchPlan.operationalCapabilities,
         businessCapabilities: plan.businessLaunchPlan.businessCapabilities,
         requestedCapabilities: plan.businessLaunchPlan.requestedCapabilities,
+        ...(plan.businessLaunchPlan.capabilityEvidence
+          ? { capabilityEvidence: plan.businessLaunchPlan.capabilityEvidence }
+          : {}),
         requestedResources: plan.businessLaunchPlan.requestedResources,
         blockedRequests: plan.businessLaunchPlan.blockedRequests,
       },
@@ -763,12 +790,22 @@ async function runReservedLaunchPipeline(
     expectedBindingCount: plannedDataBindings.length,
     bindingsReady: dataBindingsReady,
   });
+  const paymentProvider = [
+    plan.selections.businessParameters?.paymentProvider,
+    businessProfilePaymentProvider,
+    canonicalPlan.playground.creatorData.businessInfo.paymentProvider,
+  ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+  const commerceRequired = plan.launchCapabilities.includes('commerce');
+  const paymentProviderConfigured = isProfilePaymentProviderConfigured(loadedBusinessProfile);
   const nativeSetupSnapshot = buildNativePublishSetupSnapshot({
     enabled: plan.launchContract.nativePublishCapable,
     ownerEmail: plan.ownerEmail,
     businessName: brand,
     businessId: plan.confirmed.businessId,
     systemType: input.systemId,
+    commerceRequired,
+    paymentProviderConfigured,
+    paymentProvider,
   });
   const wizardAudit = auditWizardIntentGap({
     sitePlan,
@@ -783,6 +820,12 @@ async function runReservedLaunchPipeline(
       enabled: plan.launchContract.nativePublishCapable,
       systemType: input.systemId,
       industryOverlay: plan.industryOverlay,
+      commerceRequired,
+      paymentProviderConfigured,
+      capabilitiesAwaitingConfirmation: (plan.businessLaunchPlan.capabilityEvidence ?? [])
+        .filter((evidence) => evidence.origin === 'inferred'
+          && plan.businessLaunchPlan.blockedRequests.includes(`capability:${evidence.capabilityId}:confirmation-required`))
+        .map(({ capabilityId, reason }) => ({ capabilityId, reason })),
     }),
     wizardAudit,
   };
@@ -868,6 +911,8 @@ async function runReservedLaunchPipeline(
     ) as PublishedRuntimeConfig,
     bindingCount: plannedDataBindings.length,
     formDefinitionCount: plannedFormDefinitions.length,
+    commerceRequired,
+    paymentProviderConfigured,
   });
   if (!publishedRuntimeReadiness.ok) {
     run.degrade(

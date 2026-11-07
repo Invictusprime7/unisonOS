@@ -1,0 +1,154 @@
+{
+  "version": "1.0",
+  "compiledBy": "stage-4b",
+  "pageFilePath": "/src/pages/About.tsx",
+  "templateName": "DREAM. Design. Eman Amanni · Studio",
+  "variantOverrides": {
+    "portfolio-photography-nav": "navbar:floating-pill",
+    "portfolio-photography-hero": "hero:image-fan",
+    "portfolio-photography-gallery": "gallery:case-study",
+    "portfolio-photography-services": "services:product-cards",
+    "portfolio-photography-about": "about:editorial-split",
+    "portfolio-photography-pricing": "pricing:billing-toggle",
+    "portfolio-photography-testimonials": "testimonials:rail",
+    "portfolio-photography-cta": "cta:centered",
+    "portfolio-photography-footer": "footer:brand-social"
+  },
+  "compositionAlternativeId": "portfolio-photography:about:editorial",
+  "layoutRecipe": "collage-hero",
+  "activation": {
+    "policy": "maximum-compatible",
+    "version": "1.0",
+    "decisions": [
+      {
+        "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-hero-0",
+        "implementationId": "hero:variable-type",
+        "recipeId": "immersive-hero",
+        "reason": "not-applicable"
+      },
+      {
+        "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-hero-0",
+        "implementationId": "hero:variable-type",
+        "recipeId": "scene-backdrop",
+        "reason": "not-applicable"
+      },
+      {
+        "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-about-0",
+        "implementationId": "about:image-story",
+        "recipeId": "editorial-reveal",
+        "reason": "selected"
+      },
+      {
+        "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-stats-0",
+        "implementationId": "stats:proof-grid",
+        "recipeId": "editorial-reveal",
+        "reason": "selected"
+      },
+      {
+        "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-team-0",
+        "implementationId": "team:profile-cards",
+        "recipeId": "editorial-reveal",
+        "reason": "selected"
+      },
+      {
+        "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-testimonials-0",
+        "implementationId": "testimonials:rail",
+        "recipeId": "editorial-reveal",
+        "reason": "selected"
+      },
+      {
+        "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-cta-0",
+        "implementationId": "cta:centered",
+        "recipeId": "editorial-reveal",
+        "reason": "selected"
+      }
+    ],
+    "canvasRoots": 0
+  },
+  "sections": [
+    {
+      "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-navbar-0",
+      "semanticType": "navbar",
+      "primitiveId": "Navbar",
+      "variantId": "navbar:floating-pill",
+      "layoutRecipe": "floating-pill"
+    },
+    {
+      "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-hero-0",
+      "semanticType": "hero",
+      "primitiveId": "Hero",
+      "variantId": "hero:variable-type",
+      "layoutRecipe": "variable-type",
+      "mediaRecipe": "centered-frame"
+    },
+    {
+      "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-about-0",
+      "semanticType": "about",
+      "primitiveId": "About",
+      "variantId": "about:image-story",
+      "layoutRecipe": "image-story"
+    },
+    {
+      "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-stats-0",
+      "semanticType": "stats",
+      "primitiveId": "Stats",
+      "variantId": "stats:proof-grid",
+      "layoutRecipe": "proof-grid"
+    },
+    {
+      "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-team-0",
+      "semanticType": "team",
+      "primitiveId": "Team",
+      "variantId": "team:profile-cards",
+      "layoutRecipe": "profile-cards"
+    },
+    {
+      "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-testimonials-0",
+      "semanticType": "testimonials",
+      "primitiveId": "Testimonials",
+      "variantId": "testimonials:rail",
+      "layoutRecipe": "carousel"
+    },
+    {
+      "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-cta-0",
+      "semanticType": "cta",
+      "primitiveId": "CTA",
+      "variantId": "cta:centered",
+      "layoutRecipe": "centered"
+    },
+    {
+      "sectionId": "b2edea11-c036-4e95-8c66-088f003cd3cb-footer-0",
+      "semanticType": "footer",
+      "primitiveId": "Footer",
+      "variantId": "footer:brand-social",
+      "layoutRecipe": "brand-social"
+    }
+  ],
+  "compilerOwnership": {
+    "/src/components/theme.ts": "842318595",
+    "/src/components/SiteLayout.tsx": "2205194398",
+    "/src/pages/About.sections.ts": "4149139414",
+    "/src/components/catalogHydration.ts": "1089167172",
+    "/src/components/formRuntime.ts": "248572061",
+    "/src/components/publishedActionRuntime.ts": "3758280899",
+    "/src/pages/About.tsx": "1023080972",
+    "/src/components/Navbar.tsx": "3868256739",
+    "/src/components/Hero.tsx": "221929940",
+    "/src/components/About.tsx": "1139991317",
+    "/src/components/Stats.tsx": "2653228704",
+    "/src/components/Team.tsx": "1594897920",
+    "/src/components/Testimonials.tsx": "2535286907",
+    "/src/components/CTA.tsx": "3290047380",
+    "/src/components/Footer.tsx": "648259952",
+    "/src/components/MobileNavigation.tsx": "1125008304",
+    "/src/components/recipes/Hero.ts": "2260425632",
+    "/src/components/recipes/Navbar.ts": "3493075941",
+    "/src/components/recipes/CTA.ts": "1489045853",
+    "/src/components/recipes/Footer.ts": "4059480490",
+    "/src/components/recipes/Testimonials.ts": "2330902570",
+    "/src/components/recipes/About.ts": "867762636",
+    "/src/components/recipes/Stats.ts": "771790308",
+    "/src/components/recipes/Team.ts": "3061740819",
+    "/src/components/SocialIcon.tsx": "1417293100"
+  }
+}

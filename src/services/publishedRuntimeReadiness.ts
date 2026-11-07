@@ -6,6 +6,7 @@ export interface PublishedRuntimeReadiness {
     profile: boolean;
     catalog: boolean;
     forms: boolean;
+    payments: boolean;
   };
   blockers: string[];
 }
@@ -19,11 +20,14 @@ export function evaluatePublishedRuntimeReadiness(input: {
   runtime: PublishedRuntimeConfig;
   bindingCount: number;
   formDefinitionCount: number;
+  commerceRequired?: boolean;
+  paymentProviderConfigured?: boolean;
 }): PublishedRuntimeReadiness {
   const required = {
     profile: true,
     catalog: input.bindingCount > 0,
     forms: input.formDefinitionCount > 0,
+    payments: input.commerceRequired === true,
   };
   const blockers: string[] = [];
 
@@ -35,6 +39,9 @@ export function evaluatePublishedRuntimeReadiness(input: {
   }
   if (required.forms && !input.runtime.formEndpoint) {
     blockers.push('Published form submission endpoint is unavailable.');
+  }
+  if (required.payments && input.paymentProviderConfigured !== true) {
+    blockers.push('Payment provider is not configured for requested checkout.');
   }
 
   return { ok: blockers.length === 0, required, blockers };

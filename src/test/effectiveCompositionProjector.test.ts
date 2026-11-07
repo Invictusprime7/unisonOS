@@ -148,6 +148,46 @@ describe('effective composition projection', () => {
     expect(projection.pages.home.uncertain).toContain('import-owner-unverified:./UnverifiedCard');
   });
 
+  it('projects an unregistered site-local section with a verified source owner', async () => {
+    const pagePath = '/src/pages/Matches.tsx';
+    const componentPath = '/src/project-components/football/MatchCentre.tsx';
+    const files = {
+      [pagePath]: `import MatchCentre from '@/project-components/football/MatchCentre';
+export default function Matches(){return <main><section data-ut-section-id="matches:match-centre:0" data-ut-section-type="match-centre" data-ut-variant="custom:project-components-football-match-centre-default"><MatchCentre /></section></main>}`,
+      [componentPath]: 'export default function MatchCentre(){return <article><h2>Latest scores</h2></article>}',
+    };
+    const fileProvenance = await buildFileProvenance({
+      previousFiles: {},
+      files,
+      source: 'wizard-launch',
+      operationIds: ['custom-match-centre'],
+      compilerOwnedPaths: [],
+    });
+    Object.assign(fileProvenance[componentPath], {
+      ownership: 'ai', creatorOrigin: 'ai-builder', lastEditorOrigin: 'ai-builder',
+    });
+
+    const projection = await projectEffectiveComposition({
+      pages: { matches: { filePath: pagePath } },
+      files,
+      fileProvenance,
+      baseRevisionId: 'revision-match-centre',
+      vfsHash: 'accepted-vfs-hash',
+      hashSource: async (path, contents) => `${path}:${contents.length}`,
+    });
+
+    expect(projection.pages.matches.componentUses).toContainEqual(expect.objectContaining({
+      name: 'MatchCentre',
+      sourcePath: componentPath,
+      ownerId: 'site-component:/src/project-components/football/MatchCentre.tsx',
+      origin: 'ai-authored',
+    }));
+    expect(projection.pages.matches.registryEvidence).toContainEqual(expect.objectContaining({
+      registry: 'section-type', id: 'match-centre', status: 'unregistered', sourcePath: pagePath,
+    }));
+    expect(projection.pages.matches.uncertain).not.toContain(`import-owner-unverified:@/project-components/football/MatchCentre`);
+  });
+
   it('reports exact registry membership independently from authored source origin', async () => {
     const source = [
       'export default function Home({ activeVariant }) {',

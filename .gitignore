@@ -58,5 +58,9 @@ zip_extract/
 .artifacts/
 .artifacts/composition/
 
+# Playwright reports and traces
+/playwright-report/
+/test-results/
+
 # Lovable sandbox workspace directory
 .workspace/

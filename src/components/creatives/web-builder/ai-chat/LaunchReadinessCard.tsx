@@ -25,6 +25,10 @@ interface LaunchReadinessManifest {
   industryReady?: boolean;
   notificationsReady?: boolean;
   bookingReady?: boolean;
+  commerceRequired?: boolean;
+  paymentsReady?: boolean;
+  payments?: { required?: boolean; configured?: boolean; stepStatus?: string };
+  capabilitiesAwaitingConfirmation?: Array<{ capabilityId?: string; reason?: string }>;
   previewReady?: boolean;
   bindings?: { total?: number; previewReady?: number; publishReady?: number; blocked?: number };
   industryIntentCoverage?: {
@@ -64,6 +68,8 @@ export function LaunchReadinessCard({ vfsFiles, className }: Props) {
   const audit = manifest.wizardAudit;
   const coverage = manifest.industryIntentCoverage;
   const blocked = manifest.bindings?.blocked || 0;
+  const capabilitySuggestions = manifest.capabilitiesAwaitingConfirmation || [];
+  const paymentsReady = manifest.commerceRequired !== true || manifest.paymentsReady === true;
   const unsatisfied = coverage?.unsatisfiedRequired || [];
   const requiredMissing = (audit?.missing || []).filter(
     (m) => m.level === 'required' && !m.synthesizable,
@@ -73,7 +79,8 @@ export function LaunchReadinessCard({ vfsFiles, className }: Props) {
     (audit?.publishReadyByAudit ?? manifest.industryReady ?? true) &&
     blocked === 0 &&
     unsatisfied.length === 0 &&
-    requiredMissing.length === 0;
+    requiredMissing.length === 0 &&
+    paymentsReady;
 
   return (
     <div
@@ -117,11 +124,32 @@ export function LaunchReadinessCard({ vfsFiles, className }: Props) {
               blocked ? ` · ${blocked} blocked` : ''
             }`}
           />
+          {manifest.commerceRequired && (
+            <Row
+              label="Checkout payments"
+              value={paymentsReady ? 'connected' : 'connection required'}
+            />
+          )}
           {coverage && (
             <Row
               label="Industry intents"
               value={`${coverage.requiredSatisfied || 0}/${coverage.requiredTotal || 0} required`}
             />
+          )}
+          {capabilitySuggestions.length > 0 && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2">
+              <div className="mb-1 font-medium text-amber-700 dark:text-amber-400">
+                Suggested capabilities · not enabled
+              </div>
+              <ul className="space-y-1">
+                {capabilitySuggestions.map((item) => (
+                  <li key={item.capabilityId}>
+                    <span className="font-medium text-foreground">{item.capabilityId}</span>
+                    {item.reason ? <span>: {item.reason}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           {requiredMissing.length > 0 && (
             <div className="rounded-md bg-amber-500/10 border border-amber-500/30 p-2">

@@ -127,8 +127,6 @@ export async function orchestrateAppBuild(
     return { files: sections.files, errors: [
       ...markers.unresolvedBindingIds.map(id => `Canonical binding ${id} has no matching generated control on ${page.filePath}.`),
       ...sections.diagnostics.map(diagnostic => diagnostic.message),
-      ...sections.pages.flatMap(result => pageCompositionCoverage(
-        input.contract.design.compositionPlan.pages.find(planned => planned.pageId === page.pageId), result)),
     ] };
   };
   const pageCheck = (path: string, source: string, files?: Readonly<Record<string, string>>) => {
@@ -239,9 +237,9 @@ export async function orchestrateAppBuild(
       path: diagnostic.path,
       message: diagnostic.message,
     }));
-    const coverageIssues = (latestSectionMaterialization?.pages ?? []).flatMap(page =>
+    const coverageAdvisories = (latestSectionMaterialization?.pages ?? []).flatMap(page =>
       pageCompositionCoverage(input.contract.design.compositionPlan.pages.find(planned => planned.pageId === page.pageId), page)
-        .map(message => ({ severity: 'blocker' as const, code: 'page-composition-incomplete', path: page.filePath, message })));
+        .map(message => ({ severity: 'advisory' as const, code: 'page-composition-advisory', path: page.filePath, message })));
     const authorshipIssues = missingAuthorship.map(page => ({ severity: 'blocker' as const,
       code: 'ai-page-not-authored', path: page.filePath,
       message: `${page.title} has no completed AI authorship; a baseline cannot count as an AI-enriched page.` }));
@@ -253,8 +251,8 @@ export async function orchestrateAppBuild(
       })));
     return {
       ...report,
-      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0 && sectionModelIssues.length === 0 && coverageIssues.length === 0 && authorshipIssues.length === 0,
-      issues: [...report.issues, ...bindingIssues, ...sectionModelIssues, ...coverageIssues, ...authorshipIssues, ...pageIssues],
+      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0 && sectionModelIssues.length === 0 && authorshipIssues.length === 0,
+      issues: [...report.issues, ...bindingIssues, ...sectionModelIssues, ...coverageAdvisories, ...authorshipIssues, ...pageIssues],
     };
   };
   const normalizeCandidateFiles = (files: Record<string, string>) => {

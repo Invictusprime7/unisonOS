@@ -179,6 +179,7 @@
     "type-check": "tsc --build --noEmit",
     "unison": "node scripts/unison.mjs",
     "test": "vitest run --reporter=default",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "verify": "npm run type-check && npm run lint && npm run lint:pipeline-bypass && npm run lint:canonical-vfs-writes && npm run lint:single-source-of-truth && npm test",
     "ci": "npm run verify && npm run build"

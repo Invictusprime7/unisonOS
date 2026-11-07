@@ -43,6 +43,35 @@ function scaffoldRegistry(contract: AppBuildContract) {
 }
 
 describe('deterministic App Builder scaffold', () => {
+  it('keeps a prompt-planned custom route in the canonical scaffold', () => {
+    const pages = [
+      page('home', 'Home', '/', 'home', true),
+      page('matches', 'Matches', '/matches', 'custom'),
+    ];
+    const contract = {
+      topology: {
+        sitePlan: { pages, homePageId: 'home' },
+        pageRegistry: {
+          pages: {
+            home: { pageId: 'home', path: '/', title: 'Home' },
+            matches: { pageId: 'matches', path: '/matches', title: 'Matches' },
+          },
+        },
+      },
+      business: {
+        industry: 'general', capabilities: [], businessName: 'Black Stars',
+        businessProfile: { description: 'Match coverage and team stories.' }, parameters: {}, intentBindings: [],
+      },
+      design: { seed: 'matches-custom-route', resolvedSiteDesignContext: { contract: { industry: 'general' } } },
+    } as unknown as AppBuildContract;
+    const registry = scaffoldRegistry(contract);
+    const files = materializeDeterministicAppBuilderScaffold(contract, registry);
+
+    expect(files['/src/pages/Matches.tsx']).toContain('data-ut-page-role="custom"');
+    expect(files['/src/pages/Matches.tsx']).toContain('<SiteNav />');
+    expect(files['/src/pages/Matches.tsx']).toContain('<SiteFooter />');
+  });
+
   it('uses pinned variants and preserves repeated planned sections', () => {
     const target = page('home', 'Home', '/', 'home', true);
     const contract = { topology: { sitePlan: { pages: [target] }, pageRegistry: { pages: {} } },

@@ -83,7 +83,79 @@ describe("homepage site confirmation", () => {
   });
 });
 
+describe('chat-to-wizard plan coherence', () => {
+  it('keeps portfolio purpose and selected pages when a visitor asks for an interactive experience', () => {
+    const brief = buildConfirmedSiteBrief([
+      message('user', 'Help me create a professional art portfolio website for my business.'),
+      message('assistant', 'What type of art do you specialize in, and who is your primary audience?'),
+      message('user', 'My selection: Showcase Work'),
+      message('assistant', 'What is the main action visitors should take?'),
+      message('user', 'My selection: Explore an interactive experience'),
+      message('assistant', 'Which pages would you like to include, such as Home, Gallery, FAQ, and Blog?'),
+      message('user', 'My selection: Home, Gallery, FAQ, Blog'),
+      message('assistant', 'What visual style best represents your artwork?'),
+      message('user', 'My selection: Bold · Auto-matched art direction · motion-rich'),
+      message('assistant', 'What is your brand or artist name?'),
+      message('user', 'My selection: ARIA'),
+      message('assistant', 'Brand ARIA. Purpose: showcase work through an interactive experience. Pages: Home, Gallery, FAQ, and Blog. Is this right?'),
+      message('user', 'Yes, please.'),
+    ]);
+
+    const plan = deriveChatLaunchPlan(brief, { promptFirst: true });
+    const projected = projectUniversalCreationInput(plan, plan.selectedPages, { promptFirst: true });
+
+    expect(plan.creationInput.sitePurpose).toBe('Creative portfolio and work showcase');
+    expect(plan.selectedPages).toEqual(expect.arrayContaining(['gallery', 'faq', 'blog']));
+    expect(projected?.pages.map((page) => page.route)).toEqual(expect.arrayContaining(['/gallery', '/faq', '/blog']));
+    expect(projected?.pages.map((page) => page.route)).not.toContain('/experience');
+    expect(plan.creationInput.requestedCapabilities).toEqual([]);
+    expect(plan.creationInput.visualRequirements).toContain('Visual direction: bold');
+  });
+});
+
 describe("open-ended page resolution", () => {
+  it('preserves Ghana publication intent without adding unrelated business capabilities', () => {
+    const prompt = 'Create a Ghana Black Stars football publication with latest articles, match coverage, team stories, an About page, Ghana flag imagery, and Ghanaian red, gold, and green colors.';
+    const plan = deriveChatLaunchPlan(prompt, { promptFirst: true });
+
+    expect(plan.creationInput.originalPrompt).toBe(prompt);
+    expect(plan.creationInput.pages.some((page) => page.route === '/about')).toBe(true);
+    expect(plan.creationInput.visualRequirements).toContain('Preserve the specifically requested flag imagery and national colors.');
+    expect(plan.creationInput.visualRequirements).toEqual(expect.arrayContaining([
+      expect.stringContaining('Ghana flag mark'),
+    ]));
+    expect(plan.creationInput.requestedCapabilities).toEqual([]);
+    expect(plan.industry).toBeNull();
+  });
+
+  it('does not attach classifier industry or industry-default pages to a prompt-first custom route', () => {
+    const plan = deriveChatLaunchPlan(
+      'Create a football results board with a custom /matches route and Ghana identity.',
+      { promptFirst: true },
+    );
+
+    expect(plan.creationInput.mode).toBe('open-ended');
+    expect(plan.creationInput.industryHint).toBeUndefined();
+    expect(plan.industry).toBeNull();
+    expect(plan.systemId).toBeNull();
+    expect(plan.creationInput.pages.map((page) => page.route)).toContain('/matches');
+    expect(plan.creationInput.pages.map((page) => page.route)).not.toContain('/services');
+    expect(plan.creationInput.pages.map((page) => page.route)).not.toContain('/booking');
+  });
+
+  it('keeps a classifier-confident salon prompt industry-neutral in prompt-first mode', () => {
+    const brief = 'Create a salon website with appointment bookings and a custom /matches route.';
+    expect(deriveChatLaunchPlan(brief).industry).toBe('salon');
+    const plan = deriveChatLaunchPlan(brief, { promptFirst: true });
+
+    expect(plan.creationInput.industryHint).toBeUndefined();
+    expect(plan.industry).toBeNull();
+    expect(plan.systemId).toBeNull();
+    expect(plan.creationInput.requestedCapabilities).toContain('booking');
+    expect(plan.creationInput.pages.map((page) => page.route)).toContain('/matches');
+    expect(plan.creationInput.pages.map((page) => page.route)).not.toContain('/services');
+  });
+
   it("uses industry topology routes and preserves additional aliased pages", () => {
     const plan = deriveChatLaunchPlan(
       "I run a restaurant. Please include a menu page, a reservations page, a news page, a careers page, and a privacy policy.",

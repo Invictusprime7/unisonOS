@@ -47,6 +47,34 @@ describe('DesignSystemResolver', () => {
     expect(bundle.eligibleByPage['page-home']).toEqual(['hero:home']);
   });
 
+  it('keeps composition-sealed families eligible across topology role aliases', () => {
+    const contract = buildAppBuildContract(makeInput([
+      impl('about:editorial-split', 'about', ['about']),
+      impl('testimonials:grid', 'testimonials', ['about']),
+      impl('hero:prisma-cinematic', 'hero', ['home']),
+      impl('cta:gradient-banner', 'cta', ['home']),
+    ]));
+    contract.topology.sitePlan.pages = contract.topology.sitePlan.pages.map((page) => ({
+      ...page,
+      role: 'immersive',
+    }));
+    contract.design.compositionPlan = {
+      ...contract.design.compositionPlan,
+      pages: contract.design.compositionPlan.pages.map((page) => page.pageId === 'page-home'
+        ? { ...page, target: { ...page.target, sectionOrder: ['hero', 'about', 'testimonials', 'cta'] } }
+        : page),
+    };
+
+    const bundle = resolveDesignSourceBundle(contract);
+
+    expect(bundle.eligibleByPage['page-home']).toEqual(expect.arrayContaining([
+      'about:editorial-split',
+      'testimonials:grid',
+      'hero:prisma-cinematic',
+      'cta:gradient-banner',
+    ]));
+  });
+
   it('derives sourceSelection from the sealed registry context', () => {
     const contract = buildAppBuildContract(makeInput([impl('hero:b', 'hero'), impl('hero:a', 'hero', ['home'], 'approved')]));
     expect(contract.design.sourceSelection.implementationIds).toEqual(['hero:a', 'hero:b']);

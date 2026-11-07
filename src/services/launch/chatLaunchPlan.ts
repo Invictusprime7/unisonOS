@@ -10,7 +10,7 @@
 import { classifyPromptForWizard } from "@/components/onboarding/wizard/wizardPromptClassifier";
 import type { CustomerNeed, PageChoice, PrimaryGoal } from "@/components/onboarding/wizard/wizardCatalog";
 import type { BusinessSystemType } from "@/data/templates/types";
-import type { UniversalCreationInput } from "@/platform/core/universalCreation";
+import type { UniversalCapabilityEvidence, UniversalCreationInput } from "@/platform/core/universalCreation";
 import { getIndustryProfile } from "@/platform/core/industryMatrix";
 import {
   matchTopologyPageAliases,
@@ -61,7 +61,7 @@ const PAGE_DETAILS: Record<PageChoice, { route: string; title: string; purpose: 
   contact: { route: '/contact', title: 'Contact', purpose: 'Provide the contact information requested by the visitor.', role: 'contact' },
   booking: { route: '/booking', title: 'Booking', purpose: 'Support booking only when explicitly requested.', role: 'booking' },
   checkout: { route: '/checkout', title: 'Checkout', purpose: 'Support checkout only when explicitly requested.', role: 'checkout' },
-  blog: { route: '/news', title: 'News', purpose: 'Present articles, news, and editorial coverage requested by the visitor.', role: 'blog' },
+  blog: { route: '/blog', title: 'Blog', purpose: 'Present articles and editorial coverage requested by the visitor.', role: 'blog' },
   shop: { route: '/shop', title: 'Shop', purpose: 'Present products only when explicitly requested.', role: 'shop' },
 };
 
@@ -97,15 +97,23 @@ function pageDetailsForChoice(choice: PageChoice, industry: string | null) {
   return spec ? { ...generic, route: spec.path, title: spec.title } : generic;
 }
 
+function explicitlyRequestsExperiencePage(text: string): boolean {
+  return /\b(?:experience|immersive)\s+(?:page|route)\b/i.test(text)
+    || /\bpages?\b[^.!?\n]{0,120}\b(?:experience|immersive)\b/i.test(text);
+}
+
 function topologyPagesFromPrompt(text: string, industry: string | null): UniversalCreationInput['pages'] {
   return matchTopologyPageAliases(text).flatMap(({ alias, role }) => {
     if (role === 'home') return [];
+    if (role === 'immersive' && !explicitlyRequestsExperiencePage(text)) return [];
     if (role === 'custom') {
       const slug = alias.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       const title = alias.replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
       return slug ? [{ route: `/${slug}`, title, purpose: `A dedicated ${title.toLowerCase()} page requested by the visitor.`, suggestedRole: 'custom' }] : [];
     }
-    const spec = pageForTopologyRole(role, industry);
+    const spec = role === 'blog' && alias === 'news'
+      ? { title: 'News', path: '/news' }
+      : pageForTopologyRole(role, industry);
     if (!spec || spec.path === '/') return [];
     const title = spec.title;
     const details = (Object.keys(PAGE_DETAILS) as PageChoice[])
@@ -147,78 +155,90 @@ function deriveExplicitRoutePages(text: string): UniversalCreationInput['pages']
   return pages;
 }
 
-function hasOperationalRequest(text: string, pattern: RegExp): boolean {
+function findOperationalRequest(text: string, pattern: RegExp): string | null {
   const requestPattern = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
   for (const match of text.matchAll(requestPattern)) {
     const before = text.slice(0, match.index);
     const sentencePrefix = before.slice(Math.max(before.lastIndexOf('.'), before.lastIndexOf('!'), before.lastIndexOf('?'), before.lastIndexOf('\n'), before.lastIndexOf(';')) + 1);
-    if (!/\b(?:no|not|without|avoid|exclude|omit|skip|never|don't|do not|doesn't|does not|needn't)\b(?:\s+\w+){0,3}\s*$/i.test(sentencePrefix.slice(-80))) return true;
+    if (!/\b(?:no|not|without|avoid|exclude|omit|skip|never|don't|do not|doesn't|does not|needn't)\b(?:\s+\w+){0,3}\s*$/i.test(sentencePrefix.slice(-80))) return match[0].trim();
   }
-  return false;
+  return null;
 }
 
-export function deriveChatLaunchPlan(brief: string): ChatLaunchPlan {
+export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boolean } = {}): ChatLaunchPlan {
   const text = String(brief || "");
+  const promptFirst = options.promptFirst === true;
   const confirmedDirection = text.match(
     /(?:^|\n)Confirmed site direction:\s*([\s\S]*?)(?=\n\s*Conversation details:|$)/i,
   )?.[1]?.trim();
-  const analysis = classifyPromptForWizard(confirmedDirection || text);
+  const conversationDetails = text.match(/(?:^|\n)Conversation details:\s*([\s\S]*)$/i)?.[1]?.trim();
+  const semanticText = conversationDetails || confirmedDirection || text;
+  const analysis = classifyPromptForWizard(semanticText);
   const confident = Boolean(analysis?.industryIdentityMatched && analysis.confidence > 0.55);
-  const topologyAliases = matchTopologyPageAliases(text);
+  const topologyAliases = matchTopologyPageAliases(semanticText);
   const topologyRoles = new Set<string>(topologyAliases.map(({ role }) => role));
-  const mentionedPages = (Object.keys(PAGE_KEYWORDS) as PageChoice[]).filter((page) =>
-    hit(text, PAGE_KEYWORDS[page]) || topologyRoles.has(PAGE_DETAILS[page].role),
-  );
-  const family = Object.keys(FAMILY_KEYWORDS).find((f) => hit(text, FAMILY_KEYWORDS[f])) ?? null;
+  const mentionsBlog = hit(semanticText, ['blog', 'journal', 'articles']);
+  const mentionsNews = topologyAliases.some(({ alias }) => alias === 'news');
+  const mentionedPages = (Object.keys(PAGE_KEYWORDS) as PageChoice[]).filter((page) => {
+    if (page === 'blog' && mentionsNews && !mentionsBlog) return false;
+    return hit(semanticText, PAGE_KEYWORDS[page]) || topologyRoles.has(PAGE_DETAILS[page].role);
+  });
+  const family = Object.keys(FAMILY_KEYWORDS).find((f) => hit(semanticText, FAMILY_KEYWORDS[f])) ?? null;
   const defaults = confident ? analysis!.selectedPages : [];
-  const focusedGoal = FOCUSED_GOALS.find(({ pattern }) => pattern.test(text))?.goal;
+  const focusedGoal = FOCUSED_GOALS.find(({ pattern }) => pattern.test(semanticText))?.goal;
   const focusedNeed = focusedGoal ? GOAL_CUSTOMER_NEED[focusedGoal] : undefined;
-  const resolvedIndustry = confident ? analysis!.industry : null;
+  const resolvedIndustry = !promptFirst && confident ? analysis!.industry : null;
   const profileRoutes = resolvedIndustry ? getIndustryProfile(resolvedIndustry)?.defaultPages.map((page) => page.path) ?? [] : [];
   const creationPages = uniquePagesByRoute([
     ...mentionedPages.map((page) => pageDetailsForChoice(page, resolvedIndustry)),
-    ...topologyPagesFromPrompt(text, resolvedIndustry),
-    ...deriveExplicitRoutePages(text).filter((page) => !profileRoutes.some((route) => route.toLowerCase() === page.route.toLowerCase())),
+    ...topologyPagesFromPrompt(semanticText, resolvedIndustry),
+    ...deriveExplicitRoutePages(semanticText).filter((page) => !profileRoutes.some((route) => route.toLowerCase() === page.route.toLowerCase())),
   ]);
   const visualRequirements = [
     ...(family ? [`Visual direction: ${family}`] : []),
-    ...[...text.matchAll(/\b(?:#[0-9a-f]{3,8}|(?:red|orange|yellow|green|blue|black|white|gold|teal|pink|maroon|navy|crimson|emerald))\b/gi)].map(([color]) => `Preserve the requested color: ${color}`),
-    ...( /\b(flag|flag icon|national colors)\b/i.test(text) ? ['Preserve the specifically requested flag imagery and national colors.'] : []),
-    ...( /\bghana\b/i.test(text) && /\bflag\b/i.test(text) ? ['Include a recognizable Ghana flag mark: horizontal red, gold/yellow, and green stripes with a centered black five-point star; keep it accessible and proportional.'] : []),
+    ...[...semanticText.matchAll(/\b(?:#[0-9a-f]{3,8}|(?:red|orange|yellow|green|blue|black|white|gold|teal|pink|maroon|navy|crimson|emerald))\b/gi)].map(([color]) => `Preserve the requested color: ${color}`),
+    ...( /\b(flag|flag icon|national colors)\b/i.test(semanticText) ? ['Preserve the specifically requested flag imagery and national colors.'] : []),
+    ...( /\bghana\b/i.test(semanticText) && /\bflag\b/i.test(semanticText) ? ['Include a recognizable Ghana flag mark: horizontal red, gold/yellow, and green stripes with a centered black five-point star; keep it accessible and proportional.'] : []),
   ];
-  const requestedCapabilities = [
-    ...(hasOperationalRequest(text, /\b(?:booking|appointments?|reservations?|reserve (?:a )?(?:table|spot|service)|book (?:a |an )?(?:table|spot|service|appointment|session))\b/gi) ? ['booking'] : []),
-    ...(hasOperationalRequest(text, /\b(?:checkout|cart|online ordering|order online|sell products?|e-?commerce|online store|payment processing|pay online)\b/gi) ? ['commerce'] : []),
-    ...(hasOperationalRequest(text, /\b(?:sign in|log in|authentication|user accounts?)\b/gi) ? ['authentication'] : []),
-    ...(hasOperationalRequest(text, /\b(?:contact form|lead form|quote request|newsletter|subscribe)\b/gi) ? ['lead-capture'] : []),
-    ...(hasOperationalRequest(text, /\b(?:cms|content management system|editorial dashboard|article editor|admin editor|manage (?:articles|posts|content)|create and publish (?:articles|posts))\b/gi) ? ['content-management'] : []),
-  ];
+  const capabilityRequests = [
+    ['booking', findOperationalRequest(semanticText, /\b(?:booking|appointments?|reservations?|reserve (?:a )?(?:table|spot|service)|book (?:a |an )?(?:table|spot|service|appointment|session))\b/gi)],
+    ['commerce', findOperationalRequest(semanticText, /\b(?:checkout|cart|online ordering|order online|sell products?|e-?commerce|online store|payment processing|pay online)\b/gi)],
+    ['authentication', findOperationalRequest(semanticText, /\b(?:sign in|log in|authentication|user accounts?)\b/gi)],
+    ['lead-capture', findOperationalRequest(semanticText, /\b(?:contact form|lead form|quote request|newsletter|subscribe)\b/gi)],
+    ['content-management', findOperationalRequest(semanticText, /\b(?:cms|content management system|editorial dashboard|article editor|admin editor|manage (?:articles|posts|content)|create and publish (?:articles|posts))\b/gi)],
+  ] as const;
+  const capabilityEvidence: UniversalCapabilityEvidence[] = capabilityRequests.flatMap(([capabilityId, phrase]) =>
+    phrase ? [{ capabilityId, origin: 'explicit', reason: `Prompt phrase: ${phrase}` }] : [],
+  );
+  const requestedCapabilities = capabilityEvidence.map(({ capabilityId }) => capabilityId);
   const creationInput: UniversalCreationInput = {
-    mode: confident ? 'guided' : 'open-ended',
-    originalPrompt: text,
-    sitePurpose: /\b(news|editorial|publication|journal|articles|blog)\b/i.test(text)
-      ? 'Editorial publication and content reading'
-      : /\b(portfolio|showcase|gallery)\b/i.test(text)
-        ? 'Creative portfolio and work showcase'
-        : /\b(interactive|educational|learning|course)\b/i.test(text)
+    mode: promptFirst || !confident ? 'open-ended' : 'guided',
+    originalPrompt: semanticText,
+    sitePurpose: /\b(portfolio|showcase|gallery)\b/i.test(semanticText)
+      ? 'Creative portfolio and work showcase'
+      : /\b(news|editorial|publication|journal|articles|blog)\b/i.test(semanticText)
+        ? 'Editorial publication and content reading'
+        : /\b(interactive|educational|learning|course)\b/i.test(semanticText)
           ? 'Interactive educational experience'
           : 'Website purpose described by the visitor',
-    subject: (confirmedDirection || text).trim().split(/[\n.!?]/, 1)[0].slice(0, 240),
+    subject: semanticText.trim().split(/[\n.!?]/, 1)[0].slice(0, 240),
+    ...(!promptFirst && confident ? { industryHint: analysis!.industry } : {}),
     pages: [{ route: '/', title: 'Home', purpose: 'Introduce the subject and purpose stated in the original prompt.', suggestedRole: 'home' }, ...creationPages],
     visualRequirements,
     requestedCapabilities,
+    capabilityEvidence,
   };
   return {
     creationInput,
-    industry: confident ? analysis!.industry : null,
-    systemId: confident ? analysis!.systemId : null,
+    industry: !promptFirst && confident ? analysis!.industry : null,
+    systemId: !promptFirst && confident ? analysis!.systemId : null,
     businessName: analysis?.businessName ?? null,
-    primaryGoal: confident ? focusedGoal ?? analysis!.primaryGoal : null,
-    customerNeeds: confident ? focusedNeed ? [focusedNeed] : analysis!.customerNeeds : [],
+    primaryGoal: !promptFirst && confident ? focusedGoal ?? analysis!.primaryGoal : null,
+    customerNeeds: !promptFirst && confident ? focusedNeed ? [focusedNeed] : analysis!.customerNeeds : [],
     // Pages the chat named win; industry defaults only fill in when none were named.
-    selectedPages: mentionedPages.length ? Array.from(new Set([...mentionedPages])) : defaults,
-    themePresetId: family ?? (confident ? analysis!.themePresetId : null),
-    brief: text,
+    selectedPages: promptFirst || mentionedPages.length ? Array.from(new Set(mentionedPages)) : defaults,
+    themePresetId: family ?? (!promptFirst && confident ? analysis!.themePresetId : null),
+    brief: semanticText,
   };
 }
 
@@ -230,12 +250,26 @@ export interface FinalLaunchSelections {
   themePresetId?: string | null;
 }
 
-export function projectUniversalCreationInput(plan: ChatLaunchPlan | null, selectedPages: readonly PageChoice[]): UniversalCreationInput | undefined {
+export function projectUniversalCreationInput(
+  plan: ChatLaunchPlan | null,
+  selectedPages: readonly PageChoice[],
+  options: { promptFirst?: boolean } = {},
+): UniversalCreationInput | undefined {
   if (!plan) return undefined;
+  if (options.promptFirst) {
+    return {
+      ...plan.creationInput,
+      pages: uniquePagesByRoute([
+        { route: '/', title: 'Home', purpose: 'Introduce the subject and purpose stated in the original prompt.', suggestedRole: 'home' },
+        ...plan.creationInput.pages.filter((page) => page.route !== '/'),
+      ]),
+    };
+  }
   const industryPages = plan.industry ? getIndustryProfile(plan.industry)?.defaultPages ?? [] : [];
   const wizardRoles = new Set(Object.values(PAGE_DETAILS).map((page) => page.role));
   const standardRoutes = new Set([
     '/',
+    '/news',
     ...Object.values(PAGE_DETAILS).map((page) => page.route.toLowerCase()),
     ...industryPages
       .filter((page) => wizardRoles.has(resolveTopologyPageRoleAlias(page.suggestedRole || page.purpose) || ''))

@@ -42,6 +42,10 @@ interface ReadinessManifest {
     sink?: 'email' | 'native-inbox' | 'none';
   };
   bookingReady?: boolean;
+  commerceRequired?: boolean;
+  paymentsReady?: boolean;
+  payments?: { required?: boolean; configured?: boolean; stepStatus?: string };
+  capabilitiesAwaitingConfirmation?: Array<{ capabilityId?: string; reason?: string }>;
   bindings?: { total?: number; previewReady?: number; publishReady?: number; blocked?: number };
   industryIntentCoverage?: {
     requiredTotal?: number;
@@ -208,6 +212,7 @@ export const ReadinessCenterPanel: React.FC<ReadinessCenterPanelProps> = ({
     // ---- Intents --------------------------------------------------------
     const coverage = manifest?.industryIntentCoverage;
     const blocked = manifest?.bindings?.blocked ?? 0;
+    const capabilitySuggestions = manifest?.capabilitiesAwaitingConfirmation ?? [];
     const intents: Section = {
       id: 'intents',
       title: 'Intents',
@@ -240,6 +245,11 @@ export const ReadinessCenterPanel: React.FC<ReadinessCenterPanelProps> = ({
             blocked ? ` · ${blocked} blocked` : ''
           }`,
         },
+        ...(capabilitySuggestions.length > 0 ? [{
+          label: 'Suggested capabilities not enabled',
+          state: 'na' as const,
+          detail: capabilitySuggestions.map((item) => item.capabilityId).filter(Boolean).join(', '),
+        }] : []),
       ],
     };
 
@@ -266,6 +276,11 @@ export const ReadinessCenterPanel: React.FC<ReadinessCenterPanelProps> = ({
               state: contract && contract.requiredWorkflows.length > 0 ? 'ok' : 'na',
               detail: contract ? `${contract.requiredWorkflows.length} workflow(s)` : '—',
             },
+            ...(manifest?.commerceRequired ? [{
+              label: 'Checkout payment provider',
+              state: manifest.paymentsReady ? 'ok' as const : 'fail' as const,
+              detail: manifest.paymentsReady ? 'connected' : 'connection required',
+            }] : []),
           ]
         : [{ label: 'Provisioning report', state: 'na', detail: 'No contract in scope' }],
     };

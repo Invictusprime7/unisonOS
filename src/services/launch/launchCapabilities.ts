@@ -1,6 +1,7 @@
 import { getCapability, type CapabilityId } from '@/platform/core/capabilityRegistry';
 import { resolveCapabilityPacks, type BusinessCapability } from '@/platform/core/capabilityPacks';
 import { getIndustryProfile, normalizeIndustryKey } from '@/platform/core/industryMatrix';
+import type { UniversalCapabilityEvidence } from '@/platform/core/universalCreation';
 import type { CustomerNeed, PageChoice, PrimaryGoal } from '@/components/onboarding/wizard/wizardCatalog';
 
 export const BUSINESS_LAUNCH_PLAN_VERSION = 'unison-business-launch-plan/1' as const;
@@ -17,6 +18,7 @@ export interface BusinessLaunchPlan {
   operationalCapabilities: CapabilityId[];
   businessCapabilities: BusinessCapability[];
   requestedCapabilities: string[];
+  capabilityEvidence?: UniversalCapabilityEvidence[];
   requestedResources: string[];
   blockedRequests: string[];
 }
@@ -100,6 +102,7 @@ const UNIVERSAL_CAPABILITIES: Readonly<Record<string, {
 
 export interface UniversalCapabilityResolution {
   requestedCapabilities: string[];
+  capabilityEvidence?: UniversalCapabilityEvidence[];
   operationalCapabilities: CapabilityId[];
   businessCapabilities: BusinessCapability[];
   requestedIntents: string[];
@@ -107,15 +110,25 @@ export interface UniversalCapabilityResolution {
   blockedRequests: string[];
 }
 
-export function resolveUniversalCreationCapabilities(requested: readonly string[] = []): UniversalCapabilityResolution {
+export function resolveUniversalCreationCapabilities(
+  requested: readonly string[] = [],
+  evidence: readonly UniversalCapabilityEvidence[] = [],
+): UniversalCapabilityResolution {
   const names = [...new Set(requested.map((value) => value.trim().toLowerCase().replace(/_/g, '-')).filter(Boolean))];
   const operationalCapabilities = new Set<CapabilityId>();
   const businessCapabilities = new Set<BusinessCapability>();
   const requestedIntents = new Set<string>();
   const requestedResources = new Set<string>();
   const blockedRequests: string[] = [];
+  const inferred = new Set(evidence
+    .filter((item) => item.origin === 'inferred')
+    .map((item) => item.capabilityId.trim().toLowerCase().replace(/_/g, '-')));
 
   for (const name of names) {
+    if (inferred.has(name)) {
+      blockedRequests.push(`capability:${name}:confirmation-required`);
+      continue;
+    }
     const definition = UNIVERSAL_CAPABILITIES[name];
     if (!definition) {
       blockedRequests.push(`capability:${name}:unsupported`);
@@ -132,8 +145,20 @@ export function resolveUniversalCreationCapabilities(requested: readonly string[
     definition.resources.forEach((resource) => requestedResources.add(resource));
   }
 
+  const evidenceByCapability = new Map<UniversalCapabilityEvidence['capabilityId'], UniversalCapabilityEvidence>();
+  for (const item of evidence) {
+    const capabilityId = item.capabilityId.trim().toLowerCase().replace(/_/g, '-');
+    if (!names.includes(capabilityId) || !UNIVERSAL_CAPABILITIES[capabilityId]
+      || blockedRequests.includes(`capability:${capabilityId}:unsupported`)
+      || typeof item.reason !== 'string' || !item.reason.trim()) continue;
+    const normalized = { ...item, capabilityId: capabilityId as UniversalCapabilityEvidence['capabilityId'], reason: item.reason.trim() };
+    const existing = evidenceByCapability.get(normalized.capabilityId);
+    if (!existing || normalized.origin === 'explicit') evidenceByCapability.set(normalized.capabilityId, normalized);
+  }
+
   return {
     requestedCapabilities: names,
+    ...(evidenceByCapability.size ? { capabilityEvidence: [...evidenceByCapability.values()] } : {}),
     operationalCapabilities: [...operationalCapabilities],
     businessCapabilities: [...businessCapabilities],
     requestedIntents: [...requestedIntents],
@@ -224,13 +249,17 @@ export function resolveBusinessLaunchPlan(input: {
   customerNeeds?: readonly CustomerNeed[];
   selectedPages?: readonly PageChoice[];
   requestedCapabilities?: readonly string[];
+  capabilityEvidence?: readonly UniversalCapabilityEvidence[];
 }): BusinessLaunchPlan {
   const profile = getIndustryProfile(input.industry);
   const canonicalIndustryId = profile?.industry ?? null;
   const primaryGoal = input.primaryGoal ?? null;
   const customerNeeds = [...new Set(input.customerNeeds ?? [])];
   const focusedIntent = { primaryGoal, customerNeeds };
-  const universalCapabilities = resolveUniversalCreationCapabilities(input.requestedCapabilities);
+  const universalCapabilities = resolveUniversalCreationCapabilities(
+    input.requestedCapabilities,
+    input.capabilityEvidence,
+  );
   const requestedOperational = new Set<CapabilityId>();
   const goalCapability = primaryGoal ? GOAL_CAPABILITIES[primaryGoal] : undefined;
   if (goalCapability) requestedOperational.add(goalCapability);
@@ -296,6 +325,9 @@ export function resolveBusinessLaunchPlan(input: {
     operationalCapabilities,
     businessCapabilities,
     requestedCapabilities: universalCapabilities.requestedCapabilities,
+    ...(universalCapabilities.capabilityEvidence
+      ? { capabilityEvidence: universalCapabilities.capabilityEvidence }
+      : {}),
     requestedResources,
     blockedRequests,
   };

@@ -111,7 +111,7 @@ function getResolvedBusinessField(
     case 'paymentProvider':
       return (
         businessInfo.paymentProvider ||
-        (paymentStep?.status === 'completed' ? 'configured' : null) ||
+        (paymentStep?.config?.paymentProviderConfigured === true ? 'configured' : null) ||
         (paymentStep?.config?.stripeConnected === true ? 'stripe' : null)
       );
     case 'bookingOwner':
@@ -141,11 +141,12 @@ function isSetupStepSatisfied(
   const step = setupSteps.get(stepId);
 
   if (!step) return false;
+  if (stepId === 'payments') {
+    return step.config?.stripeConnected === true || step.config?.paymentProviderConfigured === true;
+  }
   if (step.status === 'completed') return true;
 
   switch (stepId) {
-    case 'payments':
-      return step.config?.stripeConnected === true || !isBlankValue(businessInfo.paymentProvider);
     case 'booking_calendar':
       return Boolean(
         !isBlankValue(businessInfo.bookingOwner) ||
@@ -553,9 +554,8 @@ function buildOperationalDependencies(
     businessInfo.notificationEmail ||
     null;
   const paymentConnected =
-    paymentStep?.status === 'completed' ||
-    paymentStep?.config?.stripeConnected === true ||
-    businessInfo.paymentProvider === 'stripe';
+    paymentStep?.config?.paymentProviderConfigured === true ||
+    paymentStep?.config?.stripeConnected === true;
   const bookingConfigured =
     bookingStep?.status === 'completed' ||
     (

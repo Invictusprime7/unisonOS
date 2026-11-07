@@ -911,9 +911,24 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
   );
 
   it('preserves arbitrary source and assets byte-for-byte when they are outside an explicit edit', async () => {
+    const matchesPage = 'import MatchCentre from "../project-components/football/MatchCentre"; export default function Matches(){return <main><section data-ut-section-id="matches:match-centre:0" data-ut-section-type="match-centre" data-ut-variant="custom:project-components-football-match-centre-default"><MatchCentre title="Ghana v Senegal" /></section></main>}';
+    const matchCentre = 'export default function MatchCentre({title}:{title:string}){return <article><h2>{title}</h2><p>Match coverage</p></article>}';
+    const matchComposition = JSON.stringify({
+      version: '1.0', compiledBy: 'app-builder', pageFilePath: '/src/pages/Matches.tsx',
+      sections: [{
+        sectionId: 'matches:match-centre:0', semanticType: 'match-centre', primitiveId: 'MatchCentre',
+        sourceModulePath: '/src/project-components/football/MatchCentre.tsx',
+        sourcePath: '/src/pages/Matches.tsx', componentOwnerId: 'site-component:/src/project-components/football/MatchCentre.tsx',
+        variantId: 'custom:project-components-football-match-centre-default', data: { title: 'Ghana v Senegal' },
+      }],
+      variantOverrides: { 'matches:match-centre:0': 'custom:project-components-football-match-centre-default' },
+    });
     const files = {
       '/src/App.tsx': 'export default function App(){return null}',
       '/src/components/Hero.tsx': 'export const Hero = () => <section>Exact</section>;',
+      '/src/pages/Matches.tsx': matchesPage,
+      '/src/project-components/football/MatchCentre.tsx': matchCentre,
+      '/.unison/compositions/pages/Matches.json': matchComposition,
       '/src/features/gallery/useGallery.ts': 'export const useGallery = () => 1;',
       '/src/styles/custom.css': '.gallery { gap: 3rem; }',
       '/public/logo.svg': '<svg><title>Exact</title></svg>',
@@ -933,6 +948,13 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
 
     expect(result.vfsFiles).toEqual(candidate);
     expect(revisionStore[0]?.vfs_files).toEqual(candidate);
+    expect(result.vfsFiles['/src/pages/Matches.tsx']).toBe(matchesPage);
+    expect(result.vfsFiles['/src/project-components/football/MatchCentre.tsx']).toBe(matchCentre);
+    expect(result.vfsFiles['/.unison/compositions/pages/Matches.json']).toBe(matchComposition);
+    const reopened = await loadLatestRevisionForProject(IDENTITY.projectId);
+    expect(reopened?.vfsFiles['/src/pages/Matches.tsx']).toBe(matchesPage);
+    expect(reopened?.vfsFiles['/src/project-components/football/MatchCentre.tsx']).toBe(matchCentre);
+    expect(reopened?.vfsFiles['/.unison/compositions/pages/Matches.json']).toBe(matchComposition);
   });
 
   it('carries unchanged provenance forward while stamping changed files with the new revision', async () => {

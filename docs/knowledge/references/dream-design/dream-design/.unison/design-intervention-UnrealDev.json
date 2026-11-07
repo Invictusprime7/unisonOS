@@ -1,0 +1,142 @@
+{
+  "version": "2.0",
+  "source": "deterministic-baseline",
+  "seed": "dream. design. eman amanni|portfolio|portfolio_creator|portfolio-photography|bold|showcase_work|fill_form,request_quote|about,gallery,home|2ce93d66-a0e5-4265-aa1f-1bd7d1f8df4a|-",
+  "industry": "portfolio",
+  "businessModel": "portfolio_creator",
+  "templateId": "portfolio-photography",
+  "themePresetId": "bold",
+  "artDirectionPackId": "cinematic-portfolio",
+  "layoutRecipe": "collage-hero",
+  "sectionVariants": [
+    "testimonial-rail",
+    "conversion-form",
+    "collage-hero",
+    "gallery-lightbox"
+  ],
+  "activeVariants": {
+    "portfolio-photography-nav": "navbar:floating-pill",
+    "portfolio-photography-hero": "hero:image-fan",
+    "portfolio-photography-gallery": "gallery:case-study",
+    "portfolio-photography-services": "services:product-cards",
+    "portfolio-photography-about": "about:editorial-split",
+    "portfolio-photography-pricing": "pricing:billing-toggle",
+    "portfolio-photography-testimonials": "testimonials:rail",
+    "portfolio-photography-cta": "cta:centered",
+    "portfolio-photography-footer": "footer:brand-social"
+  },
+  "motionRecipes": [
+    "gallery-inspection",
+    "editorial-reveal",
+    "proof-led-stagger"
+  ],
+  "interactionRecipes": [
+    "image-lightbox",
+    "mobile-nav-dialog",
+    "accordion"
+  ],
+  "motionBudget": "expressive",
+  "experienceRecipes": [
+    "immersive-hero",
+    "depth-gallery",
+    "floating-media"
+  ],
+  "experienceBudget": "immersive",
+  "compositionPolicy": "maximum-compatible",
+  "envelope": {
+    "version": "1.0",
+    "vocabularyVersion": "1.0",
+    "density": "airy",
+    "visualDominance": "high",
+    "typographyScale": "oversized",
+    "layoutSymmetry": "asymmetric",
+    "motion": "expressive",
+    "webgl": "eligible",
+    "canvasBudget": 2,
+    "immersiveRequested": false,
+    "heroCandidates": [
+      "oversized-editorial",
+      "floating-media",
+      "interactive-canvas",
+      "collage",
+      "asymmetric-story",
+      "scroll-reveal",
+      "split-cinematic",
+      "fullscreen-video"
+    ],
+    "contentCandidates": [
+      "editorial-story",
+      "layered-media",
+      "floating-cards",
+      "marquee",
+      "comparison",
+      "bento",
+      "horizontal-scroll",
+      "split-feature"
+    ],
+    "mediaCandidates": [
+      "lookbook",
+      "masonry",
+      "filmstrip",
+      "depth-gallery",
+      "lightbox",
+      "parallax-gallery"
+    ],
+    "backgroundCandidates": [
+      "gradient-orbs",
+      "noise-field",
+      "3d-scene",
+      "media-canvas",
+      "particle-field",
+      "animated-grid",
+      "glow-field"
+    ],
+    "commerceCandidates": [],
+    "motionCandidates": [
+      "mask-reveal",
+      "parallax",
+      "scroll-linked",
+      "stagger",
+      "hover-depth"
+    ],
+    "navigationCandidates": [
+      "minimal",
+      "editorial",
+      "floating-pill",
+      "split"
+    ],
+    "experiencePrimitives": [],
+    "heavyLeads": []
+  },
+  "brief": {
+    "visualArchetype": "cinematic-portfolio/asymmetric-high-dominance",
+    "composition": {
+      "symmetry": "asymmetric",
+      "density": "airy",
+      "sectionRhythm": "variable",
+      "heroScale": "monumental"
+    },
+    "typography": {
+      "contrast": "extreme",
+      "displayTreatment": "oversized"
+    },
+    "media": {
+      "dominance": "high",
+      "cropping": "editorial",
+      "treatments": [
+        "full-bleed",
+        "lookbook",
+        "masonry"
+      ]
+    },
+    "motion": {
+      "intensity": "expressive",
+      "scrollLinked": true
+    },
+    "experience": {
+      "webglEligible": true,
+      "canvasBudget": 2
+    }
+  },
+  "aiDirective": "Compose only with snapshot-owned UI primitives and semantic Stage 4b tokens. Art direction is \"Cinematic Portfolio\" — Full-bleed imagery, inspection-led motion, portrait-weighted media. Art Direction Family \"bold\", pack \"bold.cinematic-portfolio\": compose creatively inside this grammar and never switch family. This launch resolved the registered implementations about:editorial-split, cta:centered, footer:brand-social, gallery:case-study, hero:image-fan, navbar:floating-pill, pricing:billing-toggle, services:product-cards, testimonials:rail — compose within them and never author replacement section source. Their design language is floating-pill, editorial-product-grid, horizontal-scroll; vary the pattern between pages instead of repeating one section shape. Additional immersive components are not approved for this launch. Preserve the compiler-owned composition adapters and their recorded capability decisions; never add experience imports or import three/@react-three/* directly. Preserve the motion budget, selected recipes, accessibility, responsive constraints, and canonical intent bindings."
+}

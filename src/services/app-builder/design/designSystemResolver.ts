@@ -91,8 +91,13 @@ export function resolveDesignSourceBundle(contract: AppBuildContract): DesignSou
     const target = design.compositionPlan?.pages.find((planned) => planned.pageId === page.id)?.target;
     // The sealed section order owns which families this page renders; those
     // families get the variety, never unrelated families that merely sort first.
-    const pageFamilies = new Set<string>([...(target?.sectionOrder ?? []), 'navbar', 'footer']);
+    const compositionFamilies = new Set<string>(target?.sectionOrder ?? []);
+    const pageFamilies = new Set<string>([...compositionFamilies, 'navbar', 'footer']);
+    // Immersive has no dedicated composition profile yet; its sealed target
+    // supplies the fallback architecture, so only those explicit families may
+    // cross the authored page-role boundary.
     const roleFit = pool.filter((impl) => pinnedIds.has(impl.id)
+      || (pageRole === 'immersive' && compositionFamilies.has(impl.sectionType))
       || impl.pageRoles.length === 0 || impl.pageRoles.includes(pageRole));
     const richerTypes = new Set(roleFit.filter((impl) => !isGenericImplementationId(impl.id)).map((impl) => impl.sectionType));
     const seed = `${design.seed}:${page.id}`;

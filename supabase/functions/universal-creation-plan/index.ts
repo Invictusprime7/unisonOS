@@ -53,9 +53,9 @@ export default {
     const systemPrompt = `You are Unison's Universal Intent Planner. Propose a compact page topology and operational capabilities from the user's request. Do not write code, invent business facts, or add features that were not requested. Preserve all explicit custom routes. Prefer a single clear page purpose over generic filler pages.
 
 Return only JSON with this shape:
-{"pages":[{"route":"/example","title":"Example","purpose":"Specific visitor outcome","suggestedRole":"custom"}],"requestedCapabilities":["booking"]}
+{"pages":[{"route":"/example","title":"Example","purpose":"Specific visitor outcome","suggestedRole":"custom"}],"requestedCapabilities":["booking"],"capabilityEvidence":[{"capabilityId":"booking","reason":"The prompt requests appointment reservations"}]}
 
-Pages may use roles home, about, services, contact, pricing, gallery, faq, booking, checkout, thank_you, blog, shop, immersive, or custom. Capabilities may only be booking, commerce, authentication, lead-capture, or content-management. Return no more than 12 pages and no more than 5 capabilities. Keep routes absolute and stable. Existing Wizard pages are authoritative; do not repeat them. Do not infer a capability from a negated request.`;
+Pages may use roles home, about, services, contact, pricing, gallery, faq, booking, checkout, thank_you, blog, shop, immersive, or custom. Capabilities may only be booking, commerce, authentication, lead-capture, or content-management. Return no more than 12 pages and no more than 5 capabilities. Each capabilityEvidence entry must reference a requestedCapabilities ID and explain the prompt evidence. Keep routes absolute and stable. Existing Wizard pages are authoritative; do not repeat them. Do not infer a capability from a negated request.`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 35_000);
@@ -96,7 +96,21 @@ Pages may use roles home, about, services, contact, pricing, gallery, faq, booki
           .map((value) => value.trim().toLowerCase())
           .filter((value) => CAPABILITIES.has(value)))].slice(0, 5)
         : [];
-      return Response.json({ success: true, proposal: { pages, requestedCapabilities } });
+      const requestedCapabilitySet = new Set(requestedCapabilities);
+      const capabilityEvidence = Array.isArray(proposal.capabilityEvidence)
+        ? proposal.capabilityEvidence.flatMap((value: unknown) => {
+          if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+          const evidence = value as Record<string, unknown>;
+          const capabilityId = typeof evidence.capabilityId === "string"
+            ? evidence.capabilityId.trim().toLowerCase()
+            : "";
+          const reason = typeof evidence.reason === "string" ? sanitizeString(evidence.reason, 320) : "";
+          return capabilityId && requestedCapabilitySet.has(capabilityId) && reason
+            ? [{ capabilityId, reason }]
+            : [];
+        })
+        : [];
+      return Response.json({ success: true, proposal: { pages, requestedCapabilities, capabilityEvidence } });
     } catch (caught) {
       console.error("[universal-creation-plan] planning failed", caught instanceof Error ? caught.message : "unknown error");
       return Response.json({ success: false, error: "AI planning failed" }, { status: 502 });

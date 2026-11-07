@@ -18,6 +18,16 @@ vi.mock("@/components/onboarding/wizard/DesignContractInspector", () => ({ Desig
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
 
 describe("Launcher Wizard guided flow", () => {
+  it('renders the open-ended option for an unclassified chat prompt', async () => {
+    render(<MemoryRouter><LauncherWizard
+      open presentation="chat" onOpenChange={vi.fn()}
+      initialVisionPrompt="Build a custom app for a very niche workflow"
+    /></MemoryRouter>);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Open-ended/ })).toHaveAttribute('aria-pressed', 'true'));
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  });
+
   it('switches an open-ended brief back to guided mode when a guided industry is selected', async () => {
     vi.mocked(runLaunchPipeline).mockRejectedValueOnce(new Error('stop after launch input'));
     render(<MemoryRouter><LauncherWizard open onOpenChange={vi.fn()} /></MemoryRouter>);

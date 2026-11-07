@@ -710,6 +710,53 @@ const CMS_CONTENT_PACK: CapabilityPack = {
   },
 };
 
+const AUTH_CUSTOMER_PACK: CapabilityPack = {
+  id: 'auth.customer',
+  name: 'Site Visitor Authentication',
+  description: 'Site-scoped visitor accounts and sessions handled by the existing site-auth service.',
+  provides: ['auth.customer', 'portal.customer'],
+  dependsOn: [],
+  relatedOperationalPacks: ['auth'],
+  database: {
+    tables: [
+      {
+        table: 'site_users',
+        purpose: 'Visitor identities isolated to one canonical site.',
+        requiredColumns: [
+          'id', 'site_id', 'business_id', 'email', 'password_hash', 'name',
+          'metadata', 'email_verified', 'created_at', 'updated_at', 'last_login_at',
+        ],
+        ownershipColumn: 'business_id',
+        publicRead: false,
+        publicInsert: false,
+        policies: ['Business owners can manage site users', 'Service role full access on site_users'],
+        grants: OWNER_MANAGED_GRANTS,
+      },
+    ],
+  },
+  backend: {
+    functions: ['site-auth', 'intent-exec'],
+    events: ['customer.registered'],
+    permissions: ['customer.portal.access'],
+  },
+  frontend: {
+    components: ['AuthModal', 'CustomerPortal'],
+    dataSources: ['auth.customer'],
+    slots: ['navbar.account-action'],
+  },
+  intents: { provided: ['auth.login', 'auth.register', 'auth.logout'], required: [] },
+  settings: { accountFields: [], projectFields: ['auth.allowCustomerSignup'] },
+  readiness: {
+    assertions: [
+      { id: 'site-users-table-exists', kind: 'table-exists', target: 'site_users', description: 'Site visitor accounts have a canonical site-scoped store.', blocking: true },
+      { id: 'site-users-rls-enabled', kind: 'rls-enabled', target: 'site_users', description: 'Visitor accounts are protected by row-level security.', blocking: true },
+      { id: 'site-auth-handler-installed', kind: 'handler-installed', target: 'site-auth', description: 'Login and registration use the server-side site-auth handler.', blocking: true },
+      { id: 'site-auth-jwt-configured', kind: 'setting-present', target: 'SITE_AUTH_JWT_SECRET', description: 'Site sessions can be signed securely.', blocking: true },
+    ],
+    fixtures: ['site-user', 'site-session'],
+  },
+};
+
 // ============================================================================
 // Registry + dependency resolution
 // ============================================================================
@@ -725,6 +772,7 @@ export const CAPABILITY_PACKS: CapabilityPack[] = [
   COMMERCE_CHECKOUT_PACK,
   AUTOMATION_FOLLOW_UP_PACK,
   CMS_CONTENT_PACK,
+  AUTH_CUSTOMER_PACK,
 ];
 
 

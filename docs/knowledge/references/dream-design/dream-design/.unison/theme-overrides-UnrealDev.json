@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "tokens": {
+    "--background": "0 0% 0%",
+    "--foreground": "45 70% 80%",
+    "--primary": "45 90% 50%",
+    "--primary-foreground": "0 0% 0%",
+    "--secondary": "45 80% 40%",
+    "--secondary-foreground": "0 0% 0%",
+    "--accent": "45 90% 50%",
+    "--accent-foreground": "0 0% 0%",
+    "--muted": "0 0% 10%",
+    "--muted-foreground": "45 30% 60%",
+    "--card": "0 0% 8%",
+    "--card-foreground": "45 70% 80%",
+    "--border": "45 20% 20%",
+    "--ring": "45 90% 50%",
+    "--popover": "0 0% 8%",
+    "--popover-foreground": "45 70% 80%"
+  }
+}

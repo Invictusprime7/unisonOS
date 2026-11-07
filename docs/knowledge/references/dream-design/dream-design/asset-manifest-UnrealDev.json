@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "unison-asset-manifest/1",
+  "localAssets": [],
+  "externalReferences": [
+    {
+      "host": "cdn.tailwindcss.com",
+      "sourcePaths": [
+        "src/main.tsx"
+      ],
+      "licenseReviewStatus": "unverified"
+    },
+    {
+      "host": "fonts.googleapis.com",
+      "sourcePaths": [
+        "src/index.css"
+      ],
+      "licenseReviewStatus": "unverified"
+    },
+    {
+      "host": "images.unsplash.com",
+      "sourcePaths": [
+        "src/pages/About.tsx",
+        "src/pages/Home.tsx",
+        "src/pages/Work.tsx",
+        "src/project-components/home/HomeAboutTeaser.tsx",
+        "src/project-components/home/HomeGallery.tsx",
+        "src/project-components/home/HomeHero.tsx"
+      ],
+      "licenseReviewStatus": "unverified"
+    },
+    {
+      "host": "localhost",
+      "sourcePaths": [
+        "src/pages/Home.tsx"
+      ],
+      "licenseReviewStatus": "unverified"
+    },
+    {
+      "host": "maps.google.com",
+      "sourcePaths": [
+        "src/unison/design-sources/recipes/Contact.ts"
+      ],
+      "licenseReviewStatus": "unverified"
+    },
+    {
+      "host": "nfrdomdvyrbwuokathtw.supabase.co",
+      "sourcePaths": [
+        "src/unison/publishedRuntime.ts"
+      ],
+      "licenseReviewStatus": "unverified"
+    },
+    {
+      "host": "www.google.com",
+      "sourcePaths": [
+        "src/unison/design-sources/recipes/Contact.ts"
+      ],
+      "licenseReviewStatus": "unverified"
+    },
+    {
+      "host": "www.w3.org",
+      "sourcePaths": [
+        "src/unison/ui/backgrounds.tsx"
+      ],
+      "licenseReviewStatus": "unverified"
+    }
+  ]
+}

@@ -127,6 +127,34 @@ describe('launch business runtime persistence', () => {
     });
   });
 
+  it('allows commerce preview but blocks publish until payment setup is verified', () => {
+    const runtime = buildPublishedRuntimeConfig({
+      siteId: 'site-1',
+      businessId: 'business-1',
+      projectId: 'project-1',
+      siteBundleSnapshot: createSnapshot(),
+    });
+
+    expect(evaluatePublishedRuntimeReadiness({
+      runtime,
+      bindingCount: 1,
+      formDefinitionCount: 0,
+      commerceRequired: true,
+      paymentProviderConfigured: false,
+    })).toMatchObject({
+      ok: false,
+      required: { payments: true },
+      blockers: ['Payment provider is not configured for requested checkout.'],
+    });
+    expect(evaluatePublishedRuntimeReadiness({
+      runtime,
+      bindingCount: 1,
+      formDefinitionCount: 0,
+      commerceRequired: true,
+      paymentProviderConfigured: true,
+    })).toMatchObject({ ok: true, required: { payments: true } });
+  });
+
   it('persists the public runtime contract into canonical VFS metadata', () => {
     const files = upsertCanonicalMetadataFiles({}, {
       appContext: {} as never,

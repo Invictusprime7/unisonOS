@@ -32,6 +32,9 @@ export interface BuildNativePublishSetupSnapshotInput {
   businessName?: string;
   businessId?: string;
   systemType?: string | null;
+  commerceRequired?: boolean;
+  paymentProviderConfigured?: boolean;
+  paymentProvider?: string | null;
   /** True when an outbound email transport (Resend/SMTP/etc.) is configured for this project. */
   emailTransportConfigured?: boolean;
   /** True when Unison's native owner inbox / intent_execution_log sink is enabled (default true). */
@@ -42,8 +45,11 @@ export interface BuildNativePublishReadinessManifestInput {
   state: PlaygroundState;
   validations?: unknown;
   setupSnapshot?: PlaygroundSetupSnapshot;
+  capabilitiesAwaitingConfirmation?: Array<{ capabilityId: string; reason: string }>;
   enabled: boolean;
   systemType?: string | null;
+  commerceRequired?: boolean;
+  paymentProviderConfigured?: boolean;
   /** Industry overlay (e.g. 'salon') used to verify required intents are bound. */
   industryOverlay?: string | null;
   emailTransportConfigured?: boolean;
@@ -80,6 +86,9 @@ export function buildNativePublishSetupSnapshot(
     : nativeInboxEnabled
       ? 'unison-native-inbox'
       : 'none';
+  const commerceRequired = input.commerceRequired === true;
+  const paymentProviderConfigured = input.paymentProviderConfigured === true;
+  const paymentsReady = !commerceRequired || paymentProviderConfigured;
 
   const steps: PlaygroundSetupStepSnapshot[] = [
     {
@@ -118,16 +127,19 @@ export function buildNativePublishSetupSnapshot(
     },
     {
       id: 'payments',
-      status: skipped(),
+      status: commerceRequired ? paymentProviderConfigured ? completed() : pending() : skipped(),
       config: {
-        reason: 'No payment provider required for native booking/contact publish path.',
-        autoProvisioned: true,
+        commerceRequired,
+        paymentProvider: paymentProviderConfigured ? input.paymentProvider || 'configured' : null,
+        paymentProviderConfigured,
+        ...(!commerceRequired ? { reason: 'No checkout capability is requested.' } : {}),
+        autoProvisioned: paymentsReady,
       },
     },
   ];
 
   return {
-    publishStatus: notificationSinkReady ? 'ready' : 'pending',
+    publishStatus: notificationSinkReady && paymentsReady ? 'ready' : 'pending',
     customDomain: null,
     notificationEmail: hasEmail ? normalizedEmail : null,
     projectName: input.businessName || null,
@@ -151,6 +163,7 @@ export function buildNativePublishReadinessManifest(
 
   const notificationStep = input.setupSnapshot?.setupSteps?.find((s) => s.id === 'notifications');
   const bookingStep = input.setupSnapshot?.setupSteps?.find((s) => s.id === 'booking_calendar');
+  const paymentsStep = input.setupSnapshot?.setupSteps?.find((s) => s.id === 'payments');
 
   // Industry intent coverage — verifies the synthesis pass left no required
   // intent unbound and no forbidden intent leaked through.
@@ -177,6 +190,12 @@ export function buildNativePublishReadinessManifest(
   // receive them. Email transport OR a native inbox sink is required.
   const notificationsReady =
     hasOwnerEmail && (emailTransportConfigured || nativeInboxEnabled);
+  const paymentConfig = (paymentsStep?.config || {}) as Record<string, unknown>;
+  const commerceRequired = input.commerceRequired
+    ?? paymentConfig.commerceRequired === true;
+  const paymentProviderConfigured = input.paymentProviderConfigured
+    ?? paymentConfig.paymentProviderConfigured === true;
+  const paymentsReady = !commerceRequired || paymentProviderConfigured;
 
   return {
     publishMode: input.enabled ? 'native-first-party' : 'manual-setup',
@@ -196,6 +215,16 @@ export function buildNativePublishReadinessManifest(
       stepStatus: notificationStep?.status || 'unknown',
     },
     bookingReady: bookingStep?.status === 'completed',
+    commerceRequired,
+    paymentsReady,
+    payments: {
+      required: commerceRequired,
+      configured: paymentProviderConfigured,
+      stepStatus: paymentsStep?.status || 'unknown',
+    },
+    capabilitiesAwaitingConfirmation: (input.capabilitiesAwaitingConfirmation ?? []).filter(
+      (item) => item.capabilityId.trim() && item.reason.trim(),
+    ),
     industryReady,
     bindings: {
       total: bindingList.length,

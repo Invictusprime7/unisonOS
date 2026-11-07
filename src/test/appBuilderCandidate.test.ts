@@ -394,15 +394,17 @@ describe('App Builder candidate closure', () => {
   it('accepts a complete multi-page candidate with project-local companion modules', async () => {
     const files = {
       ...initialFiles,
-      '/src/pages/Home.tsx': 'import Card from "../project-components/Card"; export default function Home(){return <main><Card /></main>}',
+      '/src/pages/Home.tsx': 'import Card from "../project-components/Card"; import MatchCentre from "../project-components/football/MatchCentre"; export default function Home(){return <main><Card /><section data-ut-section-id="home:match-centre:0" data-ut-section-type="match-centre" data-ut-variant="custom:project-components-football-match-centre-default"><MatchCentre title="Ghana v Senegal" /></section></main>}',
       '/src/pages/Contact.tsx': 'export default function Contact(){return <main>Contact</main>}',
       '/src/project-components/Card.tsx': 'export default function Card(){return <section>Card</section>}',
+      '/src/project-components/football/MatchCentre.tsx': 'export default function MatchCentre({title}:{title:string}){return <article><h2>{title}</h2><p>Match coverage</p></article>}',
     };
     const report = await validateAppBuildCandidate({ contract: contract(), files, initialFiles });
 
     expect(report.ok, JSON.stringify(report.issues)).toBe(true);
     expect(report.issues.filter((issue) => issue.severity === 'blocker')).toEqual([]);
     expect(report.sourceHash).toMatch(/^fnv1a:/);
+    expect(report.issues.some((issue) => issue.code === 'module-closure-unresolved-import')).toBe(false);
   });
 
   it('blocks missing pages, unresolved companions and protected infrastructure changes', async () => {

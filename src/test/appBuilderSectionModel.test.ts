@@ -356,18 +356,18 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     const sidecar = JSON.parse(normalized['/.unison/compositions/pages/Home.json']);
 
     expect(materialization.diagnostics).toEqual([]);
-    expect(normalized['/src/pages/Home.tsx']).toContain('variantId="custom:service-panel"');
+    expect(normalized['/src/pages/Home.tsx']).toContain('variantId="custom:project-components-feature-panel-default"');
     expect(normalized['/src/pages/Home.tsx']).toContain('props={{"title":"Care, made personal"}}');
     expect(inspection.issues).toEqual([]);
     expect(inspection.sections.find((section) => section.sectionId === 'home:services:0')).toMatchObject({
       semanticType: 'services',
-      variantId: 'custom:service-panel',
+      variantId: 'custom:project-components-feature-panel-default',
       sourceModulePath: '/src/project-components/FeaturePanel.tsx',
       componentOwnerId: 'site-component:/src/project-components/FeaturePanel.tsx',
       data: { title: 'Care, made personal' },
     });
     expect(sidecar.sections.find((section: { sectionId: string }) => section.sectionId === 'home:services:0'))
-      .toMatchObject({ variantId: 'custom:service-panel', data: { title: 'Care, made personal' } });
+      .toMatchObject({ variantId: 'custom:project-components-feature-panel-default', data: { title: 'Care, made personal' } });
     expect(sidecar.sections).toEqual(inspection.sections);
   });
 
@@ -394,6 +394,34 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
         sourceModulePath: '/src/project-components/FeaturePanel.tsx',
         componentOwnerId: 'site-component:/src/project-components/FeaturePanel.tsx',
       });
+  });
+
+  it('derives custom variant identity from the site-local source path', () => {
+    const files = {
+      '/src/pages/Matches.tsx': `import Navbar from "@/unison/design-sources/Navbar";
+import Footer from "@/unison/design-sources/Footer";
+import MatchCentre from "@/project-components/football/MatchCentre";
+export default function Matches(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{links:[]}} /></header><main><section data-ut-section-id="matches:match-centre:0" data-ut-section-type="match-centre"><MatchCentre title="Ghana v Senegal" /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer></>}`,
+      '/src/project-components/football/MatchCentre.tsx': `export default function MatchCentre({title}:{title:string}){return <article><h2>{title}</h2><p>Match coverage</p></article>}`,
+    };
+    const result = materializeAppBuilderSectionModelsWithDiagnostics(
+      files,
+      [{ id: 'matches', filePath: '/src/pages/Matches.tsx', route: '/matches' }],
+      implementations,
+      { matches: ['navbar:standard', 'footer:columns'] },
+      ['navbar:standard', 'footer:columns'],
+    );
+    const section = result.pages[0].inspection.sections.find((entry) => entry.sectionId === 'matches:match-centre:0');
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files['/src/pages/Matches.tsx']).toContain('data-ut-variant="custom:project-components-football-match-centre-default"');
+    expect(section).toMatchObject({
+      semanticType: 'match-centre',
+      variantId: 'custom:project-components-football-match-centre-default',
+      sourceModulePath: '/src/project-components/football/MatchCentre.tsx',
+      componentOwnerId: 'site-component:/src/project-components/football/MatchCentre.tsx',
+      data: { title: 'Ghana v Senegal' },
+    });
   });
 
   it.each([

@@ -1,0 +1,277 @@
+// UNISON GENERATED UI FOUNDATION v1.12
+/* Stage 4b owns the global Tailwind layers and theme tokens in /src/index.css. */
+/* UNISON VFS STYLE BRIDGE */
+.utx10a8y8t{inset:0}
+.utx1ghz6dp{margin:0}
+.utx79iv2k{padding:.75rem}
+.utxis3749{padding:1.5rem}
+.utx1uz70x1{padding:1rem}
+.utx1fo97fj:not(#\#){border-radius:min(var(--radius,4px),8px)}
+.utx1fe46o7:not(#\#){border-radius:min(var(--radius),8px)}
+.utxc342km:not(#\#){border-width:0}
+.utx13z6uf9:not(#\#){gap:.5rem}
+.utx8fetqu:not(#\#){gap:1rem}
+.utx1h4iudz:not(#\#){gap:2rem}
+.utx10no89f:not(#\#){inset-block:0}
+.utxvueqy4:not(#\#){margin-inline:auto}
+.utx1a2a7pz:not(#\#){outline:none}
+.utx6qoaat:not(#\#){padding-block:1.25rem}
+.utx1yb22fu:not(#\#){padding-block:1.5rem}
+.utx1qilo2b:not(#\#){padding-block:var(--ut-section-space,4rem)}
+.utxllzysa:not(#\#){padding-inline:.25rem}
+.utx1qhpy6z:not(#\#){padding-inline:1.25rem}
+.utx1hl2dhg:not(#\#){text-decoration:none}
+.utx1svt1u2:focus-visible:not(#\#){outline:2px solid hsl(var(--ring))}
+.utx6s0dn4:not(#\#):not(#\#){align-items:center}
+.utx1b4jn95:not(#\#):not(#\#){background-color:hsl(var(--background))}
+.utx1q2wf4z:not(#\#):not(#\#){background-color:hsl(var(--card))}
+.utx10d9a90:not(#\#):not(#\#){background-color:hsl(var(--foreground) / .45)}
+.utxdl2yti:not(#\#):not(#\#){background-color:hsl(var(--primary))}
+.utxjbqb8w:not(#\#):not(#\#){background-color:transparent}
+.utx9f619:not(#\#):not(#\#){box-sizing:border-box}
+.utxqzvrys:not(#\#):not(#\#){color:hsl(var(--foreground))}
+.utxsnk363:not(#\#):not(#\#){color:hsl(var(--muted-foreground))}
+.utxrwwme7:not(#\#):not(#\#){color:hsl(var(--primary-foreground))}
+.utx1heor9g:not(#\#):not(#\#){color:inherit}
+.utx1ypdohk:not(#\#):not(#\#){cursor:pointer}
+.utx78zum5:not(#\#):not(#\#){display:flex}
+.utxrvj5dj:not(#\#):not(#\#){display:grid}
+.utx3nfvp2:not(#\#):not(#\#){display:inline-flex}
+.utxdt5ytf:not(#\#):not(#\#){flex-direction:column}
+.utx1iyjqo2:not(#\#):not(#\#){flex-grow:1}
+.utx2lah0s:not(#\#):not(#\#){flex-shrink:0}
+.utxva6cmm:not(#\#):not(#\#){font-family:var(--font-body)}
+.utxylgur7:not(#\#):not(#\#){font-family:var(--font-heading)}
+.utx1c3i2sq:not(#\#):not(#\#){font-size:1.125rem}
+.utx1603h9y:not(#\#):not(#\#){font-size:1.25rem}
+.utxngnso2:not(#\#):not(#\#){font-size:1.5rem}
+.utx1jchvi3:not(#\#):not(#\#){font-size:1rem}
+.utx579bpy:not(#\#):not(#\#){font-size:2rem}
+.utx1s688f:not(#\#):not(#\#){font-weight:600}
+.utx1mkdm3x:not(#\#):not(#\#){grid-template-columns:minmax(0,1fr)}
+.utxtijo5x:not(#\#):not(#\#){inset-inline-end:0}
+.utxl56j7k:not(#\#):not(#\#){justify-content:center}
+.utx1qughib:not(#\#):not(#\#){justify-content:space-between}
+.utx12oo3zp:not(#\#):not(#\#){letter-spacing:0}
+.utx1u7k74:not(#\#):not(#\#){line-height:1.2}
+.utx37zpob:not(#\#):not(#\#){line-height:1.4}
+.utx1evy7pa:not(#\#):not(#\#){line-height:1.5}
+.utx1dbl2gt:not(#\#):not(#\#){line-height:1.6}
+.utx4q1cud:not(#\#):not(#\#){line-height:1.75}
+.utx1hl8ikr:not(#\#):not(#\#){outline-offset:2px}
+.utx1ewu8gn:not(#\#):not(#\#){outline-offset:3px}
+.utx2wh2y9:not(#\#):not(#\#){outline-offset:4px}
+.utxj0a0fe:not(#\#):not(#\#){overflow-wrap:anywhere}
+.utxixxii4:not(#\#):not(#\#){position:fixed}
+.utx1yc453h:not(#\#):not(#\#){text-align:start}
+.utx11uqc5h:not(#\#):not(#\#){z-index:100}
+.utx1rozsjd:not(#\#):not(#\#){z-index:101}
+.utxlbouxd:hover:not(#\#):not(#\#){background-color:hsl(var(--muted))}
+.utx1i2slih:hover:not(#\#):not(#\#){background-color:hsl(var(--primary) / .9)}
+.utx12dxgtt:hover:not(#\#):not(#\#){color:hsl(var(--primary))}
+@media (min-width: 64rem){.utx1wdgsqc.utx1wdgsqc:not(#\#):not(#\#){display:none}}
+@media (min-width: 48rem){.utx18q8ew7.utx18q8ew7:not(#\#):not(#\#){grid-template-columns:repeat(2,minmax(0,1fr))}}
+.utxmll18r:not(#\#):not(#\#):not(#\#){height:1.25rem}
+.utx12hms15:not(#\#):not(#\#):not(#\#){height:2.75rem}
+.utxyi6m4r:not(#\#):not(#\#):not(#\#){margin-bottom:1rem}
+.utx14phcvn:not(#\#):not(#\#):not(#\#){margin-bottom:2.5rem}
+.utx1t84w78:not(#\#):not(#\#):not(#\#){margin-bottom:2rem}
+.utxdj266r:not(#\#):not(#\#):not(#\#){margin-top:0}
+.utxj1urod:not(#\#):not(#\#):not(#\#){margin-top:1rem}
+.utx1jb01v5:not(#\#):not(#\#):not(#\#){max-width:42rem}
+.utx13w81kk:not(#\#):not(#\#):not(#\#){max-width:70ch}
+.utxmeosds:not(#\#):not(#\#):not(#\#){max-width:min(var(--ut-content-width,72rem),54rem)}
+.utxgbkey0:not(#\#):not(#\#):not(#\#){min-height:2.75rem}
+.utx13gjtz1:not(#\#):not(#\#):not(#\#){min-height:3.5rem}
+.utx1uqea4d:not(#\#):not(#\#):not(#\#){min-height:var(--ut-nav-block)}
+.utxeuugli:not(#\#):not(#\#):not(#\#){min-width:0}
+.utx1odjw0f:not(#\#):not(#\#):not(#\#){overflow-y:auto}
+.utx163t5y5:not(#\#):not(#\#):not(#\#){padding-bottom:1.5rem}
+.utxwqq7k2:not(#\#):not(#\#):not(#\#){width:1.25rem}
+.utxh8yej3:not(#\#):not(#\#):not(#\#){width:100%}
+.utxb1qrhf:not(#\#):not(#\#):not(#\#){width:2.75rem}
+.utx3d859g:not(#\#):not(#\#):not(#\#){width:min(24rem,100%)}
+/*
+ * Geometry token defaults. Stage 4b's themed /src/index.css overrides these
+ * per style card; they exist only so a recovery-path VFS still has a complete
+ * geometry scale. Generated sections must reference these tokens instead of
+ * hardcoding heights, hero blocks, tile sizes or micro type sizes.
+ */
+:root {
+  --ut-nav-block: 4.5rem;
+  --ut-hero-block: 72vh;
+  --ut-hero-space-top: clamp(5.5rem, 8vw, 6.5rem);
+  --ut-hero-media-block: 20rem;
+  --ut-hero-media-max: 33.75rem;
+  --ut-media-block: 16.25rem;
+  --ut-media-block-lg: 20rem;
+  --ut-tile-block: 13.75rem;
+  --ut-overlay-block: 78vh;
+  --ut-eyebrow-size: 0.6875rem;
+  --ut-content-width: 72rem;
+  --ut-gutter: 1.25rem;
+  --ut-touch-target: 2.75rem;
+  --ut-shell-width: min(100% - (var(--ut-gutter) * 2), var(--ut-content-width));
+  --ut-carousel-card: min(26.25rem, 85vw);
+  --ut-panel-width: min(22rem, calc(100vw - (var(--ut-gutter) * 2)));
+  --ut-control-radius: calc(var(--radius) - 0.125rem);
+  --ut-media-radius: var(--radius);
+}
+
+/* UNISON RADIX STYLE RECIPES v1.0 */
+@keyframes ut-radix-enter {
+  from { opacity: 0; transform: translate3d(var(--ut-radix-enter-x, 0), var(--ut-radix-enter-y, 0), 0) scale(var(--ut-radix-enter-scale, 1)); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes ut-radix-exit {
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(var(--ut-radix-exit-x, 0), var(--ut-radix-exit-y, 0), 0) scale(var(--ut-radix-exit-scale, 1)); }
+}
+
+@keyframes ut-radix-accordion-open {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+
+@keyframes ut-radix-accordion-close {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+
+@keyframes ut-radix-toast-swipe-out {
+  from { transform: translateX(var(--radix-toast-swipe-end-x)); }
+  to { transform: translateX(100%); }
+}
+
+@layer components {
+  .unison-surface {
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    background: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+    box-shadow: 0 10px 24px hsl(var(--foreground) / 0.12);
+  }
+
+  .unison-interactive-surface {
+    transition: transform 300ms ease, border-color 300ms ease, box-shadow 300ms ease;
+  }
+
+  .unison-interactive-surface:hover {
+    transform: translateY(-0.25rem);
+    border-color: hsl(var(--primary) / 0.35);
+    box-shadow: 0 18px 36px hsl(var(--foreground) / 0.14);
+  }
+
+  .unison-eyebrow {
+    color: hsl(var(--primary));
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  [data-ut-radix] {
+    --ut-radix-enter-x: 0;
+    --ut-radix-enter-y: 0;
+    --ut-radix-enter-scale: 0.98;
+    --ut-radix-exit-x: 0;
+    --ut-radix-exit-y: 0;
+    --ut-radix-exit-scale: 0.98;
+  }
+
+  [data-ut-radix][data-state="open"] {
+    animation: ut-radix-enter var(--ut-motion-duration, 180ms) var(--ut-motion-ease, ease-out);
+  }
+
+  [data-ut-radix][data-state="closed"] {
+    animation: ut-radix-exit var(--ut-motion-duration, 140ms) var(--ut-motion-ease, ease-in);
+  }
+
+  [data-ut-radix][data-side="top"] { --ut-radix-enter-y: var(--ut-radix-offset, 0.5rem); }
+  [data-ut-radix][data-side="right"] { --ut-radix-enter-x: calc(var(--ut-radix-offset, 0.5rem) * -1); }
+  [data-ut-radix][data-side="bottom"] { --ut-radix-enter-y: calc(var(--ut-radix-offset, 0.5rem) * -1); }
+  [data-ut-radix][data-side="left"] { --ut-radix-enter-x: var(--ut-radix-offset, 0.5rem); }
+
+  [data-ut-radix]:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  [data-ut-radix][data-disabled],
+  [data-ut-radix][aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  [data-ut-radix="overlay"] {
+    position: fixed;
+    inset: 0;
+    background: hsl(var(--foreground) / 0.48);
+  }
+
+  [data-ut-radix="content"] {
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--ut-control-radius);
+    background: hsl(var(--popover));
+    color: hsl(var(--popover-foreground));
+    box-shadow: 0 18px 48px hsl(var(--foreground) / 0.18);
+  }
+
+  [data-ut-radix="control"][data-state="checked"],
+  [data-ut-radix="control"][data-state="on"] {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  [data-ut-radix="item"][data-highlighted] {
+    outline: none;
+    background: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+  }
+
+  [data-ut-radix="accordion-content"] {
+    overflow: hidden;
+  }
+
+  [data-ut-radix="accordion-content"][data-state="open"] {
+    animation-name: ut-radix-accordion-open;
+  }
+
+  [data-ut-radix="accordion-content"][data-state="closed"] {
+    animation-name: ut-radix-accordion-close;
+  }
+
+  [data-ut-radix="toast"][data-swipe="move"] {
+    transform: translateX(var(--radix-toast-swipe-move-x));
+  }
+
+  [data-ut-radix="toast"][data-swipe="cancel"] {
+    transform: translateX(0);
+    transition: transform var(--ut-motion-duration, 180ms) var(--ut-motion-ease, ease-out);
+  }
+
+  [data-ut-radix="toast"][data-swipe="end"] {
+    animation: ut-radix-toast-swipe-out var(--ut-motion-duration, 140ms) var(--ut-motion-ease, ease-in);
+  }
+}
+
+@layer utilities {
+  .unison-text-display { font-family: var(--font-heading); }
+  .unison-text-body { font-family: var(--font-body); }
+  .unison-motion-lift { transition: transform 300ms ease; }
+  .unison-motion-lift:hover { transform: translateY(-0.25rem); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .unison-interactive-surface,
+    .unison-motion-lift,
+    [data-ut-radix] {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+    .unison-interactive-surface:hover,
+    .unison-motion-lift:hover { transform: none; }
+  }
+}

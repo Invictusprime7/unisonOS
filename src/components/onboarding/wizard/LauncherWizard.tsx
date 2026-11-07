@@ -137,6 +137,7 @@ const STEP_ORDER: WizardStep[] = [
 
 type SelectionStep = WizardStep | "pages" | "brand" | "confirm";
 const CHAT_STEP_ORDER: SelectionStep[] = ["industry", "goals", "questions", "pages", "aesthetic", "brand", "confirm"];
+const PROMPT_FIRST_STEP_ORDER: SelectionStep[] = ["industry", "goals", "questions", "pages", "aesthetic", "brand", "confirm"];
 /** The no-AI starter is offered only when the AI provider itself could not run (outage, timeout, quota, credits). */
 const AI_UNAVAILABLE_PATTERN = /timed? ?out|timeout|quota|credit|rate.?limit|429|402|unavailable|provider|no managed ai|not configured/i;
 const CHAT_GUIDANCE: Record<SelectionStep, string> = {
@@ -147,6 +148,15 @@ const CHAT_GUIDANCE: Record<SelectionStep, string> = {
   aesthetic: "Let's give your site a visual personality. Choose a style, then fine-tune the art direction and experience.",
   brand: "What should we call your brand? You can also add social profiles before we wrap up.",
   confirm: "Here's the plan we've shaped together. Review your choices, go back to refine them, or create your site when you're ready.",
+};
+const PROMPT_FIRST_CHAT_GUIDANCE: Record<SelectionStep, string> = {
+  industry: "Is there an industry or audience you'd like to emphasize beyond what's in your prompt?",
+  goals: "What should visitors accomplish, if your prompt doesn't already make that clear?",
+  questions: "Are there any important interactions missing from your description?",
+  pages: "Would you like any additional pages beyond the ones you described?",
+  aesthetic: "Do you have any visual preferences to add?",
+  brand: "What name should appear on the application?",
+  confirm: "Does this capture what you want to build?",
 };
 
 export const LauncherWizard = ({
@@ -165,10 +175,12 @@ export const LauncherWizard = ({
   const navigate = useNavigate();
   const { setLaunch } = useLaunch();
 
-  const [step, setStep] = useState<SelectionStep>("industry");
-  const [draftHydrated, setDraftHydrated] = useState(false);
   const isChat = presentation === "chat";
-  const stepOrder: readonly SelectionStep[] = isChat ? CHAT_STEP_ORDER : STEP_ORDER;
+  const promptFirstBrief = isChat && Boolean(initialVisionPrompt?.trim());
+  const [step, setStep] = useState<SelectionStep>(() =>
+    promptFirstBrief ? "industry" : initialVisionPrompt?.trim() ? "brand" : "industry",
+  );
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const [completedTurns, setCompletedTurns] = useState<{ step: SelectionStep; answer: string }[]>([]);
   const currentTurnRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -184,6 +196,12 @@ export const LauncherWizard = ({
     }
   }, [isChat, open, step]);
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
+  const industryChoiceTouchedRef = useRef(false);
+  const promptFirst = promptFirstBrief && !industryChoiceTouchedRef.current;
+  const stepOrder: readonly SelectionStep[] = promptFirst
+    ? PROMPT_FIRST_STEP_ORDER
+    : isChat ? CHAT_STEP_ORDER : STEP_ORDER;
+  const chatGuidance = promptFirst ? PROMPT_FIRST_CHAT_GUIDANCE : CHAT_GUIDANCE;
   const [systemId, setSystemId] = useState<BusinessSystemType | null>(null);
   const [businessName, setBusinessName] = useState("");
   const [businessParameters, setBusinessParameters] = useState<NonNullable<LaunchOrchestratorInput['businessParameters']>>({
@@ -284,6 +302,7 @@ export const LauncherWizard = ({
     seededFromChatRef.current = false;
     chatPlanRef.current = null;
     pageChoicesTouchedRef.current = false;
+    industryChoiceTouchedRef.current = false;
     chatPlanRef.current = null;
     setSelectedIndustry(null);
     setSystemId(null);
@@ -334,9 +353,25 @@ export const LauncherWizard = ({
 
     setVisionPrompt(initialVisionPrompt);
     // One synced plan: everything the chat settled prefills the Wizard.
-    const plan = deriveChatLaunchPlan(initialVisionPrompt);
-    chatPlanRef.current = plan;
+    const plan = deriveChatLaunchPlan(initialVisionPrompt, { promptFirst });
+    const creationPlan = promptFirst
+      ? { ...plan, creationInput: { ...plan.creationInput, mode: 'open-ended' as const } }
+      : plan;
+    chatPlanRef.current = creationPlan;
     pageChoicesTouchedRef.current = false;
+    if (promptFirst) {
+      setSelectedIndustry('universal');
+      setSystemId('content');
+      setPrimaryGoal(null);
+      setCustomerNeeds([]);
+      setSelectedPages(plan.selectedPages);
+      if (plan.businessName) setBusinessName(current => current || plan.businessName!);
+      const matchedTheme = THEME_PRESETS.find((preset) => preset.id === plan.themePresetId);
+      if (matchedTheme) setTheme(matchedTheme);
+      if (!stepOrder.includes(step)) setStep('brand');
+      seededFromChatRef.current = true;
+      return;
+    }
     // Keep the live brief current, but never replay defaults over choices
     // already made in this mounted conversation.
     if (seededFromChatRef.current) {
@@ -360,7 +395,7 @@ export const LauncherWizard = ({
     if (plan.primaryGoal) setPrimaryGoal(plan.primaryGoal);
     setCustomerNeeds(plan.customerNeeds);
     if (!guidedStep) setStep("goals");
-  }, [open, initialVisionPrompt, prefill?.businessName, prefill?.notificationEmail, prefill?.email, prefill?.phone, prefill?.notificationPhone, prefill?.socialLinks, prefill?.tagline, prefill?.description, prefill?.website, prefill?.logoUrl, prefill?.brandColor, prefill?.timezone, prefill?.address, prefill?.hours, guidedStep]);
+  }, [open, initialVisionPrompt, promptFirst, step, stepOrder, prefill?.businessName, prefill?.notificationEmail, prefill?.email, prefill?.phone, prefill?.notificationPhone, prefill?.socialLinks, prefill?.tagline, prefill?.description, prefill?.website, prefill?.logoUrl, prefill?.brandColor, prefill?.timezone, prefill?.address, prefill?.hours, guidedStep]);
 
   useEffect(() => {
     if (!open || !draftHydrated) return;
@@ -400,6 +435,7 @@ export const LauncherWizard = ({
   }, [open, guidedStep, guidancePending, isLaunching, review]);
 
   const selectIndustry = (industry: string, id: BusinessSystemType) => {
+    industryChoiceTouchedRef.current = true;
     setSelectedIndustry(industry);
     setSystemId(id);
     setPrimaryGoal(getIndustryPrimaryGoal(industry));
@@ -415,15 +451,20 @@ export const LauncherWizard = ({
   };
 
   const selectOpenEnded = () => {
+    industryChoiceTouchedRef.current = false;
     setSelectedIndustry('universal');
     setSystemId('content');
     setPrimaryGoal(null);
     setCustomerNeeds([]);
-    if (chatPlanRef.current) {
-      chatPlanRef.current = {
-        ...chatPlanRef.current,
-        creationInput: { ...chatPlanRef.current.creationInput, mode: 'open-ended' },
-      };
+    pageChoicesTouchedRef.current = false;
+    const prompt = chatPlanRef.current?.brief || visionPrompt;
+    if (prompt.trim()) {
+      const plan = deriveChatLaunchPlan(prompt, { promptFirst: true });
+      chatPlanRef.current = plan;
+      setSelectedPages(plan.selectedPages);
+    } else {
+      chatPlanRef.current = null;
+      setSelectedPages([]);
     }
   };
 
@@ -562,9 +603,9 @@ export const LauncherWizard = ({
     latestProgressRef.current = null;
     setLaunchStatus(generationMode === 'deterministic' ? 'Building starter pages…' : 'Preparing your site…');
 
-    const derivedPlan = chatPlanRef.current ?? (isOpenEnded ? deriveChatLaunchPlan(visionPrompt) : null);
+    const derivedPlan = chatPlanRef.current ?? (isOpenEnded ? deriveChatLaunchPlan(visionPrompt, { promptFirst: true }) : null);
     const creationPlan = derivedPlan && isOpenEnded && derivedPlan.creationInput.mode !== 'open-ended'
-      ? { ...derivedPlan, creationInput: { ...derivedPlan.creationInput, mode: 'open-ended' as const } }
+      ? { ...derivedPlan, creationInput: { ...derivedPlan.creationInput, mode: 'open-ended' as const, industryHint: undefined } }
       : derivedPlan;
     const input: LaunchOrchestratorInput = {
       generationMode,
@@ -579,7 +620,7 @@ export const LauncherWizard = ({
             themePresetId: theme?.id ?? null,
           })
         : visionPrompt,
-      universalCreation: projectUniversalCreationInput(creationPlan, selectedPages),
+      universalCreation: projectUniversalCreationInput(creationPlan, selectedPages, { promptFirst }),
       theme,
       designSelection: createWizardDesignSelection({
         mode: artDirectionPackId ? "guided" : "auto",
@@ -683,10 +724,10 @@ export const LauncherWizard = ({
         {isChat && <h2 className="affinity-wizard-title">Affinity Wizard</h2>}
         {isChat && !guidedStep && !review && !isLaunching && <div className="space-y-4 p-3" aria-live="polite">
           {completedTurns.map((turn, index) => <div key={index} className="space-y-2">
-            <p className="rounded-lg bg-white/5 p-3 text-sm text-white/80">{CHAT_GUIDANCE[turn.step]}</p>
+            <p className="rounded-lg bg-white/5 p-3 text-sm text-white/80">{chatGuidance[turn.step]}</p>
             <p className="ml-8 rounded-lg border border-cyan-300/20 bg-cyan-400/10 p-3 text-sm text-cyan-100">{turn.answer}</p>
           </div>)}
-          <p ref={currentTurnRef} tabIndex={-1} key={step} className="animate-fade-in motion-reduce:animate-none rounded-lg bg-white/5 p-3 text-sm leading-6 text-cyan-100 focus-visible:outline-none">{CHAT_GUIDANCE[step]}</p>
+          <p ref={currentTurnRef} tabIndex={-1} key={step} className="animate-fade-in motion-reduce:animate-none rounded-lg bg-white/5 p-3 text-sm leading-6 text-cyan-100 focus-visible:outline-none">{chatGuidance[step]}</p>
         </div>}
         {!isChat && !review && (
           <header className="border-b border-border px-5 py-4 pr-14 sm:px-7 sm:pr-16">
@@ -779,8 +820,8 @@ export const LauncherWizard = ({
                                 if (!pageChoicesTouchedRef.current) setSelectedPages([]);
                                 return;
                               }
-                              const derived = deriveChatLaunchPlan(prompt);
-                              chatPlanRef.current = { ...derived, creationInput: { ...derived.creationInput, mode: 'open-ended' } };
+                              const derived = deriveChatLaunchPlan(prompt, { promptFirst: true });
+                              chatPlanRef.current = derived;
                               if (!pageChoicesTouchedRef.current) setSelectedPages(derived.selectedPages);
                             }}
                             rows={5}
@@ -876,7 +917,15 @@ export const LauncherWizard = ({
                   </section>}
                   {step === "confirm" && <section aria-label="Your site plan" className="rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-4">
                     <h2 className="mb-4 text-lg font-semibold">Ready to create {businessName}?</h2>
-                    <dl className="space-y-3">{([['Business type','industry'],['Main goal','goals'],['Visitor actions','questions'],['Pages','pages'],['Visual direction','aesthetic'],['Brand name','brand']] as const).map(([label, selectedStep]) => <div key={selectedStep}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-sm">{selectionSummary(selectedStep)}</dd></div>)}</dl>
+                    <dl className="space-y-3">{(promptFirst
+                      ? [
+                          ['Purpose', chatPlanRef.current?.creationInput.sitePurpose ?? 'Website purpose described by the visitor'],
+                          ['Pages', chatPlanRef.current?.creationInput.pages.map(page => page.title).join(', ') || 'Home'],
+                          ['Requested functionality', chatPlanRef.current?.creationInput.requestedCapabilities.join(', ') || 'No backend capabilities requested'],
+                          ['Brand name', selectionSummary('brand')],
+                        ]
+                      : ([['Business type','industry'],['Main goal','goals'],['Visitor actions','questions'],['Pages','pages'],['Visual direction','aesthetic'],['Brand name','brand']] as const).map(([label, selectedStep]) => [label, selectionSummary(selectedStep)])
+                    ).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-sm">{value}</dd></div>)}</dl>
                   </section>}
                 </div>
 
