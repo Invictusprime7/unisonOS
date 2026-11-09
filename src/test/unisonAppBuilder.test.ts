@@ -1208,12 +1208,12 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     expect(result.candidate.status, JSON.stringify(result.candidate.diagnostics)).toBe('ready-for-commit');
     expect(rawHome).toContain(customSection);
     expect(result.candidateFiles['/src/project-components/MatchCentre.tsx']).toBe(matchCentre);
-    // Only canonical identity is added to the authored call site; the authored
-    // custom variant ID and props stay as written.
+    // Only canonical identity is added: the custom variant becomes its stable
+    // source-derived ID and the authored props stay as written.
     const acceptedHome = result.candidateFiles['/src/pages/Home.tsx'];
     expect(acceptedHome).toContain('import MatchCentre from "../project-components/MatchCentre";');
     expect(acceptedHome).toContain('<MatchCentre fixture="Ghana v Senegal"');
-    expect(acceptedHome).toMatch(/data-ut-section-id="home:match-centre:0"[^>]*data-ut-variant="custom:match-centre"/);
+    expect(acceptedHome).toMatch(/data-ut-section-id="home:match-centre:0"[^>]*data-ut-variant="custom:project-components-match-centre-default"/);
     expect(acceptedHome).toMatch(/data-ut-variant="(?:hero|services|gallery|testimonials|cta|about|features|stats|contact|faq|pricing|team)[^"]*:[^"]+"/);
     const origins = result.candidate.provenance.sectionOrigins;
     expect(origins?.custom).toBe(1);

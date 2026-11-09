@@ -71,7 +71,8 @@ export default function Home() { return <><nav data-ut-section-id="site:navbar" 
     );
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.files['/.unison/compositions/pages/Home.json']).toContain('custom:hero-story');
+    // Custom variants get a stable source-derived identity (see appBuilderSectionModel tests).
+    expect(result.files['/.unison/compositions/pages/Home.json']).toContain('custom:project-components-hero-hero-story-default');
     expect(result.files['/.unison/compositions/pages/Home.json']).toContain('"semanticType": "hero"');
   });
 });

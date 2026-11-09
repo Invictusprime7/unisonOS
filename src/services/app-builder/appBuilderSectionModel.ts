@@ -59,7 +59,6 @@ interface EligibleImplementation {
 }
 
 const CUSTOM_SECTION_TYPE = /^[a-z][a-z0-9-]{0,63}$/;
-const AUTHORED_CUSTOM_VARIANT = /^custom:[a-z0-9][a-z0-9-]{0,95}$/;
 const CUSTOM_COMPONENT_PATH = /^\/src\/(?:project-components|components\/generated)\/.+\.[jt]sx?$/i;
 
 function customVariantIdForSource(modulePath: string, exportName?: string): string {
@@ -205,11 +204,7 @@ function findCustomSectionImplementations(
           }
           if (customModules.size === 1) {
             const [implementation] = customModules.values();
-            // The authored custom:<kebab-slug> identity is kept (the authoring
-            // contract asks for it); the source-derived ID is only a fallback.
-            const variantId = authoredVariantId && AUTHORED_CUSTOM_VARIANT.test(authoredVariantId)
-              ? authoredVariantId
-              : customVariantIdForSource(implementation.modulePath, implementation.exportName);
+            const variantId = customVariantIdForSource(implementation.modulePath, implementation.exportName);
             const candidate: EligibleImplementation = {
               ...implementation,
               sectionType,
