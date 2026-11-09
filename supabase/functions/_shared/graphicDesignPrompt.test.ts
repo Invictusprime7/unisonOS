@@ -43,3 +43,27 @@ Deno.test('extracts the design from fenced JSON and rejects replies without page
   assert(extractGraphicDesignResult('{"summary":"x","document":{"pages":[]}}') === null, 'empty pages accepted');
   assert(extractGraphicDesignResult('not json') === null, 'non-JSON accepted');
 });
+
+const layer = (id: string) => `{"type":"text","id":"${id}","text":"Say \\"hi\\" {not} [json]","x":1,"y":2}`;
+const reply = (pagesJson: string) => `{"summary":"Done.","document":{"title":"T","palette":["#000000"],"pages":${pagesJson}}`;
+
+Deno.test("graphic reply missing its final closing brace is repaired", () => {
+  const text = reply(`[{"id":"p1","layers":[${layer("a")},${layer("b")}]}]`); // outer } dropped
+  const result = extractGraphicDesignResult(text);
+  if (!result) throw new Error("expected repaired document");
+  const layers = (result.document.pages as Array<{ layers: Array<{ text: string }> }>)[0].layers;
+  if (layers.length !== 2 || layers[1].text !== 'Say "hi" {not} [json]') throw new Error("string content must be untouched");
+});
+
+Deno.test("graphic reply with a misplaced closer, stray closer, missing comma and trailing comma is repaired", () => {
+  const text = reply(`[{"id":"p1","layers":[${layer("a")} ${layer("b")},]}}]}}]`);
+  const result = extractGraphicDesignResult(text);
+  if (!result) throw new Error("expected repaired document");
+  const layers = (result.document.pages as Array<{ layers: unknown[] }>)[0].layers;
+  if (layers.length !== 2) throw new Error(`expected 2 layers, got ${layers.length}`);
+});
+
+Deno.test("graphic reply that is not a design still fails", () => {
+  if (extractGraphicDesignResult("Sorry, I can't help with that.")) throw new Error("prose is not a design");
+  if (extractGraphicDesignResult(`{"summary":"x","document":{"pages":[]}}`)) throw new Error("empty pages are not a design");
+});

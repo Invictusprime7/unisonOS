@@ -198,18 +198,78 @@ function messageText(content: unknown): string {
   return "";
 }
 
-/** Pull `{ summary, document }` out of a provider reply; null when unusable. */
-export function extractGraphicDesignResult(content: unknown): { summary: string; document: Record<string, unknown> } | null {
-  const text = messageText(content).trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+const trimTrailingComma = (out: string) => out.replace(/,\s*$/, "");
+
+/**
+ * Structural repair for long model JSON. Gemini occasionally drops or
+ * misplaces a closing bracket (or a comma between array items) in otherwise
+ * complete multi-page documents. This closes missing brackets, drops stray
+ * ones, removes trailing commas and inserts a missing comma between adjacent
+ * values. String contents are never altered.
+ */
+export function repairJsonStructure(text: string): string {
+  let out = "";
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  let last = ""; // last significant character outside strings
+  for (const ch of text) {
+    if (inString) {
+      out += ch;
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === "\"") { inString = false; last = "\""; }
+      continue;
+    }
+    if (/\s/.test(ch)) { out += ch; continue; }
+    if ((ch === "{" || ch === "[" || ch === "\"") && (last === "}" || last === "]" || last === "\"")) {
+      out += ",";
+    }
+    if (ch === "\"") { inString = true; out += ch; continue; }
+    if (ch === "{" || ch === "[") {
+      stack.push(ch === "{" ? "}" : "]");
+      out += ch;
+      last = ch;
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      const index = stack.lastIndexOf(ch);
+      if (index < 0) continue; // stray closer
+      while (stack.length - 1 > index) out = trimTrailingComma(out) + stack.pop();
+      out = trimTrailingComma(out) + stack.pop();
+      last = ch;
+      continue;
+    }
+    out += ch;
+    last = ch;
+  }
+  if (inString) out += "\"";
+  while (stack.length) out = trimTrailingComma(out) + stack.pop();
+  return out;
+}
+
+function parseJsonObject(text: string): unknown {
   const start = text.indexOf("{");
+  if (start < 0) return null;
   const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  let parsed: unknown;
+  if (end > start) {
+    try {
+      return JSON.parse(text.slice(start, end + 1));
+    } catch {
+      // fall through to structural repair
+    }
+  }
   try {
-    parsed = JSON.parse(text.slice(start, end + 1));
+    return JSON.parse(repairJsonStructure(text.slice(start)));
   } catch {
     return null;
   }
+}
+
+/** Pull `{ summary, document }` out of a provider reply; null when unusable. */
+export function extractGraphicDesignResult(content: unknown): { summary: string; document: Record<string, unknown> } | null {
+  const text = messageText(content).trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const parsed = parseJsonObject(text);
   if (!isRecord(parsed)) return null;
   const document = isRecord(parsed.document) ? parsed.document : Array.isArray(parsed.pages) ? parsed : null;
   if (!document || !Array.isArray(document.pages) || document.pages.length === 0) return null;
