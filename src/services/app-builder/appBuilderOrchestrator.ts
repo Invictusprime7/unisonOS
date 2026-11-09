@@ -26,6 +26,7 @@ import { sectionSiteBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 import { closureRepairTargets } from './closureRepairTargets';
 import { isBindingOperationallyPending } from './bindingAvailability';
 import { pageCompositionCoverage } from './pageCompositionCoverage';
+import { countSectionOrigins } from './sectionOrigins';
 
 export interface AppBuilderOrchestratorDependencies {
   authorSite: (input: SiteAuthoringInput) => Promise<SiteAuthoringResult>;
@@ -396,6 +397,7 @@ export async function orchestrateAppBuild(
       sourceHash: closure.sourceHash,
       authoredPageIds: generationMode === 'ai' ? authored.outcomes.filter(outcome => outcome.status === 'authored').map(outcome => outcome.page.pageId) : [],
       strategy,
+      sectionOrigins: countSectionOrigins(candidateFiles, pages.map((page) => page.filePath)),
     },
   };
   input.onStatus?.(ready ? 'Preparing accepted template' : 'Finishing App Builder diagnostics');
