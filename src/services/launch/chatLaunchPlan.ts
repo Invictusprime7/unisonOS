@@ -10,7 +10,13 @@
 import { classifyPromptForWizard } from "@/components/onboarding/wizard/wizardPromptClassifier";
 import type { CustomerNeed, PageChoice, PrimaryGoal } from "@/components/onboarding/wizard/wizardCatalog";
 import type { BusinessSystemType } from "@/data/templates/types";
-import type { UniversalCapabilityEvidence, UniversalCreationInput } from "@/platform/core/universalCreation";
+import type { DesignDirection, UniversalCapabilityEvidence, UniversalCreationInput } from "@/platform/core/universalCreation";
+import {
+  confirmedPageNames,
+  deriveCreativePlan,
+  pageRequirements,
+  renderCreativeRequirements,
+} from "@/services/launch/creativePlan";
 import { getIndustryProfile } from "@/platform/core/industryMatrix";
 import {
   matchTopologyPageAliases,
@@ -27,6 +33,8 @@ export interface ChatLaunchPlan {
   customerNeeds: CustomerNeed[];
   selectedPages: PageChoice[];
   themePresetId: string | null;
+  /** Explicit, confirmed or clearly provisional design direction (never a silent default). */
+  designDirection: DesignDirection;
   brief: string;
 }
 
@@ -41,15 +49,6 @@ const PAGE_KEYWORDS: Record<PageChoice, string[]> = {
   checkout: ["checkout", "cart", "online ordering", "order online", "takeout", "take-out", "pickup", "delivery"],
   blog: ["blog", "journal", "articles", "news"],
   shop: ["shop", "store", "products", "collection", "gift shop", "merch", "merchandise"],
-};
-
-const FAMILY_KEYWORDS: Record<string, string[]> = {
-  modern: ["modern", "clean", "contemporary", "sleek"],
-  editorial: ["editorial", "magazine", "luxury", "elegant", "serif"],
-  futuristic: ["futuristic", "tech", "neon", "cyber", "sci-fi"],
-  minimalist: ["minimalist", "minimal", "simple", "whitespace"],
-  bold: ["bold", "loud", "vibrant", "high contrast", "punchy"],
-  organic: ["organic", "natural", "earthy", "warm", "botanical", "calm"],
 };
 
 const PAGE_DETAILS: Record<PageChoice, { route: string; title: string; purpose: string; role: string }> = {
@@ -165,6 +164,27 @@ function findOperationalRequest(text: string, pattern: RegExp): string | null {
   return null;
 }
 
+/** Pages from an explicit page list in the summary the owner confirmed. */
+function confirmedPagesFromDirection(direction: string, industry: string | null): { pages: UniversalCreationInput['pages']; choices: PageChoice[] } {
+  const pages: UniversalCreationInput['pages'] = [];
+  const choices: PageChoice[] = [];
+  for (const name of confirmedPageNames(direction)) {
+    if (/^(?:home|homepage|landing)$/i.test(name)) continue;
+    const choice = (Object.keys(PAGE_KEYWORDS) as PageChoice[]).find((page) => hit(name, PAGE_KEYWORDS[page]));
+    const topology = topologyPagesFromPrompt(name, industry).filter((page) => page.suggestedRole !== 'custom');
+    if (choice) {
+      choices.push(choice);
+      pages.push({ ...pageDetailsForChoice(choice, industry), title: name.replace(/\b\w/g, (letter) => letter.toUpperCase()) });
+    } else if (topology.length) {
+      pages.push({ ...topology[0], title: name.replace(/\b\w/g, (letter) => letter.toUpperCase()) });
+    } else {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      if (slug) pages.push({ route: `/${slug}`, title: name.replace(/\b\w/g, (letter) => letter.toUpperCase()), purpose: `The ${name} page the owner confirmed in the site direction.`, suggestedRole: 'custom' });
+    }
+  }
+  return { pages: uniquePagesByRoute(pages), choices };
+}
+
 export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boolean } = {}): ChatLaunchPlan {
   const text = String(brief || "");
   const promptFirst = options.promptFirst === true;
@@ -173,6 +193,10 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   )?.[1]?.trim();
   const conversationDetails = text.match(/(?:^|\n)Conversation details:\s*([\s\S]*)$/i)?.[1]?.trim();
   const semanticText = conversationDetails || confirmedDirection || text;
+  // The summary the owner confirmed is an accepted refinement: it can add
+  // pages and direction the owner agreed to, but the owner's words lead.
+  const acceptedDirection = conversationDetails && confirmedDirection ? confirmedDirection : '';
+  const creative = deriveCreativePlan(semanticText, acceptedDirection);
   const analysis = classifyPromptForWizard(semanticText);
   const confident = Boolean(analysis?.industryIdentityMatched && analysis.confidence > 0.55);
   const topologyAliases = matchTopologyPageAliases(semanticText);
@@ -183,19 +207,27 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
     if (page === 'blog' && mentionsNews && !mentionsBlog) return false;
     return hit(semanticText, PAGE_KEYWORDS[page]) || topologyRoles.has(PAGE_DETAILS[page].role);
   });
-  const family = Object.keys(FAMILY_KEYWORDS).find((f) => hit(semanticText, FAMILY_KEYWORDS[f])) ?? null;
+  const family = creative.designDirection.origin === 'provisional' ? null : creative.designDirection.familyId;
   const defaults = confident ? analysis!.selectedPages : [];
   const focusedGoal = FOCUSED_GOALS.find(({ pattern }) => pattern.test(semanticText))?.goal;
   const focusedNeed = focusedGoal ? GOAL_CUSTOMER_NEED[focusedGoal] : undefined;
   const resolvedIndustry = !promptFirst && confident ? analysis!.industry : null;
   const profileRoutes = resolvedIndustry ? getIndustryProfile(resolvedIndustry)?.defaultPages.map((page) => page.path) ?? [] : [];
+  const confirmedPages = confirmedPagesFromDirection(acceptedDirection, resolvedIndustry);
   const creationPages = uniquePagesByRoute([
     ...mentionedPages.map((page) => pageDetailsForChoice(page, resolvedIndustry)),
     ...topologyPagesFromPrompt(semanticText, resolvedIndustry),
     ...deriveExplicitRoutePages(semanticText).filter((page) => !profileRoutes.some((route) => route.toLowerCase() === page.route.toLowerCase())),
+    ...confirmedPages.pages,
   ]);
+  const ownerRoutes = new Set(uniquePagesByRoute([
+    ...mentionedPages.map((page) => pageDetailsForChoice(page, resolvedIndustry)),
+    ...topologyPagesFromPrompt(semanticText, resolvedIndustry),
+    ...deriveExplicitRoutePages(semanticText),
+  ]).map((page) => page.route.toLowerCase()));
+  const confirmedOnlyRoutes = new Set(confirmedPages.pages.map((page) => page.route.toLowerCase()).filter((route) => !ownerRoutes.has(route)));
   const visualRequirements = [
-    ...(family ? [`Visual direction: ${family}`] : []),
+    ...(family ? [`Visual direction: ${family}`] : [`Provisional token base: ${creative.designDirection.familyId} — ${creative.designDirection.note}`]),
     ...[...semanticText.matchAll(/\b(?:#[0-9a-f]{3,8}|(?:red|orange|yellow|green|blue|black|white|gold|teal|pink|maroon|navy|crimson|emerald))\b/gi)].map(([color]) => `Preserve the requested color: ${color}`),
     ...( /\b(flag|flag icon|national colors)\b/i.test(semanticText) ? ['Preserve the specifically requested flag imagery and national colors.'] : []),
     ...( /\bghana\b/i.test(semanticText) && /\bflag\b/i.test(semanticText) ? ['Include a recognizable Ghana flag mark: horizontal red, gold/yellow, and green stripes with a centered black five-point star; keep it accessible and proportional.'] : []),
@@ -211,6 +243,7 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
     phrase ? [{ capabilityId, origin: 'explicit', reason: `Prompt phrase: ${phrase}` }] : [],
   );
   const requestedCapabilities = capabilityEvidence.map(({ capabilityId }) => capabilityId);
+  const ownerMessages = conversationDetails ? conversationDetails.split('\n').map((line) => line.trim()).filter(Boolean) : [];
   const creationInput: UniversalCreationInput = {
     mode: promptFirst || !confident ? 'open-ended' : 'guided',
     originalPrompt: semanticText,
@@ -227,6 +260,21 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
     visualRequirements,
     requestedCapabilities,
     capabilityEvidence,
+    ...(acceptedDirection ? { confirmedDirection: acceptedDirection.slice(0, 4000) } : {}),
+    ...(ownerMessages.length > 1 ? { refinements: ownerMessages.slice(1) } : {}),
+    creativeBrief: creative.creativeBrief,
+    requirements: [
+      ...creative.requirements,
+      ...pageRequirements(creationPages, confirmedOnlyRoutes),
+      ...capabilityEvidence.map((evidence) => ({
+        id: `req:capability:${evidence.capabilityId}`, kind: 'capability' as const,
+        text: `operational capability ${evidence.capabilityId} (explicitly requested; still requires authorization)`,
+        evidence: evidence.reason, origin: 'explicit' as const,
+      })),
+    ],
+    multiPage: creative.multiPage,
+    designDirection: creative.designDirection,
+    clarifications: [],
   };
   return {
     creationInput,
@@ -236,11 +284,17 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
     primaryGoal: !promptFirst && confident ? focusedGoal ?? analysis!.primaryGoal : null,
     customerNeeds: !promptFirst && confident ? focusedNeed ? [focusedNeed] : analysis!.customerNeeds : [],
     // Pages the chat named win; industry defaults only fill in when none were named.
-    selectedPages: promptFirst || mentionedPages.length ? Array.from(new Set(mentionedPages)) : defaults,
+    selectedPages: promptFirst || mentionedPages.length || confirmedPages.choices.length
+      ? Array.from(new Set([...mentionedPages, ...confirmedPages.choices]))
+      : defaults,
     themePresetId: family ?? (!promptFirst && confident ? analysis!.themePresetId : null),
+    designDirection: creative.designDirection,
     brief: semanticText,
   };
 }
+
+/** Closes the never-truncated requirement block inside a vision brief. */
+export const CREATIVE_REQUIREMENTS_END = 'END CREATIVE REQUIREMENTS';
 
 export interface FinalLaunchSelections {
   industry?: string | null;
@@ -292,11 +346,20 @@ export function projectUniversalCreationInput(
  */
 export function buildSyncedVisionBrief(plan: ChatLaunchPlan | null, final: FinalLaunchSelections): string {
   if (!plan || !plan.brief.trim()) return "";
+  const direction = plan.designDirection;
+  const themeLine = direction.origin === 'provisional' && (!final.themePresetId || final.themePresetId === direction.familyId)
+    ? `design token base ${direction.familyId} (PROVISIONAL — no executable family matched the prompt; the creative brief stays authoritative)`
+    : `theme family ${final.themePresetId ?? direction.familyId}`;
   const lines = [
     `ORIGINAL PROMPT (primary creative authority; realize every explicit requirement, including layout, imagery, interactions and motion): ${plan.brief.trim()}`,
-    `CREATION SPECIFICATION — mode ${plan.creationInput.mode}; purpose: ${plan.creationInput.sitePurpose}; subject: ${plan.creationInput.subject}; requested capabilities: ${plan.creationInput.requestedCapabilities.join(", ") || "none"}.`,
-    `REVISABLE PLAN DEFAULTS: business "${final.businessName}"; industry ${final.industry ?? "unspecified"}; goal ${final.primaryGoal ?? "unspecified"}; pages ${final.selectedPages.join(", ") || "home only"}; theme family ${final.themePresetId ?? "auto"}. These never narrow the prompt above.`,
-  ];
+    renderCreativeRequirements(plan.creationInput.requirements, direction),
+    renderCreativeRequirements(plan.creationInput.requirements, direction) ? CREATIVE_REQUIREMENTS_END : '',
+    plan.creationInput.confirmedDirection
+      ? `CONFIRMED SITE DIRECTION (the summary the owner accepted; it refines the prompt and never narrows it): ${plan.creationInput.confirmedDirection}`
+      : '',
+    `CREATION SPECIFICATION — mode ${plan.creationInput.mode}; purpose: ${plan.creationInput.sitePurpose}; subject: ${plan.creationInput.subject}; requested capabilities: ${plan.creationInput.requestedCapabilities.join(", ") || "none"}; multi-page ${plan.creationInput.multiPage ? "required" : "not stated"}.`,
+    `REVISABLE PLAN DEFAULTS: business "${final.businessName}"; industry ${final.industry ?? "unspecified"}; goal ${final.primaryGoal ?? "unspecified"}; pages ${final.selectedPages.join(", ") || "home only"}; ${themeLine}. These never narrow the prompt above.`,
+  ].filter(Boolean);
   const changed: string[] = [];
   if (plan.industry && final.industry && plan.industry !== final.industry) changed.push(`industry is ${final.industry} (not ${plan.industry})`);
   if (plan.businessName && plan.businessName !== final.businessName) changed.push(`the business is named "${final.businessName}"`);
