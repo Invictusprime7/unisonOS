@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPromptLaunchInput,
+  extractPromptSocialLinks,
   inferPromptExperience,
 } from '@/services/launch/promptLaunchInput';
+import { clearRetiredInterviewDrafts } from '@/components/launch/PromptLaunchPanel';
 import {
   ARCHETYPE_ADVISORY_POLICY,
   MIXED_SECTION_AUTHORING_POLICY,
@@ -113,5 +115,47 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     expect(sections.find((s) => s.sectionId === 'home:services:0')?.variantId).toBe('services:editorial-rows');
     expect(sections.find((s) => s.sectionId === 'home:match-centre:0')?.variantId?.startsWith('custom:')).toBe(true);
     expect(countSectionOrigins(result.files, ['/src/pages/Home.tsx'])).toEqual({ certified: 1, custom: 1 });
+  });
+});
+
+describe('prompt-first launch replaces the retired guided setup responsibilities', () => {
+  it('carries social profiles written in the conversation into the launch', () => {
+    const { input } = buildPromptLaunchInput(
+      'Build a bakery site called Crumb. Our Instagram is https://instagram.com/crumbbakes and TikTok https://www.tiktok.com/@crumb.',
+    );
+    expect(input.socialLinks).toEqual({
+      instagram: 'https://instagram.com/crumbbakes',
+      tiktok: 'https://www.tiktok.com/@crumb',
+    });
+    expect(input.businessParameters?.socialLinks).toEqual(input.socialLinks);
+  });
+
+  it('ignores non-social links and bare network homepages', () => {
+    expect(extractPromptSocialLinks('See https://crumb.example/menu and https://instagram.com/ for ideas')).toEqual({});
+  });
+
+  it('lets a link stated in the conversation replace a saved business profile link', () => {
+    const { input } = buildPromptLaunchInput('A studio site. Instagram: https://instagram.com/new-handle', {
+      prefill: { socialLinks: { instagram: 'https://instagram.com/old-handle', facebook: 'https://facebook.com/studio' } },
+    });
+    expect(input.socialLinks).toEqual({
+      instagram: 'https://instagram.com/new-handle',
+      facebook: 'https://facebook.com/studio',
+    });
+  });
+
+  it('clears answers the retired guided setup saved in the browser, and nothing else', () => {
+    const store = new Map<string, string>([
+      ['unison.launch-interview.v1.user-1', '{"privateAnswers":{"ownerEmail":"a@b.c"}}'],
+      ['unison.launch-interview.v1.anonymous', '{}'],
+      ['unison.site-discovery.user-1', '[]'],
+    ]);
+    const storage = {
+      get length() { return store.size; },
+      key: (index: number) => [...store.keys()][index] ?? null,
+      removeItem: (key: string) => { store.delete(key); },
+    };
+    clearRetiredInterviewDrafts(storage);
+    expect([...store.keys()]).toEqual(['unison.site-discovery.user-1']);
   });
 });
