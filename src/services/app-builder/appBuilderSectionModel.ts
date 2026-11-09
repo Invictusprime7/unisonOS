@@ -398,17 +398,34 @@ function importsRegisteredImplementation(
     && (imported.importedName === null || imported.importedName === implementation.exportName);
 }
 
+/**
+ * Alias form (`@/…`, no extension) of an import specifier. Relative imports
+ * written from a `/src/` file resolve to the same alias, so a site-local or
+ * certified module is recognised however the author spelled its path.
+ */
+function canonicalModuleSpecifier(sourceFile: ts.SourceFile, specifier: string): string {
+  if (!specifier.startsWith('.') || !sourceFile.fileName.startsWith('/src/')) return specifier;
+  const stack = sourceFile.fileName.split('/').slice(0, -1).filter(Boolean);
+  for (const part of specifier.split('/')) {
+    if (part === '..') stack.pop();
+    else if (part !== '.' && part !== '') stack.push(part);
+  }
+  const resolved = `/${stack.join('/')}`.replace(/\.(?:tsx?|jsx?)$/i, '');
+  return resolved.startsWith('/src/') ? `@/${resolved.slice('/src/'.length)}` : specifier;
+}
+
 function moduleImports(sourceFile: ts.SourceFile): Map<string, ImportedBinding> {
   const imports = new Map<string, ImportedBinding>();
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const modulePath = canonicalModuleSpecifier(sourceFile, statement.moduleSpecifier.text);
     const binding = statement.importClause?.name;
-    if (binding) imports.set(binding.text, { modulePath: statement.moduleSpecifier.text, importedName: null });
+    if (binding) imports.set(binding.text, { modulePath, importedName: null });
     const named = statement.importClause?.namedBindings;
     if (named && ts.isNamedImports(named)) {
       for (const element of named.elements) {
         imports.set(element.name.text, {
-          modulePath: statement.moduleSpecifier.text,
+          modulePath,
           importedName: (element.propertyName ?? element.name).text,
         });
       }
@@ -751,7 +768,7 @@ function findLegacyNamedRenderer(
   const localNames = new Set<string>();
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)
-      || statement.moduleSpecifier.text !== expectedImport) continue;
+      || canonicalModuleSpecifier(sourceFile, statement.moduleSpecifier.text) !== expectedImport) continue;
     const named = statement.importClause?.namedBindings;
     if (!named || !ts.isNamedImports(named)) continue;
     for (const specifier of named.elements) {
@@ -777,7 +794,7 @@ function findLegacyNamedRenderer(
   visit(sectionRoot);
   const existingDispatcher = sourceFile.statements.find((statement) =>
     ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)
-    && statement.moduleSpecifier.text === expectedImport && statement.importClause?.name,
+    && canonicalModuleSpecifier(sourceFile, statement.moduleSpecifier.text) === expectedImport && statement.importClause?.name,
   );
   let dispatcherName = existingDispatcher && ts.isImportDeclaration(existingDispatcher)
     ? existingDispatcher.importClause?.name?.text ?? null
