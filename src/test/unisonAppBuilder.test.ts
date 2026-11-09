@@ -1220,6 +1220,75 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     expect(origins?.certified).toBeGreaterThan(0);
   });
 
+  it('Native authorship: a provider-written MatchCentre module survives the real repair loop, normalization and closure', async () => {
+    const { authorSitePages } = await import('@/services/launch/siteAuthoringOrchestrator');
+    const trace = await import('@/services/launch/authorshipTrace');
+    const appContract = contract();
+    appContract.business.universalCreation = {
+      mode: 'open-ended', originalPrompt: 'A bold live sports blog with an original match centre.', sitePurpose: 'sports blog', subject: 'football',
+      pages: [], visualRequirements: [], requestedCapabilities: [],
+      requirements: [{ id: 'req:interaction:match-centre', kind: 'interaction', text: 'interactions: match centre', origin: 'explicit' }],
+    };
+    const matchCentre = 'export default function MatchCentre({ fixture }: { fixture: string }) {\n  return <article aria-label="Match centre"><p>Sample data</p><h2>{fixture}</h2></article>;\n}\n';
+    const customSection = '<section data-ut-section-id="home:match-centre:0" data-ut-section-type="match-centre" data-ut-variant="custom:match-centre"><MatchCentre fixture="Ghana v Senegal" /></section>';
+    const providerRequests: string[] = [];
+    const invoke = vi.fn(async (request: { messages: Array<{ content: string }> }) => {
+      const composerRequest = JSON.parse(request.messages[0].content) as { files: Record<string, string>; page: { filePath: string }; brief: string };
+      providerRequests.push(composerRequest.brief);
+      const page = scaffoldAuthoredPages(appContract, {
+        '/src/pages/Home.tsx': { imports: 'import MatchCentre from "../project-components/MatchCentre";', body: customSection },
+      }, composerRequest.files)[composerRequest.page.filePath];
+      const fileOps = [
+        { type: 'replace', path: composerRequest.page.filePath, content: page },
+        { type: 'create', path: '/src/project-components/MatchCentre.tsx', content: matchCentre },
+      ];
+      return { data: { content: JSON.stringify({ summary: 'Authored Home with an original match centre.', fileOps }) }, error: null };
+    });
+    trace.setAuthorshipTraceEnabled(true);
+    const run = trace.beginAuthorshipTrace('native-authorship-test');
+    run.record('launchPrompt', { requirementHashes: [] });
+    try {
+      const result = await createTestBuilder({
+        authorSite: (input) => authorSitePages({ ...input, invoke: invoke as never }),
+      }).generate({ operationId: 'native-authorship', contract: appContract, initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null });
+
+      expect(invoke).toHaveBeenCalled();
+      expect(result.candidate.status, JSON.stringify(result.candidate.diagnostics)).toBe('ready-for-commit');
+      expect(result.candidateFiles['/src/project-components/MatchCentre.tsx']).toBe(matchCentre);
+      expect(result.candidateFiles['/src/pages/Home.tsx']).toContain('import MatchCentre from "../project-components/MatchCentre";');
+      expect(result.candidateFiles['/src/pages/Home.tsx']).toContain('<MatchCentre fixture="Ghana v Senegal"');
+      expect(result.candidate.provenance.sectionOrigins?.custom).toBe(1);
+      expect(result.candidate.requirementCoverage?.items.find((item) => item.id === 'req:interaction:match-centre')?.status).toBe('met');
+      // Accepted bytes, as the commit receives them.
+      run.recordFiles('acceptedVfsManifest', result.candidateFiles, { revisionId: 'test' });
+      const report = trace.firstLossBoundary(run.events());
+      expect(report.boundary, report.detail).toBe('none');
+      expect(report.authoredAccepted).toEqual(['/src/project-components/MatchCentre.tsx']);
+      expect(providerRequests[0]).toContain('CREATIVE AUTHORITY');
+    } finally {
+      trace.setAuthorshipTraceEnabled(null);
+      trace.endAuthorshipTrace();
+    }
+  });
+
+  it('Native authorship: registry-only output is never reported as complete for an original-experience request', async () => {
+    const appContract = contract();
+    appContract.business.universalCreation = {
+      mode: 'open-ended', originalPrompt: 'Sports blog with a match centre.', sitePurpose: 'sports', subject: 'football',
+      pages: [], visualRequirements: [], requestedCapabilities: [],
+      requirements: [{ id: 'req:interaction:match-centre', kind: 'interaction', text: 'interactions: match centre', origin: 'explicit' }],
+    };
+    const result = await createTestBuilder({ authorSite: async (input) => ({
+      files: scaffoldAuthoredPages(appContract, { '/src/pages/Home.tsx': { body: '<p>Visit our Match Centre soon</p>' } }, input.files),
+      revisionId: input.revisionId,
+      outcomes: input.pages.map((page) => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
+    }) }).generate({ operationId: 'registry-only', contract: appContract, initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null });
+    const coverage = result.candidate.requirementCoverage;
+    expect(coverage?.complete).toBe(false);
+    expect(coverage?.items.find((item) => item.id === 'req:interaction:match-centre')?.status).toBe('partial');
+    expect(coverage?.summary).toContain('still open');
+  });
+
   it('generates an in-builder page candidate with scoped files and topology ops', async () => {
     const page = {
       pageId: 'focus', title: 'Focus', route: '/focus', filePath: '/src/pages/Focus.tsx',
