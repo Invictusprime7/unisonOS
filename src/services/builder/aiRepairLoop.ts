@@ -7,7 +7,6 @@
  * the single legal writer.
  */
 
-import { sampleLabelViolations } from './aiCandidateGates';
 import { activeAuthorshipTrace } from '@/services/launch/authorshipTrace';
 import { runBuilderTurn } from '@/services/builderBrainClient';
 import {
@@ -17,7 +16,7 @@ import {
   type AIComposerRequest,
   type AIComposerResponse,
 } from '@/contracts/aiComposerContract';
-import { prepareAICandidate, type PageCheck, type PreparedCandidate } from './aiCandidateGates';
+import { prepareAICandidate, sampleLabelViolations, type PageCheck, type PreparedCandidate } from './aiCandidateGates';
 import type { HomepageVisualLanguage } from '@/services/launch/homepageFirstContract';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from './canonicalAuthoringRequest';
