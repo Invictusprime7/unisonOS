@@ -6,6 +6,8 @@ import { createUnisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder'
 import { buildPromptLaunchInput } from '@/services/launch/promptLaunchInput';
 import { buildRequirementCoverage } from '@/services/app-builder/requirementCoverage';
 import { manifestFromFiles } from '@/services/launch/authorshipTrace';
+import { readFileSync, existsSync } from 'node:fs';
+import { runComposerRepairLoop } from '@/services/builder/aiRepairLoop';
 
 const URL = 'https://oruwtgdjurstvhgqcvbv.supabase.co/functions/v1/generate-page';
 const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ydXd0Z2RqdXJzdHZoZ3FjdmJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyOTE5NzIsImV4cCI6MjA3NTg2Nzk3Mn0.aOV9uab2niXhszfqCg81yzDRDg1-15XS9BL3-2bhhYM';
@@ -59,5 +61,28 @@ describe.skipIf(!process.env.LOVABLE_BROWSER_SUPABASE_ACCESS_TOKEN)('live native
     });
     writeFileSync(`${OUT}/coverage.json`, JSON.stringify(coverage, null, 2));
     expect(result.status, JSON.stringify(result.diagnostics)).toBe('ready-for-commit');
+  }, 300_000);
+
+  it.skipIf(!existsSync(`${OUT}/_src_project-components_sports_MatchCentre.tsx`))('Affinity edits the authored match centre with the real AI', async () => {
+    const files = {
+      ...shell,
+      '/src/pages/MatchCentre.tsx': readFileSync(`${OUT}/_src_pages_MatchCentre.tsx`, 'utf8'),
+      '/src/project-components/sports/MatchCentre.tsx': readFileSync(`${OUT}/_src_project-components_sports_MatchCentre.tsx`, 'utf8'),
+    };
+    const builder = createUnisonAppBuilder({
+      loadContentTypes: async () => [],
+      runComposer: (loopInput) => runComposerRepairLoop({ ...loopInput, invoke: invoke as never }),
+    });
+    const result = await builder.edit({
+      operationId: 'live-native-edit', baseRevisionId: 'probe', currentFiles: files,
+      instruction: 'In the match centre component, put the live fixture ticker in a left sidebar column next to the scoreboard on desktop (two-column layout). Keep everything else.',
+      page: { title: 'Match Centre', route: '/match-centre', role: 'custom', filePath: '/src/pages/MatchCentre.tsx' },
+      sourceTargets: ['/src/project-components/sports/MatchCentre.tsx'],
+      timeoutMs: 200_000,
+    });
+    const changed = Object.keys(result.candidateFiles).filter((path) => result.candidateFiles[path] !== (files as Record<string, string>)[path]);
+    writeFileSync(`${OUT}/edit.json`, JSON.stringify({ status: result.candidate.status, stopReason: result.stopReason, diagnostics: result.candidate.diagnostics, changed, summary: result.summary }, null, 2));
+    if (result.candidateFiles['/src/project-components/sports/MatchCentre.tsx']) writeFileSync(`${OUT}/edited_MatchCentre.tsx`, result.candidateFiles['/src/project-components/sports/MatchCentre.tsx']);
+    expect(result.candidate.status, JSON.stringify(result.candidate.diagnostics)).toBe('ready-for-commit');
   }, 300_000);
 });
