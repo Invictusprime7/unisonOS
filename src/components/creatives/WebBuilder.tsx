@@ -1745,7 +1745,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       cancelled = true;
     };
   }, [projectId, hydrateCanonicalPlayground]);
-  // Business blueprint context forwarded from LauncherWizard for context-aware in-builder AI
+  // Business blueprint context forwarded from prompt-first launch for context-aware in-builder AI
   const systemsBuildContextFromState = effectiveRouteState?.systemsBuildContext ?? null;
   // Durable WizardSeed forwarded into AIBuilderPanel so every Lane B turn shares
   // the same seed / memory / intent contract that drove the original launch.

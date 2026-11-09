@@ -2,7 +2,7 @@
  * LaunchState Type
  * 
  * Represents the complete metadata and context of a site launch operation.
- * This is the intermediate representation that LauncherWizard / launchOrchestrator
+ * This is the intermediate representation that prompt-first launch / launchOrchestrator
  * creates and passes to WebBuilder to stabilize the preview contract.
  * 
  * Eventually this becomes the basis for a full SiteBundle, but during
@@ -54,7 +54,7 @@ export interface LaunchBlueprint {
 }
 
 export interface LaunchState {
-  // Core launch metadata (from LauncherWizard)
+  // Core launch metadata (from prompt-first launch)
   systemType: SystemType;
   systemName: string;
   businessName: string;
@@ -64,7 +64,7 @@ export interface LaunchState {
    * Resolved industry key that drove seeding + intent-profile selection.
    * Top-level mirror of `blueprint.identity.industry` so downstream
    * consumers (WebBuilder, IntentRouter, publish gate) don't need to
-   * dig through the blueprint. Populated by LauncherWizard.
+   * dig through the blueprint. Populated by prompt-first launch.
    */
   industry?: string;
 
@@ -155,7 +155,7 @@ export interface LaunchContextType {
 // ============================================================================
 
 /**
- * Create a minimal LaunchState from LauncherWizard data
+ * Create a minimal LaunchState from prompt-first launch data
  */
 export function createLaunchState(
   input: Pick<LaunchState, 

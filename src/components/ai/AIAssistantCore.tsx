@@ -3,7 +3,7 @@
  * 
  * This is the shared core logic for AI assistant functionality.
  * Can be used in:
- * - LauncherWizard and WebBuilder AI surfaces
+ * - prompt-first launch and WebBuilder AI surfaces
  * - WebBuilder (as floating code assistant widget)
  * 
  * Provides:

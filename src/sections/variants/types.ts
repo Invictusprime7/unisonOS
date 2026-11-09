@@ -5,7 +5,7 @@
  * for each section type while preserving the same data contract (props).
  * 
  * All rendering uses JSX/React source strings — consistent with the
- * LauncherWizard pipeline that generates React VFS files.
+ * prompt-first launch pipeline that generates React VFS files.
  */
 
 import type { ComponentType } from 'react';

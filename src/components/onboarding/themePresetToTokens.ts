@@ -1,6 +1,6 @@
 /**
  * Deterministic mapping: ThemePreset (hex palette + font names) → ThemeTokens (HSL strings).
- * Used by LauncherWizard to apply the wizard's aesthetic card directly to a
+ * Used by prompt-first launch to apply the wizard's aesthetic card directly to a
  * Section Registry composition WITHOUT calling the AI.
  */
 import type { ThemePreset } from './themePresets';

@@ -1,5 +1,5 @@
 // ============================================================================
-// Theme Presets for LauncherWizard
+// Theme Presets for prompt-first launch
 // VISUAL-ONLY: These presets control colors, typography, and layout formatting.
 // They must NEVER influence industry content, text copy, or business language.
 // ============================================================================

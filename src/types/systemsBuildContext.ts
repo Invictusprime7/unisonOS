@@ -2,7 +2,7 @@
  * SystemsBuildContext
  *
  * Mirrors the full BlueprintSchema from the `systems-build` edge function
- * (snake_case field naming throughout). Passed from LauncherWizard into
+ * (snake_case field naming throughout). Passed from prompt-first launch into
  * `ai-code-assistant` so the AI has brand identity, palette, required
  * sections, and intent wiring for generation and in-builder edits.
  *

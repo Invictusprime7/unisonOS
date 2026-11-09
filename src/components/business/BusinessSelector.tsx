@@ -2,7 +2,7 @@
  * BusinessSelector — dark-themed dropdown for choosing a Business Profile.
  *
  * Mounted in:
- *   - Wizard (LauncherWizard step 1)                → mode="member"
+ *   - Wizard (prompt-first launch step 1)                → mode="member"
  *   - Web Builder topbar pill (BusinessPill)        → mode="admin"
  *   - Cloud Settings "Projects & businesses" table  → mode="admin"
  *

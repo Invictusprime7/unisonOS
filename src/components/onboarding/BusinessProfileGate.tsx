@@ -2,7 +2,7 @@
  * BusinessProfileGate — Milestone 1 signup→launch bridge.
  *
  * Ensures a signed-in owner has a minimum Business Profile
- * (name + industry + notification email) before the LauncherWizard opens.
+ * (name + industry + notification email) before the prompt-first launch opens.
  * Uses `scoreProfileCompleteness` for the same rules the publish gate uses,
  * so preview↔publish stay consistent.
  *

@@ -14,7 +14,7 @@ import { normalizeImageCompatibility } from '@/utils/imageCompatibility';
  *    pushing a broken module into Sandpack.
  *
  * This module is intentionally dependency-free and safe to call from the
- * client (LauncherWizard, Monaco quick-fix action) and from the preview
+ * client (prompt-first launch, Monaco quick-fix action) and from the preview
  * compiler.
  */
 
