@@ -128,7 +128,15 @@ serve(async (req) => {
     const payload = await response.json();
     const result = extractGraphicDesignResult(payload?.choices?.[0]?.message?.content);
     if (!result) {
-      console.error("[affinity-graphic-design] unreadable reply");
+      const choice = payload?.choices?.[0];
+      const raw = typeof choice?.message?.content === "string" ? choice.message.content : JSON.stringify(choice?.message?.content ?? null);
+      console.error("[affinity-graphic-design] unreadable reply", JSON.stringify({
+        finish: choice?.finish_reason ?? null,
+        chars: raw.length,
+        usage: payload?.usage ?? null,
+        head: raw.slice(0, 300),
+        tail: raw.slice(-300),
+      }));
       return errorResponse("Affinity returned a design it couldn't read. Nothing was changed. Try again.", 502, corsHeaders);
     }
 
