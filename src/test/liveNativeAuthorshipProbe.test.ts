@@ -13,8 +13,8 @@ const URL = 'https://oruwtgdjurstvhgqcvbv.supabase.co/functions/v1/generate-page
 const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ydXd0Z2RqdXJzdHZoZ3FjdmJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyOTE5NzIsImV4cCI6MjA3NTg2Nzk3Mn0.aOV9uab2niXhszfqCg81yzDRDg1-15XS9BL3-2bhhYM';
 const OUT = '/tmp/live-native';
 
-const invoke = async (input: Record<string, unknown>, options: { signal?: AbortSignal } = {}) => {
-  const response = await fetch(URL, {
+const invokeAt = (url: string) => async (input: Record<string, unknown>, options: { signal?: AbortSignal } = {}) => {
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${process.env.LOVABLE_BROWSER_SUPABASE_ACCESS_TOKEN}` },
     body: JSON.stringify({ ...input, gatewayOptions: { ...(input.gatewayOptions as object | undefined), timeoutMs: Math.min(130_000, Number((input.gatewayOptions as { timeoutMs?: number } | undefined)?.timeoutMs ?? 130_000)) } }),
@@ -26,6 +26,8 @@ const invoke = async (input: Record<string, unknown>, options: { signal?: AbortS
   writeFileSync(`${OUT}/status-${Date.now()}.txt`, `${response.status} ${text.slice(0, 600)}`);
   return response.ok ? { data, error: null } : { data, error: Object.assign(new Error(`HTTP ${response.status}`), { context: { status: response.status, body: text.slice(0, 2000) } }) };
 };
+const invoke = invokeAt(URL);
+const invokeEdit = invokeAt(URL.replace('generate-page', 'ai-code-assistant'));
 
 const shell = {
   '/package.json': JSON.stringify({ dependencies: { react: '^18.3.1', 'react-dom': '^18.3.1', 'react-router-dom': '^6.26.0', 'framer-motion': '^11.0.0', 'lucide-react': '^0.462.0' } }),
@@ -71,7 +73,7 @@ describe.skipIf(!process.env.LOVABLE_BROWSER_SUPABASE_ACCESS_TOKEN)('live native
     };
     const builder = createUnisonAppBuilder({
       loadContentTypes: async () => [],
-      runComposer: (loopInput) => runComposerRepairLoop({ ...loopInput, invoke: invoke as never }),
+      runComposer: (loopInput) => runComposerRepairLoop({ ...loopInput, invoke: invokeEdit as never }),
     });
     const result = await builder.edit({
       operationId: 'live-native-edit', baseRevisionId: 'probe', currentFiles: files,
