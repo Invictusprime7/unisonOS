@@ -111,6 +111,21 @@ describe('creative plan (B1/B2)', () => {
   });
 });
 
+describe('data honesty on edits (F)', () => {
+  it('rejects an edit that drops the visible sample-data label unless the owner asked about it', async () => {
+    const { sampleLabelViolations } = await import('@/services/builder/aiCandidateGates');
+    const base = { '/src/project-components/MatchCentre.tsx': 'export default function M(){return <span>Live Fixture Ticker (Sample Data)</span>}' };
+    const next = { '/src/project-components/MatchCentre.tsx': 'export default function M(){return <span>Live Fixtures</span>}' };
+    expect(sampleLabelViolations(base, next, 'Make it two columns')).toHaveLength(1);
+    expect(sampleLabelViolations(base, next, 'Remove the sample label, we connected a real feed')).toEqual([]);
+    expect(sampleLabelViolations(base, base, 'Make it two columns')).toEqual([]);
+  });
+
+  it('keeps "interactive match centre" as a match-centre requirement', () => {
+    expect(deriveCreativePlan('an interactive match centre').requirements.map((requirement) => requirement.id)).toContain('req:interaction:match-centre');
+  });
+});
+
 describe('requirements survive long prompts (B4)', () => {
   it('never truncates the CREATIVE REQUIREMENTS block', () => {
     const plan = deriveChatLaunchPlan(`${SPORTS} ${'Every story needs vivid detail. '.repeat(700)}`, { promptFirst: true });
