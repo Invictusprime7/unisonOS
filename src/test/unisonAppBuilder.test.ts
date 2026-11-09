@@ -1232,12 +1232,11 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     const matchCentre = 'export default function MatchCentre({ fixture }: { fixture: string }) {\n  return <article aria-label="Match centre"><p>Sample data</p><h2>{fixture}</h2></article>;\n}\n';
     const customSection = '<section data-ut-section-id="home:match-centre:0" data-ut-section-type="match-centre" data-ut-variant="custom:match-centre"><MatchCentre fixture="Ghana v Senegal" /></section>';
     const providerRequests: string[] = [];
+    let authoredPages: Record<string, string> = {};
     const invoke = vi.fn(async (request: { messages: Array<{ content: string }> }) => {
       const composerRequest = JSON.parse(request.messages[0].content) as { files: Record<string, string>; page: { filePath: string }; brief: string };
       providerRequests.push(composerRequest.brief);
-      const page = scaffoldAuthoredPages(appContract, {
-        '/src/pages/Home.tsx': { imports: 'import MatchCentre from "../project-components/MatchCentre";', body: customSection },
-      }, composerRequest.files)[composerRequest.page.filePath];
+      const page = authoredPages[composerRequest.page.filePath];
       const fileOps = [
         { type: 'replace', path: composerRequest.page.filePath, content: page },
         { type: 'create', path: '/src/project-components/MatchCentre.tsx', content: matchCentre },
@@ -1249,7 +1248,13 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     run.record('launchPrompt', { requirementHashes: [] });
     try {
       const result = await createTestBuilder({
-        authorSite: (input) => authorSitePages({ ...input, invoke: invoke as never }),
+        authorSite: (input) => {
+          // What the stand-in provider writes: Home with an original module plus certified sections.
+          authoredPages = scaffoldAuthoredPages(appContract, {
+            '/src/pages/Home.tsx': { imports: 'import MatchCentre from "../project-components/MatchCentre";', body: customSection },
+          }, input.files);
+          return authorSitePages({ ...input, invoke: invoke as never });
+        },
       }).generate({ operationId: 'native-authorship', contract: appContract, initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null });
 
       expect(invoke).toHaveBeenCalled();
