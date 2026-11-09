@@ -22,7 +22,26 @@ import {
   type LaunchRunSnapshot,
 } from '@/services/launch/launchRun';
 import type { AppBuildGenerationMode } from '@/services/app-builder/appBuilderContracts';
-import { clearLaunchInterviewDraft } from '@/services/launch/interviewDraftService';
+import { ImportProjectZipButton } from '@/components/onboarding/ImportProjectZipButton';
+import { ImportUnisonSiteZipButton } from '@/components/onboarding/ImportUnisonSiteZipButton';
+
+/** Key prefix of answers saved by the retired guided setup; they may hold private contact details. */
+export const RETIRED_INTERVIEW_DRAFT_PREFIX = 'unison.launch-interview.';
+
+/** Remove answers the retired guided setup left in this browser. */
+export function clearRetiredInterviewDrafts(storage: Pick<Storage, 'length' | 'key' | 'removeItem'> | null = typeof window === 'undefined' ? null : window.localStorage): void {
+  if (!storage) return;
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(RETIRED_INTERVIEW_DRAFT_PREFIX)) keys.push(key);
+    }
+    keys.forEach((key) => storage.removeItem(key));
+  } catch {
+    // Storage may be unavailable (private mode); nothing to clean up.
+  }
+}
 
 /** Provider outages only; validation failures never offer the starter fallback. */
 export const AI_UNAVAILABLE_PATTERN = /timed? ?out|timeout|quota|credit|rate.?limit|429|402|unavailable|provider|no managed ai|not configured/i;
@@ -37,13 +56,11 @@ export interface PromptLaunchPanelProps {
   brief: string;
   demoGeneration?: boolean;
   prefill?: PromptLaunchPrefill | null;
-  /** Scope of any legacy saved interview answers cleared after a launch. */
-  draftScope?: string;
   onClose: () => void;
   onLaunchComplete?: () => void;
 }
 
-export function PromptLaunchPanel({ brief, demoGeneration, prefill, draftScope, onClose, onLaunchComplete }: PromptLaunchPanelProps) {
+export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onLaunchComplete }: PromptLaunchPanelProps) {
   const navigate = useNavigate();
   const { setLaunch } = useLaunch();
   const preview = useMemo(() => {
@@ -117,7 +134,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, draftScope, 
         },
       });
       if (run !== runRef.current) return;
-      if (draftScope) clearLaunchInterviewDraft(draftScope);
+      clearRetiredInterviewDrafts();
       onLaunchComplete?.();
       setLaunch(result.launchState);
       navigate('/web-builder', { replace: true, state: result.navigationState });
@@ -221,6 +238,13 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, draftScope, 
         <Button variant="ghost" onClick={onClose}>Keep chatting</Button>
         <Button disabled={!preview} onClick={() => void launch('ai')}><Sparkle />{error ? 'Try again' : 'Create my site'}</Button>
       </div>
+      <details className="border-t border-border pt-3 text-sm" data-testid="prompt-launch-import">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Already have a site? Import it instead</summary>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <ImportProjectZipButton onImported={onClose} />
+          {prefill?.businessId && <ImportUnisonSiteZipButton businessId={prefill.businessId} onImported={onClose} />}
+        </div>
+      </details>
     </section>
   );
 }

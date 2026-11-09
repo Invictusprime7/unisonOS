@@ -122,8 +122,7 @@ const Onboarding = () => {
                 <PromptLaunchPanel
                   brief={launchBrief}
                   prefill={prefill}
-                  draftScope={user?.id ?? 'anonymous'}
-                  onClose={() => setLaunchBrief(null)}
+                    onClose={() => setLaunchBrief(null)}
                 />
               ) : undefined}
               systemType="website"
