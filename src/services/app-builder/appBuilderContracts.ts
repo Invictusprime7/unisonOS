@@ -113,6 +113,15 @@ function redactUniversalCreation(
     sitePurpose: redact(creation.sitePurpose),
     subject: redact(creation.subject),
     visualRequirements: creation.visualRequirements.map(redact),
+    ...(creation.confirmedDirection ? { confirmedDirection: redact(creation.confirmedDirection) } : {}),
+    ...(creation.refinements ? { refinements: creation.refinements.map(redact) } : {}),
+    ...(creation.requirements ? {
+      requirements: creation.requirements.map((requirement) => ({
+        ...requirement,
+        text: redact(requirement.text),
+        ...(requirement.evidence ? { evidence: redact(requirement.evidence) } : {}),
+      })),
+    } : {}),
     pages: creation.pages.map((page) => ({
       ...page,
       title: redact(page.title),

@@ -10,6 +10,7 @@ import { listResources, type ContentTypeRow } from '@/services/resources/resourc
 import { listTopologyPageRoleAliases } from '@/platform/core/siteTopologyPlanner';
 import { collectResolvedCompositions } from '@/platform/core/resolvedComposition';
 import { COMPOSER_CONTEXT_LIMIT, packContextBlocks } from './contextBudget';
+import { renderCreativeRequirements } from '@/services/launch/creativePlan';
 import { ARCHETYPE_ADVISORY_POLICY, CREATIVE_AUTHORITY_ORDER, MIXED_SECTION_AUTHORING_POLICY } from './creativeAuthorityPolicy';
 
 /** Home references stay compact so later pages keep room for their own design vocabulary. */
