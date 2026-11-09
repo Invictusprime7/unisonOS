@@ -1066,6 +1066,9 @@ async function runReservedLaunchPipeline(
       throw new Error("The generated site could not be saved to its project.");
     }
     trace.recordFiles('acceptedVfsManifest', vfsFiles, { revisionId: result.persistedRevisionId });
+    const router = vfsFiles['/src/App.tsx'] ?? '';
+    trace.recordFiles('previewRouteManifest', Object.fromEntries(Object.entries(vfsFiles)
+      .filter(([path]) => path.startsWith('/src/pages/') && router.includes(path.replace('/src/', './').replace(/\.[jt]sx?$/, '')))), { revisionId: result.persistedRevisionId });
     if (!result.siteBundleSnapshot || !result.runtimeManifest) {
       throw new Error("The canonical commit returned an incomplete launch artifact.");
     }
