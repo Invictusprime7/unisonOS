@@ -1399,6 +1399,33 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     expect(result.summary).toBe('Edited safely');
   });
 
+  it('Native authorship: Affinity edits the original MatchCentre source through the real repair loop without touching other pages', async () => {
+    const { runComposerRepairLoop } = await import('@/services/builder/aiRepairLoop');
+    const { countSectionOrigins } = await import('@/services/app-builder/sectionOrigins');
+    const matchCentre = 'export default function MatchCentre({ fixture }: { fixture: string }) {\n  return <article aria-label="Match centre"><p>Sample data</p><h2>{fixture}</h2></article>;\n}\n';
+    const relaid = 'export default function MatchCentre({ fixture }: { fixture: string }) {\n  return <article aria-label="Match centre" className="grid gap-4 md:grid-cols-2"><p>Sample data</p><h2 className="ut-display">{fixture}</h2></article>;\n}\n';
+    const home = 'import MatchCentre from "../project-components/MatchCentre";\nexport default function Home(){return <main><section data-ut-section-id="home:match-centre:0" data-ut-section-type="match-centre" data-ut-variant="custom:match-centre"><MatchCentre fixture="Ghana v Senegal" /></section></main>}';
+    const currentFiles = { ...baseFiles, '/src/pages/Home.tsx': home, '/src/project-components/MatchCentre.tsx': matchCentre };
+    const invoke = vi.fn(async () => ({
+      data: { content: JSON.stringify({ summary: 'Two-column match centre.', fileOps: [{ type: 'replace', path: '/src/project-components/MatchCentre.tsx', content: relaid }] }) },
+      error: null,
+    }));
+    const result = await createTestBuilder({
+      runComposer: (loopInput) => runComposerRepairLoop({ ...loopInput, invoke: invoke as never }),
+    }).edit({
+      operationId: 'edit-match-centre', baseRevisionId: 'revision-1', currentFiles,
+      instruction: 'Make the match centre a two-column layout',
+      page: { title: 'Home', route: '/', role: 'home', filePath: '/src/pages/Home.tsx' },
+      sourceTargets: ['/src/project-components/MatchCentre.tsx'],
+    });
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(result.candidate.status, JSON.stringify(result.candidate.diagnostics)).toBe('ready-for-commit');
+    expect(result.candidateFiles['/src/project-components/MatchCentre.tsx']).toBe(relaid);
+    expect(result.candidateFiles['/src/pages/Home.tsx']).toBe(home);
+    expect(result.changeSet?.fileOps.map((op) => op.path)).toEqual(['/src/project-components/MatchCentre.tsx']);
+    expect(countSectionOrigins(result.candidateFiles, ['/src/pages/Home.tsx'])).toEqual({ certified: 0, custom: 1 });
+  });
+
   it('returns rejected candidates instead of bypassing failed gates', async () => {
     const runComposer = vi.fn(async (): Promise<ComposerLoopResult> => ({
       ok: false, reason: 'gates_exhausted', attempts: 3, errors: ['import-graph failed'],
