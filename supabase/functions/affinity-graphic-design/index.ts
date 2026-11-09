@@ -163,7 +163,7 @@ serve(async (req) => {
     }
 
     if (!result || !response) {
-      return errorResponse("Affinity returned a design it couldn't read, twice. Nothing was changed. Try again, or ask for something simpler.", 502, corsHeaders);
+      return errorResponse("Affinity returned a design it couldn't read. Nothing was changed. Try again, or ask for something simpler.", 502, corsHeaders);
     }
 
     return secureJsonResponse({
