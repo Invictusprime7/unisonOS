@@ -1,5 +1,6 @@
 /** Candidate-only full-application orchestration behind UnisonAppBuilder. */
 
+import { buildRequirementCoverage } from './requirementCoverage';
 import { COMPOSER_CONTEXT_LIMIT } from './contextBudget';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import type { ComposerLoopInput, ComposerLoopResult, ComposerStopReason } from '@/services/builder/aiRepairLoop';
@@ -380,6 +381,14 @@ export async function orchestrateAppBuild(
       id: page.id, path: page.route, filePath: page.filePath, title: page.title, role: page.role,
     })),
   });
+  const requirements = input.contract.business.universalCreation?.requirements ?? [];
+  const requirementCoverage = requirements.length
+    ? buildRequirementCoverage({
+      requirements,
+      files: candidateFiles,
+      pages: input.contract.topology.sitePlan.pages.map((page) => ({ route: page.route, filePath: page.filePath, title: page.title, visibleInNav: page.visibleInNav })),
+    })
+    : undefined;
   const candidate = {
     candidateId: `${input.operationId}:candidate:${closure.sourceHash.replace(':', '_')}`,
     status: cancelled ? 'cancelled' as const : ready ? 'ready-for-commit' as const : 'rejected' as const,
@@ -389,6 +398,7 @@ export async function orchestrateAppBuild(
     diagnostics: surfacedDiagnostics,
     closure,
     graph,
+    ...(requirementCoverage ? { requirementCoverage } : {}),
     provenance: {
       protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
       operationId: input.operationId,
