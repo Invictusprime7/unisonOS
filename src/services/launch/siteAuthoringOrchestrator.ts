@@ -20,6 +20,7 @@ import {
   ARCHETYPE_ADVISORY_POLICY,
   CREATIVE_AUTHORITY_ORDER,
   MIXED_SECTION_AUTHORING_POLICY,
+  PROMPT_CREATIVE_AUTHORITY_POLICY,
   renderOwnerCreativeBrief,
 } from '@/services/app-builder/creativeAuthorityPolicy';
 import type { ResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
