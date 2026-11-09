@@ -186,6 +186,22 @@ function confirmedPagesFromDirection(direction: string, industry: string | null)
   return { pages: uniquePagesByRoute(pages), choices };
 }
 
+/**
+ * Page names the owner listed in prose ("with Our Story, RSVP and Travel
+ * pages"). Only lists of two or more count, so "with several pages" never adds
+ * a page.
+ */
+function ownerListedPageNames(text: string): string[] {
+  const names: string[] = [];
+  for (const match of text.matchAll(/\b(?:with|including|featuring|plus)\s+(?:an?\s+|the\s+)?([A-Za-z0-9&' ,/-]{3,160}?)\s+pages\b/gi)) {
+    const parts = match[1].split(/,|\/|\band\b/i).map((part) => part.trim()).filter(Boolean);
+    if (parts.length < 2) continue;
+    if (parts.some((part) => /^(?:multiple|several|many|separate|different|other|more|few|\d+|two|three|four|five|six)$/i.test(part))) continue;
+    names.push(...parts);
+  }
+  return names;
+}
+
 export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boolean } = {}): ChatLaunchPlan {
   const text = String(brief || "");
   const promptFirst = options.promptFirst === true;
@@ -215,16 +231,20 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   const resolvedIndustry = !promptFirst && confident ? analysis!.industry : null;
   const profileRoutes = resolvedIndustry ? getIndustryProfile(resolvedIndustry)?.defaultPages.map((page) => page.path) ?? [] : [];
   const confirmedPages = confirmedPagesFromDirection(acceptedDirection, resolvedIndustry);
+  const listedNames = ownerListedPageNames(semanticText);
+  const listedPages = listedNames.length ? confirmedPagesFromDirection(`Pages: ${listedNames.join(', ')}`, resolvedIndustry).pages : [];
   const namedCreationPages = uniquePagesByRoute([
     ...mentionedPages.map((page) => pageDetailsForChoice(page, resolvedIndustry)),
     ...topologyPagesFromPrompt(semanticText, resolvedIndustry),
     ...deriveExplicitRoutePages(semanticText).filter((page) => !profileRoutes.some((route) => route.toLowerCase() === page.route.toLowerCase())),
+    ...listedPages.map((page) => ({ ...page, purpose: page.purpose.replace('the owner confirmed in the site direction', 'the owner asked for') })),
     ...confirmedPages.pages,
   ]);
   const ownerRoutes = new Set(uniquePagesByRoute([
     ...mentionedPages.map((page) => pageDetailsForChoice(page, resolvedIndustry)),
     ...topologyPagesFromPrompt(semanticText, resolvedIndustry),
     ...deriveExplicitRoutePages(semanticText),
+    ...listedPages,
   ]).map((page) => page.route.toLowerCase()));
   const confirmedOnlyRoutes = new Set(confirmedPages.pages.map((page) => page.route.toLowerCase()).filter((route) => !ownerRoutes.has(route)));
   // Industry vertical (sports, flights, weddings…): authoring knowledge read
