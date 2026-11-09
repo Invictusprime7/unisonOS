@@ -55,8 +55,11 @@ describe('marketplace App Builder convergence', () => {
     expect(generation.materialization.manifest.implementations).toHaveProperty('contact:editorial-form');
     expect(generation.materialization.manifest.implementations).toHaveProperty('cta:inset-panel');
     const pageContext = generation.runtimeContextForPage('treatments');
-    expect(pageContext).toContain('READ-ONLY REGISTRY VOCABULARY');
-    expect(pageContext).not.toContain('services:product-cards');
+    expect(pageContext).toContain('CERTIFIED DESIGN VOCABULARY');
+    // Materialized certified designs on this page are offered for REUSE with their prop contract.
+    if (generation.designSources.eligibleByPage.treatments?.includes('services:product-cards')) {
+      expect(pageContext).toContain('CERTIFIED OPTIONS FOR THIS PAGE');
+    }
   });
 
   it('passes preview material and sealed topology to App Builder before compilation', async () => {
