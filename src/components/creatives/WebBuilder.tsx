@@ -1381,7 +1381,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       setProjectDisplayName(template.name);
       setSaveProjectDescription(template.description || '');
       setBuilderMode('preview');
-      setShowLauncher(false);
       return true;
     }
 
@@ -1413,7 +1412,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     setSaveProjectName(template.name);
     setProjectDisplayName(template.name);
     setSaveProjectDescription(template.description || '');
-    setShowLauncher(false);
     return true;
   // importBuilderFiles is declared after this hook in the file; removing it from deps
   // avoids a temporal dead zone (TDZ) ReferenceError at render time. The closure body
@@ -5475,7 +5473,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           // Check if there's meaningful content (not just default)
           const isDefaultContent = draft.code?.includes('AI-generated code will appear here');
           if (!isDefaultContent) {
-            setShowLauncher(false);
             if (hasRecoveredVfs) {
               if (draft.pendingRemote) restorePendingVfsOperations(draft.pendingVfsOperations, null);
               // canonical-vfs-exempt: hydration of a saved draft into the working set
