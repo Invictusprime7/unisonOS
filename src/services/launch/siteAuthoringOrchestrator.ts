@@ -13,6 +13,7 @@
  * (launch orchestrator / Builder) and must go through commitMutation.
  */
 
+import { activeAuthorshipTrace, traceHash } from '@/services/launch/authorshipTrace';
 import { COMPOSER_CONTEXT_LIMIT, COMPOSER_PAGE_BRIEF_LIMIT } from '@/services/app-builder/contextBudget';
 import { AI_AUTHORED_MARKER } from '@/contracts/aiComposerContract';
 import {
@@ -368,6 +369,12 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
     });
     const runLoop = (request: AIComposerRequest) => runComposerRepairLoop(loopInput(request));
     const firstRequest = await buildRequest(null);
+    activeAuthorshipTrace().record('authorSiteInvocation', {
+      pageId: page.filePath,
+      counts: { briefChars: firstRequest.brief.length, contextChars: firstRequest.runtimeContext?.length ?? 0, files: Object.keys(firstRequest.files).length },
+      requirementHashes: [...new Set([...firstRequest.brief.matchAll(/\[(req:[^\]]+)\]/g)].map((match) => traceHash(match[1])))],
+      detail: { promptAuthorityPolicy: firstRequest.brief.includes(PROMPT_CREATIVE_AUTHORITY_POLICY) },
+    });
     const cacheKey = input.reuseAcceptedPages
       ? hashKey(JSON.stringify([page, input.businessName, input.designContext?.fingerprint, firstRequest.brief, firstRequest.runtimeContext, firstRequest.files, firstRequest.routes]))
       : undefined;
@@ -431,6 +438,7 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
         // preserving newer shared-file edits made by pages authored in parallel.
         const projected = input.preparePage?.(prepared.nextFiles, page) ?? prepared.nextFiles;
         const candidate = stampAuthoredPage(projected, page, input.designContext?.fingerprint);
+        activeAuthorshipTrace().recordFiles('normalizedCandidateFileManifest', candidate, { pageId: page.filePath, detail: { stage: 'page-projection' } });
         const nextFiles: Record<string, string> = { ...files };
         for (const [path, content] of Object.entries(candidate)) {
           if (baseFiles[path] === content) continue;
