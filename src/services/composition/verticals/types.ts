@@ -88,11 +88,4 @@ export interface IndustryVerticalPack {
 }
 
 /** The resolved vertical carried on the launch intent. */
-export interface ResolvedVertical {
-  packId: string;
-  variantId: string | null;
-  /** A second pack when the prompt blends two trades (e.g. a wedding photographer). */
-  blendPackId?: string | null;
-  confidence: number;
-  evidence: string[];
-}
+export type { CreationVertical as ResolvedVertical } from '@/platform/core/universalCreation';
