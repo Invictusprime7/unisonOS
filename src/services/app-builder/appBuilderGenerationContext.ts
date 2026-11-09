@@ -10,6 +10,7 @@ import { listResources, type ContentTypeRow } from '@/services/resources/resourc
 import { listTopologyPageRoleAliases } from '@/platform/core/siteTopologyPlanner';
 import { collectResolvedCompositions } from '@/platform/core/resolvedComposition';
 import { COMPOSER_CONTEXT_LIMIT, packContextBlocks } from './contextBudget';
+import { ARCHETYPE_ADVISORY_POLICY, CREATIVE_AUTHORITY_ORDER, MIXED_SECTION_AUTHORING_POLICY } from './creativeAuthorityPolicy';
 
 /** Home references stay compact so later pages keep room for their own design vocabulary. */
 export const HOME_OBJECT_CONTEXT_LIMIT = 2_500;
@@ -206,8 +207,8 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     `Visual requirements: ${creation.visualRequirements.join('; ') || 'Use the visual direction in the original prompt.'}`,
     `Requested operational capabilities: ${creation.requestedCapabilities.join(', ') || 'none; do not add unrequested backend behavior.'}`,
     'Capability authorization: a requested capability is not authorization. Use only registered components and intents in this contract; never simulate backend writes or claim unbound operations are functional.',
-    `Original visitor prompt: ${creation.originalPrompt}`,
-    ...(openEnded ? ['The selected industry is only a compatibility hint; do not replace the visitor subject or purpose with an industry template. Site-local visual TSX is allowed when certified designs do not fit.'] : []),
+    `Original visitor prompt (primary creative authority): ${creation.originalPrompt}`,
+    ...(openEnded ? ['The selected industry is only a compatibility hint; do not replace the visitor subject or purpose with an industry template. Author site-local TSX wherever certified designs do not fit the prompt.'] : []),
     ...(creation.sitePurpose.toLowerCase().includes('editorial')
       ? ['Editorial pages may render static sample articles. When a published articles content type exists, load it through listPublishedContent from @/components/publishedActionRuntime. If no type or published rows are available, keep a local sample/empty state; do not claim CMS editing or publishing without canonical owner authorization.']
       : []),
@@ -270,7 +271,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     'FORM AND CHAT AUTHORING CONTRACT:',
     'Forms are interaction widgets, not body-section layouts: never use a bare <form>, Form, or *Form component as a standalone section or the only content on a page. Embed form controls within a purposeful, planned section that includes visible context and authored layout.',
     'Use @/unison/ui/form-fields controls and @/unison/ui/button actions for form UI. Every field needs a visible label and semantic theme tokens.',
-    'Do not import or render registry design-source modules or raw 21st.dev components for body sections. Registry entries are reference metadata, not visual templates. Registered functional hosts may be included only when the canonical contract assigns them.',
+    'Certified design sources are rendered only through their @/unison/design-sources/<Family> dispatchers with a listed variantId; never import raw 21st.dev or vendor source directly. Registered functional hosts may be included only when the canonical contract assigns them.',
     'Only emit form actions and data-ut-intent values covered by the registered intents and exact Wizard CTA markers in this contract. A design component does not authorize a new action or intent.',
     'A contact, quote, newsletter, or lead-capture form does not imply a floating chat widget. Add chat only when the owner explicitly requests it, and only wire it to an intent registered in this contract.',
   ].join('\n');
@@ -301,11 +302,15 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 1, text: modules },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
     { priority: 1, text: renderEligiblePresentation(designSources, pageId) },
-    { priority: 1, text: 'PERSISTABLE SECTION CONTRACT: every root uses stable literal data-ut-section-id, data-ut-section-type and data-ut-variant. Shared chrome IDs are site:navbar and site:footer. Every body section must use a unique custom:<kebab-slug> variant and one original default-exported component under /src/project-components/ or /src/components/generated/. Every section must render meaningful visible content; empty wrappers and form-only wrappers are invalid. Keep canonical section families and IDs; never use custom variants for chrome. Keep all canonical intent, CTA, resource, slot and component-instance markers unchanged.' },
+    { priority: 1, text: 'PERSISTABLE SECTION CONTRACT: every root uses stable literal data-ut-section-id, data-ut-section-type and data-ut-variant. Shared chrome IDs are site:navbar and site:footer. A body section is either one certified family dispatcher with a listed variantId, or one site-local default-exported component under /src/project-components/ or /src/components/generated/ with a unique custom:<kebab-slug> variant. Every section must render meaningful visible content; empty wrappers and form-only wrappers are invalid. Never use custom variants for chrome. Keep all canonical intent, CTA, resource, slot and component-instance markers unchanged.' },
+    { priority: 1, text: CREATIVE_AUTHORITY_ORDER },
+    { priority: 1, text: MIXED_SECTION_AUTHORING_POLICY },
+    { priority: 1, text: ARCHETYPE_ADVISORY_POLICY },
     { priority: 1, text: 'CANONICAL SHARED SHELL: render compiler-owned SiteNav then one <main> body then SiteFooter, exactly once. Do not inline, duplicate, or re-author page chrome.' },
     { priority: 1, text: registeredComponentBlueprints(pageId) },
     { priority: 2, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
-    { priority: 1, text: 'ORIGINAL BODY DESIGN IS REQUIRED: treat the Wizard-selected theme tokens, resolved art direction, page composition target, industry and goals as the design authority. Invent the body section composition, layout, typography, spacing and visual treatment from that context. Do not import or render registry design-source modules or raw 21st.dev components for body sections, and do not reproduce their layout, styling, or distinctive visual arrangement. The plan guides section purpose and order; it is not a visual template. Keep the sealed page archetype, body ceiling and compiler-owned shared shell. Preserve canonical IDs, bindings, handlers, intents and CTA markers; never invent backend actions, business facts or baseline filler.' },
+    { priority: 1, text: 'DESIGN DIRECTION: the owner\'s prompt and confirmed refinements decide the experience. The resolved art direction pack supplies the site-wide visual language (typography, geometry, spacing cadence, media treatment, motion character) and the theme tokens supply colour; express the prompt through them rather than replacing it. Preserve canonical IDs, bindings, handlers, intents and CTA markers; never invent backend actions, business facts or baseline filler.' },
+    { priority: 3, trimmable: true, text: renderCertifiedOptions(materialization, designSources, pageId) },
     { priority: 1, text: registeredComponentContext(pageId) },
     { priority: 4, text: registeredComponentTemplates(pageId) },
     { priority: 3, text: businessParameterContext },
@@ -351,8 +356,35 @@ function renderEligiblePresentation(designSources: DesignSourceBundle, pageId?: 
   const byFamily = eligibleImplementationsByFamily(designSources, pageId);
   const families = [...byFamily.keys()];
   return families.length
-    ? `READ-ONLY REGISTRY VOCABULARY: available semantic families are ${families.join(', ')}. These are never body renderers or visual templates; author every body section as an original custom component.`
-    : 'READ-ONLY REGISTRY VOCABULARY: author body sections as original custom components from the Wizard design contract; do not import registry design renderers.';
+    ? `CERTIFIED DESIGN VOCABULARY: certified families available on this page are ${families.join(', ')}. They are optional REUSE/ADAPT options; any other section may be AUTHORED as a site-local component.`
+    : 'CERTIFIED DESIGN VOCABULARY: no certified designs are eligible on this page; AUTHOR every body section as a site-local component.';
+}
+
+const MAX_OPTIONS_PER_FAMILY = 3;
+const MAX_PROPS_HINT = 280;
+
+/** Small ranked set of certified implementations a page may REUSE, with their prop contracts. */
+function renderCertifiedOptions(
+  materialization: DesignSourceMaterialization,
+  designSources: DesignSourceBundle,
+  pageId?: string,
+): string {
+  if (!pageId) return '';
+  const manifest = materialization.manifest.implementations;
+  const lines: string[] = [];
+  for (const [family, ids] of eligibleImplementationsByFamily(designSources, pageId)) {
+    if (family === 'navbar' || family === 'footer') continue;
+    const options = ids.filter((id) => manifest[id]).slice(0, MAX_OPTIONS_PER_FAMILY);
+    if (!options.length) continue;
+    const dispatcher = family.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+    lines.push(`- ${family} (import ${dispatcher} from "@/unison/design-sources/${dispatcher}"): ${options.map((id) => {
+      const props = manifest[id].props;
+      return `${id}${props ? ` props {${props.length > MAX_PROPS_HINT ? `${props.slice(0, MAX_PROPS_HINT)}…` : props}}` : ''}`;
+    }).join('; ')}`);
+  }
+  return lines.length
+    ? ['CERTIFIED OPTIONS FOR THIS PAGE (ranked; REUSE/ADAPT only where they fit the prompt; name[]{a|b?} is an array of objects, ? = optional):', ...lines].join('\n')
+    : '';
 }
 
 function renderDesignSourceModules(
@@ -364,12 +396,12 @@ function renderDesignSourceModules(
     .map(([, entry]) => entry.sectionType))].sort();
   if (!only) {
     return families.length
-      ? `Registry implementations are not exposed as renderable templates. Their eligible families (${families.join(', ')}) are read-only semantic references; author body section modules under /src/project-components/ or /src/components/generated/ with custom:<kebab-slug> identities.`
+      ? `Certified implementations exist for these families (${families.join(', ')}); each page lists the ones it may REUSE or ADAPT. Site-local sections live under /src/project-components/ or /src/components/generated/ with custom:<kebab-slug> identities.`
       : '';
   }
   return families.length
-    ? `PAGE-SCOPED REGISTRY CONTEXT (exhaustive): only these eligible families are available on this page (${families.join(', ')}). Never use a registered variant or implementation from another page; author body sections as original local components with custom:<kebab-slug> identities.`
-    : 'PAGE-SCOPED REGISTRY CONTEXT: no certified design-source implementations are eligible for this page. Do not use registered variants from other pages; author body sections as original local components with custom:<kebab-slug> identities.';
+    ? `PAGE-SCOPED REGISTRY CONTEXT (exhaustive for certified reuse): only these certified families are eligible on this page (${families.join(', ')}). Never use a registered variant or implementation from another page; author anything else as an original site-local component with a custom:<kebab-slug> identity.`
+    : 'PAGE-SCOPED REGISTRY CONTEXT: no certified design-source implementations are eligible for this page. Do not use registered variants from other pages; author body sections as original site-local components with custom:<kebab-slug> identities.';
 }
 
 export interface DesignSourceUsageReport {
