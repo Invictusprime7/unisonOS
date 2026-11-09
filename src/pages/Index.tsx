@@ -271,11 +271,14 @@ const Index = () => {
     try {
       clearSiteDiscoveryHandoff(user.id);
     } catch (error) {
-      console.error("[Home] Could not clear the previous Wizard handoff.", error);
+      console.error("[Home] Could not clear the previous site brief handoff.", error);
     }
+    // New projects start in the Affinity chat; the creation panel opens once a brief is confirmed.
     setLaunchBrief(null);
-    setLauncherOpen(true);
-    document.getElementById('home-ai-chat')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setLauncherOpen(false);
+    const chat = document.getElementById('home-ai-chat');
+    chat?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    chat?.querySelector('textarea')?.focus({ preventScroll: true });
   };
 
   const handleStartLauncher = () => {
