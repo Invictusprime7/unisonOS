@@ -216,5 +216,7 @@ export function buildRequirementCoverage(input: {
     },
     provenance: { certifiedSections, customSections, authoredModules, adaptedModules },
     summary,
+    promotionCandidates: promotionCandidates.filter((candidate, index) =>
+      promotionCandidates.findIndex((other) => other.modulePath === candidate.modulePath && other.requirementId === candidate.requirementId) === index),
   };
 }
