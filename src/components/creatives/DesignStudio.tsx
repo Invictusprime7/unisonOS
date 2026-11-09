@@ -9,24 +9,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TemplateLibrary } from "./design-studio/TemplateLibrary";
 import { SaveTemplateDialog } from "./design-studio/SaveTemplateDialog";
 import { VersionHistory } from "./design-studio/VersionHistory";
-import { AITemplateGenerator } from "./AITemplateGenerator";
 import { ElementsPanel, type DesignElement } from "./design-studio/ElementsPanel";
 import { DesignSidebar } from "./DesignSidebar";
 import { MobileToolbar } from "./MobileToolbar";
-import { TemplateDebugPanel } from "./design-studio/TemplateDebugPanel";
-import { TemplateErrorBoundary } from "../TemplateErrorBoundary";
-import { AIDesignAssistant } from "./AIDesignAssistant";
-import { useDesignStudio } from "@/hooks/useDesignStudio";
 import { supabase as supabaseClient } from "@/integrations/supabase/client";
 const supabase = supabaseClient as any;
 import { TemplateRenderer } from "@/utils/templateRenderer";
-import { validateTemplateStrict } from "@/utils/zodTemplateValidator";
-import { templateToDocument, extractTemplateAssets } from "@/utils/templateAdapter";
-import { preloadAssets } from "@/utils/assetPreloader";
-import type { AIGeneratedTemplate } from "@/types/template";
 import { Polygon } from "fabric";
 
-export const DesignStudio = forwardRef((props, ref) => {
+interface DesignStudioProps {
+  /** Opens Affinity Graphics, which replaces the old canvas AI helpers. */
+  onOpenAffinity?: () => void;
+}
+
+export const DesignStudio = forwardRef<unknown, DesignStudioProps>(({ onOpenAffinity }, ref) => {
   const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,15 +35,7 @@ export const DesignStudio = forwardRef((props, ref) => {
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [currentTemplateId, setCurrentTemplateId] = useState<string | null>(null);
-  
-  // Debug mode - check URL parameter
-  const [debugMode] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.has('debugTemplates');
-  });
-  const [debugInfo, setDebugInfo] = useState<any>(null);
   
   // Template renderer
   const templateRendererRef = useRef<TemplateRenderer | null>(null);
@@ -73,9 +61,6 @@ export const DesignStudio = forwardRef((props, ref) => {
   // Autosave
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Design Intent Compiler - AI mockup generation
-  const { state: designStudioState, actions: designStudioActions } = useDesignStudio();
-
   // Initialize canvas with responsive sizing
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
@@ -1052,110 +1037,6 @@ export const DesignStudio = forwardRef((props, ref) => {
     };
   }, [fabricCanvas, currentTemplateId]);
 
-  // AI Template handlers with robust validation and error boundary
-  const handleAITemplateGenerated = async (rawTemplate: any) => {
-    if (!fabricCanvas) {
-      toast({ 
-        title: "Error", 
-        description: "Canvas not initialized",
-        variant: "destructive" 
-      });
-      return;
-    }
-    
-    try {
-      const layoutStart = performance.now();
-      
-      // Step 1: Validate using Zod schema
-      console.log('[DesignStudio] Validating AI template with Zod...');
-      const validation = validateTemplateStrict(rawTemplate, debugMode);
-      
-      if (!validation.success) {
-        setDebugInfo({
-          parseResult: {
-            success: false,
-            errors: validation.errors,
-          },
-          assets: [],
-        });
-        
-        toast({ 
-          title: "Template Validation Failed", 
-          description: validation.errors?.[0] || 'Invalid template structure',
-          variant: "destructive" 
-        });
-        return;
-      }
-      
-      const template = validation.data!;
-      
-      // Step 2: Extract and preload assets
-      console.log('[DesignStudio] Preloading template assets...');
-      const assetUrls = extractTemplateAssets(template);
-      const assetsStatus = await preloadAssets(assetUrls);
-      
-      // Step 3: Compute layout
-      console.log('[DesignStudio] Converting template to document...');
-      const document = templateToDocument(template);
-      
-      const layoutEnd = performance.now();
-      
-      // Update debug info
-      setDebugInfo({
-        parseResult: {
-          success: true,
-          autoFilled: validation.autoFilled,
-        },
-        layoutTiming: {
-          start: layoutStart,
-          end: layoutEnd,
-          duration: Math.round(layoutEnd - layoutStart),
-        },
-        assets: assetUrls.map(url => {
-          const status = assetsStatus.find(a => a.url === url);
-          return {
-            url,
-            status: status?.status || 'pending',
-            size: status?.size,
-          };
-        }),
-        template,
-      });
-      
-      // Step 4: Render to canvas using new Fabric renderer
-      console.log('[DesignStudio] Rendering AI template to canvas:', template.name);
-      const { FabricTemplateRenderer } = await import('@/utils/fabricTemplateRenderer');
-      const renderer = new FabricTemplateRenderer(fabricCanvas);
-      await renderer.renderTemplate(template);
-      
-      setCurrentTemplateId(template.id || null);
-      pushHistory();
-      
-      toast({ 
-        title: "AI Template Loaded Successfully", 
-        description: `${template.name} rendered with ${template.frames.length} frame(s)`,
-      });
-    } catch (error) {
-      console.error('[DesignStudio] Error rendering AI template:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      setDebugInfo(prev => ({
-        ...prev,
-        parseResult: {
-          success: false,
-          errors: [errorMessage],
-        },
-      }));
-      
-      toast({ 
-        title: "Template Rendering Failed", 
-        description: errorMessage,
-        variant: "destructive" 
-      });
-    }
-  };
-
-
   const loadTemplateInGrapeJS = (htmlCode: string, cssCode?: string) => {
     // This will be called from the parent component
     // We'll store the template code to pass to GrapeJS editor
@@ -1189,13 +1070,13 @@ export const DesignStudio = forwardRef((props, ref) => {
           </Button>
         </div>
         <div className="ml-auto flex items-center gap-1 md:gap-2 flex-wrap">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setShowAIGenerator(true)} 
-            className="h-7 md:h-8 px-2 md:px-3 text-xs bg-purple-600 hover:bg-purple-500 text-white whitespace-nowrap"
+          <Button
+            size="sm"
+            onClick={onOpenAffinity}
+            disabled={!onOpenAffinity}
+            className="h-7 md:h-8 px-2 md:px-3 text-xs whitespace-nowrap"
           >
-            AI Generate
+            Design with Affinity
           </Button>
         </div>
       </div>
@@ -1378,27 +1259,6 @@ export const DesignStudio = forwardRef((props, ref) => {
         onRestoreVersion={handleVersionRestore}
       />
 
-      <TemplateErrorBoundary onReset={() => setDebugInfo(null)}>
-        <AITemplateGenerator
-          open={showAIGenerator}
-          onOpenChange={setShowAIGenerator}
-          onTemplateGenerated={handleAITemplateGenerated}
-        />
-      </TemplateErrorBoundary>
-
-      <TemplateDebugPanel debugInfo={debugInfo} enabled={debugMode} />
-
-      {/* AI Design Assistant - Floating Panel */}
-      <AIDesignAssistant
-        state={designStudioState}
-        actions={designStudioActions}
-        onMockupGenerated={() => {
-          toast({
-            title: "Mockup Generated",
-            description: "Your AI-generated mockup is ready for editing",
-          });
-        }}
-      />
     </div>
   );
 });
