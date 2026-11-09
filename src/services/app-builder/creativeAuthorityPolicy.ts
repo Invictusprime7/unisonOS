@@ -60,7 +60,8 @@ export function renderOwnerCreativeBrief(vision: string | undefined, limit = OWN
   const prose = start >= 0
     ? `${text.slice(0, start)}${end >= 0 ? text.slice(end + REQUIREMENTS_END.length) : ''}`.replace(/\n{3,}/g, '\n\n').trim()
     : text;
-  const room = Math.max(1_500, limit - requirements.length - 1);
+  // Prose keeps a readable share even beside a large requirement list.
+  const room = Math.max(Math.min(limit, 1_500), limit - requirements.length - 1);
   const body = prose.length > room
     ? `${prose.slice(0, room)}\n[Prompt continues; the full original prompt is in VISITOR CREATION SPECIFICATION.]`
     : prose;
