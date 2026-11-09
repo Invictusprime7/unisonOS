@@ -11,6 +11,8 @@ import type { SiteBundleSnapshotMeta } from '@/platform/core/canonicalPipeline';
 import type { ResolvedArtDirection } from '@/sections/variants/resolvedArtDirection';
 import type { ThemeTokens } from '@/sections/types';
 import { planSiteComposition, type SiteCompositionPlan } from '@/services/composition';
+import { hasDedicatedCompositionProfiles } from '@/services/composition/industryCompositionRegistry';
+import { compositionIndustryFor } from '@/services/composition/verticals';
 import type { ResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import type { WizardAggregatedRegistryContext } from '@/services/launch/wizardRegistryAggregation';
 import type { BuilderPageType, PageRegistry } from '@/types/pageRegistry';
@@ -131,6 +133,7 @@ function redactUniversalCreation(
       title: redact(page.title),
       purpose: redact(page.purpose),
     })),
+    ...(creation.vertical ? { vertical: { ...creation.vertical, evidence: creation.vertical.evidence.map(redact) } } : {}),
   };
 }
 
@@ -774,7 +777,7 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
     input.businessProfile,
   );
   const compositionPlan = planSiteComposition(
-    input.industry,
+    compositionIndustryFor(input.industry, input.universalCreation?.vertical, hasDedicatedCompositionProfiles),
     input.sitePlan.pages.map((page) => ({ pageId: page.id, role: page.role })),
     input.seed,
     {
