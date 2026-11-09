@@ -18,6 +18,7 @@ import {
   renderCreativeRequirements,
 } from "@/services/launch/creativePlan";
 import { getIndustryProfile } from "@/platform/core/industryMatrix";
+import { getVerticalPack, inferVerticalPages, resolveIndustryVertical, verticalInteractionRequirements } from "@/services/composition/verticals";
 import {
   matchTopologyPageAliases,
   resolvePageSpecsForRoles,
@@ -214,7 +215,7 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   const resolvedIndustry = !promptFirst && confident ? analysis!.industry : null;
   const profileRoutes = resolvedIndustry ? getIndustryProfile(resolvedIndustry)?.defaultPages.map((page) => page.path) ?? [] : [];
   const confirmedPages = confirmedPagesFromDirection(acceptedDirection, resolvedIndustry);
-  const creationPages = uniquePagesByRoute([
+  const namedCreationPages = uniquePagesByRoute([
     ...mentionedPages.map((page) => pageDetailsForChoice(page, resolvedIndustry)),
     ...topologyPagesFromPrompt(semanticText, resolvedIndustry),
     ...deriveExplicitRoutePages(semanticText).filter((page) => !profileRoutes.some((route) => route.toLowerCase() === page.route.toLowerCase())),
@@ -226,6 +227,35 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
     ...deriveExplicitRoutePages(semanticText),
   ]).map((page) => page.route.toLowerCase()));
   const confirmedOnlyRoutes = new Set(confirmedPages.pages.map((page) => page.route.toLowerCase()).filter((route) => !ownerRoutes.has(route)));
+  // Industry vertical (sports, flights, weddings…): authoring knowledge read
+  // from the owner's words. It adds trade-specific interaction requirements the
+  // owner named, and typical pages only when several pages were asked for but
+  // not named. It never provisions capabilities or overrides the prompt.
+  const vertical = resolveIndustryVertical(semanticText) ?? (acceptedDirection ? resolveIndustryVertical(acceptedDirection) : null);
+  const verticalPack = getVerticalPack(vertical?.packId);
+  const inferredPages = creative.multiPage && namedCreationPages.length < 2
+    ? inferVerticalPages(vertical, [{ route: '/', suggestedRole: 'home' }, ...namedCreationPages], 4 - namedCreationPages.length)
+      .map((page) => ({
+        route: page.route,
+        title: page.title,
+        purpose: `${page.purpose} Typical for ${verticalPack!.label.toLowerCase()} sites; the owner asked for several pages without naming them all.`,
+        suggestedRole: page.role,
+      }))
+    : [];
+  const creationPages = uniquePagesByRoute([...namedCreationPages, ...inferredPages]);
+  const inferredRoutes = new Set(inferredPages.map((page) => page.route.toLowerCase()));
+  const requirementsById = new Map(creative.requirements.map((requirement) => [requirement.id, requirement]));
+  for (const requirement of [
+    ...verticalInteractionRequirements(semanticText, 'explicit', vertical),
+    ...(acceptedDirection ? verticalInteractionRequirements(acceptedDirection, 'confirmed', vertical) : []),
+  ]) {
+    const existing = requirementsById.get(requirement.id);
+    if (existing && existing.kind !== 'interaction') continue;
+    if (existing && existing.origin === 'explicit' && requirement.origin !== 'explicit') continue;
+    requirementsById.set(requirement.id, { ...requirement, evidence: existing?.evidence ?? requirement.evidence });
+    const label = requirement.text.replace(/^interactions:\s*/, '');
+    if (!creative.creativeBrief.interactions.some((value) => value.toLowerCase() === label)) creative.creativeBrief.interactions.push(label);
+  }
   const visualRequirements = [
     ...(family ? [`Visual direction: ${family}`] : [`Provisional token base: ${creative.designDirection.familyId} — ${creative.designDirection.note}`]),
     ...[...semanticText.matchAll(/\b(?:#[0-9a-f]{3,8}|(?:red|orange|yellow|green|blue|black|white|gold|teal|pink|maroon|navy|crimson|emerald))\b/gi)].map(([color]) => `Preserve the requested color: ${color}`),
@@ -264,8 +294,10 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
     ...(ownerMessages.length > 1 ? { refinements: ownerMessages.slice(1) } : {}),
     creativeBrief: creative.creativeBrief,
     requirements: [
-      ...creative.requirements,
-      ...pageRequirements(creationPages, confirmedOnlyRoutes),
+      ...requirementsById.values(),
+      ...pageRequirements(namedCreationPages, confirmedOnlyRoutes),
+      ...pageRequirements(creationPages.filter((page) => inferredRoutes.has(page.route.toLowerCase())), new Set())
+        .map((requirement) => ({ ...requirement, origin: 'inferred' as const })),
       ...capabilityEvidence.map((evidence) => ({
         id: `req:capability:${evidence.capabilityId}`, kind: 'capability' as const,
         text: `operational capability ${evidence.capabilityId} (explicitly requested; still requires authorization)`,
@@ -274,6 +306,7 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
     ],
     multiPage: creative.multiPage,
     designDirection: creative.designDirection,
+    ...(vertical ? { vertical } : {}),
     clarifications: [],
   };
   return {
