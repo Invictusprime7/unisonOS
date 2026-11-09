@@ -151,7 +151,7 @@ it('opens inline Wizard after a natural confirmation request and the user replie
   expect(screen.getByText('ya')).toBeInTheDocument();
 });
 
-it('lets users open the guided steps when AI failed to ask for confirmation', () => {
+it('lets users create their site from the chat when AI failed to ask for confirmation', () => {
   const onContinueToWizard = vi.fn();
   function ChatHandoff() {
     const [brief, setBrief] = useState<string | null>(null);
@@ -167,13 +167,13 @@ it('lets users open the guided steps when AI failed to ask for confirmation', ()
         setBrief(value);
       }}
       selectionActive={Boolean(brief)}
-      conversationContent={brief ? <section aria-label="Guided setup retry">Choose your goals</section> : undefined}
+      conversationContent={brief ? <section aria-label="Create from chat">Ready to create your site</section> : undefined}
     />;
   }
 
   render(<ChatHandoff />);
-  fireEvent.click(screen.getByRole('button', { name: 'Continue with guided setup' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create my site from this chat' }));
 
-  expect(screen.getByRole('region', { name: 'Guided setup retry' })).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Create from chat' })).toBeInTheDocument();
   expect(onContinueToWizard).toHaveBeenCalledWith(expect.stringContaining('case studies and a booking calendar'));
 });
