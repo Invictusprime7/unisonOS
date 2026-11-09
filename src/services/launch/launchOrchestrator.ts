@@ -1,4 +1,5 @@
 import { validateTwentyFirstGenerationCoverage, summarizeCoverageReport } from '@/services/launch/twentyFirstCoverageGate';
+import { beginAuthorshipTrace, traceHash } from '@/services/launch/authorshipTrace';
 import { sectionSiteBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 /**
  * Launch Orchestrator — Wizard intent → canonical plan → App Builder → Builder.
@@ -269,6 +270,16 @@ async function runReservedLaunchPipeline(
 ): Promise<LaunchOrchestratorResult> {
   const openEnded = submitted.universalCreation?.mode === 'open-ended';
   let universalCreation = submitted.universalCreation;
+  const trace = beginAuthorshipTrace(traceHash(`${submitted.universalCreation?.originalPrompt ?? submitted.visionPrompt ?? ''}:${Date.now()}`));
+  trace.record('launchPrompt', {
+    counts: {
+      promptChars: submitted.universalCreation?.originalPrompt.length ?? submitted.visionPrompt?.length ?? 0,
+      requirements: submitted.universalCreation?.requirements?.length ?? 0,
+      refinements: submitted.universalCreation?.refinements?.length ?? 0,
+    },
+    requirementHashes: (submitted.universalCreation?.requirements ?? []).map((requirement) => traceHash(requirement.id)),
+    detail: { promptHash: traceHash(submitted.universalCreation?.originalPrompt ?? submitted.visionPrompt ?? ''), confirmedDirection: Boolean(submitted.universalCreation?.confirmedDirection) },
+  });
   if (universalCreation?.originalPrompt.trim()) {
     callbacks.onStatus?.(openEnded ? 'Planning pages and requested capabilities' : 'Planning additional pages');
     try {
@@ -296,6 +307,22 @@ async function runReservedLaunchPipeline(
   };
   const templateId = baseline?.id ?? 'open-ended';
   const input = { ...submitted, universalCreation, template };
+  trace.record('resolvedIntent', {
+    counts: {
+      pages: universalCreation?.pages.length ?? 0,
+      capabilities: universalCreation?.requestedCapabilities.length ?? 0,
+      requirements: universalCreation?.requirements?.length ?? 0,
+    },
+    detail: { mode: universalCreation?.mode ?? null, multiPage: universalCreation?.multiPage ?? false, templateId },
+  });
+  trace.record('chosenDirection', {
+    detail: {
+      themeId: input.theme?.id ?? null,
+      directionFamily: universalCreation?.designDirection?.familyId ?? null,
+      directionOrigin: universalCreation?.designDirection?.origin ?? null,
+      unmappedStyles: universalCreation?.designDirection?.unmappedStyles.length ?? 0,
+    },
+  });
   const run: LaunchRun = createLaunchRun({ onChange: callbacks.onProgress });
   const status = (message: string) => {
     callbacks.onStatus?.(message);
@@ -1038,6 +1065,10 @@ async function runReservedLaunchPipeline(
     if (!result.persistedRevisionId) {
       throw new Error("The generated site could not be saved to its project.");
     }
+    trace.recordFiles('acceptedVfsManifest', vfsFiles, { revisionId: result.persistedRevisionId });
+    const router = vfsFiles['/src/App.tsx'] ?? '';
+    trace.recordFiles('previewRouteManifest', Object.fromEntries(Object.entries(vfsFiles)
+      .filter(([path]) => path.startsWith('/src/pages/') && router.includes(path.replace('/src/', './').replace(/\.[jt]sx?$/, '')))), { revisionId: result.persistedRevisionId });
     if (!result.siteBundleSnapshot || !result.runtimeManifest) {
       throw new Error("The canonical commit returned an incomplete launch artifact.");
     }

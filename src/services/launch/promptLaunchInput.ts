@@ -101,8 +101,16 @@ export function extractPromptSocialLinks(prompt: string): Record<string, string>
   return links;
 }
 
+/**
+ * Theme tokens for the launch. An explicit or confirmed family wins; with
+ * none, the plan's labelled provisional base is used (never a silent first
+ * preset) and the creative brief stays authoritative.
+ */
 function resolveTheme(plan: ChatLaunchPlan): ThemePreset {
-  return THEME_PRESETS.find((preset) => preset.id === plan.themePresetId) ?? THEME_PRESETS[0];
+  const id = plan.themePresetId ?? plan.designDirection.familyId;
+  return THEME_PRESETS.find((preset) => preset.id === id)
+    ?? THEME_PRESETS.find((preset) => preset.id === plan.designDirection.familyId)
+    ?? THEME_PRESETS[0];
 }
 
 /** Build the canonical launch input from the confirmed chat brief alone. */

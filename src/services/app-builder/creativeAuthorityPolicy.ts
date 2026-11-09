@@ -6,8 +6,16 @@
  * "always use the registry dispatcher" next to "never use registry modules".
  */
 
+/**
+ * The single prompt-authority policy (Native Authorship guide §4 B3). Every
+ * authoring and editing request carries this exact text; no other active
+ * instruction may restrict body sections to registered families.
+ */
+export const PROMPT_CREATIVE_AUTHORITY_POLICY = 'The user\'s prompt and confirmed refinements determine visual composition and page-specific experience. Use Unison primitives and certified designs as implementation context. Reuse, adapt, or author original site-local TSX as needed. Never bypass canonical source identity, protected paths, valid imports, operational authorization, or VFS acceptance.';
+
 /** Authority hierarchy, highest first. Only level 1 is never negotiable. */
 export const CREATIVE_AUTHORITY_ORDER = [
+  `CREATIVE AUTHORITY: ${PROMPT_CREATIVE_AUTHORITY_POLICY}`,
   'AUTHORITY ORDER (highest first):',
   '1. Safety and runtime invariants: protected files, valid TSX/imports, stable section IDs, authorized capabilities and intents, durable assets, revision integrity. Never optional.',
   '2. The owner\'s original prompt and confirmed chat refinements: the primary creative and functional authority.',
@@ -32,15 +40,56 @@ export const ARCHETYPE_ADVISORY_POLICY = 'PAGE ARCHETYPE (advisory): the page ro
 /** Default share of the page brief the owner's prompt may use before layout hints yield. */
 export const OWNER_BRIEF_LIMIT = 6_000;
 
+/** Marker lines of the never-truncated requirement block inside a vision brief. */
+const REQUIREMENTS_START = 'CREATIVE REQUIREMENTS (';
+const REQUIREMENTS_END = 'END CREATIVE REQUIREMENTS';
+
 /**
  * The owner's prompt as the primary creative authority. Returns '' when no
- * prompt exists; never truncates below the explicit requirements it carries.
+ * prompt exists. A long prompt's prose may be shortened (with a pointer to the
+ * full prompt), but its CREATIVE REQUIREMENTS block is always kept whole.
  */
 export function renderOwnerCreativeBrief(vision: string | undefined, limit = OWNER_BRIEF_LIMIT): string {
   const text = vision?.trim();
   if (!text) return '';
-  const body = text.length > limit
-    ? `${text.slice(0, limit)}\n[Prompt continues; the full original prompt is in VISITOR CREATION SPECIFICATION.]`
+  const start = text.indexOf(REQUIREMENTS_START);
+  const end = start >= 0 ? text.indexOf(REQUIREMENTS_END, start) : -1;
+  const requirements = start >= 0
+    ? text.slice(start, end >= 0 ? end : undefined).trim()
+    : '';
+  const prose = start >= 0
+    ? `${text.slice(0, start)}${end >= 0 ? text.slice(end + REQUIREMENTS_END.length) : ''}`.replace(/\n{3,}/g, '\n\n').trim()
     : text;
-  return `OWNER CREATIVE BRIEF (primary creative authority — realize the experience, layout, imagery, interactions and motion described here; plans, archetypes and registry suggestions yield to it, only safety/runtime/capability invariants override it):\n${body}`;
+  // Prose keeps a readable share even beside a large requirement list.
+  const room = Math.max(Math.min(limit, 1_500), limit - requirements.length - 1);
+  const body = prose.length > room
+    ? `${prose.slice(0, room)}\n[Prompt continues; the full original prompt is in VISITOR CREATION SPECIFICATION.]`
+    : prose;
+  return `OWNER CREATIVE BRIEF (primary creative authority — realize the experience, layout, imagery, interactions and motion described here; plans, archetypes and registry suggestions yield to it, only safety/runtime/capability invariants override it):\n${[body, requirements].filter(Boolean).join('\n')}`;
+}
+
+/**
+ * Sentences from earlier Wizard/registry-only directives that contradict the
+ * prompt-authority policy. Saved projects still carry them in
+ * /.unison/design-intervention.json, so every consumer filters them out.
+ */
+const LEGACY_REGISTRY_ONLY_SENTENCES: readonly RegExp[] = [
+  /[^.]*\bcompose within (?:them|the registered section implementations[^.]*) and never author replacement section source\.\s*/gi,
+  /[^.]*\bnever author replacement section source\.\s*/gi,
+  /Compose only with snapshot-owned UI primitives and semantic Stage 4b tokens\.\s*/gi,
+  /[^.]*\b(?:owner(?:'s)? vision|owner brief|prompt) (?:is |applies )?only (?:for|to) (?:wording|copy|content)[^.]*\.\s*/gi,
+  /[^.]*\bregistered families are the only valid body sections[^.]*\.\s*/gi,
+];
+
+/** Remove legacy registry-only sentences; the result keeps art direction, motion and safety guidance. */
+export function retireLegacyRegistryOnlyDirective(text: string | null | undefined): string {
+  let next = String(text ?? '');
+  for (const pattern of LEGACY_REGISTRY_ONLY_SENTENCES) next = next.replace(pattern, '');
+  return next.replace(/\s{2,}/g, ' ').trim();
+}
+
+/** True when an instruction still restricts authorship to registered families. */
+export function hasLegacyRegistryOnlyDirective(text: string | null | undefined): boolean {
+  const value = String(text ?? '');
+  return LEGACY_REGISTRY_ONLY_SENTENCES.some((pattern) => new RegExp(pattern.source, pattern.flags.replace('g', '')).test(value));
 }

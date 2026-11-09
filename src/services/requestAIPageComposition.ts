@@ -1,4 +1,5 @@
 import { projectResolvedArtDirection } from '@/sections/variants/resolvedArtDirection';
+import { retireLegacyRegistryOnlyDirective } from '@/services/app-builder/creativeAuthorityPolicy';
 import { describeCompositionFailure, type CompositionFailureDetails } from './compositionFailure';
 import { normalizeCompositionResponse, renderCompositionCanonicalContract } from './launch/compositionCanonicalContract';
 import { runBuilderTurn } from './builderBrainClient';
@@ -85,10 +86,10 @@ export async function requestAIPageComposition(selections: WizardSelections, sig
   const resolvedArt = projectResolvedArtDirection({
     themePresetId: selections.themePresetId || 'modern',
     artDirectionPackId: pack.id,
-    aiDirective: design.aiDirective,
+    aiDirective: retireLegacyRegistryOnlyDirective(design.aiDirective),
   });
   if (resolvedArt) {
-    const directive = `ART DIRECTION: family ${resolvedArt.familyId}, pack ${resolvedArt.packId} (v${resolvedArt.packVersion}). Compose creatively inside this grammar; never switch family. Final tokens are projected by the compiler after composition.`;
+    const directive = `ART DIRECTION: family ${resolvedArt.familyId}, pack ${resolvedArt.packId} (v${resolvedArt.packVersion}). Express the owner's prompt through this grammar (reuse, adapt or author original sections); never switch family silently. Final tokens are projected by the compiler after composition.`;
     designContract.artDirection = { familyId: resolvedArt.familyId, packId: resolvedArt.packId, storagePackId: resolvedArt.storagePackId, directive };
     designContract.summary = `${designContract.summary}\n  ${directive}`;
   }

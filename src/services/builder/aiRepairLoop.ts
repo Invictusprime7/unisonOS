@@ -7,6 +7,7 @@
  * the single legal writer.
  */
 
+import { activeAuthorshipTrace } from '@/services/launch/authorshipTrace';
 import { runBuilderTurn } from '@/services/builderBrainClient';
 import {
   AI_COMPOSER_MODES,
@@ -244,6 +245,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
     }
     Object.assign(aiFiles, accumulatedFiles);
     deletions.push(...accumulatedDeletes);
+    activeAuthorshipTrace().recordFiles('rawCandidateFileManifest', accumulatedFiles, { pageId: request.page.filePath, detail: { attempt, deletes: accumulatedDeletes.size } });
     const prepared = await prepareAICandidate({
       aiFiles,
       deletions,
@@ -264,6 +266,13 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       pageCheck: input.pageCheck,
     });
     lastPrepared = prepared;
+    if (prepared.nextFiles) activeAuthorshipTrace().recordFiles('normalizedCandidateFileManifest', prepared.nextFiles, { pageId: request.page.filePath, detail: { attempt } });
+    activeAuthorshipTrace().record('validationResult', {
+      pageId: request.page.filePath,
+      counts: { errors: prepared.errors.length },
+      rejections: prepared.errors.slice(0, 10).map((error) => error.slice(0, 300)),
+      detail: { ready: prepared.ok, attempt },
+    });
     narrate('verification', prepared.ok ? 'Draft checks passed' : `Found ${prepared.errors.length} problem${prepared.errors.length === 1 ? '' : 's'}; fixing`, prepared.ok ? 'ok' : 'running');
     if (prepared.ok) {
       const guestDemoOperationId = typeof (data as { guestDemoOperationId?: unknown }).guestDemoOperationId === 'string'
