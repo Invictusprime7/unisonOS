@@ -32,6 +32,7 @@ describe('1 · Whistle Blower regression', () => {
   const pages = [
     { route: '/', filePath: '/src/pages/Home.tsx', title: 'Home', visibleInNav: true },
     { route: '/fixtures', filePath: '/src/pages/Fixtures.tsx', title: 'Fixtures', visibleInNav: true },
+    { route: '/blog', filePath: '/src/pages/Blog.tsx', title: 'Blog', visibleInNav: true },
   ];
   const requirements = [
     ...(creation.requirements ?? []),
@@ -40,8 +41,9 @@ describe('1 · Whistle Blower regression', () => {
 
   it('passes as complete only with original, labelled, routed and navigable source', () => {
     const files = {
-      '/src/App.tsx': router(['Fixtures']),
-      '/src/project-components/site/SiteNav.tsx': nav(['/', '/fixtures']),
+      '/src/App.tsx': router(['Fixtures', 'Blog']),
+      '/src/project-components/site/SiteNav.tsx': nav(['/', '/fixtures', '/blog']),
+      '/src/pages/Blog.tsx': 'export default function Blog(){return <main>Match reports</main>}',
       '/src/pages/Home.tsx': 'import MatchCentre from "../project-components/sports/MatchCentre";\nimport LiveScores from "../project-components/sports/LiveScores";\nimport { motion } from "framer-motion";\nexport default function Home(){return <main><motion.div whileInView={{opacity:1}}><img src="a"/><img src="b"/><img src="c"/></motion.div><section data-ut-section-id="home:match-centre:0" data-ut-section-type="match-centre" data-ut-variant="custom:match-centre"><MatchCentre/></section><section data-ut-section-id="home:hero:0" data-ut-section-type="hero" data-ut-variant="hero:prisma-cinematic"></section><LiveScores/></main>}',
       '/src/pages/Fixtures.tsx': 'import FixtureList from "../project-components/sports/FixtureList";\nexport default function Fixtures(){return <main><FixtureList/></main>}',
       '/src/project-components/sports/MatchCentre.tsx': 'export default function MatchCentre(){return <article><span>Sample data</span>Match centre</article>}',
@@ -56,8 +58,9 @@ describe('1 · Whistle Blower regression', () => {
 
   it('flags fabricated-looking live data and an unlinked page', () => {
     const files = {
-      '/src/App.tsx': router(['Fixtures']),
-      '/src/project-components/site/SiteNav.tsx': nav(['/']),
+      '/src/App.tsx': router(['Fixtures', 'Blog']),
+      '/src/project-components/site/SiteNav.tsx': nav(['/', '/blog']),
+      '/src/pages/Blog.tsx': 'export default function Blog(){return <main>Match reports</main>}',
       '/src/pages/Home.tsx': 'import MatchCentre from "../project-components/MatchCentre";\nexport default function Home(){return <main><MatchCentre/></main>}',
       '/src/pages/Fixtures.tsx': 'export default function Fixtures(){return <main>Fixtures</main>}',
       '/src/project-components/MatchCentre.tsx': 'export default function MatchCentre(){return <article>Match centre: Ghana 2–1 Senegal, live scores</article>}',
