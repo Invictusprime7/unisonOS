@@ -376,8 +376,9 @@ function renderCertifiedOptions(
     if (family === 'navbar' || family === 'footer') continue;
     const options = ids.filter((id) => manifest[id]).slice(0, MAX_OPTIONS_PER_FAMILY);
     if (!options.length) continue;
-    const dispatcher = family.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('');
-    lines.push(`- ${family} (import ${dispatcher} from "@/unison/design-sources/${dispatcher}"): ${options.map((id) => {
+    const importPath = manifest[options[0]].modulePath.replace(/^\/src\//, '@/').replace(/\.(?:tsx?|jsx?)$/i, '');
+    const dispatcher = importPath.split('/').pop() ?? 'Section';
+    lines.push(`- ${family} (import ${dispatcher} from "${importPath}"): ${options.map((id) => {
       const props = manifest[id].props;
       return `${id}${props ? ` props {${props.length > MAX_PROPS_HINT ? `${props.slice(0, MAX_PROPS_HINT)}…` : props}}` : ''}`;
     }).join('; ')}`);
