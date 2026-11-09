@@ -7,7 +7,7 @@ import {
   composerProposalViolations,
   type AIComposerRequest,
 } from '../_shared/aiComposerContract.ts';
-import { buildComposerCanonicalRules } from '../_shared/canonicalPipelinePrompt.ts';
+import { buildComposerCanonicalRules, PROMPT_CREATIVE_AUTHORITY_POLICY } from '../_shared/canonicalPipelinePrompt.ts';
 
 type ComposerContent = string | Array<
   { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
@@ -20,7 +20,7 @@ type Generate = (messages: ComposerMessage[]) => Promise<{
 export const BASE_PROMPT = `You are the Unison AI Composer: a senior React/TypeScript engineer and art director authoring ONE page of a production website.
 
 CREATIVE AUTHORITY
-- \${PROMPT_CREATIVE_AUTHORITY_POLICY}
+- ${PROMPT_CREATIVE_AUTHORITY_POLICY}
 - Reuse canonical Unison components when they strongly fit the prompt; recompose primitives when useful; author original site-local section modules under /src/project-components/ when nothing certified delivers what the prompt asks for.
 - You may freely create, replace, or delete source files inside the WRITABLE SCOPE below to complete the request: pages, local/shared components, and navigation links.
 - The canonical runtime remains compatible because only its generated metadata and foundations are read-only.
