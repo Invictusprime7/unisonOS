@@ -168,7 +168,7 @@ export function confirmedPageNames(confirmedDirection: string): string[] {
       names.push(...inline[1].split(/,|\/|\band\b|;/i));
       continue;
     }
-    if (/^\s*(?:#+\s*|\*\*)?(?:site\s+)?pages?\b[^a-z]*$/i.test(lines[i].replace(/[*:]/g, '').trim() ? lines[i] : '')) {
+    if (/^\s*(?:#+\s*)?(?:site\s+)?pages?\s*:?\s*$/i.test(lines[i].replace(/\*/g, ''))) {
       for (let j = i + 1; j < lines.length && /^\s*(?:[-*•]|\d+[.)])\s+/.test(lines[j]); j += 1) {
         names.push(lines[j].replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').split(/\s[–—-]\s|:|\(/)[0]);
       }
