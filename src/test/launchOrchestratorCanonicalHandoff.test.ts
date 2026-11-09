@@ -33,17 +33,18 @@ describe('launch orchestrator canonical handoff', () => {
     expect(source).not.toContain('prepareSandpackFiles');
   });
 
-  it('keeps submitted Wizard context authoritative over launcher defaults', () => {
-    expect(source).toContain('const customerNeeds = uniqueValues<CustomerNeed>(input.customerNeeds);');
+  it('keeps submitted launch context authoritative and never adopts guided defaults for prompt-first launches', () => {
+    expect(source).toContain('const customerNeeds = uniqueValues<CustomerNeed>(openEnded ? [] : input.customerNeeds);');
     expect(source).not.toContain('...(preselect?.customerNeeds || [])');
     expect(source).toContain('secondaryGoals: plan.selections.secondaryGoals,');
     expect(source).toContain('requestedPages: plan.requestedPages,');
   });
 
-  it('uses the selected template as the canonical industry authority', () => {
-    expect(source).toContain('const industryOverlay = resolveWizardIndustryOverlay({');
-    expect(source).toContain('templateIndustry: input.template.industry,');
-    expect(source).toContain('generationIndustry: industryProfile?.industry || generationCategory,');
+  it('uses the selected template as the industry authority for guided launches only', () => {
+    expect(source).toContain("const openEnded = input.universalCreation?.mode === 'open-ended';");
+    expect(source).toContain('const industryOverlay = openEnded && (!input.industry || input.industry === \'universal\')');
+    expect(source).toContain('templateIndustry: openEnded ? undefined : input.template.industry,');
+    expect(source).toContain('generationIndustry: openEnded ? input.industry : industryProfile?.industry || generationCategory,');
     expect(source).toContain('industryOverlay,');
     expect(source).not.toContain('industryOverlay: SYSTEM_TO_INDUSTRY_OVERLAY[input.systemId] || "general"');
     expect(source).not.toContain('industryOverlay: plan.generationCategory');
@@ -86,14 +87,13 @@ describe('launch orchestrator canonical handoff', () => {
     expect(source).toContain('const businessProfilePaymentProvider = getProfilePaymentProvider(loadedBusinessProfile);');
     expect(source).toContain('paymentProvider: plan.selections.businessParameters?.paymentProvider?.trim()');
     expect(source).toContain('const ownerParameters = plan.selections.businessParameters ?? {};');
-    expect(source).toContain("launchContract.forcedNeeds.booking || requestedIntentSet.has('booking.create')");
+    expect(source).toContain("needsBooking: (!openEnded && launchContract.forcedNeeds.booking) || launchCapabilities.includes('booking'),");
     expect(source).toContain('notificationEmail: ownerParameters.notificationEmail?.trim()');
     expect(source).toContain('if (input.existingBusinessId && !loadedBusinessProfile)');
     expect(source).toContain('businessRuntime,');
     expect(source).toContain('projectId: plan.confirmed.projectId');
     expect(source).toContain('siteId: plan.confirmed.siteId');
     expect(source).toContain('requestedCapabilities: plan.businessLaunchPlan.businessCapabilities');
-    expect(source).toContain("launchContract.forcedNeeds.booking || requestedIntentSet.has('booking.create')");
     expect(source).toContain('const dataBindingsReady = plannedDataBindings.length === 0;');
     expect(source).toContain('bindingsReady: dataBindingsReady');
     expect(source).toContain('const bindingPersistenceReceipt = await autoEmitSectionBindings({');
