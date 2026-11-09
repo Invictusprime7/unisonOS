@@ -1,13 +1,15 @@
-import { useState, useRef, Suspense, lazy, Component, type ReactNode, type ErrorInfo } from "react";
+import { useEffect, useState, useRef, Suspense, lazy, Component, type ReactNode, type ErrorInfo } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, FolderOpen, AlertTriangle, RefreshCw } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VFSProvider } from "@/contexts/VFSContext";
+import type { GraphicBrief } from "@/components/creatives/graphic-studio/AffinityGraphicStudio";
 
 // Dynamic imports for heavy components
 const DesignStudio = lazy(() => import("@/components/creatives/DesignStudio").then(m => ({ default: m.DesignStudio })));
 const WebBuilder = lazy(() => import("@/components/creatives/WebBuilder").then(m => ({ default: m.WebBuilder })));
+const AffinityGraphicStudio = lazy(() => import("@/components/creatives/graphic-studio/AffinityGraphicStudio").then(m => ({ default: m.AffinityGraphicStudio })));
 const FileBrowser = lazy(() => import("@/components/creatives/design-studio/FileBrowser").then(m => ({ default: m.FileBrowser })));
 
 class VFSErrorBoundary extends Component<
@@ -53,11 +55,29 @@ class VFSErrorBoundary extends Component<
   }
 }
 
+type StudioTab = "affinity" | "canvas" | "web";
+
+/** Brief handed over from the Home Affinity chat (router state). */
+function readGraphicBrief(state: unknown): GraphicBrief | null {
+  const brief = (state as { graphicBrief?: Partial<GraphicBrief> } | null)?.graphicBrief;
+  return brief && typeof brief.prompt === "string" && brief.prompt.trim() && typeof brief.formatId === "string"
+    ? { prompt: brief.prompt.trim(), formatId: brief.formatId }
+    : null;
+}
+
 const DesignStudioPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [graphicBrief] = useState(() => readGraphicBrief(location.state));
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
   const designStudioRef = useRef<{ addImageFromUrl: (url: string) => void } | null>(null);
-  const [activeTab, setActiveTab] = useState<"canvas" | "web">("canvas");
+  const [activeTab, setActiveTab] = useState<StudioTab>("affinity");
+
+  // The brief is consumed once; a refresh must not design it again.
+  useEffect(() => {
+    if (graphicBrief) navigate(location.pathname + location.search, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <VFSErrorBoundary>
@@ -87,15 +107,23 @@ const DesignStudioPage = () => {
         </Button>
       </header>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "canvas" | "web")} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as StudioTab)} className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <TabsList className="mx-2 sm:mx-4 mt-1 sm:mt-2 w-fit h-8 flex-shrink-0">
+          <TabsTrigger value="affinity" className="text-xs sm:text-sm h-7 px-2 sm:px-3">Affinity Graphics</TabsTrigger>
           <TabsTrigger value="canvas" className="text-xs sm:text-sm h-7 px-2 sm:px-3">Canvas Studio</TabsTrigger>
           <TabsTrigger value="web" className="text-xs sm:text-sm h-7 px-2 sm:px-3">Web Builder</TabsTrigger>
         </TabsList>
         
+        {/* Kept mounted so the design survives switching tabs. */}
+        <div role="tabpanel" aria-label="Affinity Graphics" hidden={activeTab !== "affinity"} className="flex-1 mt-0 min-h-0 overflow-hidden">
+          <Suspense fallback={<div className="flex items-center justify-center h-full">Loading Affinity Graphics...</div>}>
+            <AffinityGraphicStudio initialBrief={graphicBrief} />
+          </Suspense>
+        </div>
+
         <TabsContent value="canvas" className="flex-1 mt-0 overflow-hidden">
           <Suspense fallback={<div className="flex items-center justify-center h-full">Loading Canvas Studio...</div>}>
-            <DesignStudio ref={designStudioRef} />
+            <DesignStudio ref={designStudioRef} onOpenAffinity={() => setActiveTab("affinity")} />
           </Suspense>
         </TabsContent>
         

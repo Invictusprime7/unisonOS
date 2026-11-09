@@ -79,6 +79,11 @@ export interface AIAssistantCoreProps {
   onBeforeSend?: (message: string) => boolean;
   /** Backend mode for a specialized assistant surface */
   aiMode?: string;
+  /**
+   * Offered every new message first; return a reply to answer it locally
+   * (e.g. hand a flyer request to Design Studio) instead of another AI turn.
+   */
+  onLocalReply?: (message: string) => string | null;
   /** Called instead of another AI turn after explicit site confirmation */
   onSiteConfirmed?: (siteBrief: string) => void;
   /** Manual handoff from this conversation to prompt-first site creation when AI misses the confirmation. */
@@ -121,6 +126,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   onCodeGenerated,
   onMessageSent,
   onBeforeSend,
+  onLocalReply,
   aiMode,
   onSiteConfirmed,
   onContinueToWizard,
@@ -224,6 +230,18 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
       content: trimmedInput || "Analyze these files",
       timestamp: new Date(),
     };
+
+    const localReply = trimmedInput && droppedFiles.length === 0 ? onLocalReply?.(trimmedInput) ?? null : null;
+    if (localReply) {
+      setMessages((previous) => [
+        ...previous,
+        userMessage,
+        { role: "assistant", content: localReply, timestamp: new Date() },
+      ]);
+      setInput("");
+      onDiscoveryStarted?.();
+      return;
+    }
 
     const previousAssistantMessage = [...messages]
       .reverse()

@@ -1,5 +1,15 @@
 # Roadmap
 
+## Active: Affinity Graphics — prompt-first print & graphic design (2026-11-09)
+- [ ] Graphic formats: flyers, posters, banners, business cards (front/back), letterheads — print sizes with bleed and safe area
+- [ ] One editable graphic document; Affinity creates it from a description and edits it by asking (whole document returned, validated)
+- [ ] Import references (logo, photos to use, style inspiration) from device or Files
+- [ ] Design check from the beginner tips (2–3 colours, big headline, white space, alignment/safe area, contrast, tiny print) with "Fix with Affinity"
+- [ ] Export PNG/JPG, PDF for print (with bleed), Save to Files
+- [ ] Entry points: Home Affinity chat hands graphic requests to Design Studio; Design Studio's Affinity panel replaces the old canvas AI helpers
+- [ ] Backend service `affinity-graphic-design` (Gemini first, existing backup policy) — needs Unison deployment
+- [ ] Tests + real-browser render/export check
+
 ## Active: UPG-01 prompt-first creation (2026-11-09)
 - [x] A — Trace call graph, first lost creative authority, ownership inventory (docs/UPG-01_REPORT.md)
 - [x] B — Original prompt + refinements carried as primary creative authority into every page brief

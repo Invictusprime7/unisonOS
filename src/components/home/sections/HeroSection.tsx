@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 import { AIAssistantCore, type QuickAction } from "@/components/ai/AIAssistantCore";
 import { siteDiscoveryMessagesKey } from "@/components/ai/siteDiscoveryPersistence";
 import { PromptLaunchPanel } from "@/components/launch/PromptLaunchPanel";
+import { GraphicHandoffCard } from "@/components/launch/GraphicHandoffCard";
+import { detectGraphicRequest, type GraphicRequest } from "@/services/graphic-design/graphicIntent";
 import { MarketplaceCatalog } from '@/marketplace/MarketplaceCatalog';
 
 
@@ -41,12 +43,18 @@ const HOME_QUICK_ACTIONS: QuickAction[] = [
     label: "Online store",
     prompt: "Help me create an online store to sell my products.",
   },
+  {
+    id: "print-design",
+    label: "Flyer or business card",
+    prompt: "Help me design a flyer for my business.",
+  },
 ];
 
 export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange, badge, headline, subtitle, chatGlow = false, demoGeneration = false }: HeroSectionProps) {
   const [discoveryActive, setDiscoveryActive] = useState(false);
   const [chatResetKey, setChatResetKey] = useState(0);
   const [activeHomeTab, setActiveHomeTab] = useState<'chat' | 'marketplace'>('chat');
+  const [graphicRequest, setGraphicRequest] = useState<GraphicRequest | null>(null);
 
   const handleHomeTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
@@ -221,7 +229,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               appearance="unison"
               className={cn("transition-[height] duration-500 motion-reduce:transition-none", launcherOpen || discoveryActive ? "h-[min(740px,85dvh)]" : "h-[250px] sm:h-[270px]")}
               placeholder="Tell Affinity about your idea..."
-              quickActions={HOME_QUICK_ACTIONS}
+              quickActions={demoGeneration ? HOME_QUICK_ACTIONS.filter((action) => action.id !== "print-design") : HOME_QUICK_ACTIONS}
               aiMode="site-discovery"
               persistenceKey={user ? siteDiscoveryMessagesKey(user.id) : undefined}
               onContinueToWizard={onSiteConfirmed}
@@ -233,7 +241,18 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
                 demoGeneration={demoGeneration}
                 onClose={() => onLauncherOpenChange(false)}
                 onLaunchComplete={() => setChatResetKey(key => key + 1)}
+              /> : graphicRequest ? <GraphicHandoffCard
+                request={graphicRequest}
+                onDismiss={() => setGraphicRequest(null)}
               /> : undefined}
+              onLocalReply={(message) => {
+                // Live Demo stays a website-only experience.
+                if (demoGeneration) return null;
+                const request = detectGraphicRequest(message);
+                if (!request) return null;
+                setGraphicRequest(request);
+                return `That sounds like a ${request.format.label.toLowerCase()}. I'll design it in Design Studio, where you can add your logo or photos and download it ${request.format.print ? 'ready to print' : 'ready to use'}.`;
+              }}
               onBeforeSend={() => {
                 if (user) return true;
                 onAuthRequired();
