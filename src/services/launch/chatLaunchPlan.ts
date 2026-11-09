@@ -286,15 +286,16 @@ export function projectUniversalCreationInput(
 }
 
 /**
- * The single brief App Builder receives: final selections first (authoritative),
- * explicit notes where the user changed something the chat proposed, then the
- * chat's content for wording only.
+ * The single brief App Builder receives. The owner's original prompt leads as
+ * the primary creative authority; inferred plan values follow as revisable
+ * defaults, with explicit notes where a later refinement changed them.
  */
 export function buildSyncedVisionBrief(plan: ChatLaunchPlan | null, final: FinalLaunchSelections): string {
   if (!plan || !plan.brief.trim()) return "";
   const lines = [
-    `SYNCED LAUNCH PLAN — authoritative selections: business "${final.businessName}"; industry ${final.industry ?? "unspecified"}; goal ${final.primaryGoal ?? "unspecified"}; pages ${final.selectedPages.join(", ") || "home only"}; theme family ${final.themePresetId ?? "auto"}.`,
-    `CREATION SPECIFICATION — mode ${plan.creationInput.mode}; purpose: ${plan.creationInput.sitePurpose}; subject: ${plan.creationInput.subject}; requested capabilities: ${plan.creationInput.requestedCapabilities.join(", ") || "none"}. Preserve all explicit details from the original prompt.`,
+    `ORIGINAL PROMPT (primary creative authority; realize every explicit requirement, including layout, imagery, interactions and motion): ${plan.brief.trim()}`,
+    `CREATION SPECIFICATION — mode ${plan.creationInput.mode}; purpose: ${plan.creationInput.sitePurpose}; subject: ${plan.creationInput.subject}; requested capabilities: ${plan.creationInput.requestedCapabilities.join(", ") || "none"}.`,
+    `REVISABLE PLAN DEFAULTS: business "${final.businessName}"; industry ${final.industry ?? "unspecified"}; goal ${final.primaryGoal ?? "unspecified"}; pages ${final.selectedPages.join(", ") || "home only"}; theme family ${final.themePresetId ?? "auto"}. These never narrow the prompt above.`,
   ];
   const changed: string[] = [];
   if (plan.industry && final.industry && plan.industry !== final.industry) changed.push(`industry is ${final.industry} (not ${plan.industry})`);
@@ -302,8 +303,7 @@ export function buildSyncedVisionBrief(plan: ChatLaunchPlan | null, final: Final
   if (plan.themePresetId && final.themePresetId && plan.themePresetId !== final.themePresetId) changed.push(`theme family is ${final.themePresetId}`);
   const dropped = plan.selectedPages.filter((p) => !final.selectedPages.includes(p));
   if (dropped.length) changed.push(`pages ${dropped.join(", ")} were removed — do not reference them`);
-  if (changed.length) lines.push(`The owner changed the chat plan in the Wizard: ${changed.join("; ")}. Where the chat below disagrees, these selections win.`);
-  lines.push(`Planning chat (content and wording only): ${plan.brief.trim()}`);
+  if (changed.length) lines.push(`CONFIRMED REFINEMENTS: ${changed.join("; ")}. These later refinements win where the prompt disagrees.`);
   return lines.join("\n");
 }
 
