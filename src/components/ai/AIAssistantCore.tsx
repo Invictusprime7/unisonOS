@@ -211,7 +211,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
       ...previous,
       {
         role: "assistant",
-        content: "Let's continue with the guided setup. Your conversation is included as context.",
+        content: "Here is what I'll build from our conversation. Create it when you're ready, or keep chatting to refine it.",
         timestamp: new Date(),
       },
     ]);
@@ -245,7 +245,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
         userMessage,
         {
           role: "assistant",
-          content: "Great. Let’s fine-tune the goals, visitor actions, pages, and visual direction.",
+          content: "Great. Review the plan below and create your site when you're ready.",
           timestamp: new Date(),
         },
       ]);
@@ -694,7 +694,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
                 : "text-muted-foreground"
             )}
           >
-            Continue with guided setup
+            Create my site from this chat
           </Button>
         )}
       </div>}
