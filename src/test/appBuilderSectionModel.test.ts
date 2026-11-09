@@ -371,6 +371,27 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     expect(sidecar.sections).toEqual(inspection.sections);
   });
 
+  it('accepts a site-local section imported by relative path', () => {
+    const files = {
+      '/src/pages/Home.tsx': `import Navbar from "@/unison/design-sources/Navbar";
+import Footer from "@/unison/design-sources/Footer";
+import FeaturePanel from "../project-components/FeaturePanel";
+export default function Home(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{links:[]}} /></header><main><section data-ut-section-id="home:match-centre:0" data-ut-section-type="match-centre" data-ut-variant="custom:match-centre"><FeaturePanel title="Live scores" /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer></>}`,
+      '/src/project-components/FeaturePanel.tsx': `export default function FeaturePanel({title}:{title:string}){return <article>{title}</article>}`,
+    };
+    const materialization = materializeAppBuilderSectionModelsWithDiagnostics(
+      files,
+      [{ id: 'home', filePath: '/src/pages/Home.tsx' }],
+      implementations,
+      { home: ['navbar:standard', 'footer:columns'] },
+      ['navbar:standard', 'footer:columns'],
+    );
+    expect(materialization.diagnostics).toEqual([]);
+    expect(materialization.files['/src/project-components/FeaturePanel.tsx']).toBe(files['/src/project-components/FeaturePanel.tsx']);
+    expect(materialization.files['/src/pages/Home.tsx']).toContain('import FeaturePanel from "../project-components/FeaturePanel";');
+    expect(materialization.files['/src/pages/Home.tsx']).toContain('data-ut-variant="custom:project-components-feature-panel-default"');
+  });
+
   it('certifies a named site-local component export with a stable source owner', () => {
     const files = {
       '/src/pages/Home.tsx': `import Navbar from "@/unison/design-sources/Navbar";

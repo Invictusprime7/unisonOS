@@ -42,28 +42,16 @@ it('lets users manually clear the headerless homepage conversation', () => {
   expect(screen.getByText('Tell Affinity what you have in mind.')).toBeInTheDocument();
 });
 
-it('reveals controls with each discovery question and sends selections back into the same chat', async () => {
+it('keeps discovery questions as plain chat and ignores legacy guided-step markers', async () => {
   vi.mocked(invokeAIFunction)
-    .mockResolvedValueOnce({ data: { mode: 'site-discovery', content: 'What is your main goal?', wizardStep: 'goals' }, error: null } as never)
-    .mockResolvedValueOnce({ data: { mode: 'site-discovery', content: 'Which pages do you want?', wizardStep: 'pages' }, error: null } as never);
-  render(<AIAssistantCore aiMode="site-discovery" showFileUpload={false}
-    discoverySelections={(turn, answer) => <section aria-label="Question selections">
-      <span>{turn.step}</span><button disabled={turn.pending} onClick={() => answer('My selection: Book appointments')}>Choose booking</button>
-    </section>} />);
-  expect(screen.queryByRole('region', { name: 'Question selections' })).not.toBeInTheDocument();
+    .mockResolvedValueOnce({ data: { mode: 'site-discovery', content: 'What should visitors do first? <UNISON_WIZARD_STEP:goals>', wizardStep: 'goals' }, error: null } as never);
+  render(<AIAssistantCore aiMode="site-discovery" showFileUpload={false} />);
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'I run a salon.' } });
   fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
-  expect(await screen.findByText('goals')).toBeInTheDocument();
+  expect(await screen.findByText('What should visitors do first?')).toBeInTheDocument();
+  expect(screen.queryByText(/UNISON_WIZARD_STEP/)).not.toBeInTheDocument();
   expect(screen.getByRole('textbox')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Choose booking' }));
-  expect(await screen.findByText('pages')).toBeInTheDocument();
-  expect(screen.getByText('I run a salon.')).toBeInTheDocument();
-  expect(screen.getByText('My selection: Book appointments')).toBeInTheDocument();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  const calls = vi.mocked(invokeAIFunction).mock.calls;
-  expect(calls[calls.length - 1]?.[1]).toMatchObject({
-    messages: expect.arrayContaining([{ role: 'user', content: 'My selection: Book appointments' }]),
-  });
 });
 
 it('keeps the discovery conversation when confirmation reveals inline selections', () => {

@@ -231,7 +231,6 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               conversationContent={launcherOpen && launchBrief ? <PromptLaunchPanel
                 brief={launchBrief}
                 demoGeneration={demoGeneration}
-                draftScope={user?.id ?? 'anonymous'}
                 onClose={() => onLauncherOpenChange(false)}
                 onLaunchComplete={() => setChatResetKey(key => key + 1)}
               /> : undefined}

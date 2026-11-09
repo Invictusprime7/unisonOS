@@ -3,7 +3,7 @@
  * 
  * JSX/TSX source string renderers for each variant layout.
  * These produce React JSX source code that replaces existing section blocks
- * in the VFS App.tsx, consistent with the LauncherWizard React pipeline.
+ * in the VFS App.tsx, consistent with the prompt-first launch React pipeline.
  *
  * All templates use Tailwind CSS classes and produce valid JSX
  * (className instead of class, self-closing tags, etc.).

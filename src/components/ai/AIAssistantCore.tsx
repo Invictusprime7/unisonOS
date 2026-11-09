@@ -3,7 +3,7 @@
  * 
  * This is the shared core logic for AI assistant functionality.
  * Can be used in:
- * - LauncherWizard and WebBuilder AI surfaces
+ * - prompt-first launch and WebBuilder AI surfaces
  * - WebBuilder (as floating code assistant widget)
  * 
  * Provides:
@@ -34,7 +34,6 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { getChatWizardStep, type ChatWizardStep } from '@/services/launch/chatWizardStep';
 import { FileDropZone, DroppedFile } from "@/components/creatives/web-builder/FileDropZone";
 import { useAIFileAnalysis } from "@/hooks/useAIFileAnalysis";
 import {
@@ -56,7 +55,6 @@ export interface AIMessage {
   timestamp: Date;
   hasCode?: boolean;
   code?: string;
-  wizardStep?: ChatWizardStep;
 }
 
 export interface QuickAction {
@@ -83,7 +81,7 @@ export interface AIAssistantCoreProps {
   aiMode?: string;
   /** Called instead of another AI turn after explicit site confirmation */
   onSiteConfirmed?: (siteBrief: string) => void;
-  /** Manual fallback for continuing in a guided Wizard when AI misses the handoff. */
+  /** Manual handoff from this conversation to prompt-first site creation when AI misses the confirmation. */
   onContinueToWizard?: (siteBrief: string) => void;
   /** Current context code for the AI */
   contextCode?: string;
@@ -107,12 +105,10 @@ export interface AIAssistantCoreProps {
   hideHeader?: boolean;
   /** Presentation style for embedded surfaces */
   appearance?: "default" | "unison";
-  /** Guided selections rendered as the next turn in this conversation. */
+  /** Inline content (e.g. the prompt-first launch card) rendered as the next turn in this conversation. */
   conversationContent?: React.ReactNode;
-  /** Selection turns provide their own controls while keeping history visible. */
+  /** Inline turns provide their own controls while keeping history visible. */
   selectionActive?: boolean;
-  /** Selection controls accompanying the current AI discovery question. */
-  discoverySelections?: (turn: { step: ChatWizardStep; brief: string; pending: boolean }, answer: (value: string) => void) => React.ReactNode;
   onDiscoveryStarted?: () => void;
   /** Custom send handler - if provided, bypasses default AI logic */
   customSendHandler?: (message: string, files?: DroppedFile[]) => Promise<{ content: string; code?: string } | null>;
@@ -141,7 +137,6 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   appearance = "default",
   conversationContent,
   selectionActive = false,
-  discoverySelections,
   onDiscoveryStarted,
   customSendHandler,
 }) => {
@@ -235,7 +230,6 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
       .find((message) => message.role === "assistant");
     if (
       onSiteConfirmed
-      && !discoverySelections
       && isSiteConfirmation(trimmedInput)
       && hasSiteConfirmationRequest(previousAssistantMessage)
     ) {
@@ -258,7 +252,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
     setIsLoading(true);
 
     try {
-      let response: { content: string; code?: string; wizardStep?: ChatWizardStep } | null = null;
+      let response: { content: string; code?: string } | null = null;
 
       // Use custom handler if provided
       if (customSendHandler) {
@@ -313,7 +307,6 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
         response = {
           content,
           code: codeMatch ? codeMatch[1].trim() : undefined,
-          ...(aiMode === 'site-discovery' ? { wizardStep: getChatWizardStep(content, data?.wizardStep) } : {}),
         };
       }
 
@@ -327,7 +320,6 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
           timestamp: new Date(),
           hasCode: !!response.code,
           code: response.code,
-          wizardStep: response.wizardStep,
         };
 
         setMessages(prev => [...prev, assistantMessage]);
@@ -602,13 +594,6 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
             </div>
           )}
           {conversationContent}
-          {!conversationContent && discoverySelections && messages.some(message => message.wizardStep) && (() => {
-            const turn = [...messages].reverse().find(message => message.wizardStep)!;
-            return discoverySelections({
-              step: getChatWizardStep(turn.content, turn.wizardStep),
-              brief: buildConfirmedSiteBrief(messages), pending: isLoading,
-            }, value => { void handleSend(value); });
-          })()}
         </div>
       </ScrollArea>
 

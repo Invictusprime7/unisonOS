@@ -1182,6 +1182,44 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     expect(result.revisionId).toBeNull();
   });
 
+  it('UPG-01: accepts a certified design and an original section on one page with the original source unchanged', async () => {
+    const appContract = contract();
+    const matchCentre = 'export default function MatchCentre({ fixture }: { fixture: string }) {\n  return <article aria-label="Match centre"><h2>{fixture}</h2><p>Live minute-by-minute</p></article>;\n}\n';
+    const customSection = '<section data-ut-section-id="home:match-centre:0" data-ut-section-type="match-centre" data-ut-variant="custom:match-centre"><MatchCentre fixture="Ghana v Senegal" /></section>';
+    let rawHome = '';
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => {
+      const files = {
+        ...scaffoldAuthoredPages(appContract, {
+          '/src/pages/Home.tsx': { imports: 'import MatchCentre from "../project-components/MatchCentre";', body: customSection },
+        }, input.files),
+        '/src/project-components/MatchCentre.tsx': matchCentre,
+      };
+      rawHome = files['/src/pages/Home.tsx'];
+      return {
+        files, revisionId: input.revisionId,
+        outcomes: input.pages.map((page) => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
+      };
+    });
+    const result = await createTestBuilder({ authorSite }).generate({
+      operationId: 'upg01-mixed-sections', contract: appContract, initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null,
+    });
+
+    expect(result.candidate.status, JSON.stringify(result.candidate.diagnostics)).toBe('ready-for-commit');
+    expect(rawHome).toContain(customSection);
+    expect(result.candidateFiles['/src/project-components/MatchCentre.tsx']).toBe(matchCentre);
+    // Only canonical identity is added: the custom variant becomes its stable
+    // source-derived ID and the authored props stay as written.
+    const acceptedHome = result.candidateFiles['/src/pages/Home.tsx'];
+    expect(acceptedHome).toContain('import MatchCentre from "../project-components/MatchCentre";');
+    expect(acceptedHome).toContain('<MatchCentre fixture="Ghana v Senegal"');
+    expect(acceptedHome).toMatch(/data-ut-section-id="home:match-centre:0"[^>]*data-ut-variant="custom:project-components-match-centre-default"/);
+    expect(acceptedHome).toMatch(/data-ut-variant="(?:hero|services|gallery|testimonials|cta|about|features|stats|contact|faq|pricing|team)[^"]*:[^"]+"/);
+    const origins = result.candidate.provenance.sectionOrigins;
+    expect(origins?.custom).toBe(1);
+    expect(origins?.certified).toBeGreaterThan(0);
+  });
+
   it('generates an in-builder page candidate with scoped files and topology ops', async () => {
     const page = {
       pageId: 'focus', title: 'Focus', route: '/focus', filePath: '/src/pages/Focus.tsx',

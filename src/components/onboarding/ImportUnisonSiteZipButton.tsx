@@ -34,7 +34,7 @@ export function ImportUnisonSiteZipButton({
       return;
     }
     if (!businessId) {
-      toast.error('Choose a Business Profile in the Goals step before restoring an export.');
+      toast.error('Choose a Business Profile before restoring an export.');
       return;
     }
 

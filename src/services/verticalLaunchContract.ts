@@ -4,10 +4,10 @@
  * Single typed source-of-truth for what each business vertical (booking, saas,
  * agency, portfolio, store, content) guarantees at launch time. Replaces the
  * ad-hoc `forceSalonPreviewReady` boolean that was scattered across
- * LauncherWizard.
+ * prompt-first launch.
  *
  * Why this exists:
- * - LauncherWizard previously branched off a single bool for every per-vertical
+ * - prompt-first launch previously branched off a single bool for every per-vertical
  *   decision (booking on/off, lead capture on/off, selected-page scaffold,
  *   native-publish guarantee, etc). That conflated "is preselected?" with
  *   "what does this vertical promise?".

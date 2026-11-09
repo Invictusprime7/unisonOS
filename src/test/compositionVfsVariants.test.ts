@@ -281,7 +281,7 @@ export default function HeroSection(){return <section data-ut-section-id="${sect
     }
   });
 
-  it('makes LauncherWizard business identity override template sample content', () => {
+  it('makes launch business identity override template sample content', () => {
     const template = getCompositionById('salon-premium');
     if (!template) throw new Error('Missing salon composition');
     const page: PageRouteNode = {

@@ -2,7 +2,7 @@
  * AI Site Preflight Repair
  * ------------------------
  *
- * Runs in the background during the LauncherWizard pipeline, AFTER the AI
+ * Runs in the background during the prompt-first launch pipeline, AFTER the AI
  * returns code and BEFORE the files are committed to the VFS / handed to the
  * WebBuilder preview.
  *

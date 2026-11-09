@@ -7,8 +7,10 @@
 - [x] D — Prompt-aware design retrieval; page-role labels rank, not exclude, for open-ended creation
 - [x] E — Safe per-build diagnostics (prompt hash, mode, reuse/original counts, fallback)
 - [x] F — Chat is the only new-site entry (Home, Live Demo, Onboarding, Builder "New site"); guided Wizard unmounted
-- [ ] G — Delete LauncherWizard, interview drafts and guided-step code once its compatibility tests are retired (3 of its flow tests already fail before this change)
-- [ ] Redeploy Unison's `ai-code-assistant` so the planning chat stops emitting guided-step markers
+- [x] G — Deleted LauncherWizard, interview drafts and guided-step code; every former responsibility re-homed (import, social links, failure report, prefill)
+- [x] Mixed raw → accepted evidence through the real App Builder; relative-path site-local sections accepted
+- [x] Certification-list suites green (stale capability/handoff/resolver/custom-ID checks updated)
+- [ ] Redeploy Unison's `ai-code-assistant` (planning prompt wording only; the chat already ignores old markers)
 - [ ] Live browser generation, edit, reopen and publish across scenarios (needs signed-in Unison session + deployment)
 
 ## Active: GitHub Vercel deployment (2026-11-02)

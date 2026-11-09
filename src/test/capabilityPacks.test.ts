@@ -25,6 +25,7 @@ describe('capability pack contracts', () => {
       'commerce.checkout',
       'automation.follow_up',
       'cms.content',
+      'auth.customer',
     ]);
   });
 
@@ -58,7 +59,9 @@ describe('capability pack contracts', () => {
     expect(packForCapability('crm.contacts')?.id).toBe('crm.leads');
     expect(packForCapability('forms.contact')?.id).toBe('crm.leads');
     expect(packForCapability('commerce.checkout')?.id).toBe('commerce.checkout');
-    expect(packForCapability('auth.customer')).toBeNull();
+    expect(packForCapability('auth.customer')?.id).toBe('auth.customer');
+    expect(packForCapability('portal.customer')?.id).toBe('auth.customer');
+    expect(packForCapability('loyalty.points' as never)).toBeNull();
     expect(packForCapability('cms.content')?.id).toBe('cms.content');
     expect(getCapabilityPack('booking.appointments')?.name).toBe('Booking & Availability');
   });
@@ -92,8 +95,8 @@ describe('resolveCapabilityPacks', () => {
   });
 
   it('reports capabilities that have no pack yet instead of failing', () => {
-    const { order, unsupported } = resolveCapabilityPacks(['portal.customer', 'catalog.services']);
-    expect(unsupported).toEqual(['portal.customer']);
+    const { order, unsupported } = resolveCapabilityPacks(['loyalty.points' as never, 'catalog.services']);
+    expect(unsupported).toEqual(['loyalty.points']);
     expect(order.map((p) => p.id)).toEqual(['business_profile', 'catalog.services']);
   });
 

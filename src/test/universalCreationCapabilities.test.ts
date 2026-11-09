@@ -33,7 +33,8 @@ describe('Universal Creation capability resolution', () => {
     ]));
     expect(plan.requestedIntents).toEqual(expect.arrayContaining(['booking.create', 'cart.add', 'cart.checkout', 'contact.submit']));
     expect(plan.requestedResources).toEqual(expect.arrayContaining(['services', 'availability_slots', 'products', 'content:articles']));
-    expect(plan.blockedRequests).toContain('capability:authentication:unsupported');
+    expect(plan.blockedRequests).not.toContain('capability:authentication:unsupported');
+    expect(plan.businessCapabilities).toContain('auth.customer');
   });
 
   it('materializes the operational routes, forms, and calendar for open-ended requests', () => {
@@ -89,12 +90,16 @@ describe('Universal Creation capability resolution', () => {
   });
 
   it('does not silently activate unsupported capability requests', () => {
-    const resolution = resolveUniversalCreationCapabilities(['authentication', 'mystery-system']);
+    const resolution = resolveUniversalCreationCapabilities(['mystery-system']);
     expect(resolution.operationalCapabilities).toEqual([]);
     expect(resolution.businessCapabilities).toEqual([]);
-    expect(resolution.blockedRequests).toEqual([
-      'capability:authentication:unsupported',
-      'capability:mystery-system:unsupported',
-    ]);
+    expect(resolution.blockedRequests).toEqual(['capability:mystery-system:unsupported']);
+  });
+
+  it('resolves customer sign-in through the registered customer auth pack', () => {
+    const resolution = resolveUniversalCreationCapabilities(['authentication']);
+    expect(resolution.operationalCapabilities).toEqual(['auth']);
+    expect(resolution.businessCapabilities).toEqual(['auth.customer']);
+    expect(resolution.blockedRequests).toEqual([]);
   });
 });

@@ -2,7 +2,7 @@
  * builderBrainClient — Headless client for the shared "builder brain"
  * (the `ai-code-assistant` edge function / Lane B).
  *
- * Both the Wizard launch path (LauncherWizard) and the in-Builder
+ * Both the Wizard launch path (prompt-first launch) and the in-Builder
  * AIBuilderPanel call into this single client so they share:
  *   - the same edge entry point
  *   - the same memory / research / VFS context behavior (Lane B)

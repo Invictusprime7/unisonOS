@@ -316,7 +316,6 @@ Use the marker only for a clear confirmation request. If the user suggests chang
     choices: [{ message: { content: providerResult.content } }],
     content: providerResult.content,
     mode: 'site-discovery',
-    wizardStep: providerResult.content.match(/<UNISON_WIZARD_STEP:(industry|goals|questions|pages|aesthetic|brand|confirm)>/)?.[1],
     modelUsed: providerResult.modelUsed,
     providerUsed: providerResult.providerUsed,
   }), {

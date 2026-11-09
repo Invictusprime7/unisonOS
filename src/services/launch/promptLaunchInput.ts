@@ -73,6 +73,34 @@ export function inferPromptSiteName(plan: ChatLaunchPlan, prefillName?: string |
   return words.replace(/\b\w/g, (letter) => letter.toUpperCase()).slice(0, 48);
 }
 
+const SOCIAL_HOSTS: ReadonlyArray<readonly [platform: string, host: RegExp]> = [
+  ['instagram', /(?:^|\.)instagram\.com$/],
+  ['facebook', /(?:^|\.)(?:facebook\.com|fb\.com)$/],
+  ['linkedin', /(?:^|\.)linkedin\.com$/],
+  ['youtube', /(?:^|\.)(?:youtube\.com|youtu\.be)$/],
+  ['tiktok', /(?:^|\.)tiktok\.com$/],
+  ['x', /(?:^|\.)(?:x\.com|twitter\.com)$/],
+  ['pinterest', /(?:^|\.)pinterest\.com$/],
+  ['github', /(?:^|\.)github\.com$/],
+];
+
+/**
+ * Social profiles the owner wrote into the conversation (http/https links on
+ * known networks only). These replace the retired guided setup's social step.
+ */
+export function extractPromptSocialLinks(prompt: string): Record<string, string> {
+  const links: Record<string, string> = {};
+  for (const match of prompt.matchAll(/https?:\/\/[^\s<>"'()]+/gi)) {
+    const raw = match[0].replace(/[.,;:!?]+$/, '');
+    let url: URL;
+    try { url = new URL(raw); } catch { continue; }
+    if (url.pathname === '/' || !url.pathname) continue;
+    const entry = SOCIAL_HOSTS.find(([, host]) => host.test(url.hostname.toLowerCase()));
+    if (entry && !links[entry[0]]) links[entry[0]] = url.toString();
+  }
+  return links;
+}
+
 function resolveTheme(plan: ChatLaunchPlan): ThemePreset {
   return THEME_PRESETS.find((preset) => preset.id === plan.themePresetId) ?? THEME_PRESETS[0];
 }
@@ -86,7 +114,7 @@ export function buildPromptLaunchInput(prompt: string, options: PromptLaunchOpti
   const prefill = options.prefill ?? null;
   const businessName = inferPromptSiteName(plan, prefill?.businessName);
   const theme = resolveTheme(plan);
-  const socialLinks = { ...(prefill?.socialLinks ?? {}) };
+  const socialLinks = { ...(prefill?.socialLinks ?? {}), ...extractPromptSocialLinks(prompt) };
   const phone = prefill?.phone?.trim() || undefined;
   const publicEmail = prefill?.email?.trim() || undefined;
   const ownerEmail = prefill?.notificationEmail?.trim() || undefined;

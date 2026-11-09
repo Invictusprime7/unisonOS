@@ -42,7 +42,8 @@ describe('DesignSystemResolver', () => {
     const contract = buildAppBuildContract(makeInput([
       impl('hero:home', 'hero', ['home']), impl('hero:contact', 'hero', ['contact']),
     ]));
-    contract.topology.sitePlan.pages = contract.topology.sitePlan.pages.map((page) => ({ ...page, role: 'landing' }));
+    // Replace (never mutate) the shared fixture plan so later tests keep the Home role.
+    contract.topology.sitePlan = { ...contract.topology.sitePlan, pages: contract.topology.sitePlan.pages.map((page) => ({ ...page, role: 'landing' })) };
     const bundle = resolveDesignSourceBundle(contract);
     expect(bundle.eligibleByPage['page-home']).toEqual(['hero:home']);
   });
@@ -54,10 +55,10 @@ describe('DesignSystemResolver', () => {
       impl('hero:prisma-cinematic', 'hero', ['home']),
       impl('cta:gradient-banner', 'cta', ['home']),
     ]));
-    contract.topology.sitePlan.pages = contract.topology.sitePlan.pages.map((page) => ({
-      ...page,
-      role: 'immersive',
-    }));
+    contract.topology.sitePlan = {
+      ...contract.topology.sitePlan,
+      pages: contract.topology.sitePlan.pages.map((page) => ({ ...page, role: 'immersive' })),
+    };
     contract.design.compositionPlan = {
       ...contract.design.compositionPlan,
       pages: contract.design.compositionPlan.pages.map((page) => page.pageId === 'page-home'

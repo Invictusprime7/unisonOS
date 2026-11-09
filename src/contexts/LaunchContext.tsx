@@ -1,10 +1,10 @@
 /**
  * LaunchContext - Provides launch state across the app
  * 
- * Makes LaunchState (from LauncherWizard / launchOrchestrator) available to:
+ * Makes LaunchState (from prompt-first launch / launchOrchestrator) available to:
  * - WebBuilder (for preview configuration)
  * - VFSPreview (for Sandpack file generation)
- * - LauncherWizard (for multi-step wizard state)
+ * - PromptLaunchPanel (handoff after a chat-created site)
  * - AI panels (for context about the current launch)
  * 
  * This context bridges the gap between multiple preview truths by providing
