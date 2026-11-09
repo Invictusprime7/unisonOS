@@ -4,7 +4,7 @@
 - Load Unison tokens last; hero effects opt in via theme bridge. Why: protect vendor skins.
 - Demo counts settle with canonical revisions. Why: count only saved generations.
 
-- New projects start only in the Affinity chat: `PromptLaunchPanel` runs `runLaunchPipeline` with `buildPromptLaunchInput` and never authors or mutates VFS; `LauncherWizard` is unmounted compatibility code pending removal. Why: one creation surface and one launch path.
+- New projects start only in the Affinity chat: `PromptLaunchPanel` runs `runLaunchPipeline` with `buildPromptLaunchInput` and never authors or mutates VFS; the guided Wizard, its saved interview drafts and step markers are deleted, and project import lives in the panel. Why: one creation surface and one launch path.
 - `UnisonAppBuilder` is the sole fresh-launch application author; `generate-page` reuses Composer and saved Home design. Why: no parallel writer.
 - The canonical platform owns topology/routes, capabilities/intents/bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation; never generate competing pages after App Builder authorship.
 - `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
@@ -43,7 +43,7 @@
 - Edit gates retain compile/imports, ownership, protected paths, data-loss and binding safety; design/scope is advisory. Queue rebase checks domain dependencies, not age; reviews remain revision-bound. Why: independent saves must not block edits.
 
 - Affinity shows public paragraphs, never native thinking. Why: explanations without private deliberation.
-- Wizard launch progress projects canonical stage and page/batch events into a bounded public activity feed; elapsed time never advances completion. Why: visitors can see real work without fabricated progress or private reasoning.
+- Launch progress projects canonical stage and page/batch events into a bounded public activity feed; elapsed time never advances completion. Why: visitors can see real work without fabricated progress or private reasoning.
 - Published cart intents use the canonical client commerce adapter with site-scoped browser persistence and quantity badges; checkout stays server-priced and provider-gated. Why: a bag can persist without granting payment authority or trusting browser prices for charges.
 - App Builder checks contracts before/after source-owned repairs; provisioning and cosmetic repetition are draft advisories, never paid repairs. Active ownership, render safety and publish gates remain enforced. Why: save usable designs without costly full-page rework.
 - Composer fix rounds send candidate source only in FILES (previousResponse lists paths), and an interrupted fix round resumes from its accumulated draft rather than re-authoring the page. Why: duplicated source made fix rounds time out and every from-scratch retry re-billed the full page.
