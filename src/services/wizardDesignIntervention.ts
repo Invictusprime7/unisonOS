@@ -537,8 +537,8 @@ export function buildWizardDesignIntervention(
   )];
   const compositionDirective = [
     resolvedImplementations.length > 0
-      ? `This launch resolved the registered implementations ${resolvedImplementations.join(', ')} — compose within them and never author replacement section source.`
-      : 'Compose within the registered section implementations resolved for this launch and never author replacement section source.',
+      ? `This launch resolved the registered implementations ${resolvedImplementations.join(', ')} — reuse or adapt them where they fit the owner's prompt, and author original site-local sections where they do not.`
+      : 'Reuse or adapt registered section implementations where they fit the owner\'s prompt, and author original site-local sections where they do not.',
     resolvedPatterns.length > 0
       ? `Their design language is ${resolvedPatterns.join(', ')}; vary the pattern between pages instead of repeating one section shape.`
       : 'Vary the pattern between pages instead of repeating one section shape.',
@@ -568,7 +568,7 @@ export function buildWizardDesignIntervention(
     compositionPolicy: 'maximum-compatible',
     envelope,
     brief,
-    aiDirective: `Compose only with snapshot-owned UI primitives and semantic Stage 4b tokens. Art direction is "${pack.name}" — ${pack.description} ${familyDirective(input.themePresetId, artDirectionPackId)} ${compositionDirective} ${experienceDirective} Preserve the motion budget, selected recipes, accessibility, responsive constraints, and canonical intent bindings.`,
+    aiDirective: `${PROMPT_CREATIVE_AUTHORITY_POLICY} Style with snapshot-owned UI primitives and semantic Stage 4b tokens. Art direction is "${pack.name}" — ${pack.description} ${familyDirective(input.themePresetId, artDirectionPackId)} ${compositionDirective} ${experienceDirective} Preserve the motion budget, selected recipes, accessibility, responsive constraints, and canonical intent bindings.`,
 
 
   };
