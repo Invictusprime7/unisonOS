@@ -181,8 +181,13 @@ function findCustomSectionImplementations(
                 const component = tagName(child.tagName);
                 const imported = component ? imports.get(component) : undefined;
                 const rawPath = imported?.modulePath;
-                if (imported && rawPath?.startsWith('@/')) {
-                  const modulePath = resolveRelativeModule(path, `/src/${rawPath.slice(2)}`, existingPaths);
+                // Site-local sections may be imported by alias or relative path.
+                if (imported && rawPath && (rawPath.startsWith('@/') || rawPath.startsWith('.'))) {
+                  const modulePath = resolveRelativeModule(
+                    path,
+                    rawPath.startsWith('@/') ? `/src/${rawPath.slice(2)}` : rawPath,
+                    existingPaths,
+                  );
                   if (modulePath && CUSTOM_COMPONENT_PATH.test(modulePath)
                     && hasRenderableCustomSectionBody(files[modulePath] ?? '', imported.importedName ?? undefined)) {
                     const exportName = imported.importedName === null ? undefined : imported.importedName;
