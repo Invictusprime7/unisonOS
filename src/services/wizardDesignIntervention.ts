@@ -30,6 +30,7 @@ import type {
 import { getDesignImplementation, getImplementationVocabularyRefs } from '@/services/designImplementationRegistry';
 import { resolveAvailableAutoArtDirectionPackId } from '@/services/wizardDesignAvailability';
 import { selectAffineVariant } from '@/sections/compositionAffinity';
+import { PROMPT_CREATIVE_AUTHORITY_POLICY } from '@/services/app-builder/creativeAuthorityPolicy';
 
 
 

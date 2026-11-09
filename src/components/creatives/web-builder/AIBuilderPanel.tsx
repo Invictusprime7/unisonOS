@@ -1,4 +1,5 @@
 import { resolvePreviewSource } from '@/services/editor/previewSourceResolver';
+import { PROMPT_CREATIVE_AUTHORITY_POLICY, retireLegacyRegistryOnlyDirective } from '@/services/app-builder/creativeAuthorityPolicy';
 import { readAppBuilderAISettings, saveAppBuilderAISettings } from '@/services/app-builder/appBuilderAISettings';
 import { clarifyBuilderRequest } from '@/services/builder/conversationalClarifier';
 import { isThemeOnlyRequest } from '@/services/theme/themeEdit';
@@ -1563,12 +1564,13 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       }
       if (designIntervention) {
         contextLines.push([
-          '\n[Snapshot-owned deterministic design intervention — hard contract]',
+          '\n[Snapshot-owned design intervention — art direction, motion and safety context; the prompt-authority policy below governs composition]',
           `Layout: ${designIntervention.layoutRecipe}`,
           `Section variants: ${designIntervention.sectionVariants.join(', ')}`,
           `Motion recipes: ${designIntervention.motionRecipes.join(', ')} (${designIntervention.motionBudget} budget)`,
           `Interaction recipes: ${designIntervention.interactionRecipes.join(', ')}`,
-          `${designIntervention.aiDirective} Do not write /.unison/design-intervention.json.`,
+          // Saved projects can still carry the retired registry-only sentence.
+          `${retireLegacyRegistryOnlyDirective(designIntervention.aiDirective)} ${PROMPT_CREATIVE_AUTHORITY_POLICY} Do not write /.unison/design-intervention.json.`,
         ].join('\n'));
       }
 
