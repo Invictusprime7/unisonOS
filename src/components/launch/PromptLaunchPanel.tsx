@@ -6,6 +6,7 @@
  * and writes nothing itself — `runLaunchPipeline` and App Builder do.
  */
 
+import type { RequirementCoverageReport } from '@/services/app-builder/requirementCoverage';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Monitor, PanelsTopLeft, Smartphone, Sparkle } from 'lucide-react';
@@ -49,6 +50,7 @@ export const AI_UNAVAILABLE_PATTERN = /timed? ?out|timeout|quota|credit|rate.?li
 interface ReviewCandidate {
   files: Record<string, string>;
   entryPoint: string;
+  coverage?: RequirementCoverageReport;
 }
 
 export interface PromptLaunchPanelProps {
@@ -118,7 +120,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
       const result = await runLaunchPipeline(input, {
         onReview: (candidate) => new Promise<boolean>((resolve) => {
           if (!live()) { resolve(false); return; }
-          setReview({ files: candidate.files, entryPoint: candidate.entryPoint });
+          setReview({ files: candidate.files, entryPoint: candidate.entryPoint, coverage: candidate.coverage });
           setLaunching(false);
           decisionRef.current = resolve;
         }),
@@ -165,6 +167,11 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
           <div>
             <h2 className="text-base font-semibold">{previewReady ? 'Your site is ready to review' : 'Preparing your site preview'}</h2>
             <p className="text-xs text-muted-foreground">{previewReady ? 'Check the result before opening it in the builder.' : 'Your pages are generated. Checking that they render correctly.'}</p>
+            {review.coverage && (
+              <p className={review.coverage.complete ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'} data-testid="prompt-launch-coverage">
+                {review.coverage.summary}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-1 rounded-md border border-border bg-muted p-1">
             <Button size="icon" variant={device === 'desktop' ? 'secondary' : 'ghost'} aria-label="Desktop preview" aria-pressed={device === 'desktop'} onClick={() => setDevice('desktop')}><Monitor /></Button>

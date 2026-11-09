@@ -153,7 +153,12 @@ export interface LaunchOrchestratorInput {
 }
 
 export interface LaunchOrchestratorCallbacks {
-  onReview?: (candidate: { files: Record<string, string>; entryPoint: string }) => Promise<boolean>;
+  onReview?: (candidate: {
+    files: Record<string, string>;
+    entryPoint: string;
+    /** What the owner asked for vs what this candidate actually built. */
+    coverage?: import('@/services/app-builder/requirementCoverage').RequirementCoverageReport;
+  }) => Promise<boolean>;
   onStatus?: (status: string) => void;
   onProgress?: (snapshot: LaunchRunSnapshot) => void;
   /**
@@ -702,6 +707,15 @@ async function runReservedLaunchPipeline(
     return result;
   }, { timeoutMs: authoringBudgetMs + 20_000 });
   const candidateFiles = { ...appBuild.candidateFiles };
+  const coverage = appBuild.candidate.requirementCoverage;
+  if (coverage) {
+    status(coverage.summary);
+    for (const item of coverage.items) {
+      if (item.status === 'missing' || item.status === 'partial') {
+        run.degrade('app-build', `app-build.requirement-${item.status}`, `${item.text}: ${item.evidence.join('; ')}`, item.id);
+      }
+    }
+  }
   for (const issue of appBuild.candidate.closure?.issues ?? []) {
     if (issue.severity === 'advisory') {
       run.degrade('app-build', `app-build.${issue.code}`, issue.message, issue.path);
@@ -984,7 +998,7 @@ async function runReservedLaunchPipeline(
 
   // ── Stage: commit ─────────────────────────────────────────────────────────
   status("Saving your site workspace…");
-  if (callbacks.onReview && !await callbacks.onReview({ files: vfsFiles, entryPoint: artifacts.entryPoint })) {
+  if (callbacks.onReview && !await callbacks.onReview({ files: vfsFiles, entryPoint: artifacts.entryPoint, coverage })) {
     const error = new Error('Site preview discarded');
     error.name = 'LaunchReviewCancelled';
     throw error;

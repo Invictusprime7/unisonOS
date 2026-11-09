@@ -400,10 +400,25 @@ function planFromProfile(
     }
   }
 
-  // Ensure we have a home page
+  // Ensure we have a home page. Never relabel another page (e.g. Blog) as
+  // Home: that breaks its topology role and route; add a real Home instead.
   if (!homePageId && pages.length > 0) {
-    homePageId = pages[0].id;
-    pages[0].isHome = true;
+    const home: PageRouteNode = {
+      ...pages[0],
+      id: generateUUID(),
+      name: 'Home',
+      title: 'Home',
+      route: '/',
+      role: 'home',
+      purpose: 'home',
+      filePath: '/src/pages/Home.tsx',
+      visibleInNav: true,
+      isHome: true,
+      seo: { title: `Home | ${businessName}`, description: `Home page for ${businessName}` },
+    };
+    pages.unshift(home);
+    navItems.unshift(home.id);
+    homePageId = home.id;
   }
 
   // 2. Build funnels from industry conversion patterns

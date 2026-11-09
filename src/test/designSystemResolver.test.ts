@@ -100,6 +100,25 @@ describe('DesignSystemResolver', () => {
   });
 });
 
+describe('intent-driven design retrieval (Native Authorship D)', () => {
+  const firstHero = (prompt: string, brief: string[] = []) => {
+    const contract = buildAppBuildContract(makeInput([
+      impl('hero:prisma-cinematic', 'hero'), impl('hero:editorial-banner', 'hero'), impl('hero:split-image', 'hero'),
+    ]));
+    contract.business.universalCreation = {
+      mode: 'open-ended', originalPrompt: prompt, sitePurpose: '', subject: '', pages: [], visualRequirements: [], requestedCapabilities: [],
+      creativeBrief: { tone: brief, typography: [], color: [], imagery: [], composition: [], motion: [], interactions: [], references: [] },
+    };
+    return resolveDesignSourceBundle(contract).eligibleByPage['page-home'].filter((id) => id.startsWith('hero:'))[0];
+  };
+
+  it('ranks certified designs by what the prompt and creative brief ask for', () => {
+    expect(firstHero('A cinematic film studio site')).toBe('hero:prisma-cinematic');
+    expect(firstHero('A magazine for architects', ['editorial'])).toBe('hero:editorial-banner');
+    expect(firstHero('Photography with a split image layout')).toBe('hero:split-image');
+  });
+});
+
 describe('AppBuilderGenerationContext (R0/R1)', () => {
   it('offers mixed reuse and original body design while keeping forms on-system and chat opt-in', async () => {
     const { buildAppBuilderGenerationContext } = await import('@/services/app-builder/appBuilderGenerationContext');

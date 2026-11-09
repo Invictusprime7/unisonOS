@@ -647,6 +647,8 @@ export interface AppBuildCandidate {
   designReport?: import('./appBuilderGenerationContext').DesignSourceUsageReport;
   /** Derived read-only graph for the exact accepted candidate source. */
   graph?: import('@/services/agent-runtime/systemGraph').SystemGraph;
+  /** The owner's explicit requirements vs this exact source (advisory, never a gate). */
+  requirementCoverage?: import('./requirementCoverage').RequirementCoverageReport;
 }
 
 export interface AppBuildCandidateProvenance {
