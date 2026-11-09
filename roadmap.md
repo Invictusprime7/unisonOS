@@ -1,8 +1,9 @@
 # Roadmap
 
 ## Active: Native AI authorship restoration (guide 2026-11-09)
-- [ ] Sprint 1 · A — call graph, history search, build-stage provenance trace (flagged) + first-loss-boundary test
-- [ ] Sprint 1 · B — creative plan (requirements with IDs, creative brief, refinements, multi-page), no silent Modern, retire registry-only directives, never drop the brief
+- [x] Sprint 1 · A — call graph, history search, build-stage provenance trace (flagged) + first-loss-boundary test (docs/NATIVE_AUTHORSHIP_REPORT.md)
+- [x] Sprint 1 · B — creative plan (requirements with IDs, creative brief, refinements, multi-page), no silent Modern, retire registry-only directives, never drop the brief
+- [ ] Redeploy Unison `ai-code-assistant`/`generate-page` (server policy wording) — needs Unison deployment
 - [ ] Sprint 2 · C — original multi-file TSX + mixed certified/custom acceptance, non-destructive normalization, adapted derivatives
 - [ ] Sprint 3 · E — multi-page intent and route visibility (registry, nav, Preview selector, export agree)
 - [ ] Sprint 3 · F — requirement coverage report; registry-only output cannot pass the sports fixture
