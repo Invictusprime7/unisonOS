@@ -208,6 +208,12 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     `Requested operational capabilities: ${creation.requestedCapabilities.join(', ') || 'none; do not add unrequested backend behavior.'}`,
     'Capability authorization: a requested capability is not authorization. Use only registered components and intents in this contract; never simulate backend writes or claim unbound operations are functional.',
     `Original visitor prompt (primary creative authority): ${creation.originalPrompt}`,
+    ...(creation.confirmedDirection ? [`Confirmed site direction (accepted refinement; never narrows the prompt): ${creation.confirmedDirection}`] : []),
+    ...(creation.refinements?.length ? [`Owner refinements in order (later ones win where they disagree): ${creation.refinements.join(' | ')}`] : []),
+    ...(creation.designDirection?.origin === 'provisional'
+      ? [`Design direction is PROVISIONAL: ${creation.designDirection.note} Never treat the token base as the requested style.`]
+      : []),
+    renderCreativeRequirements(creation.requirements, creation.designDirection),
     ...(openEnded ? ['The selected industry is only a compatibility hint; do not replace the visitor subject or purpose with an industry template. Author site-local TSX wherever certified designs do not fit the prompt.'] : []),
     ...(creation.sitePurpose.toLowerCase().includes('editorial')
       ? ['Editorial pages may render static sample articles. When a published articles content type exists, load it through listPublishedContent from @/components/publishedActionRuntime. If no type or published rows are available, keep a local sample/empty state; do not claim CMS editing or publishing without canonical owner authorization.']
