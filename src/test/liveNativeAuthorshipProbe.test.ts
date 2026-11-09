@@ -15,7 +15,7 @@ const invoke = async (input: Record<string, unknown>, options: { signal?: AbortS
   const response = await fetch(URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${process.env.LOVABLE_BROWSER_SUPABASE_ACCESS_TOKEN}` },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, gatewayOptions: { ...(input.gatewayOptions as object | undefined), timeoutMs: Math.min(130_000, Number((input.gatewayOptions as { timeoutMs?: number } | undefined)?.timeoutMs ?? 130_000)) } }),
     signal: options.signal,
   });
   const text = await response.text();
