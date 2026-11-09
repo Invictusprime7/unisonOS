@@ -15,6 +15,12 @@
 
 import { COMPOSER_CONTEXT_LIMIT, COMPOSER_PAGE_BRIEF_LIMIT } from '@/services/app-builder/contextBudget';
 import { AI_AUTHORED_MARKER } from '@/contracts/aiComposerContract';
+import {
+  ARCHETYPE_ADVISORY_POLICY,
+  CREATIVE_AUTHORITY_ORDER,
+  MIXED_SECTION_AUTHORING_POLICY,
+  renderOwnerCreativeBrief,
+} from '@/services/app-builder/creativeAuthorityPolicy';
 import type { ResolvedSiteDesignContext } from '@/services/launch/resolvedSiteDesignContext';
 import { projectSiteDesignContract } from '@/services/launch/siteDesignContract';
 import type { AIComposerRequest } from '@/contracts/aiComposerContract';
@@ -178,13 +184,14 @@ export function renderPageBrief(
     `ART DIRECTION PACK: ${ctx.contract.artDirectionPackId}`,
     `EXPERIENCE: ${ctx.contract.experience}`,
     `DESIGN CONTRACT:\n${summaryLines.join('\n')}`,
-    `PAGE STRUCTURE (enforced): render the shared site nav first and the shared footer last (one shared component each, e.g. /src/project-components/site/SiteNav.tsx and SiteFooter.tsx, linking every route; create them once if missing, reuse them otherwise). Body: at least ${Math.max(page.role === 'home' ? 3 : 2, Math.min(pageMin ?? 0, 4))} distinct sections. The page archetype's required/forbidden families and body limit are hard constraints; the composition target is inspiration, not a required sequence. Reorder or replace optional families and use original layouts as needed. Avoid a lone centered hero. Use real photography wherever the page is media-led.`,
-    `SECTION IDENTITY (required for every page-level body <section>): use a unique, stable literal data-ut-section-id such as "${page.pageId}:services:0", data-ut-section-type such as "services", and data-ut-variant such as "services:editorial-rows". IDs are pageId:section-family:zero-based occurrence and must remain unchanged across content edits and layout swaps.`,
-    'SITE CHROME IDENTITY (required on every page): wrap the shared registered navbar dispatcher in <header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="<eligible navbar variant>"> and the shared registered footer dispatcher in <footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="<eligible footer variant>". Reuse these exact IDs and the same variants across all pages; the matching dispatcher variantId must equal the wrapper data-ut-variant.',
-    'SECTION DATA AND RENDERING (required): render each section as a <section> wrapper containing exactly one default family dispatcher imported from the matching @/unison/design-sources/<Family> module, e.g. import Services from "@/unison/design-sources/Services"; <Services sectionId="<same section ID>" variantId="services:editorial-rows" props={{ headline: "...", items: [...] }} />. Use the same stable sectionId on the wrapper data-ut-section-id and dispatcher sectionId props, and the same registered variantId on the wrapper data-ut-variant and dispatcher prop. Keep all section content props in a JSON-serializable literal props object. Do not render named variant exports directly, spread dynamic props, or place multiple dispatchers under one section wrapper. Keep registered intent, CTA, resource, and component-instance markers intact inside their existing section content.',
+    `PAGE STRUCTURE (required): render the shared site nav first and the shared footer last (one shared component each, e.g. /src/project-components/site/SiteNav.tsx and SiteFooter.tsx, linking every route; create them once if missing, reuse them otherwise). Body: at least ${Math.max(page.role === 'home' ? 3 : 2, Math.min(pageMin ?? 0, 4))} distinct, meaningful sections. Avoid a lone centered hero. Use real photography wherever the page is media-led.`,
+    ARCHETYPE_ADVISORY_POLICY,
+    `SECTION IDENTITY (required for every page-level body <section>): use a unique, stable literal data-ut-section-id such as "${page.pageId}:services:0", data-ut-section-type such as "services" (or a kebab purpose such as "match-centre" for original sections), and data-ut-variant such as "services:editorial-rows" (certified) or "custom:match-centre" (site-local). IDs are pageId:section-purpose:zero-based occurrence and must remain unchanged across content edits and layout swaps.`,
+    'SITE CHROME IDENTITY (required on every page): wrap the shared registered navbar dispatcher in <header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="<eligible navbar variant>"> and the shared registered footer dispatcher in <footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="<eligible footer variant>">. Reuse these exact IDs and the same variants across all pages; the matching dispatcher variantId must equal the wrapper data-ut-variant.',
+    MIXED_SECTION_AUTHORING_POLICY,
     preferred.length ? `PREFERRED CANONICAL VOCABULARY:\n${preferred.join('\n')}` : '',
     forbidden.length ? `FORBIDDEN IMPLEMENTATIONS (never use):\n${forbidden.join('\n')}` : '',
-    `CREATIVE AUTHORITY: ${ctx.creativeRecommendation.guidance}`,
+    `ART DIRECTION GUIDANCE: ${ctx.creativeRecommendation.guidance}`,
     `AFFINITY INVARIANTS: Preserve pack ${ctx.affinity.invariants.artDirectionPackId}; its typography, geometry, spacing cadence, media treatment, motion character, and shared chrome identity are site-wide.`,
     `PAGE-LOCAL VARIANTS: ${ctx.affinity.looseFit.guidance}`,
     ctx.affinity.variants[page.role]
@@ -278,25 +285,21 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
     const buildRequest = async (redundancy: RedundancyIssue | null): Promise<AIComposerRequest> => (await assembleCanonicalAuthoringRequest({
       task: 'site_page_author',
       page: { role: page.role, title: page.title, route: page.route, filePath: page.filePath },
-      // Layout plan and design contract lead; the planning-chat vision follows so it
-      // shapes wording/content without displacing composition vocabulary.
+      // The owner's prompt leads as primary creative authority; layout hints
+      // and the design contract yield space to it, never the reverse.
       brief: (() => {
+        const owner = renderOwnerCreativeBrief(input.visionBrief);
         const layout = [
-          renderCompositionBrief(planned, visualMemory.entries(), redundancy),
+          CREATIVE_AUTHORITY_ORDER,
           renderPageBrief(input.designContext, page, input.businessName, establishedLanguage),
+          renderCompositionBrief(planned, visualMemory.entries(), redundancy),
         ].filter(Boolean).join('\n');
-        const vision = input.visionBrief
-          ? `OWNER VISION (from the planning chat; use it for wording and content only — never let it override the layout plan, section vocabulary or sealed design above): ${input.visionBrief.slice(0, 1200)}`
-          : '';
-        // Photo library sits outside the truncated layout so it can never be cut off.
+        // Photo library sits outside the trimmable layout so it can never be cut off.
         const photos = isImageLedRole(page.role)
           ? `PHOTO LIBRARY (required — this page is image-led and is rejected without photos): render at least one <img src="..."> in the page file itself using these verified URLs, copied exactly; never invent other image URLs:\n${verifiedPhotosFor(input.designContext?.contract.industry).join('\n')}`
           : '';
-        // The design contract must arrive whole; the vision is the only part that yields space.
-        const room = COMPOSER_PAGE_BRIEF_LIMIT - (photos ? photos.length + 1 : 0);
-        const fitted = layout.slice(0, Math.max(5500, room));
-        const visionRoom = COMPOSER_PAGE_BRIEF_LIMIT - fitted.length - (photos ? photos.length + 1 : 0) - 1;
-        return [photos, fitted, visionRoom > 200 ? vision.slice(0, visionRoom) : ''].filter(Boolean).join('\n').slice(0, COMPOSER_PAGE_BRIEF_LIMIT);
+        const room = COMPOSER_PAGE_BRIEF_LIMIT - owner.length - (photos ? photos.length + 1 : 0) - 2;
+        return [owner, photos, layout.slice(0, Math.max(0, room))].filter(Boolean).join('\n').slice(0, COMPOSER_PAGE_BRIEF_LIMIT);
       })(),
       knowledgeQuery: `${input.businessName} ${page.role} ${page.title} ${page.route}`,
       baseFiles,
