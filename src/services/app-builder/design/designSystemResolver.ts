@@ -72,12 +72,34 @@ function targetFit(impl: WizardRegistryImplementationSummary, target: { hero?: s
   return score;
 }
 
+const STOP_WORDS = new Set(['the', 'and', 'with', 'for', 'that', 'this', 'from', 'your', 'our', 'site', 'website', 'page', 'pages', 'want', 'need', 'like', 'make', 'build', 'create', 'have', 'into', 'about', 'will', 'should', 'please']);
+
+/** Lower-case creative terms from the owner's prompt, visual requirements and page purpose. */
+export function creativeTermsFor(contract: AppBuildContract, pageRoute?: string): Set<string> {
+  const creation = contract.business.universalCreation;
+  const page = creation?.pages.find((candidate) => candidate.route === pageRoute);
+  const text = [creation?.originalPrompt, ...(creation?.visualRequirements ?? []), page?.purpose, page?.title]
+    .filter(Boolean).join(' ').toLowerCase();
+  return new Set((text.match(/[a-z][a-z0-9-]{2,}/g) ?? []).filter((term) => !STOP_WORDS.has(term)));
+}
+
+/** Higher means the implementation's name, family and visual signature echo the owner's prompt. */
+export function creativeFit(impl: WizardRegistryImplementationSummary, terms: ReadonlySet<string>): number {
+  if (!terms.size) return 0;
+  const signature = impl.visualSignature ? Object.values(impl.visualSignature).filter((value) => typeof value === 'string') : [];
+  const haystack = [impl.id, impl.name, impl.sectionType, ...signature].join(' ').toLowerCase();
+  let score = 0;
+  for (const term of terms) if (haystack.includes(term)) score += 1;
+  return score;
+}
+
 export function resolveDesignSourceBundle(contract: AppBuildContract): DesignSourceBundle {
   const { design } = contract;
   const registry = design.registryContext;
   const selected = new Set(design.sourceSelection.implementationIds);
   const forbidden = design.resolvedSiteDesignContext.hardLegality.forbiddenImplementations;
   const preferred = design.resolvedSiteDesignContext.creativeRecommendation.preferredImplementations;
+  const openEnded = contract.business.universalCreation?.mode === 'open-ended';
 
   const pool = (registry.implementations ?? []).filter((impl) => {
     if (!selected.has(impl.id)) return false;
@@ -96,13 +118,18 @@ export function resolveDesignSourceBundle(contract: AppBuildContract): DesignSou
     // Immersive has no dedicated composition profile yet; its sealed target
     // supplies the fallback architecture, so only those explicit families may
     // cross the authored page-role boundary.
-    const roleFit = pool.filter((impl) => pinnedIds.has(impl.id)
+    // Page-role labels rank prompt-first (open-ended) options instead of excluding them.
+    const roleMatches = (impl: WizardRegistryImplementationSummary) => pinnedIds.has(impl.id)
       || (pageRole === 'immersive' && compositionFamilies.has(impl.sectionType))
-      || impl.pageRoles.length === 0 || impl.pageRoles.includes(pageRole));
+      || impl.pageRoles.length === 0 || impl.pageRoles.includes(pageRole);
+    const roleFit = openEnded ? pool : pool.filter(roleMatches);
+    const terms = creativeTermsFor(contract, page.route);
     const richerTypes = new Set(roleFit.filter((impl) => !isGenericImplementationId(impl.id)).map((impl) => impl.sectionType));
     const seed = `${design.seed}:${page.id}`;
     const rank = (impl: WizardRegistryImplementationSummary) => [
       pinnedIds.has(impl.id) ? 0 : 1,
+      roleMatches(impl) ? 0 : 1,
+      -creativeFit(impl, terms),
       (preferred[impl.sectionType] ?? []).includes(impl.id) ? 0 : 1,
       -targetFit(impl, target),
     ];
