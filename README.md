@@ -11,6 +11,7 @@ Unison turns a business idea into a source-backed React website and a connected 
 - Reopen saved projects and per-draft AI conversations across sessions using the same backend and account.
 - See file activity, open relevant files, and distinguish a saved edit from a preview that has confirmed loading it.
 - Review checkpoint descriptions and restore an accepted source revision.
+- Ask Affinity for a flyer, poster, banner, business card or letterhead. It designs an editable piece in Design Studio from your words and references (logo, photos, style inspiration), changes it when asked, runs a beginner design check, and exports PNG, JPG, print-ready PDF (with bleed) or a copy saved to Files.
 
 ## One continuous project
 
