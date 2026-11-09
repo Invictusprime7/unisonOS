@@ -114,7 +114,7 @@ export function buildPromptLaunchInput(prompt: string, options: PromptLaunchOpti
   const prefill = options.prefill ?? null;
   const businessName = inferPromptSiteName(plan, prefill?.businessName);
   const theme = resolveTheme(plan);
-  const socialLinks = { ...(prefill?.socialLinks ?? {}), ...extractPromptSocialLinks(plan.creationInput.originalPrompt) };
+  const socialLinks = { ...(prefill?.socialLinks ?? {}), ...extractPromptSocialLinks(prompt) };
   const phone = prefill?.phone?.trim() || undefined;
   const publicEmail = prefill?.email?.trim() || undefined;
   const ownerEmail = prefill?.notificationEmail?.trim() || undefined;
