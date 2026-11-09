@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { buildPromptLaunchInput } from '@/services/launch/promptLaunchInput';
 import { buildRequirementCoverage } from '@/services/app-builder/requirementCoverage';
 import type { CreationRequirement } from '@/platform/core/universalCreation';
+import { renderVerticalKnowledge } from '@/services/composition/verticals';
 
 const ids = (requirements: readonly CreationRequirement[] | undefined) => (requirements ?? []).map((requirement) => requirement.id);
 
@@ -33,7 +34,7 @@ describe('1 · Whistle Blower regression', () => {
     expect(creation.vertical).toMatchObject({ packId: 'sports', variantId: 'fan-media' });
     const inferred = (creation.requirements ?? []).filter((requirement) => requirement.kind === 'page' && requirement.origin === 'inferred');
     expect(inferred.map((requirement) => requirement.pageRoute)).toEqual(expect.arrayContaining(['/live', '/match-centre']));
-    expect(input.visionPrompt).toContain('INDUSTRY KNOWLEDGE (Sports');
+    expect(renderVerticalKnowledge(creation.vertical)).toContain('INDUSTRY KNOWLEDGE (Sports · Fan blog / sports media');
   });
 
   const pages = [
