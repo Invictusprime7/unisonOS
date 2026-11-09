@@ -30,6 +30,25 @@ export interface CreationRequirement {
   /** explicit: owner's words; confirmed: the chat summary the owner confirmed; inferred: planner. */
   origin: 'explicit' | 'confirmed' | 'inferred';
   pageRoute?: string;
+  /** Live-looking data (scores, departures, availability) must be real or visibly labelled sample data. */
+  sampleDataRequired?: boolean;
+  /** Alternative phrasings that evidence an implementation (any one, all of its words). */
+  evidenceTerms?: string[];
+}
+
+/**
+ * The industry vertical read from the owner's words (sports, flights,
+ * weddings…). Authoring knowledge only: it never provisions capabilities and
+ * never outranks the prompt.
+ */
+export interface CreationVertical {
+  packId: string;
+  variantId: string | null;
+  /** A second vertical when the prompt blends two trades (e.g. a wedding photographer). */
+  blendPackId?: string | null;
+  confidence: number;
+  /** The owner's matched phrases. */
+  evidence: string[];
 }
 
 /** Creative brief dimensions, each the owner's own phrases. */
@@ -77,6 +96,7 @@ export interface UniversalCreationInput {
   requirements?: CreationRequirement[];
   multiPage?: boolean;
   designDirection?: DesignDirection;
+  vertical?: CreationVertical;
   /** Open questions that block a faithful build; empty when none. */
   clarifications?: string[];
 }

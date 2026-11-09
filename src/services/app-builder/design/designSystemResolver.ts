@@ -4,6 +4,7 @@
  * contract's own sourceSelection / registryContext.
  */
 
+import { verticalDesignTerms } from '@/services/composition/verticals';
 import { activeAuthorshipTrace } from '@/services/launch/authorshipTrace';
 import type { AppBuildContract } from '@/services/app-builder/appBuilderContracts';
 import type { WizardRegistryImplementationSummary } from '@/services/launch/wizardRegistryAggregation';
@@ -86,7 +87,9 @@ export function creativeTermsFor(contract: AppBuildContract, pageRoute?: string)
     .filter((requirement) => !requirement.pageRoute || requirement.pageRoute === pageRoute)
     .map((requirement) => requirement.text.replace(/^[a-z]+:\s*/, ''));
   const text = [creation?.originalPrompt, ...(creation?.visualRequirements ?? []), ...brief, ...requirements,
-    creation?.confirmedDirection, ...(creation?.refinements ?? []), page?.purpose, page?.title]
+    creation?.confirmedDirection, ...(creation?.refinements ?? []), page?.purpose, page?.title,
+    // Vertical mood/structure words (e.g. scoreboard, poster, serene) rank inside the sealed registry only.
+    ...verticalDesignTerms(creation?.vertical)]
     .filter(Boolean).join(' ').toLowerCase();
   return new Set((text.match(/[a-z][a-z0-9-]{2,}/g) ?? []).filter((term) => !STOP_WORDS.has(term)));
 }

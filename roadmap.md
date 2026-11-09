@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: Industry vertical coverage
+- [x] Deep vertical packs (sports, flights/travel, events, music, weddings, fitness, hotels, photography/film) with sub-variants, vocabulary, content objects, proof, interactions, pages, composition profiles
+- [x] Wire into chat plan (detection, interaction requirements, inferred pages), composition, design ranking, page brief, coverage + library promotion candidates
+- [ ] Live AI build per vertical (needs Unison deployment + funded Gemini)
+- [ ] Promote recurring original components to the Unison Design System library (done in the library project)
+
 ## Active: Native AI authorship restoration (guide 2026-11-09)
 - [x] Sprint 1 · A — call graph, history search, build-stage provenance trace (flagged) + first-loss-boundary test (docs/NATIVE_AUTHORSHIP_REPORT.md)
 - [x] Sprint 1 · B — creative plan (requirements with IDs, creative brief, refinements, multi-page), no silent Modern, retire registry-only directives, never drop the brief

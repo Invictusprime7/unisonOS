@@ -7,6 +7,7 @@ import type { CompositionCharacter, IndustryPageCompositionProfile } from './typ
 import type { CompositionResolution, CompositionResolutionInput } from './types';
 import { hashSeed } from '@/platform/core/generationSeed';
 import { pageArchetypeFor, pageArchetypeIssues } from '@/sections/pageArchetypeContract';
+import { VERTICAL_PACKS } from './verticals';
 
 type ProfileSeed = Omit<IndustryPageCompositionProfile, 'industryId' | 'pageRole' | 'compositionCharacter' | 'customCompositionAllowed' | 'customComponentsAllowed'> & {
   character: Partial<CompositionCharacter> & Pick<CompositionCharacter, 'density'>;
@@ -280,7 +281,15 @@ const GENERIC = build('*', {
   },
 });
 
-const REGISTRY: IndustryPageCompositionProfile[] = [...SALON, ...RESTAURANT, ...SAAS, ...GENERIC];
+// Industry vertical packs (sports, travel, events…) contribute data-only profiles.
+const VERTICALS: IndustryPageCompositionProfile[] = VERTICAL_PACKS.flatMap((pack) => build(pack.id, pack.roleProfiles));
+
+const REGISTRY: IndustryPageCompositionProfile[] = [...SALON, ...RESTAURANT, ...SAAS, ...VERTICALS, ...GENERIC];
+
+/** True when the industry has its own composition profiles (not the generic fallback). */
+export function hasDedicatedCompositionProfiles(industryId: string): boolean {
+  return industryId !== '*' && REGISTRY.some((profile) => profile.industryId === industryId);
+}
 
 const ROLE_ALIASES: Record<string, string> = {
   index: 'home', landing: 'home', 'book-now': 'booking', book: 'booking', reservations: 'booking', reserve: 'booking',

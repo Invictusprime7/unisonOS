@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { buildPromptLaunchInput } from '@/services/launch/promptLaunchInput';
 import { buildRequirementCoverage } from '@/services/app-builder/requirementCoverage';
 import type { CreationRequirement } from '@/platform/core/universalCreation';
+import { renderVerticalKnowledge } from '@/services/composition/verticals';
 
 const ids = (requirements: readonly CreationRequirement[] | undefined) => (requirements ?? []).map((requirement) => requirement.id);
 
@@ -29,10 +30,19 @@ describe('1 · Whistle Blower regression', () => {
     expect(input.visionPrompt).toContain('[req:interaction:match-centre]');
   });
 
+  it('knows the sports vertical and proposes its typical pages, marked inferred', () => {
+    expect(creation.vertical).toMatchObject({ packId: 'sports', variantId: 'fan-media' });
+    const inferred = (creation.requirements ?? []).filter((requirement) => requirement.kind === 'page' && requirement.origin === 'inferred');
+    expect(inferred.map((requirement) => requirement.pageRoute)).toEqual(expect.arrayContaining(['/live', '/match-centre']));
+    expect(renderVerticalKnowledge(creation.vertical)).toContain('INDUSTRY KNOWLEDGE (Sports · Fan blog / sports media');
+  });
+
   const pages = [
     { route: '/', filePath: '/src/pages/Home.tsx', title: 'Home', visibleInNav: true },
     { route: '/fixtures', filePath: '/src/pages/Fixtures.tsx', title: 'Fixtures', visibleInNav: true },
     { route: '/blog', filePath: '/src/pages/Blog.tsx', title: 'Blog', visibleInNav: true },
+    { route: '/live', filePath: '/src/pages/Live.tsx', title: 'Live Scores', visibleInNav: true },
+    { route: '/match-centre', filePath: '/src/pages/MatchCentrePage.tsx', title: 'Match Centre', visibleInNav: true },
   ];
   const requirements = [
     ...(creation.requirements ?? []),
@@ -41,9 +51,11 @@ describe('1 · Whistle Blower regression', () => {
 
   it('passes as complete only with original, labelled, routed and navigable source', () => {
     const files = {
-      '/src/App.tsx': router(['Fixtures', 'Blog']),
-      '/src/project-components/site/SiteNav.tsx': nav(['/', '/fixtures', '/blog']),
+      '/src/App.tsx': router(['Fixtures', 'Blog', 'Live', 'MatchCentrePage']),
+      '/src/project-components/site/SiteNav.tsx': nav(['/', '/fixtures', '/blog', '/live', '/match-centre']),
       '/src/pages/Blog.tsx': 'export default function Blog(){return <main>Match reports</main>}',
+      '/src/pages/Live.tsx': 'export default function Live(){return <main>Live</main>}',
+      '/src/pages/MatchCentrePage.tsx': 'export default function MatchCentrePage(){return <main>Match</main>}',
       '/src/pages/Home.tsx': 'import MatchCentre from "../project-components/sports/MatchCentre";\nimport LiveScores from "../project-components/sports/LiveScores";\nimport { motion } from "framer-motion";\nexport default function Home(){return <main><motion.div whileInView={{opacity:1}}><img src="a"/><img src="b"/><img src="c"/></motion.div><section data-ut-section-id="home:match-centre:0" data-ut-section-type="match-centre" data-ut-variant="custom:match-centre"><MatchCentre/></section><section data-ut-section-id="home:hero:0" data-ut-section-type="hero" data-ut-variant="hero:prisma-cinematic"></section><LiveScores/></main>}',
       '/src/pages/Fixtures.tsx': 'import FixtureList from "../project-components/sports/FixtureList";\nexport default function Fixtures(){return <main><FixtureList/></main>}',
       '/src/project-components/sports/MatchCentre.tsx': 'export default function MatchCentre(){return <article><span>Sample data</span>Match centre</article>}',

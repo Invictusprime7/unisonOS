@@ -29,6 +29,12 @@ export interface RequirementCoverageReport {
   provenance: { certifiedSections: number; customSections: number; authoredModules: string[]; adaptedModules: string[] };
   /** One-line owner-facing summary. */
   summary: string;
+  /**
+   * Original site-local modules that implement a requested experience. They
+   * stay in the project; reusable ones are candidates to add to the Unison
+   * library upstream (never copied into the managed design-system source).
+   */
+  promotionCandidates: Array<{ requirementId: string; modulePath: string }>;
 }
 
 export interface CoveragePage {
@@ -113,6 +119,7 @@ export function buildRequirementCoverage(input: {
   const inNavigation = pages.filter((page) => page.visibleInNav !== false && linkedIn(navSources, page.route)).map((page) => page.route);
 
   const items: RequirementCoverageItem[] = [];
+  const promotionCandidates: RequirementCoverageReport['promotionCandidates'] = [];
   const requestedPages: string[] = [];
   for (const requirement of input.requirements) {
     const base = { id: requirement.id, kind: requirement.kind, text: requirement.text };
@@ -136,11 +143,14 @@ export function buildRequirementCoverage(input: {
         break;
       }
       case 'interaction': {
-        const terms = termsOf(requirement.text);
-        const inModule = moduleWords.filter((entry) => mentions(entry.words, terms)).map((entry) => entry.path);
-        const inPage = pageWords.filter((entry) => mentions(entry.words, terms)).map((entry) => entry.path);
+        // Any one phrasing evidences the experience (e.g. "flight status" or a DeparturesBoard module).
+        const phrasings = [requirement.text, ...(requirement.evidenceTerms ?? [])].map(termsOf).filter((terms) => terms.length);
+        const matches = (text: string) => phrasings.some((terms) => mentions(text, terms));
+        const inModule = moduleWords.filter((entry) => matches(entry.words)).map((entry) => entry.path);
+        const inPage = pageWords.filter((entry) => matches(entry.words)).map((entry) => entry.path);
         const customOnPage = pageSources.some((source) => [...source.matchAll(SECTION_VARIANT)]
-          .some((match) => match[1].startsWith('custom:') && mentions(wordsOf(match[0] + match[1]), terms)));
+          .some((match) => match[1].startsWith('custom:') && matches(wordsOf(match[0] + match[1]))));
+        for (const path of inModule) if (!adaptedModules.includes(path)) promotionCandidates.push({ requirementId: requirement.id, modulePath: path });
         items.push({ ...base,
           status: inModule.length || customOnPage ? 'met' : inPage.length ? 'partial' : 'missing',
           evidence: inModule.length ? inModule.map((path) => `implemented in ${path}`)
@@ -169,9 +179,11 @@ export function buildRequirementCoverage(input: {
 
   // Live-data experiences must use clearly labelled sample data unless a real
   // source is connected; fabricated scores or statistics never count as met.
-  const liveRequested = input.requirements.some((requirement) => requirement.kind === 'interaction' && LIVE_DATA.test(requirement.text));
-  if (liveRequested) {
-    const implementing = items.filter((item) => item.kind === 'interaction' && LIVE_DATA.test(item.text) && item.status === 'met')
+  const liveIds = new Set(input.requirements
+    .filter((requirement) => requirement.kind === 'interaction' && (requirement.sampleDataRequired || LIVE_DATA.test(requirement.text)))
+    .map((requirement) => requirement.id));
+  if (liveIds.size) {
+    const implementing = items.filter((item) => liveIds.has(item.id) && item.status === 'met')
       .flatMap((item) => item.evidence.map((line) => line.replace(/^implemented in /, '')))
       .filter((path) => path in files);
     const labelled = implementing.length > 0 && implementing.every((path) => SAMPLE_LABEL.test(files[path] ?? ''));
@@ -204,5 +216,7 @@ export function buildRequirementCoverage(input: {
     },
     provenance: { certifiedSections, customSections, authoredModules, adaptedModules },
     summary,
+    promotionCandidates: promotionCandidates.filter((candidate, index) =>
+      promotionCandidates.findIndex((other) => other.modulePath === candidate.modulePath && other.requirementId === candidate.requirementId) === index),
   };
 }

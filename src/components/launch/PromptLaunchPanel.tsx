@@ -172,6 +172,11 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
                 {review.coverage.summary}
               </p>
             )}
+            {review.coverage && review.coverage.promotionCandidates.length > 0 && (
+              <p className="text-xs text-muted-foreground" data-testid="prompt-launch-promotion">
+                {`${new Set(review.coverage.promotionCandidates.map((candidate) => candidate.modulePath)).size} original part(s) were designed for this site and could be added to the Unison library later.`}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-1 rounded-md border border-border bg-muted p-1">
             <Button size="icon" variant={device === 'desktop' ? 'secondary' : 'ghost'} aria-label="Desktop preview" aria-pressed={device === 'desktop'} onClick={() => setDevice('desktop')}><Monitor /></Button>
