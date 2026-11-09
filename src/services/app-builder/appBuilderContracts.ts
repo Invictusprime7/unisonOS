@@ -115,6 +115,10 @@ function redactUniversalCreation(
     visualRequirements: creation.visualRequirements.map(redact),
     ...(creation.confirmedDirection ? { confirmedDirection: redact(creation.confirmedDirection) } : {}),
     ...(creation.refinements ? { refinements: creation.refinements.map(redact) } : {}),
+    ...(creation.creativeBrief ? {
+      creativeBrief: Object.fromEntries(Object.entries(creation.creativeBrief)
+        .map(([dimension, values]) => [dimension, values.map(redact)])) as unknown as NonNullable<UniversalCreationInput['creativeBrief']>,
+    } : {}),
     ...(creation.requirements ? {
       requirements: creation.requirements.map((requirement) => ({
         ...requirement,
