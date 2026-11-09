@@ -16,7 +16,7 @@ import {
   type AIComposerRequest,
   type AIComposerResponse,
 } from '@/contracts/aiComposerContract';
-import { prepareAICandidate, type PageCheck, type PreparedCandidate } from './aiCandidateGates';
+import { prepareAICandidate, sampleLabelViolations, type PageCheck, type PreparedCandidate } from './aiCandidateGates';
 import type { HomepageVisualLanguage } from '@/services/launch/homepageFirstContract';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from './canonicalAuthoringRequest';
@@ -265,6 +265,16 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       resolveDependencies: input.resolveDependencies,
       pageCheck: input.pageCheck,
     });
+    // Data honesty is checked against the base the request edits, so a fix
+    // round restores the sample label instead of saving live-looking data.
+    const honesty = request.task === 'builder_source_edit' || request.task === 'site_page_repair'
+      ? sampleLabelViolations(input.baseFiles, prepared.nextFiles ?? {}, request.instruction ?? '')
+      : [];
+    if (honesty.length) {
+      prepared.ok = false;
+      prepared.errors = [...prepared.errors, ...honesty.map((failure) => `${failure.path}: ${failure.message}`)];
+      prepared.gates = { ...prepared.gates, passed: false, failures: [...prepared.gates.failures, ...honesty] };
+    }
     lastPrepared = prepared;
     if (prepared.nextFiles) activeAuthorshipTrace().recordFiles('normalizedCandidateFileManifest', prepared.nextFiles, { pageId: request.page.filePath, detail: { attempt } });
     activeAuthorshipTrace().record('validationResult', {

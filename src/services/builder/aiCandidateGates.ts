@@ -19,7 +19,7 @@ import { assertBackendOps } from '@/types/backendOperations';
 import { invalidArbitraryClasses } from './arbitraryClassValidation';
 
 export interface CandidateGateFailure {
-  gate: 'parse' | 'import-graph' | 'empty' | 'affinity' | 'design-source' | 'backend-proposal' | 'css-value';
+  gate: 'parse' | 'import-graph' | 'empty' | 'affinity' | 'design-source' | 'backend-proposal' | 'css-value' | 'data-honesty';
   path: string;
   message: string;
 }
@@ -94,6 +94,26 @@ async function parseFailures(paths: string[], files: Record<string, string>): Pr
     }
   }
   return failures;
+}
+
+const VISIBLE_SAMPLE_LABEL = />[^<>{}]*\b(?:sample|demo|demonstration|illustrative)\b[^<>{}]*<|["'`][^"'`\n]{0,60}\b(?:sample|demo) (?:data|content|scores?|stats?|fixtures?)\b[^"'`\n]{0,60}["'`]/i;
+const OWNER_CHANGES_DATA_LABEL = /\b(?:sample|demo|placeholder|real data|live data|connect(?:ed)? (?:a )?(?:feed|api|data)|label)\b/i;
+
+/**
+ * Data honesty: an edit must not drop the visible "sample data" label from a
+ * file that showed one (live-looking scores and stats would then read as real),
+ * unless the owner's instruction is about that label or real data.
+ */
+export function sampleLabelViolations(
+  baseFiles: Readonly<Record<string, string>>,
+  nextFiles: Readonly<Record<string, string>>,
+  instruction = '',
+): CandidateGateFailure[] {
+  if (OWNER_CHANGES_DATA_LABEL.test(instruction)) return [];
+  return Object.keys(nextFiles)
+    .filter((path) => CODE_RE.test(path) && typeof baseFiles[path] === 'string' && baseFiles[path] !== nextFiles[path])
+    .filter((path) => VISIBLE_SAMPLE_LABEL.test(baseFiles[path]) && !VISIBLE_SAMPLE_LABEL.test(nextFiles[path]))
+    .map((path) => ({ gate: 'data-honesty' as const, path, message: 'Keep the visible "Sample data" label: this component shows demonstration data, and removing the label would present it as real.' }));
 }
 
 /** Run every blocking gate against a built candidate. Pure except for lazy parser load. */

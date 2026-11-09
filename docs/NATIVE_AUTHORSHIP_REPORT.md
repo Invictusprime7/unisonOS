@@ -1,4 +1,4 @@
-# Native AI Authorship Restoration — Sprint 1 report (2026-11-09)
+# Native AI Authorship Restoration — report (2026-11-09, Sprints 1–4)
 
 ## Phase A — where authorship is decided and lost
 
@@ -20,7 +20,7 @@ Restrictive instructions found and retired:
 
 Provenance trace (`src/services/launch/authorshipTrace.ts`, off unless `localStorage['unison:authorship-trace']='1'` or `VITE_UNISON_AUTHORSHIP_TRACE=1`): records `launchPrompt`, `resolvedIntent`, `chosenDirection`, `authorSiteInvocation` (requirement-ID hashes actually in the brief), `rawCandidateFileManifest`, `normalizedCandidateFileManifest` (repair loop and page projection), `validationResult`, `acceptedVfsManifest`, `previewRouteManifest`. Hashes, paths, counts and import edges only. `firstLossBoundary(events)` names the first boundary: before the AI, AI output, normalization, commit or Preview. Read in the browser with `__unisonAuthorshipTraces()`.
 
-Not yet recorded: `artDirectionCandidates`, `designReferences` (Sprint 4 · D).
+`designReferences` (considered/selected certified designs with reasons) is recorded by `designSystemResolver.ts`.
 
 ## Phase B — creative plan
 
@@ -29,8 +29,26 @@ Not yet recorded: `artDirectionCandidates`, `designReferences` (Sprint 4 · D).
 - Pages from an explicit page list in the confirmed direction are kept (origin `confirmed`); prose mentions never add pages.
 - `CREATIVE REQUIREMENTS … END CREATIVE REQUIREMENTS` block is never truncated by `renderOwnerCreativeBrief`; prose is shortened with a pointer to the full prompt. `VISITOR CREATION SPECIFICATION` also carries requirements, confirmed direction and refinements. New string fields are redacted for private routing values.
 
+## Sprints 2–4 — what changed
+
+- C: original `/src/project-components/**` modules are accepted next to certified sections; normalization keeps them byte-for-byte; adapted derivatives carry `// @unison-derived-from <variantId>`.
+- D: certified design retrieval ranks by owner prompt, creative brief, requirements, confirmed direction and refinements inside the sealed registry (never widens it).
+- E: topology fallback inserts a real Home page instead of renaming the first page; coverage requires source + router + navigation for each requested page.
+- F: `requirementCoverage.ts` reports met/partial/missing/unverified per requirement ID (advisory, shown in launch review). Style judgement is reported `unverified`, never inferred. Live-looking data must carry a visible sample label.
+- G: Affinity edits of authored modules run through the canonical Composer gates; a new `data-honesty` gate rejects an edit that drops a visible "Sample data" label unless the owner asked about it.
+- H: three unused duplicate App Builder authorities (`*-3manBeatz.ts`) removed; other `-3manBeatz` artifacts were not audited.
+
+## Live AI evidence (Lovable Cloud test copy, not Unison)
+
+Real Gemini calls through the real App Builder page path (`generatePages` → `generate-page`) and edit path (`edit` → `ai-code-assistant`):
+
+1. Prompt: Whistle Blower bold multi-page live-sports blog, interactive match centre, cinematic motion, labelled sample data. The AI wrote `/src/project-components/sports/MatchCentre.tsx` (26 KB, original: fixture ticker, scoreboard, filterable timeline, stats tab) and `/src/pages/MatchCentre.tsx` importing it. Candidate `ready-for-commit`, no diagnostics, ~55 s.
+2. Rendered in headless Chromium: 4 sections, 10 controls, clicking a fixture switches the match, no runtime errors.
+3. Affinity edit ("ticker in a left sidebar next to the scoreboard"): only the component changed, `ready-for-commit`, two-column layout rendered. The first edit run silently dropped the "(Sample Data)" label — this produced the data-honesty gate; the rerun kept it.
+4. Coverage on that output correctly reported imagery `missing` (no images) and `/blog` `missing` (only one page requested in the probe).
+
 ## Evidence and limits
 
-- `src/test/nativeAuthorshipPolicy.test.ts` (15 checks) plus 23 launch/App Builder/composer suites (276 checks) pass; edge suites pass except one sandbox-env-dependent provider check unrelated to this work.
-- The first-loss test uses recorded synthetic stages, not a live AI run. No Whistle Blower fixture was provided and the authoritative Unison backend is not reachable from this sandbox, so no live generate → render → edit → reopen proof exists yet.
+- Offline: `nativeAuthorshipPolicy` and `nativeAuthorshipMatrix` (Whistle Blower, cinematic music, salon, commerce, SaaS, unfamiliar style) plus 31 launch/App Builder/composer suites pass; App Builder tests cover authored-module acceptance, registry-only output staying incomplete, and source-scoped edits.
+- Not proven: save to a revision and reopen (needs the Unison backend and a signed-in account); a full multi-page launch through the chat UI; matrix scenarios 7 (reopen/edit/publish readiness) and 8 (failure paths); Preview page-selector/export agreement.
 - Server wording reaches users only after Unison redeploys `ai-code-assistant`/`generate-page`.
