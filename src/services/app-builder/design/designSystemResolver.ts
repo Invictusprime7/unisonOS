@@ -4,6 +4,7 @@
  * contract's own sourceSelection / registryContext.
  */
 
+import { activeAuthorshipTrace } from '@/services/launch/authorshipTrace';
 import type { AppBuildContract } from '@/services/app-builder/appBuilderContracts';
 import type { WizardRegistryImplementationSummary } from '@/services/launch/wizardRegistryAggregation';
 import { normalizePageRole } from '@/services/composition/industryCompositionRegistry';
@@ -78,7 +79,14 @@ const STOP_WORDS = new Set(['the', 'and', 'with', 'for', 'that', 'this', 'from',
 export function creativeTermsFor(contract: AppBuildContract, pageRoute?: string): Set<string> {
   const creation = contract.business.universalCreation;
   const page = creation?.pages.find((candidate) => candidate.route === pageRoute);
-  const text = [creation?.originalPrompt, ...(creation?.visualRequirements ?? []), page?.purpose, page?.title]
+  // Creative brief phrases and requirement texts carry the owner's intent even
+  // when the prose is long; page-scoped requirements only rank their page.
+  const brief = creation?.creativeBrief ? Object.values(creation.creativeBrief).flat() : [];
+  const requirements = (creation?.requirements ?? [])
+    .filter((requirement) => !requirement.pageRoute || requirement.pageRoute === pageRoute)
+    .map((requirement) => requirement.text.replace(/^[a-z]+:\s*/, ''));
+  const text = [creation?.originalPrompt, ...(creation?.visualRequirements ?? []), ...brief, ...requirements,
+    creation?.confirmedDirection, ...(creation?.refinements ?? []), page?.purpose, page?.title]
     .filter(Boolean).join(' ').toLowerCase();
   return new Set((text.match(/[a-z][a-z0-9-]{2,}/g) ?? []).filter((term) => !STOP_WORDS.has(term)));
 }
@@ -165,6 +173,19 @@ export function resolveDesignSourceBundle(contract: AppBuildContract): DesignSou
     }
     for (const implementation of ranked) if (pinnedIds.has(implementation.id)) take(implementation);
     eligibleByPage[page.id] = bounded.map((impl) => impl.id);
+    // Selection reasons for diagnostics (no-op unless the authorship trace is on).
+    activeAuthorshipTrace().record('designReferences', {
+      pageId: page.id,
+      counts: { considered: roleFit.length, selected: bounded.length, promptTerms: terms.size },
+      rejections: bounded.slice(0, 12).map((impl) => [
+        impl.id,
+        pinnedIds.has(impl.id) ? 'pinned' : '',
+        roleMatches(impl) ? 'role-fit' : 'role-ranked',
+        creativeFit(impl, terms) ? `prompt-fit:${creativeFit(impl, terms)}` : '',
+        (preferred[impl.sectionType] ?? []).includes(impl.id) ? 'pack-preferred' : '',
+        pageFamilies.has(impl.sectionType) ? 'planned-family' : 'optional-family',
+      ].filter(Boolean).join(' ')),
+    });
   }
 
   const used = new Set(Object.values(eligibleByPage).flat());
