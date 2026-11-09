@@ -25,6 +25,7 @@ import {
 
 const REQUEST_TIMEOUT_MS = 125_000;
 const BACKUP_MIN_WINDOW_MS = 40_000;
+const UNREADABLE_RETRY_MIN_WINDOW_MS = 45_000;
 
 function hasGeminiKey(): boolean {
   return ["GEMINI_API_KEY", "GOOGLE_API_KEY", "UNISONGEMINI_API_KEY"].some((name) => Boolean(Deno.env.get(name)?.trim()));
@@ -44,6 +45,24 @@ async function withDeadline(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Diagnostics only: why a reply failed to parse, without logging its content. */
+function logUnreadableReply(choice: { finish_reason?: unknown; message?: { content?: unknown } } | undefined, usage: unknown): void {
+  const content = choice?.message?.content;
+  const raw = typeof content === "string" ? content : JSON.stringify(content ?? null);
+  let parseError: string | null = null;
+  try {
+    JSON.parse(raw);
+  } catch (error) {
+    parseError = (error instanceof Error ? error.message : String(error)).slice(0, 200);
+  }
+  console.error("[affinity-graphic-design] unreadable reply", JSON.stringify({
+    finish: choice?.finish_reason ?? null,
+    chars: raw.length,
+    usage: usage ?? null,
+    parseError,
+  }));
 }
 
 function providerErrorDetail(text: string): string {
@@ -91,60 +110,60 @@ serve(async (req) => {
       max_tokens: 16_000,
     };
     const startedAt = Date.now();
+    const remainingMs = () => REQUEST_TIMEOUT_MS - (Date.now() - startedAt);
     let response: Response | null = null;
     let timedOut = false;
+    let result: ReturnType<typeof extractGraphicDesignResult> = null;
 
-    // Gemini (the owner's key) leads and owns the whole window; the directly
-    // configured backup runs only when Gemini fails early enough to leave time.
-    if (geminiReady) {
-      const attempt = await withDeadline(REQUEST_TIMEOUT_MS, (signal) => createPlannedChatCompletion(request, signal));
-      timedOut = attempt.timedOut;
-      response = attempt.response;
-      if (response && !response.ok) console.warn("[affinity-graphic-design] gemini failed", response.status);
-    }
-    const remaining = REQUEST_TIMEOUT_MS - (Date.now() - startedAt);
-    if ((!response || !response.ok) && !timedOut && backupReady && remaining >= BACKUP_MIN_WINDOW_MS) {
-      const attempt = await withDeadline(remaining, (signal) => createLastResortGatewayChatCompletion(request, signal));
-      timedOut = attempt.timedOut;
-      if (attempt.response) response = attempt.response;
-    }
+    // A reply that is complete but structurally broken JSON (Gemini sometimes
+    // drops a bracket in long documents) gets one fresh attempt when enough
+    // of the window is left; provider errors and timeouts are never retried.
+    for (let round = 0; round < 2 && !result; round++) {
+      if (round > 0) {
+        if (remainingMs() < UNREADABLE_RETRY_MIN_WINDOW_MS) break;
+        console.warn("[affinity-graphic-design] retrying once after an unreadable reply");
+      }
+      response = null;
+      timedOut = false;
 
-    if (!response) {
-      return errorResponse(
-        timedOut ? "Affinity took too long to finish this design. Nothing was changed. Try again, or ask for something simpler." : "Affinity couldn't reach the AI provider. Nothing was changed.",
-        timedOut ? 504 : 503,
-        corsHeaders,
-      );
-    }
+      // Gemini (the owner's key) leads and owns the whole window; the directly
+      // configured backup runs only when Gemini fails early enough to leave time.
+      if (geminiReady) {
+        const attempt = await withDeadline(remainingMs(), (signal) => createPlannedChatCompletion(request, signal));
+        timedOut = attempt.timedOut;
+        response = attempt.response;
+        if (response && !response.ok) console.warn("[affinity-graphic-design] gemini failed", response.status);
+      }
+      if ((!response || !response.ok) && !timedOut && backupReady && remainingMs() >= BACKUP_MIN_WINDOW_MS) {
+        const attempt = await withDeadline(remainingMs(), (signal) => createLastResortGatewayChatCompletion(request, signal));
+        timedOut = attempt.timedOut;
+        if (attempt.response) response = attempt.response;
+      }
 
-    if (!response.ok) {
-      const detail = providerErrorDetail(await response.text());
-      console.error("[affinity-graphic-design] provider error", response.status, detail);
-      if (response.status === 402) return errorResponse("Your Gemini account is out of credit. Add credit to keep designing. Nothing was changed.", 402, corsHeaders);
-      if (response.status === 429) return errorResponse("The AI provider is rate limiting requests. Wait a minute and try again.", 429, corsHeaders);
-      return errorResponse(`The AI provider couldn't finish this design (${response.status}). Nothing was changed.`, 503, corsHeaders);
-    }
+      if (!response) {
+        return errorResponse(
+          timedOut ? "Affinity took too long to finish this design. Nothing was changed. Try again, or ask for something simpler." : "Affinity couldn't reach the AI provider. Nothing was changed.",
+          timedOut ? 504 : 503,
+          corsHeaders,
+        );
+      }
 
-    const payload = await response.json();
-    const result = extractGraphicDesignResult(payload?.choices?.[0]?.message?.content);
-    if (!result) {
+      if (!response.ok) {
+        const detail = providerErrorDetail(await response.text());
+        console.error("[affinity-graphic-design] provider error", response.status, detail);
+        if (response.status === 402) return errorResponse("Your Gemini account is out of credit. Add credit to keep designing. Nothing was changed.", 402, corsHeaders);
+        if (response.status === 429) return errorResponse("The AI provider is rate limiting requests. Wait a minute and try again.", 429, corsHeaders);
+        return errorResponse(`The AI provider couldn't finish this design (${response.status}). Nothing was changed.`, 503, corsHeaders);
+      }
+
+      const payload = await response.json();
       const choice = payload?.choices?.[0];
-      const raw = typeof choice?.message?.content === "string" ? choice.message.content : JSON.stringify(choice?.message?.content ?? null);
-      console.error("[affinity-graphic-design] unreadable reply", JSON.stringify({
-        finish: choice?.finish_reason ?? null,
-        chars: raw.length,
-        usage: payload?.usage ?? null,
-        head: raw.slice(0, 300),
-        tail: raw.slice(-300),
-        parseError: (() => {
-          try { JSON.parse(raw); return null; } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            const at = Number(/position (\d+)/.exec(message)?.[1] ?? -1);
-            return { message, near: at >= 0 ? raw.slice(Math.max(0, at - 200), at + 120) : null };
-          }
-        })(),
-      }));
-      return errorResponse("Affinity returned a design it couldn't read. Nothing was changed. Try again.", 502, corsHeaders);
+      result = extractGraphicDesignResult(choice?.message?.content);
+      if (!result) logUnreadableReply(choice, payload?.usage);
+    }
+
+    if (!result || !response) {
+      return errorResponse("Affinity returned a design it couldn't read, twice. Nothing was changed. Try again, or ask for something simpler.", 502, corsHeaders);
     }
 
     return secureJsonResponse({
