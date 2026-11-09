@@ -6,6 +6,7 @@
  * never change per vertical.
  */
 import type { CreationRequirement, CreationVertical, UniversalCreationPage } from '@/platform/core/universalCreation';
+import { resolveTopologyPageRoleAlias } from '@/platform/core/siteTopologyPlanner';
 import type { IndustryVerticalPack, VerticalInteraction, VerticalPage, VerticalSubVariant } from './types';
 import { SPORTS } from './sports';
 import { TRAVEL } from './travel';
@@ -167,7 +168,9 @@ export function inferVerticalPages(
   const resolved = variantOf(vertical);
   if (!resolved) return [];
   const routes = new Set(existing.map((page) => page.route.toLowerCase()));
-  const roles = new Set(existing.map((page) => page.suggestedRole).filter((role) => role && role !== 'custom'));
+  // A page's role comes from its suggested role or, when unset, its route ("/blog" → blog).
+  const roleOf = (page: Pick<UniversalCreationPage, 'route' | 'suggestedRole'>) => page.suggestedRole || resolveTopologyPageRoleAlias(page.route) || null;
+  const roles = new Set(existing.map(roleOf).filter((role) => role && role !== 'custom'));
   const pages: VerticalPage[] = [];
   for (const page of resolved.variant.pages) {
     if (pages.length >= limit) break;
