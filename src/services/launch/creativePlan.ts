@@ -47,7 +47,7 @@ const DIMENSIONS: ReadonlyArray<readonly [dimension: keyof CreativeBrief, patter
   ['imagery', /\b(visually rich|image[- ]heavy|image[- ]led|photography|photos?|imagery|illustrations?|videos?|full[- ]bleed (?:images?|photos?|media)|action shots?|immersive imagery|hero (?:image|video)s?)\b/gi],
   ['composition', /\b(magazine[- ]style|editorial layout|asymmetric(?:al)?|bento|split[- ]screen|masonry|full[- ]bleed|long[- ]scroll|dense|airy|whitespace|grid layout|card grid|layered)\b/gi],
   ['motion', /\b(motion|animat(?:e|ed|ion|ions)|cinematic|parallax|scroll[- ]driven|kinetic|reveal(?:s| effects?)?|transitions?|micro[- ]interactions?)\b/gi],
-  ['interactions', /\b(live (?:scores?|updates?|ticker|feed|blog|coverage|commentary|match(?:es)?)|tickers?|countdowns?|filters?|filterable|search(?:able)?|carousels?|sliders?|tabs|accordions?|interactive [a-z]+|polls?|quiz(?:zes)?|calculators?|maps?|comments?|match cent(?:re|er)|fixtures?|standings|league tables?|leaderboards?|scoreboards?|playlists?|audio player|video player|before[- ]and[- ]after)\b/gi],
+  ['interactions', /\b(live (?:scores?|updates?|ticker|feed|blog|coverage|commentary|match(?:es)?)|tickers?|countdowns?|filters?|filterable|search(?:able)?|carousels?|sliders?|tabs|accordions?|interactive [a-z]+|polls?|quiz(?:zes)?|calculators?|maps?|comments?|match cent(?:re|er)|fixtures?|standings|league tables?|leaderboards?|scoreboards?|playlists?|audio player|video player|before[- ]and[- ]after|dashboards?|charts?|analytics|artist showcase|lookbook|product configurator|booking calendar)\b/gi],
 ];
 
 const NEGATION = /\b(?:no|not|without|avoid|exclude|omit|skip|never|don't|do not|doesn't|does not|less|fewer)\b(?:\s+\w+){0,3}\s*$/i;
