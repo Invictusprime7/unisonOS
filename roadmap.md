@@ -1,12 +1,14 @@
 # Roadmap
 
 ## Active: UPG-01 prompt-first creation (2026-11-09)
-- [ ] A — Trace call graph, first lost creative authority, ownership inventory (docs/UPG-01_REPORT.md)
-- [ ] B — Original prompt + refinements carried as primary creative authority into every page brief
-- [ ] C — One REUSE / ADAPT / AUTHOR policy for page authoring; mixed certified + site-local sections validated together
-- [ ] D — Prompt-aware design retrieval; page-role labels rank, not exclude, for open-ended creation
-- [ ] E — Safe per-build diagnostics (prompt hash, mode, reuse/original counts, fallback)
-- [ ] F — Chat is the only new-site entry; guided Wizard, onboarding gate and Builder "New site" wizard retired
+- [x] A — Trace call graph, first lost creative authority, ownership inventory (docs/UPG-01_REPORT.md)
+- [x] B — Original prompt + refinements carried as primary creative authority into every page brief
+- [x] C — One REUSE / ADAPT / AUTHOR policy for page authoring; mixed certified + site-local sections validated together
+- [x] D — Prompt-aware design retrieval; page-role labels rank, not exclude, for open-ended creation
+- [x] E — Safe per-build diagnostics (prompt hash, mode, reuse/original counts, fallback)
+- [x] F — Chat is the only new-site entry (Home, Live Demo, Onboarding, Builder "New site"); guided Wizard unmounted
+- [ ] G — Delete LauncherWizard, interview drafts and guided-step code once its compatibility tests are retired (3 of its flow tests already fail before this change)
+- [ ] Redeploy Unison's `ai-code-assistant` so the planning chat stops emitting guided-step markers
 - [ ] Live browser generation, edit, reopen and publish across scenarios (needs signed-in Unison session + deployment)
 
 ## Active: GitHub Vercel deployment (2026-11-02)
