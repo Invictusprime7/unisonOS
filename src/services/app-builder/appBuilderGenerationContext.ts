@@ -272,7 +272,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     'Forms are interaction widgets, not body-section layouts: never use a bare <form>, Form, or *Form component as a standalone section or the only content on a page. Embed form controls within a purposeful, planned section that includes visible context and authored layout.',
     'Use @/unison/ui/form-fields controls and @/unison/ui/button actions for form UI. Every field needs a visible label and semantic theme tokens.',
     'Certified design sources are rendered only through their @/unison/design-sources/<Family> dispatchers with a listed variantId; never import raw 21st.dev or vendor source directly. Registered functional hosts may be included only when the canonical contract assigns them.',
-    'Only emit form actions and data-ut-intent values covered by the registered intents and exact Wizard CTA markers in this contract. A design component does not authorize a new action or intent.',
+    'Only emit form actions and data-ut-intent values covered by the registered intents and exact canonical CTA markers in this contract. A design component does not authorize a new action or intent.',
     'A contact, quote, newsletter, or lead-capture form does not imply a floating chat widget. Add chat only when the owner explicitly requests it, and only wire it to an intent registered in this contract.',
   ].join('\n');
   const checkoutRequiresPaymentSetup = business.registeredComponents.some((component) =>
