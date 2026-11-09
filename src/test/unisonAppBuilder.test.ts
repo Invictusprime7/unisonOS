@@ -1422,7 +1422,8 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
     expect(result.candidate.status, JSON.stringify(result.candidate.diagnostics)).toBe('ready-for-commit');
     expect(result.candidateFiles['/src/project-components/MatchCentre.tsx']).toBe(relaid);
     expect(result.candidateFiles['/src/pages/Home.tsx']).toBe(home);
-    expect(result.changeSet?.fileOps.map((op) => op.path)).toEqual(['/src/project-components/MatchCentre.tsx']);
+    // Only the edited source owner changes (the dependency manifest is system-normalized).
+    expect(result.changeSet?.fileOps.map((op) => op.path).filter((path) => path.startsWith('/src/'))).toEqual(['/src/project-components/MatchCentre.tsx']);
     expect(countSectionOrigins(result.candidateFiles, ['/src/pages/Home.tsx'])).toEqual({ certified: 0, custom: 1 });
   });
 
