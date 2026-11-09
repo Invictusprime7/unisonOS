@@ -136,6 +136,13 @@ serve(async (req) => {
         usage: payload?.usage ?? null,
         head: raw.slice(0, 300),
         tail: raw.slice(-300),
+        parseError: (() => {
+          try { JSON.parse(raw); return null; } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            const at = Number(/position (\d+)/.exec(message)?.[1] ?? -1);
+            return { message, near: at >= 0 ? raw.slice(Math.max(0, at - 200), at + 120) : null };
+          }
+        })(),
       }));
       return errorResponse("Affinity returned a design it couldn't read. Nothing was changed. Try again.", 502, corsHeaders);
     }
