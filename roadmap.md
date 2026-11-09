@@ -1,14 +1,23 @@
 # Roadmap
 
+## Active: Native AI authorship restoration (guide 2026-11-09)
+- [ ] Sprint 1 · A — call graph, history search, build-stage provenance trace (flagged) + first-loss-boundary test
+- [ ] Sprint 1 · B — creative plan (requirements with IDs, creative brief, refinements, multi-page), no silent Modern, retire registry-only directives, never drop the brief
+- [ ] Sprint 2 · C — original multi-file TSX + mixed certified/custom acceptance, non-destructive normalization, adapted derivatives
+- [ ] Sprint 3 · E — multi-page intent and route visibility (registry, nav, Preview selector, export agree)
+- [ ] Sprint 3 · F — requirement coverage report; registry-only output cannot pass the sports fixture
+- [ ] Sprint 4 · D — intent-aware design retrieval; G — Affinity edits authored sections; H — audited legacy retirement
+- [ ] Test matrix (8 scenarios) + live generate → render → edit → reopen evidence (needs a working AI backend session)
+
 ## Active: Affinity Graphics — prompt-first print & graphic design (2026-11-09)
-- [ ] Graphic formats: flyers, posters, banners, business cards (front/back), letterheads — print sizes with bleed and safe area
-- [ ] One editable graphic document; Affinity creates it from a description and edits it by asking (whole document returned, validated)
-- [ ] Import references (logo, photos to use, style inspiration) from device or Files
-- [ ] Design check from the beginner tips (2–3 colours, big headline, white space, alignment/safe area, contrast, tiny print) with "Fix with Affinity"
-- [ ] Export PNG/JPG, PDF for print (with bleed), Save to Files
-- [ ] Entry points: Home Affinity chat hands graphic requests to Design Studio; Design Studio's Affinity panel replaces the old canvas AI helpers
-- [ ] Backend service `affinity-graphic-design` (Gemini first, existing backup policy) — needs Unison deployment
-- [ ] Tests + real-browser render/export check
+- [x] Graphic formats: flyers, posters, banners, business cards (front/back), letterheads — print sizes with bleed and safe area
+- [x] One editable graphic document; Affinity creates it from a description and edits it by asking (whole document returned, validated)
+- [x] Import references (logo, photos to use, style inspiration) from device or Files
+- [x] Design check from the beginner tips with "Fix with Affinity"
+- [x] Export PNG/JPG, PDF for print (with bleed), Save to Files
+- [x] Entry points: Home Affinity chat hands graphic requests to Design Studio; Design Studio's Affinity tab replaces the old canvas AI helpers
+- [x] Repair Gemini's occasional bracket slips; one retry for unreadable replies (22/22 test designs after fix)
+- [ ] Deploy `affinity-graphic-design` to Unison and run one signed-in create → photo → save-to-Files check
 
 ## Active: UPG-01 prompt-first creation (2026-11-09)
 - [x] A — Trace call graph, first lost creative authority, ownership inventory (docs/UPG-01_REPORT.md)
