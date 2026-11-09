@@ -222,7 +222,7 @@ export function repairJsonStructure(text: string): string {
       continue;
     }
     if (/\s/.test(ch)) { out += ch; continue; }
-    if ((ch === "{" || ch === "[" || ch === "\"") && (last === "}" || last === "]" || (last === "\"" && stack[stack.length - 1] === "]"))) {
+    if ((ch === "{" || ch === "[" || ch === "\"") && (last === "}" || last === "]" || last === "\"")) {
       out += ",";
     }
     if (ch === "\"") { inString = true; out += ch; continue; }
