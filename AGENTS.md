@@ -4,7 +4,7 @@
 - Load Unison tokens last; hero effects opt in via theme bridge. Why: protect vendor skins.
 - Demo counts settle with canonical revisions. Why: count only saved generations.
 
-- `LauncherWizard` captures intent and invokes orchestration, never authors or mutates VFS. Why: selection-only ownership.
+- New projects start only in the Affinity chat: `PromptLaunchPanel` runs `runLaunchPipeline` with `buildPromptLaunchInput` and never authors or mutates VFS; `LauncherWizard` is unmounted compatibility code pending removal. Why: one creation surface and one launch path.
 - `UnisonAppBuilder` is the sole fresh-launch application author; `generate-page` reuses Composer and saved Home design. Why: no parallel writer.
 - The canonical platform owns topology/routes, capabilities/intents/bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation; never generate competing pages after App Builder authorship.
 - `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
@@ -21,7 +21,7 @@
 - Both modes enforce sealed section order/archetypes; AI requires every requested page authored. Starter variants use legal pins, geometry and seed. Why: prevent sparse pages and baseline-as-AI acceptance.
 - Live-VFS commits absorb pending ops recorded before capture and advance the autosave baseline; pending ops conflict only off another base revision. Why: lagging baselines raised false conflicts.
 
-- Chat/Wizard share `src/services/launch/chatLaunchPlan.ts`; chat prefills Wizard; `buildSyncedVisionBrief` prioritizes final selections; page briefs lead with composition target/design contract. Why: prevent input drift and crowded-out design context.
+- The owner's original prompt leads every brief (`buildSyncedVisionBrief`, `renderOwnerCreativeBrief`); plan values are revisable defaults and page authoring uses the single REUSE/ADAPT/AUTHOR policy in `app-builder/creativeAuthorityPolicy.ts`. Why: competing registry-only and custom-only rules flattened prompts into generic templates.
 - Agent tools use enforced dispatch; proposals use `runBuilderAiMutation` → `commitMutation`. Capture live VFS/revision together; refuse stale preparation/selection. Resolve prompted parts to visible-page source owners; refuse only incomplete target reads. Why: guessed pages changed unrelated content.
 - Direct preview edits prefer exact source-locator spans and restrict writes to the clicked owner; structural actions share the toolbar save path. Inspector family recovery uses registered variants/slots and live composition. Why: runtime selectors and active-page-only deletes missed imported sections or edited lookalikes.
 - Toolbar executors follow property-owner routing: JSX move/delete/duplicate use source, styling and visibility use presentation. Why: a presentation-only move handler was unreachable and rejected every reorder before saving.

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { AIAssistantCore, type QuickAction } from "@/components/ai/AIAssistantCore";
 import { siteDiscoveryMessagesKey } from "@/components/ai/siteDiscoveryPersistence";
-import { LauncherWizard } from "@/components/onboarding/wizard/LauncherWizard";
+import { PromptLaunchPanel } from "@/components/launch/PromptLaunchPanel";
 import { MarketplaceCatalog } from '@/marketplace/MarketplaceCatalog';
 
 
@@ -225,26 +225,14 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               aiMode="site-discovery"
               persistenceKey={user ? siteDiscoveryMessagesKey(user.id) : undefined}
               onContinueToWizard={onSiteConfirmed}
+              onSiteConfirmed={onSiteConfirmed}
               onDiscoveryStarted={() => setDiscoveryActive(true)}
-              discoverySelections={(turn, answer) => <LauncherWizard
-                open
-                presentation="chat"
-                draftScope={user?.id ?? 'anonymous'}
-                guidedStep={turn.step}
-                guidancePending={turn.pending}
-                initialVisionPrompt={turn.brief}
-                onSelectionConfirmed={answer}
-                onOpenChange={onLauncherOpenChange}
-                onLaunchComplete={() => setChatResetKey(key => key + 1)}
-              />}
               selectionActive={launcherOpen}
-              conversationContent={launcherOpen ? <LauncherWizard
-                open
+              conversationContent={launcherOpen && launchBrief ? <PromptLaunchPanel
+                brief={launchBrief}
                 demoGeneration={demoGeneration}
-                presentation="chat"
                 draftScope={user?.id ?? 'anonymous'}
-                initialVisionPrompt={launchBrief}
-                onOpenChange={onLauncherOpenChange}
+                onClose={() => onLauncherOpenChange(false)}
                 onLaunchComplete={() => setChatResetKey(key => key + 1)}
               /> : undefined}
               onBeforeSend={() => {
@@ -260,7 +248,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
             />
             </div>
             <p className="mt-2 text-center text-xs text-white/40">
-              {launcherOpen || discoveryActive ? "Choose an option or reply in chat. Create your site when you're ready." : "Describe your idea or choose a starting point above"}
+              {launcherOpen || discoveryActive ? "Reply in chat to refine your idea. Create your site when you're ready." : "Describe your idea or choose a starting point above"}
             </p>
           </motion.div>
           </div>

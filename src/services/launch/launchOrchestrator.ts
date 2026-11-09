@@ -278,7 +278,7 @@ async function runReservedLaunchPipeline(
         ? plannedCreation
         : { ...plannedCreation, requestedCapabilities: creationInput.requestedCapabilities };
     } catch {
-      callbacks.onStatus?.('Using the Wizard plan; AI planning was unavailable');
+      callbacks.onStatus?.('Using the plan derived from your prompt; AI planning was unavailable');
     }
   }
   const baseline = submitted.template || (openEnded

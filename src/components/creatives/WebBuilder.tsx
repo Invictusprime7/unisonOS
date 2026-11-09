@@ -382,7 +382,6 @@ import { vfsEventBus } from '@/services/vfsEventBus';
 import { useLaunch } from "@/contexts/useLaunchHooks";
 import { ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose, ArrowLeft, Download, SlidersHorizontal } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LauncherWizard } from "@/components/onboarding/wizard/LauncherWizard";
 import {
   Dialog,
   DialogContent,
@@ -759,7 +758,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   // The builder is independently usable for blank and restored projects.
   // Opening the launcher here creates a modal backdrop over every direct
   // /web-builder visit and makes the shell appear frozen.
-  const [showLauncher, setShowLauncher] = useState(false);
   const routeStateHasStructuredProject = !!(
     effectiveRouteState?.vfsFiles ||
     effectiveRouteState?.siteBundleSnapshot?.vfsFiles ||
@@ -1383,7 +1381,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       setProjectDisplayName(template.name);
       setSaveProjectDescription(template.description || '');
       setBuilderMode('preview');
-      setShowLauncher(false);
       return true;
     }
 
@@ -1415,7 +1412,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     setSaveProjectName(template.name);
     setProjectDisplayName(template.name);
     setSaveProjectDescription(template.description || '');
-    setShowLauncher(false);
     return true;
   // importBuilderFiles is declared after this hook in the file; removing it from deps
   // avoids a temporal dead zone (TDZ) ReferenceError at render time. The closure body
@@ -5477,7 +5473,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           // Check if there's meaningful content (not just default)
           const isDefaultContent = draft.code?.includes('AI-generated code will appear here');
           if (!isDefaultContent) {
-            setShowLauncher(false);
             if (hasRecoveredVfs) {
               if (draft.pendingRemote) restorePendingVfsOperations(draft.pendingVfsOperations, null);
               // canonical-vfs-exempt: hydration of a saved draft into the working set
@@ -7856,8 +7851,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     >
     <BusinessProfileProvider businessId={businessId || undefined} projectId={resolvedProjectId || null}>
     <div ref={mainContainerRef} className={cn("wb-obsidian flex min-h-[100dvh] h-[100dvh] flex-col overflow-hidden bg-[#09090b]", isMobile && "pb-16")}>
-      {/* Launcher is opened only by an explicit user flow. */}
-      <LauncherWizard open={showLauncher} onOpenChange={setShowLauncher} draftScope={currentUserId ?? 'anonymous'} />
 
       {/* Interactive Element Highlighting Styles */}
       <InteractiveElementHighlight isInteractiveMode={isInteractiveMode} />
@@ -9450,7 +9443,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
             <Button variant="outline" onClick={() => { setMobileActionsOpen(false); setPlaygroundInitialBindingId(undefined); setPlaygroundModalOpen(true); }} className="justify-start border-white/10 bg-white/[0.03] text-white hover:bg-cyan-500/10">
               <Layers className="mr-2 h-4 w-4 text-emerald-400" /> Playground
             </Button>
-            <Button variant="outline" onClick={() => { setMobileActionsOpen(false); setShowLauncher(true); }} className="justify-start border-white/10 bg-white/[0.03] text-white hover:bg-cyan-500/10">
+            <Button variant="outline" onClick={() => { setMobileActionsOpen(false); navigate('/'); }} className="justify-start border-white/10 bg-white/[0.03] text-white hover:bg-cyan-500/10">
               <Sparkles className="mr-2 h-4 w-4 text-fuchsia-400" /> New site
             </Button>
           </div>

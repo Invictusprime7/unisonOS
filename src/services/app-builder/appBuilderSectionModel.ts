@@ -848,7 +848,9 @@ export function inspectAppBuilderPageSections(
             legacyRendererName = legacy.legacyRendererName;
           }
           if (renderer.matches !== 1 || !renderer.name || !renderer.props) {
-            issues.push(`${pagePath}: section "${sectionId}" must use its registered family dispatcher and literal serializable props.`);
+            issues.push(variantId.startsWith('custom:')
+              ? `${pagePath}: section "${sectionId}" must render exactly one site-local default-exported component from /src/project-components/ or /src/components/generated/ for its custom variant.`
+              : `${pagePath}: section "${sectionId}" must use its registered family dispatcher and literal serializable props.`);
           } else {
             sections.push({
               sectionId,

@@ -29,9 +29,9 @@ describe('App Builder context recovery', () => {
       for (const page of c.contract.topology.sitePlan.pages) {
         const context = generation.runtimeContextForPage(page.id);
         expect(context.length).toBeLessThanOrEqual(COMPOSER_CONTEXT_LIMIT);
-        expect(context).toContain('ORIGINAL BODY DESIGN IS REQUIRED');
+        expect(context).toContain('SECTION AUTHORING POLICY');
         expect(context).toContain('custom:<kebab-slug>');
-        expect(context).toContain('Do not import or render registry design-source modules');
+        expect(context).not.toContain('Do not import or render registry design-source modules');
         expect(context).not.toContain('use only listed IDs');
         expect(context).toContain('FORM');
         expect(context).toContain('CANONICAL INTENT BINDINGS');

@@ -644,6 +644,8 @@ export interface AppBuildCandidateProvenance {
   sourceHash: string;
   authoredPageIds: readonly string[];
   strategy: 'ai-candidate' | 'ai-candidate+closure-repair' | 'legacy-commit-adapter' | 'deterministic-scaffold';
+  /** Body-section origins across generated pages: certified registry designs vs site-local source. */
+  sectionOrigins?: { certified: number; custom: number };
 }
 
 export interface AppBuildCandidateClosureIssue {

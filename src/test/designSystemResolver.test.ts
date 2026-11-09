@@ -100,15 +100,16 @@ describe('DesignSystemResolver', () => {
 });
 
 describe('AppBuilderGenerationContext (R0/R1)', () => {
-  it('requires original body design while keeping forms on-system and chat opt-in', async () => {
+  it('offers mixed reuse and original body design while keeping forms on-system and chat opt-in', async () => {
     const { buildAppBuilderGenerationContext } = await import('@/services/app-builder/appBuilderGenerationContext');
     const context = buildAppBuilderGenerationContext(buildAppBuildContract(makeInput([])));
 
     expect(context.runtimeContext).toContain('@/unison/ui/form-fields');
-    expect(context.runtimeContext).toContain('ORIGINAL BODY DESIGN IS REQUIRED');
-    expect(context.runtimeContext).toContain('Do not import or render registry design-source modules');
+    expect(context.runtimeContext).toContain('SECTION AUTHORING POLICY');
+    expect(context.runtimeContext).toContain('Certified design sources are rendered only through their @/unison/design-sources/<Family> dispatchers');
+    expect(context.runtimeContext).not.toContain('Do not import or render registry design-source modules');
     expect(context.runtimeContext).toContain('A contact, quote, newsletter, or lead-capture form does not imply a floating chat widget');
-    expect(context.runtimeContext).toContain('registered intents and exact Wizard CTA markers');
+    expect(context.runtimeContext).toContain('registered intents and exact canonical CTA markers');
   });
 
   it('derives runtime policy from the contract and reports design-source usage', async () => {
@@ -126,7 +127,7 @@ describe('AppBuilderGenerationContext (R0/R1)', () => {
     expect(bare.primitiveOnlyPages).toEqual(['page-home']);
   });
 
-  it('keeps seeded variant eligibility deterministic without exposing renderable registry variants', async () => {
+  it('keeps seeded variant eligibility deterministic and lists only materialized certified options', async () => {
     const { buildAppBuilderGenerationContext } = await import('@/services/app-builder/appBuilderGenerationContext');
     const implementations = [
       impl('hero:alpha', 'hero'), impl('hero:beta', 'hero'), impl('hero:gamma', 'hero'),
@@ -140,12 +141,14 @@ describe('AppBuilderGenerationContext (R0/R1)', () => {
     const first = contextFor('project-seed-a');
     const firstPrompt = first.runtimeContextForPage('page-home', 12_000);
 
-    expect(firstPrompt).toContain('READ-ONLY REGISTRY VOCABULARY');
+    expect(firstPrompt).toContain('CERTIFIED DESIGN VOCABULARY');
     expect(firstPrompt).toContain('PAGE-SCOPED REGISTRY CONTEXT');
     expect(firstPrompt).toContain('Do not use registered variants from other pages');
-    expect(firstPrompt).toContain('ORIGINAL BODY DESIGN IS REQUIRED');
+    expect(firstPrompt).toContain('SECTION AUTHORING POLICY');
+    expect(firstPrompt).toContain('AUTHORITY ORDER');
     expect(firstPrompt).toContain('Forms are interaction widgets, not body-section layouts');
     expect(firstPrompt).toContain('Every section must render meaningful visible content');
+    // Fixture implementations have no materialized module, so none is offered for REUSE.
     expect(firstPrompt).not.toContain('hero:alpha');
     expect(new Set(heroEligibility('project-seed-a'))).toEqual(new Set(['hero:alpha', 'hero:beta', 'hero:gamma']));
     expect(heroEligibility('project-seed-a')).toEqual(heroEligibility('project-seed-a'));
@@ -208,9 +211,9 @@ describe('AppBuilderGenerationContext (R0/R1)', () => {
     const unrelated = context.runtimeContextForPage('unrelated-page', 12_000);
 
     expect(home).toContain('VERIFIED COMPONENT-CAPABILITY PROJECTION');
-    expect(home).toContain('ORIGINAL BODY DESIGN IS REQUIRED');
+    expect(home).toContain('SECTION AUTHORING POLICY');
     expect(home).toContain('custom:<kebab-slug>');
-    expect(home).toContain('Do not import or render registry design-source modules');
+    expect(home).not.toContain('Do not import or render registry design-source modules');
     expect(home).toContain('cmp-contact');
     expect(home).toContain('required capabilities contact');
     expect(home).toContain('form-contact');
@@ -218,7 +221,7 @@ describe('AppBuilderGenerationContext (R0/R1)', () => {
     expect(home).toContain('intent-exec');
     expect(home).toContain('cta.form-submit');
     expect(home).not.toContain('Preserve every planned section');
-    expect(home).toContain('READ-ONLY REGISTRY VOCABULARY: available semantic families are hero');
+    expect(home).toContain('CERTIFIED DESIGN VOCABULARY: certified families available on this page are hero');
     expect(home).not.toContain('hero:pricing-only');
     expect(unrelated).not.toContain('cmp-contact');
     expect(unrelated).not.toContain('form-contact');
