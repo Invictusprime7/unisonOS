@@ -4,10 +4,12 @@
 - [x] Sprint 1 · A — call graph, history search, build-stage provenance trace (flagged) + first-loss-boundary test (docs/NATIVE_AUTHORSHIP_REPORT.md)
 - [x] Sprint 1 · B — creative plan (requirements with IDs, creative brief, refinements, multi-page), no silent Modern, retire registry-only directives, never drop the brief
 - [ ] Redeploy Unison `ai-code-assistant`/`generate-page` (server policy wording) — needs Unison deployment
-- [ ] Sprint 2 · C — original multi-file TSX + mixed certified/custom acceptance, non-destructive normalization, adapted derivatives
-- [ ] Sprint 3 · E — multi-page intent and route visibility (registry, nav, Preview selector, export agree)
-- [ ] Sprint 3 · F — requirement coverage report; registry-only output cannot pass the sports fixture
-- [ ] Sprint 4 · D — intent-aware design retrieval; G — Affinity edits authored sections; H — audited legacy retirement
+- [x] Sprint 2 · C — original multi-file TSX + mixed certified/custom acceptance, non-destructive normalization, adapted derivatives (live AI proof on test copy)
+- [ ] Sprint 3 · E — multi-page route visibility: Home fallback + router/nav coverage done; Preview selector/export agreement not verified
+- [x] Sprint 3 · F — requirement coverage report; registry-only output cannot pass the sports fixture
+- [x] Sprint 4 · D — intent-aware design retrieval; G — Affinity edits authored sections (live AI proof) + data-honesty gate
+- [ ] Sprint 4 · H — legacy retirement: 3 duplicate App Builder files removed; remaining `-3manBeatz` artifacts unaudited
+- [ ] Save → reopen → publish-readiness proof and matrix scenarios 7–8 — blocked on Unison deployment + signed-in session
 - [ ] Test matrix (8 scenarios) + live generate → render → edit → reopen evidence (needs a working AI backend session)
 
 ## Active: Affinity Graphics — prompt-first print & graphic design (2026-11-09)
