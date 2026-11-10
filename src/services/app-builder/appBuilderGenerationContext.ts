@@ -336,11 +336,11 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 2, text: commerceSetupContext },
     { priority: 4, text: 'Portable recipe identity: pass stable sectionId from the page composition and componentInstanceId only from an existing canonical functional instance; never invent cmp_ IDs or substitute an implementation ID for an instance ID. Local toggles are component state, not data-ut-intent. Auth submit forms use data-intent-form="auth.login"/"auth.register"; auth.login/auth.register click bindings only open/focus auth.' },
     { priority: 3, text: `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}. Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.` },
-    { priority: 3, trimmable: true, text: templateVerticalContext },
     { priority: 4, text: industryContext },
     { priority: 4, text: logoContext },
     { priority: 4, text: iconContext },
     { priority: 4, text: `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.` },
+    { priority: 5, trimmable: true, text: templateVerticalContext },
     { priority: 5, text: `Protected paths: ${runtime.protectedPaths.join(', ')}.` },
     { priority: 5, text: `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.` },
   ], budget);

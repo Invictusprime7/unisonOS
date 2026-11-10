@@ -235,7 +235,10 @@ export function matchVerticalPageName(name: string, preferredPackId?: string): V
         const title = singular(page.title);
         const slug = singular(page.route.replace(/^\//, ''));
         if (key === title || key === slug) return page;
-        if (!prefix && (key.startsWith(`${title} `) || key.startsWith(`${slug} `))) prefix = page;
+        // Prefix matches ("tour dates" → Tour) stay inside the site's own trade
+        // when it is known: "product details" on a store is not SaaS's Product page.
+        const prefixScope = !preferredPackId || pack.id === preferredPackId;
+        if (!prefix && prefixScope && (key.startsWith(`${title} `) || key.startsWith(`${slug} `))) prefix = page;
       }
     }
   }
