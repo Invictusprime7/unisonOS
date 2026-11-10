@@ -36,11 +36,12 @@ async function readDirectory(dir: FsDirEntry): Promise<FsEntry[]> {
 /** Must be called synchronously inside the drop handler; entries are captured first. */
 export function collectDroppedImportInput(dt: DataTransfer): Promise<DroppedImportCollection> {
   const items = Array.from(dt.items ?? []);
-  const entries = items
-    .map((item) => (item.kind === 'file' && typeof (item as DataTransferItem & { webkitGetAsEntry?: () => FsEntry | null }).webkitGetAsEntry === 'function'
-      ? (item as DataTransferItem & { webkitGetAsEntry: () => FsEntry | null }).webkitGetAsEntry()
-      : null))
-    .filter((entry): entry is FsEntry => Boolean(entry));
+  const entries: FsEntry[] = [];
+  for (const item of items) {
+    if (item.kind !== 'file' || typeof item.webkitGetAsEntry !== 'function') continue;
+    const entry = item.webkitGetAsEntry() as unknown as FsEntry | null;
+    if (entry) entries.push(entry);
+  }
   const plainFiles = Array.from(dt.files ?? []);
 
   return (async () => {

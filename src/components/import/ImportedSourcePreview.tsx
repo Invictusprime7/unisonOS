@@ -132,9 +132,8 @@ export function ImportedSourcePreview({ records, files, className }: {
         )}
         {showDetails && (
           <div className="absolute inset-0 overflow-auto bg-background">
-            <ImportedSourcePreviewStatus records={records} adapter={adapter} running className="rounded-none border-0" />
             {served && served.diagnostics.length > 0 && (
-              <div className="mx-auto w-full max-w-xl px-6 pb-6">
+              <div className="mx-auto w-full max-w-xl px-6 pt-6">
                 <p className="mb-2 text-xs font-medium text-foreground">Things the original page asks for that this preview could not supply</p>
                 <ul className="space-y-1 text-xs text-muted-foreground">
                   {served.diagnostics.slice(0, 20).map((d, i) => (
@@ -145,6 +144,7 @@ export function ImportedSourcePreview({ records, files, className }: {
                 </ul>
               </div>
             )}
+            <ImportedSourcePreviewStatus records={records} adapter={adapter} running className="h-auto overflow-visible rounded-none border-0" />
           </div>
         )}
       </div>

@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { AIAssistantCore, type QuickAction } from "@/components/ai/AIAssistantCore";
 import { siteDiscoveryMessagesKey } from "@/components/ai/siteDiscoveryPersistence";
 import { PromptLaunchPanel } from "@/components/launch/PromptLaunchPanel";
+import { AffinityImportDropZone } from "@/components/import/AffinityImportDropZone";
 import { GraphicHandoffCard } from "@/components/launch/GraphicHandoffCard";
 import { detectGraphicRequest, type GraphicRequest } from "@/services/graphic-design/graphicIntent";
 import { MarketplaceCatalog } from '@/marketplace/MarketplaceCatalog';
@@ -281,6 +282,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               <Sparkles className="h-4 w-4 text-cyan-300" />
               <span>What would you like to build?</span>
             </div>
+            <AffinityImportDropZone signedIn={Boolean(user)} onAuthRequired={onAuthRequired} disabled={demoGeneration}>
             <div className={chatGlow ? "affinity-home-chat-glow" : undefined}>
             <AIAssistantCore
               key={`${user ? `site-discovery:${user.id}` : "site-discovery:anonymous"}:${chatResetKey}`}
@@ -323,8 +325,9 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               hideHeader
             />
             </div>
+            </AffinityImportDropZone>
             <p className="mt-2 text-center text-xs text-white/40">
-              {launcherOpen || discoveryActive ? "Reply in chat to refine your idea. Create your site when you're ready." : "Describe your idea or pick one of the floating ideas"}
+              {launcherOpen || discoveryActive ? "Reply in chat to refine your idea. Create your site when you're ready." : demoGeneration ? "Describe your idea or pick one of the floating ideas" : "Describe your idea, or drop in an existing project to import it unchanged"}
             </p>
           </motion.div>
           </div>
