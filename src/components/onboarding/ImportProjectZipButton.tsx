@@ -13,10 +13,10 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Upload, Loader2, FolderArchive, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { persistLauncherHandoff } from '@/services/launcherHandoffPersistence';
-import { createLaunchState } from '@/types/launchState';
 import { ImportIntakeError } from '@/services/import/secureIntake';
 import { importExternalProject, type ExternalImportInput, type ExternalImportStage } from '@/services/import/externalProjectImport';
+import { collectDroppedImportInput } from '@/services/import/droppedImportInput';
+import { importedToastDescription, prepareImportedProjectHandoff } from '@/services/import/importHandoff';
 
 interface ImportProjectZipButtonProps {
   /** Visual variant — pill (chip) or block (large dropzone card). */
@@ -28,20 +28,12 @@ interface ImportProjectZipButtonProps {
   className?: string;
 }
 
-const STAGE_LABEL: Record<ExternalImportStage, string> = {
+export const IMPORT_STAGE_LABEL: Record<ExternalImportStage, string> = {
   reading: 'Reading files…',
   checking: 'Checking files…',
   'saving-assets': 'Saving images and fonts…',
   'saving-version': 'Saving the first version…',
 };
-
-function pickEntryPoint(files: Record<string, string>, entrypoints: string[]): string {
-  const preferred = entrypoints.map((p) => `/${p}`).find((p) => /\.(tsx|jsx|ts|js)$/.test(p) && p in files);
-  return preferred
-    ?? Object.keys(files).find((p) => /^\/src\/.+\.(tsx|jsx)$/.test(p))
-    ?? Object.keys(files).find((p) => !p.startsWith('/.unison-import/'))
-    ?? '/index.html';
-}
 
 export const ImportProjectZipButton = ({
   variant = 'pill',
@@ -58,51 +50,14 @@ export const ImportProjectZipButton = ({
 
   const runImport = useCallback(
     async (input: ExternalImportInput) => {
-      setStage(STAGE_LABEL.reading);
+      setStage(IMPORT_STAGE_LABEL.reading);
       try {
         const result = await importExternalProject(input, {
           businessId,
-          onStage: (next, detail) => setStage(detail ? `${STAGE_LABEL[next].replace(/…$/, '')} (${detail})…` : STAGE_LABEL[next]),
+          onStage: (next, detail) => setStage(detail ? `${IMPORT_STAGE_LABEL[next].replace(/…$/, '')} (${detail})…` : IMPORT_STAGE_LABEL[next]),
         });
-        const entryPoint = pickEntryPoint(result.vfsFiles, result.profile.entrypoints);
-        const launchState = createLaunchState({
-          systemType: 'content',
-          systemName: result.projectName,
-          businessName: result.projectName,
-          templateName: result.projectName,
-          templateCategory: 'landing',
-          aesthetic: 'imported',
-          vfsFiles: result.vfsFiles,
-          preloadedIntents: [],
-          entryPoint,
-          startInPreview: true,
-          businessId: result.businessId,
-          projectId: result.projectId,
-        });
-        const routeState = {
-          fromLauncher: true,
-          fromImportedSource: true,
-          templateName: result.projectName,
-          projectName: result.projectName,
-          templateCategory: 'landing' as const,
-          systemType: 'content',
-          systemName: result.projectName,
-          startInPreview: true,
-          businessId: result.businessId,
-          projectId: result.projectId,
-          draftId: result.draftId,
-          revisionId: result.revisionId,
-          vfsFiles: result.vfsFiles,
-          entryPoint,
-          launchReliabilityMode: 'imported-source',
-        };
-        persistLauncherHandoff({ routeState, launchState });
-        const blocked = result.provenance.readiness.runtimeCompatibility === 'blocked';
-        toast.success(`Imported ${result.fileCount} files unchanged`, {
-          description: blocked
-            ? 'Saved as your first version. Preview is off for this project type, so a different design is never shown.'
-            : 'Saved as your first version.',
-        });
+        const routeState = prepareImportedProjectHandoff(result);
+        toast.success(`Imported ${result.fileCount} files unchanged`, { description: importedToastDescription(result) });
         onImported?.();
         navigate('/web-builder', { replace: true, state: routeState });
       } catch (err) {
@@ -133,9 +88,10 @@ export const ImportProjectZipButton = ({
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
-      await handleFiles(e.dataTransfer.files);
+      const { input } = await collectDroppedImportInput(e.dataTransfer);
+      if (input) await runImport(input);
     },
-    [handleFiles],
+    [runImport],
   );
 
   const inputs = (
