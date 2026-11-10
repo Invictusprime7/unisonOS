@@ -162,6 +162,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
   const { analyzing, analyzeAndGenerate } = useAIFileAnalysis();
 
@@ -374,6 +375,12 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   // Handle quick action click
   const handleQuickAction = (action: QuickAction) => {
     setInput(action.prompt);
+    requestAnimationFrame(() => {
+      const field = inputRef.current;
+      if (!field) return;
+      field.focus();
+      field.setSelectionRange(action.prompt.length, action.prompt.length);
+    });
   };
 
   // Handle Enter key
@@ -477,8 +484,8 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
         </div>
       )}
 
-      {/* Quick Actions */}
-      {!selectionActive && quickActions.length > 0 && (
+      {/* Quick Actions (Unison renders them as floating prompts inside the chat space) */}
+      {!selectionActive && quickActions.length > 0 && appearance !== "unison" && (
         <div className={cn(
           "p-2 border-b",
           appearance === "unison" ? "border-0 bg-transparent px-0 pt-0" : "bg-muted/30"
@@ -506,7 +513,10 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
       {/* Messages */}
       <ScrollArea className="sleek-scrollbar min-h-0 flex-1 p-3" ref={scrollRef} data-chat-viewport>
         <div className="space-y-3">
-          {messages.length === 0 && (
+          {messages.length === 0 && appearance === "unison" && !selectionActive && quickActions.length > 0 && (
+            <FloatingPromptPills actions={quickActions} onSelect={handleQuickAction} />
+          )}
+          {messages.length === 0 && !(appearance === "unison" && !selectionActive && quickActions.length > 0) && (
             <div className={cn(
               "text-center py-5",
               appearance === "unison" ? "text-cyan-100/70" : "text-muted-foreground py-8"
@@ -645,6 +655,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
           )}
           
           <Textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
