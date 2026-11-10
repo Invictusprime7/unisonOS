@@ -113,6 +113,7 @@ import { supabase as supabaseClient } from "@/integrations/supabase/client";
 const supabase = supabaseClient as any;
 import { buildPageStructureContext } from "@/utils/pageStructureContext";
 import { extractCleanCode, looksLikeCode, ensureReactImports } from "@/utils/aiCodeCleaner";
+import { isImportedSourceVfs } from "@/services/import/importedSourceRecords";
 import { AIActivityPanel } from "@/components/ai-agent/AIActivityPanel";
 import { useAIActivityMonitor } from "@/hooks/useAIActivityMonitor";
 import {
