@@ -159,7 +159,8 @@ function experienceCoverage(
   const exact = familyTags.find(({ tag }) => ids.includes(attribute(tag, 'data-ut-variant') ?? ''));
   const derived = context.adaptedModules.find((path) => ids.some((id) => (context.files[path] ?? '').includes(`@unison-derived-from ${id}`)));
   const original = context.moduleWords.filter((entry) => matches(entry.words) && !context.adaptedModules.includes(entry.path)).map((entry) => entry.path);
-  const custom = tags.find(({ tag }) => (attribute(tag, 'data-ut-variant') ?? '').startsWith('custom:') && matches(wordsOf(tag)));
+  const custom = tags.find(({ tag }) => (attribute(tag, 'data-ut-variant') ?? '').startsWith('custom:')
+    && (matches(wordsOf(tag)) || attribute(tag, 'data-ut-section-type') === family));
   if (design.kind === 'original') {
     for (const path of original) promotionCandidates.push({ requirementId: requirement.id, modulePath: path });
     const mentioned = scopedSources.some((entry) => matches(wordsOf(entry.source)));
