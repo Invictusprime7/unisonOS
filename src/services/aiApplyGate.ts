@@ -67,7 +67,15 @@ export function buildAiCandidatePatch(ctx: AiCommitContext): PatchPlan {
     }
     candidate = rebase.candidate;
   }
-  if (!candidate) return legacyFilesToPatchPlan(ctx.nextFiles, 'ai-builder legacy candidate');
+  // A creative refinement ("make the hero more cinematic") is recorded in the
+  // site's sealed creative brief inside this same canonical commit.
+  const refinedBrief = refinedCreativeBriefFile(ctx.beforeFiles, ctx.label);
+  const briefOp = refinedBrief ? { type: 'replace' as const, path: CREATIVE_BRIEF_PATH, contents: refinedBrief.contents } : null;
+  if (!candidate) {
+    const legacy = legacyFilesToPatchPlan(ctx.nextFiles, 'ai-builder legacy candidate');
+    if (briefOp && !legacy.fileOps.some((operation) => operation.path === CREATIVE_BRIEF_PATH)) legacy.fileOps.push(briefOp);
+    return legacy;
+  }
   if (!candidate.id.trim()) {
     throw new Error('[aiApplyGate] candidate identity is required.');
   }
@@ -105,6 +113,7 @@ export function buildAiCandidatePatch(ctx: AiCommitContext): PatchPlan {
       attempt: candidate.attempt,
     },
   };
+  if (briefOp && !patch.fileOps.some((operation) => operation.path === CREATIVE_BRIEF_PATH)) patch.fileOps.push(briefOp);
   assertPatchPlan(patch, 'aiApplyGate');
   return patch;
 }
