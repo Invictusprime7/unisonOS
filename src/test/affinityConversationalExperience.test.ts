@@ -9,6 +9,9 @@ import {
   renderCreativeBriefDirective,
   serializeCreativeBrief,
 } from '@/services/launch/experienceDirector';
+import { buildRequirementCoverage } from '@/services/app-builder/requirementCoverage';
+import { buildAiCandidatePatch } from '@/services/aiApplyGate';
+import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
 
 const MUSIC = 'Create a cinematic music artist website with an immersive hero, horizontal releases gallery, tour dates, and fan sign-ups.';
 const SPORTS = 'Build a bold, visually rich, multi-page live sports blog with a match centre, editorial news layouts, and animated scores.';
@@ -132,6 +135,60 @@ describe('Affinity conversational experience direction', () => {
 
   it('is deterministic for the same words', () => {
     expect(JSON.stringify(deriveExperienceDirection({ ownerText: SPORTS }))).toBe(JSON.stringify(deriveExperienceDirection({ ownerText: SPORTS })));
+  });
+
+  it('checks accepted source semantically: the requested design on the requested page', () => {
+    const pages = [{ route: '/', title: 'Home' }, { route: '/releases', title: 'Releases' }];
+    const direction = deriveExperienceDirection({ ownerText: MUSIC, pages });
+    const requirements = experienceRequirements(direction);
+    const coveragePages = [
+      { route: '/', filePath: '/src/pages/Home.tsx', title: 'Home' },
+      { route: '/releases', filePath: '/src/pages/Releases.tsx', title: 'Releases' },
+    ];
+    const heroId = direction.decisions.find((entry) => entry.id === 'dec:hero:home')!.implementationIds[0];
+    const files = (galleryVariant: string, packId: string) => ({
+      '/.unison/wizard-registry-context.json': JSON.stringify({ artDirectionPackId: packId }),
+      '/src/pages/Home.tsx': `import { motion } from "framer-motion";\nexport default function Home(){return <main><section data-ut-section-type="hero" data-ut-variant="${heroId}"></section></main>}`,
+      '/src/pages/Releases.tsx': `export default function Releases(){return <main><section data-ut-section-type="gallery" data-ut-variant="${galleryVariant}"></section></main>}`,
+    });
+    const status = (report: ReturnType<typeof buildRequirementCoverage>, id: string) => report.items.find((item) => item.id === id);
+    const good = buildRequirementCoverage({ requirements, files: files('gallery:horizontal-reel', 'cinematic-portfolio'), pages: coveragePages });
+    expect(status(good, 'req:experience:art-direction')?.status).toBe('met');
+    expect(status(good, 'req:experience:hero:home')?.status).toBe('met');
+    expect(status(good, 'req:experience:section:gallery:releases')?.status).toBe('met');
+    expect(status(good, 'req:experience:budget')?.status).toBe('met');
+    const swapped = buildRequirementCoverage({ requirements, files: files('gallery:masonry', 'swiss-grid'), pages: coveragePages });
+    expect(status(swapped, 'req:experience:section:gallery:releases')).toMatchObject({ status: 'partial', evidence: ['used gallery:masonry instead of gallery:horizontal-reel'] });
+    expect(status(swapped, 'req:experience:art-direction')?.status).toBe('missing');
+    expect(swapped.complete).toBe(false);
+  });
+
+  it('checks an authored original against site-local source', () => {
+    const direction = deriveExperienceDirection({ ownerText: WEDDING });
+    const requirement = experienceRequirements(direction).find((entry) => entry.id === 'req:experience:original:timeline:site')!;
+    const pages = [{ route: '/', filePath: '/src/pages/Home.tsx', title: 'Home' }];
+    const authored = buildRequirementCoverage({ requirements: [requirement], pages, files: {
+      '/src/pages/Home.tsx': 'import StoryTimeline from "../project-components/StoryTimeline";\nexport default function Home(){return <main><section data-ut-section-type="timeline" data-ut-variant="custom:story-timeline"><StoryTimeline/></section></main>}',
+      '/src/project-components/StoryTimeline.tsx': 'export default function StoryTimeline(){return <ol aria-label="Our story">…</ol>}',
+    } });
+    expect(authored.items[0].status).toBe('met');
+    const missing = buildRequirementCoverage({ requirements: [requirement], pages, files: { '/src/pages/Home.tsx': 'export default function Home(){return <main>Hello</main>}' } });
+    expect(missing.items[0].status).toBe('missing');
+  });
+
+  it('a hero-only Affinity edit saves the refined brief in the same commit and scopes the editor', () => {
+    const base = deriveExperienceDirection({ ownerText: WEDDING });
+    const beforeFiles = { [CREATIVE_BRIEF_PATH]: serializeCreativeBrief(base, [{ route: '/', title: 'Home' }]), '/src/pages/Home.tsx': 'x' };
+    const label = 'Make the hero more cinematic, but leave the rest of the site unchanged.';
+    const patch = buildAiCandidatePatch({ businessId: 'b', projectId: 'p', draftId: 'd', beforeFiles, nextFiles: { ...beforeFiles, '/src/pages/Home.tsx': 'y' }, activePagePath: '/src/pages/Home.tsx', label });
+    const briefOps = patch.fileOps.filter((operation) => operation.path === CREATIVE_BRIEF_PATH);
+    expect(briefOps).toHaveLength(1);
+    const saved = JSON.parse((briefOps[0] as { contents: string }).contents);
+    expect(saved.direction.decisions.find((entry: { id: string }) => entry.id === 'dec:hero:home').modifiers).toContain('cinematic');
+    expect(saved.direction.locked).toContain('dec:art-direction');
+    const context = createUnisonBuilderContext({ files: beforeFiles, requestEnvelope: { summary: label } as never });
+    expect(context.creativeBrief).toContain('This request changes only: dec:hero:home');
+    expect(renderUnisonBuilderDirective(context)).toContain('SEALED CREATIVE BRIEF');
   });
 
   it('records an Affinity edit refinement in the sealed brief and tells the editor what is locked', () => {
