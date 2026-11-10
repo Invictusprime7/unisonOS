@@ -1,6 +1,7 @@
 import { CheckCircle2, CircleSlash, AlertTriangle, FileCode2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ImportedSourceRecords, VerificationState } from '@/services/import/importedSourceRecords';
+import type { ImportCompatibilityProfile } from '@/services/import/importCompatibilityProfile';
 
 const FRAMEWORK_LABEL: Record<string, string> = {
   'tanstack-start': 'TanStack Start',
@@ -29,9 +30,18 @@ function StateIcon({ state }: { state: VerificationState | 'supported' | 'blocke
  * a transformed version of the design; it reports what is preserved and what
  * still blocks a faithful preview and publishing.
  */
-export function ImportedSourcePreviewStatus({ records, className }: { records: ImportedSourceRecords; className?: string }) {
+export function ImportedSourcePreviewStatus({ records, adapter, running, className }: {
+  records: ImportedSourceRecords;
+  /** Live adapter decision; defaults to the profile frozen at import time. */
+  adapter?: ImportCompatibilityProfile['previewAdapter'];
+  /** True while the original files are running in the isolated preview frame. */
+  running?: boolean;
+  className?: string;
+}) {
   const { provenance, profile, manifest, assets } = records;
   const r = provenance.readiness;
+  const liveAdapter = adapter ?? profile.previewAdapter;
+  const runtimeState = liveAdapter.status === 'available' ? 'supported' : 'blocked';
   const framework = FRAMEWORK_LABEL[profile.framework] ?? profile.framework;
   const storedAssets = assets.assets.filter((a) => a.status === 'stored').length;
   const pageRoutes = profile.routing.routes.filter((route) => route.kind === 'page');
@@ -42,8 +52,12 @@ export function ImportedSourcePreviewStatus({ records, className }: { records: I
       state: r.assetsPreserved,
       detail: assets.assets.length === 0 ? 'None in this project' : `${storedAssets} of ${assets.assets.length} stored unchanged`,
     },
-    { label: 'Can run here', state: r.runtimeCompatibility, detail: r.runtimeCompatibility === 'supported' ? `${framework} supported` : `${framework} needs ${profile.previewAdapter.requires.join(', ')}` },
-    { label: 'Preview shown', state: r.previewRendered, detail: r.previewRendered === 'blocked' ? 'Off, so a different design is never shown' : 'Not checked yet' },
+    { label: 'Can run here', state: runtimeState, detail: runtimeState === 'supported' ? `${framework} runs from its original files` : `${framework} needs ${liveAdapter.requires.join(', ')}` },
+    {
+      label: 'Preview shown',
+      state: running ? 'unverified' : runtimeState === 'supported' ? 'unverified' : 'blocked',
+      detail: running ? 'Showing the original files, unchanged' : runtimeState === 'supported' ? 'Not opened yet' : 'Off, so a different design is never shown',
+    },
     { label: 'Matches the original', state: r.visualParity, detail: 'Not compared yet' },
     { label: 'Ready to publish', state: r.publishReady ? 'verified' : 'blocked', detail: r.publishReady ? 'Ready' : 'Blocked until the preview matches the original' },
   ];
@@ -59,7 +73,7 @@ export function ImportedSourcePreviewStatus({ records, className }: { records: I
           <FileCode2 className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <div className="space-y-1">
             <h3 className="text-sm font-semibold text-foreground">Imported {framework} project</h3>
-            <p className="text-xs leading-relaxed text-muted-foreground">{profile.previewAdapter.reason}</p>
+            <p className="text-xs leading-relaxed text-muted-foreground">{liveAdapter.reason}</p>
           </div>
         </div>
 
