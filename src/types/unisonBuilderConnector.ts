@@ -21,6 +21,11 @@ export interface UnisonBuilderTurnContext {
    * launched before the brief existed.
    */
   creativeBrief?: string | null;
+  /**
+   * Sealed industry enrichment (trade knowledge, copy depth, photo library)
+   * so edits and later pages stay as rich as the launch.
+   */
+  siteKnowledge?: string | null;
 }
 
 export interface EnforcedElementTarget {
