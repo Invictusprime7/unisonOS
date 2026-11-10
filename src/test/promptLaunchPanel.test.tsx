@@ -41,7 +41,8 @@ describe('PromptLaunchPanel (chat-only site creation)', () => {
     expect(inspector).toHaveTextContent('“immersive hero”');
     expect(inspector).toHaveTextContent('“horizontal releases gallery”');
     expect(inspector).toHaveTextContent('Your words');
-    expect(screen.getByText(/Releases/, { selector: 'dd' })).toBeInTheDocument();
+    // Pages show every planned destination, including ones only the prompt named.
+    expect(screen.getByText(/Tour Dates/, { selector: 'dd' })).toBeInTheDocument();
   });
 
   it('runs the canonical launch with the prompt-only AI input', async () => {
