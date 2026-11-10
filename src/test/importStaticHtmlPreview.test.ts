@@ -42,7 +42,7 @@ describe('static HTML preview adapter', () => {
   it('keeps every byte outside resolved local references', () => {
     const doc = buildStaticHtmlPreviewDocument({ files: FILES, entryPath: '/index.html', assetUrls: ASSETS });
     const withoutBridge = doc.html.replace(/<script data-unison-import-overlay="navigation">[\s\S]*?<\/script>/, '');
-    const normalize = (s: string) => s.replace(/data:[^"')\s,]+/g, 'REF').replace(/https:\/\/cdn\.test\/[^"')\s,]+/g, 'REF');
+    const normalize = (s: string) => s.replace(/data:[^"')\s]+/g, 'REF').replace(/https:\/\/cdn\.test\/[^"')\s,]+/g, 'REF');
     const expected = INDEX.replace(/(href=")css\/site\.css/, '$1REF').replace(/url\('img\/hero\.jpg'\)/, "url('REF')")
       .replace('src="img/logo.png" srcset="img/logo.png 1x, img/logo@2x.png 2x"', 'src="REF" srcset="REF 1x, REF 2x"')
       .replace('url(img/hero.jpg)', 'url(REF)').replace('src="js/app.js"', 'src="REF"');
