@@ -17,6 +17,12 @@ export interface WizardDesignSelection {
   experience: WizardExperiencePreference;
   /** Stable section instance id -> certified registry implementation id. */
   sectionPins: Record<string, VariantId>;
+  /**
+   * Page route -> section type -> certified implementation id. The
+   * conversational equivalent of picking a layout for one page only
+   * ("on the gallery page, use masonry"). Site-wide choices stay in sectionPins.
+   */
+  routePins?: Record<string, Record<string, VariantId>>;
 }
 
 export function createWizardDesignSelection(
@@ -28,5 +34,8 @@ export function createWizardDesignSelection(
     artDirectionPackId: input.artDirectionPackId,
     experience: input.experience ?? 'standard',
     sectionPins: { ...(input.sectionPins ?? {}) },
+    ...(input.routePins && Object.keys(input.routePins).length
+      ? { routePins: Object.fromEntries(Object.entries(input.routePins).map(([route, pins]) => [route, { ...pins }])) }
+      : {}),
   };
 }

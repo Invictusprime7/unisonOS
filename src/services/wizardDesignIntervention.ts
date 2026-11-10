@@ -516,6 +516,14 @@ export function buildWizardDesignIntervention(
     }
     activeVariants[pinKey] = variantId;
   }
+  // Home-only conversational choices ("an immersive photography hero") pin the
+  // home composition's sections of that type.
+  for (const variantId of Object.values(input.designSelection?.routePins?.['/'] ?? {})) {
+    const sectionType = String(variantId).split(':')[0];
+    for (const [sectionId, current] of Object.entries(activeVariants)) {
+      if (String(current).split(':')[0] === sectionType) activeVariants[sectionId] = variantId;
+    }
+  }
 
   // The immersive layer is only offered when a registered implementation
   // enables it; otherwise the launch approves nothing and preflight would
