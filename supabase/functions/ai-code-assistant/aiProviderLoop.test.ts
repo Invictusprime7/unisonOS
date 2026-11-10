@@ -5,6 +5,7 @@ import {
   PROVIDER_LOOP_TOTAL_BUDGET_MS,
   runProviderLoop,
   resetDirectQuotaCooldown,
+  directGeminiReasoningEffort,
 } from '../_shared/aiProviderLoop.ts';
 import { buildProviderPlan } from '../_shared/providerRouter.ts';
 const test = (name: string, fn: () => unknown) => Deno.test(name, async () => { resetDirectQuotaCooldown(); await fn(); });
@@ -720,4 +721,35 @@ test('Gemini-only key is re-checked after a credit-depleted 402 so a top-up work
       else Deno.env.set(name, value);
     }
   }
+});
+
+test('Direct Gemini receives the requested thinking level (Gemini 3 cannot fully disable it)', async () => {
+  assert(directGeminiReasoningEffort('gemini-3.8-flash', 'none') === 'low', 'Gemini 3 "none" maps to low');
+  assert(directGeminiReasoningEffort('gemini-2.5-flash', 'none') === 'none', 'older models keep none');
+  assert(directGeminiReasoningEffort('gemini-3.8-flash', undefined) === undefined, 'no request, no field');
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test' }, async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'Fast repair' } }] }));
+    }) as typeof fetch;
+    const result = await runProviderLoop({ aiMessages: messages, providerPlan: { ...hybridPlan, gatewayModels: [] }, navPageGen: false, reasoningEffort: 'low' });
+    assert(result.content === 'Fast repair' && bodies.length === 1, 'one direct Gemini call');
+    assert(bodies[0].reasoning_effort === 'low', 'direct Gemini must not fall back to its slow default thinking');
+  });
+});
+
+test('Direct Gemini retries once without the thinking field when it is rejected', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'gemini-primary', GEMINI_API_KEY: 'test' }, async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return bodies.length === 1
+        ? new Response('{"error":{"message":"Invalid value for reasoning_effort"}}', { status: 400 })
+        : new Response(JSON.stringify({ choices: [{ message: { content: 'Default thinking' } }] }));
+    }) as typeof fetch;
+    const result = await runProviderLoop({ aiMessages: messages, providerPlan: { ...hybridPlan, gatewayModels: [] }, navPageGen: false, reasoningEffort: 'low' });
+    assert(result.content === 'Default thinking' && bodies.length === 2, 'exactly one retry');
+    assert(bodies[0].reasoning_effort === 'low' && !('reasoning_effort' in bodies[1]), 'retry drops only the thinking field');
+  });
 });
