@@ -4,7 +4,14 @@
  */
 import { persistLauncherHandoff } from '@/services/launcherHandoffPersistence';
 import { createLaunchState } from '@/types/launchState';
-import type { ExternalImportResult } from './externalProjectImport';
+import type { ExternalImportResult, ExternalImportStage } from './externalProjectImport';
+
+export const IMPORT_STAGE_LABEL: Record<ExternalImportStage, string> = {
+  reading: 'Reading files…',
+  checking: 'Checking files…',
+  'saving-assets': 'Saving images and fonts…',
+  'saving-version': 'Saving the first version…',
+};
 
 function pickEntryPoint(files: Record<string, string>, entrypoints: string[]): string {
   const preferred = entrypoints.map((p) => `/${p}`).find((p) => /\.(tsx|jsx|ts|js|html?)$/.test(p) && p in files);

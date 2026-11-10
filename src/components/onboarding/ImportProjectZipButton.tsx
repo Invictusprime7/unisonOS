@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { ImportIntakeError } from '@/services/import/secureIntake';
 import { importExternalProject, type ExternalImportInput, type ExternalImportStage } from '@/services/import/externalProjectImport';
 import { collectDroppedImportInput } from '@/services/import/droppedImportInput';
-import { importedToastDescription, prepareImportedProjectHandoff } from '@/services/import/importHandoff';
+import { IMPORT_STAGE_LABEL, importedToastDescription, prepareImportedProjectHandoff } from '@/services/import/importHandoff';
 
 interface ImportProjectZipButtonProps {
   /** Visual variant — pill (chip) or block (large dropzone card). */
@@ -28,12 +28,6 @@ interface ImportProjectZipButtonProps {
   className?: string;
 }
 
-export const IMPORT_STAGE_LABEL: Record<ExternalImportStage, string> = {
-  reading: 'Reading files…',
-  checking: 'Checking files…',
-  'saving-assets': 'Saving images and fonts…',
-  'saving-version': 'Saving the first version…',
-};
 
 export const ImportProjectZipButton = ({
   variant = 'pill',
