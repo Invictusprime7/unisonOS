@@ -41,7 +41,8 @@ describe('siteCompositionPlanner', () => {
 
   it('inherits generic profiles by role rather than their position in the industry list', () => {
     for (const role of roles) {
-      const generic = resolvePageCompositionProfile('ecommerce', role);
+      // An industry with no profiles of its own (ecommerce now has a vertical pack).
+      const generic = resolvePageCompositionProfile('universal', role);
       const source = resolvePageCompositionProfile('salon', role);
       expect(generic.pageRole).toBe(role);
       expect(generic.preferredFamilies).toEqual(source.preferredFamilies);
