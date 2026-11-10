@@ -316,6 +316,36 @@ function commonDirPrefix(paths: string[]): string {
   return depth === 0 ? '' : `${first.slice(0, depth).join('/')}/`;
 }
 
+/**
+ * Wrapper folders are removed only up to the shallowest folder that is itself
+ * a project root (holds a root marker) and that every file shares. Without a
+ * marker inside the shared prefix nothing is stripped, so `src/App.tsx` stays
+ * `src/App.tsx` and monorepo package paths are never flattened.
+ */
+export function detectProjectRootPrefix(paths: string[]): string {
+  const common = commonDirPrefix(paths);
+  if (!common) return '';
+  const segments = common.slice(0, -1).split('/');
+  const present = new Set(paths);
+  for (let depth = 1; depth <= segments.length; depth++) {
+    const prefix = `${segments.slice(0, depth).join('/')}/`;
+    if (ROOT_MARKERS.some((marker) => present.has(`${prefix}${marker}`))) return prefix;
+  }
+  return '';
+}
+
+/** Total entry count declared by the archive's end-of-central-directory record (null when absent/ZIP64). */
+function declaredZipEntryCount(bytes: Uint8Array): number | null {
+  const floor = Math.max(0, bytes.length - 22 - 0xffff);
+  for (let i = bytes.length - 22; i >= floor; i--) {
+    if (bytes[i] === 0x50 && bytes[i + 1] === 0x4b && bytes[i + 2] === 0x05 && bytes[i + 3] === 0x06) {
+      const total = bytes[i + 10] | (bytes[i + 11] << 8);
+      return total === 0xffff ? null : total;
+    }
+  }
+  return null;
+}
+
 // ── secret scanning ────────────────────────────────────────────────────────
 
 interface SecretRule {
@@ -464,6 +494,13 @@ async function readZipEntries(bytes: Uint8Array, limits: IntakeLimits): Promise<
   } catch (err) {
     throw new ImportIntakeError('archive-unreadable', `This file isn't a readable ZIP archive (${err instanceof Error ? err.message : String(err)}).`);
   }
+  // JSZip keys entries by name, so a repeated name silently overwrites the
+  // earlier one. The central directory's own count exposes the collision.
+  const declaredCount = declaredZipEntryCount(bytes);
+  const parsedCount = Object.keys(zip.files).length;
+  if (declaredCount !== null && declaredCount !== parsedCount) {
+    throw new ImportIntakeError('duplicate-path', `The archive lists ${declaredCount} entries but only ${parsedCount} have unique names — some files would overwrite each other.`);
+  }
   const raw: RawZipEntry[] = [];
   zip.forEach((_relative, object) => {
     if (object.dir) return;
@@ -556,12 +593,13 @@ async function buildIntake(
     else kept.push(entry);
   }
 
-  const strippedPrefix = inputKind === 'zip' ? commonDirPrefix(kept.map((e) => e.path)) : '';
+  const strippedPrefix = detectProjectRootPrefix(kept.map((e) => e.path));
   const rel = (p: string) => (strippedPrefix && p.startsWith(strippedPrefix) ? p.slice(strippedPrefix.length) : p);
 
   for (const link of symlinks) {
     const resolved = resolveSymlinkTarget(link.path, link.target);
-    const insideRoot = resolved !== null && (!strippedPrefix || `${resolved}/`.startsWith(strippedPrefix) || resolved.startsWith(strippedPrefix));
+    const insideRoot = resolved !== null
+      && (!strippedPrefix || resolved === strippedPrefix.slice(0, -1) || resolved.startsWith(strippedPrefix));
     if (!insideRoot) {
       throw new ImportIntakeError('symlink-escape', `${link.path} is a link pointing outside the project (${link.target}).`, [link.path]);
     }
@@ -695,11 +733,8 @@ export async function intakeLooseFiles(
     if (total > limits.maxTotalBytes) throw new ImportIntakeError('total-too-large', `The selected files are larger than ${Math.round(limits.maxTotalBytes / 1024 / 1024)} MB.`);
     return { path: normalizeEntryPath(f.path, limits), bytes: f.bytes };
   });
-  const folderPrefix = entries.length > 1 ? commonDirPrefix(entries.map((e) => e.path)) : '';
-  const stripped = folderPrefix ? entries.map((e) => ({ ...e, path: e.path.slice(folderPrefix.length) })) : entries;
-  const result = await buildIntake('files', options.name ?? (stripped.length === 1 ? stripped[0].path : 'files'), stripped, [], limits);
-  if (!folderPrefix) return result;
-  return { ...result, manifest: deepFreeze({ ...result.manifest, strippedPrefix: folderPrefix }) };
+  const name = options.name ?? (entries.length === 1 ? baseName(entries[0].path) : (entries[0]?.path.split('/')[0] || 'files'));
+  return buildIntake('files', name, entries, [], limits);
 }
 
 /** Phase B gate: every text file re-encodes to its recorded SHA-256; every binary file hashes identically. */
