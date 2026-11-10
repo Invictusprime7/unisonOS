@@ -29,13 +29,31 @@ export function isImageLedRole(role: string): boolean {
  * of its own, so without these it either ships a text-only page (rejected by
  * this gate) or invents ids that 404.
  */
+// Industry spellings used across schemas (salon_spa, real_estate, …) and plain
+// trade words map onto the photo library keys.
+const PHOTO_KEY_ALIASES: Record<string, string> = {
+  'salon-spa': 'salon', beauty: 'salon', 'real-estate': 'real-estate', realestate: 'real-estate', property: 'real-estate',
+  'creator-portfolio': 'portfolio', creative: 'portfolio', 'coaching-consulting': 'coaching', consulting: 'coaching',
+  'local-service': 'local-service', trades: 'local-service', 'home-services': 'local-service',
+  legal: 'professional-services', law: 'professional-services', finance: 'professional-services', accounting: 'professional-services', professional: 'professional-services',
+  health: 'medical', healthcare: 'medical', dental: 'medical', clinic: 'medical',
+  school: 'education', courses: 'education', 'non-profit': 'nonprofit', charity: 'nonprofit', church: 'nonprofit',
+  blog: 'media', publishing: 'media', podcast: 'media', retail: 'ecommerce', shop: 'ecommerce', store: 'ecommerce',
+  hotel: 'hospitality', 'live-events': 'events', festival: 'events', wedding: 'weddings', film: 'photography', gym: 'fitness',
+};
+
+export function photoLibraryKey(industry: string | null | undefined): string {
+  const key = (industry ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  return PHOTO_KEY_ALIASES[key] ?? key;
+}
+
 export function verifiedPhotosFor(industry: string | undefined, count = 6, verticalPackIds: readonly (string | null | undefined)[] = []): string[] {
   // A recognised vertical (weddings, events, …) is the subject the owner
   // described; its photos lead. Generic office/laptop pools only fill in when
   // nothing specific exists, so a wedding site is never handed desk photos.
   const specific = [
-    ...verticalPackIds.flatMap((id) => (id ? CONTEXTUAL_IMAGES[id.toLowerCase()] ?? [] : [])),
-    ...(CONTEXTUAL_IMAGES[(industry ?? '').toLowerCase()] ?? []),
+    ...verticalPackIds.flatMap((id) => (id ? CONTEXTUAL_IMAGES[photoLibraryKey(id)] ?? [] : [])),
+    ...(CONTEXTUAL_IMAGES[photoLibraryKey(industry)] ?? []),
   ];
   const merged = specific.length >= Math.min(count, 4)
     ? specific
