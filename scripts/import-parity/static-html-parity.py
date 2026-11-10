@@ -19,6 +19,10 @@ OUT.mkdir(parents=True, exist_ok=True)
 VIEWPORTS = [(1440, 900), (768, 1024), (390, 844)]
 SCROLLS = [0, 1200]
 NOISE = 8  # per-channel difference treated as antialiasing noise (disclosed)
+# Determinism control applied identically to both sides (disclosed in the report):
+# seeded Math.random so pages that simulate random outcomes render the same state.
+DETERMINISM = "(() => { let s = 0x2545f491; Math.random = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 1e9) / 1e9; }; })();"
+SETTLE_MS = 2000
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -53,17 +57,18 @@ def compare(a, b, name):
     return {"pixels": total, "differing": exact, "materialDiffering": material, "materialPct": round(material * 100 / total, 4)}
 
 async def main():
-    report = {"site": str(SITE), "entry": ENTRY, "adapter": info, "noiseThreshold": NOISE, "masks": [], "cases": []}
+    report = {"site": str(SITE), "entry": ENTRY, "adapter": info, "noiseThreshold": NOISE, "masks": [], "determinism": ["seeded Math.random on both sides", f"{SETTLE_MS} ms settle for page timers"], "cases": []}
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         for (w, h) in VIEWPORTS:
             ctx = await browser.new_context(viewport={"width": w, "height": h}, device_scale_factor=1, reduced_motion="reduce")
+            await ctx.add_init_script(DETERMINISM)
             ref = await ctx.new_page(); await ref.goto(f"{BASE}/{ENTRY}", wait_until="networkidle")
             pre = await ctx.new_page(); await pre.set_content(HOST)
             await pre.eval_on_selector("#f", "(f, html) => { f.srcdoc = html; }", served.read_text())
             await pre.wait_for_timeout(300); await pre.wait_for_load_state("networkidle")
             frame = next(f for f in pre.frames if f != pre.main_frame)
-            await settle(ref.main_frame); await settle(frame); await ref.wait_for_timeout(800)
+            await settle(ref.main_frame); await settle(frame); await ref.wait_for_timeout(SETTLE_MS)
             geo_ref, geo_pre = await ref.evaluate(GEOMETRY), await frame.evaluate(GEOMETRY)
             geo_mismatch = sum(1 for x, y in zip(geo_ref, geo_pre) if x != y) + abs(len(geo_ref) - len(geo_pre))
             for y in SCROLLS:
