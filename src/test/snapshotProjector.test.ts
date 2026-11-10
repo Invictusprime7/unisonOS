@@ -298,32 +298,49 @@ describe('snapshot projector', () => {
     }
   });
 
-  it('replaces a fully formed template preset with the authoritative snapshot VFS', () => {
+  it('renders AI-authored VFS pages and custom components over a navigation-state snapshot', () => {
     const snapshot = snapshotWith({
-      '/src/App.tsx': 'export default function App() { return <main>Deterministic manifest</main>; }',
+      '/src/App.tsx': "import Home from './pages/Home'; export default function App() { return <Home />; }",
       '/src/index.css': ':root { --primary: 24 90% 45%; }',
-      '/src/pages/Home.tsx': 'export default function Home() { return <section>Manifest home</section>; }',
+      '/src/pages/Home.tsx': "export default function Home() { return <section data-ut-variant='hero:split-image'>Unison hero</section>; }",
     });
+    // Snapshot from route state, not the VFS's own embedded copy.
     const resolution: SnapshotResolution = {
       snapshot,
       isWizardDraft: true,
       themePresetId: 'restaurant-warm',
+      snapshotFromLiveVfs: false,
     };
-    const templatePresetFiles = {
-      '/src/App.tsx': 'export default function App() { return <main><h1>Exhale Salon</h1></main>; }',
+    const liveVfs = {
+      '/src/App.tsx': snapshot.vfsFiles['/src/App.tsx'],
       '/src/index.css': ':root { --primary: 320 80% 55%; }',
-      '/src/pages/Home.tsx': 'export default function Home() { return <section>Template home</section>; }',
-      '/src/template-only.tsx': 'export default function PresetOnly() { return null; }',
+      '/src/pages/Home.tsx': "import FestivalMarquee from '../components/project/FestivalMarquee'; export default function Home() { return <FestivalMarquee />; }",
+      '/src/components/project/FestivalMarquee.tsx': 'export default function FestivalMarquee() { return <section>Solstice Soundfest</section>; }',
     };
 
-    const projected = projectSnapshotVfsFiles(templatePresetFiles, resolution);
+    const projected = projectSnapshotVfsFiles(liveVfs, resolution);
 
-    expect(projected['/src/App.tsx']).toContain('Deterministic manifest');
-    expect(projected['/src/App.tsx']).not.toContain('Exhale Salon');
-    expect(projected['/src/index.css']).toContain('--primary: 24 90% 45%');
-    expect(projected['/src/pages/Home.tsx']).toContain('Manifest home');
-    expect(projected['/src/template-only.tsx']).toBeUndefined();
+    expect(projected['/src/pages/Home.tsx']).toContain('FestivalMarquee');
+    expect(projected['/src/pages/Home.tsx']).not.toContain('Unison hero');
+    expect(projected['/src/components/project/FestivalMarquee.tsx']).toContain('Solstice Soundfest');
+    expect(projected['/src/index.css']).toContain('--primary: 320 80% 55%');
     expect(projected['/.unison/site-bundle-snapshot.json']).toContain('snapshot-authority-test');
+  });
+
+  it('keeps the saved body only when the VFS byte is a placeholder stub or a token-less stylesheet', () => {
+    const snapshot = snapshotWith({
+      '/src/index.css': ':root { --primary: 24 90% 45%; }',
+      '/src/pages/Home.tsx': 'export default function Home() { return <section>Saved home</section>; }',
+    });
+    const resolution: SnapshotResolution = { snapshot, isWizardDraft: true, themePresetId: 'restaurant-warm' };
+
+    const projected = projectSnapshotVfsFiles({
+      '/src/index.css': 'body { color: black; }',
+      '/src/pages/Home.tsx': 'export default function Home() { return <div>Placeholder</div>; }',
+    }, resolution);
+
+    expect(projected['/src/pages/Home.tsx']).toContain('Saved home');
+    expect(projected['/src/index.css']).toContain('--primary: 24 90% 45%');
   });
 
   it('renders a committed Builder edit when the live VFS snapshot copy is older', () => {
