@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { AIAssistantCore } from "@/components/ai/AIAssistantCore";
 import { PromptLaunchPanel } from "@/components/launch/PromptLaunchPanel";
+import { AffinityImportDropZone } from "@/components/import/AffinityImportDropZone";
 import { BusinessProfileGate } from "@/components/onboarding/BusinessProfileGate";
 import type { BusinessProfileDTO } from "@/types/businessProfile";
 import { Button } from "@/components/ui/button";
@@ -108,7 +109,7 @@ const Onboarding = () => {
         </div>
 
         {chatOpen ? (
-          <div className="w-full max-w-3xl text-left">
+          <AffinityImportDropZone className="w-full max-w-3xl text-left" signedIn onAuthRequired={() => navigate('/auth')} businessId={prefill?.businessId}>
             <AIAssistantCore
               key={`onboarding:${user?.id ?? 'anonymous'}`}
               appearance="unison"
@@ -130,7 +131,7 @@ const Onboarding = () => {
               showFileUpload={false}
               hideHeader
             />
-          </div>
+          </AffinityImportDropZone>
         ) : (
           <Button
             size="lg"
