@@ -10,6 +10,8 @@
 - [ ] G — Publish the same accepted revision (blocked on E; publish stays blocked)
 - [ ] ARIA fidelity fixture run (blocked: ariastudios.zip not uploaded)
 - [ ] Signed-in end-to-end import in the browser (not yet run)
+- [ ] D/E for plain HTML sites: run the original files unchanged in an isolated frame + repeatable visual comparison harness
+- [ ] Drag and drop files, folders or ZIPs onto the Affinity chat to import them (same import path)
 
 ## Active: Sparse, generic generated pages (2026-11-10)
 - [x] Page rules (design text contracts, form placement, blueprints, business facts) were cut from every page request; now carried in full
