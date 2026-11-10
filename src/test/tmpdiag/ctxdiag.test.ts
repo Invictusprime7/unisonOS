@@ -33,5 +33,8 @@ it('diag', () => {
   const noCreation = curateMarketplaceTemplate(ALL_COMPOSITIONS.find((x) => x.id === 'salon-premium')!, THEME_PRESETS[0]);
   const g2 = buildAppBuilderGenerationContext(noCreation.contract);
   const p0 = noCreation.contract.topology.sitePlan.pages[0].id;
+  const heads=(t: string)=>t.split('\n').filter(l=>/^[A-Z][A-Z \-]{6,}[:(—]/.test(l)).map(l=>l.slice(0,40));
+  const kept=new Set(heads(ctx)); console.log('LOST@12000:', heads(unbounded).filter(h=>!kept.has(h)).join(' | '));
+  console.log('TAIL:', ctx.slice(-200));
   console.log('SALON no creation', g2.runtimeContextForPage(p0, 12000).includes('CERTIFIED OPTIONS'), g2.runtimeContextForPage(p0, 1e9).length);
 });
