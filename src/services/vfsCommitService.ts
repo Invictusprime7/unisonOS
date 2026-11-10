@@ -2315,7 +2315,12 @@ async function commitImportedSourceMutation(args: {
     }
   }
 
-  const evaluation = await evaluateImportedSourceCandidate({ before, after: working });
+  // A restore reinstates an already-accepted imported revision of this project
+  // (ownership checked above), so it is evaluated against its own bytes.
+  const evaluation = await evaluateImportedSourceCandidate({
+    before: restoredRevision ? restoredRevision.vfsFiles : before,
+    after: working,
+  });
   if (!evaluation.ok && evaluation.rejection) {
     throw new CommitGuardError(evaluation.rejection.code, 'imported-source-acceptance', `[VFSCommitService] ${evaluation.rejection.message}`, evaluation.rejection.detail);
   }
