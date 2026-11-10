@@ -13,6 +13,12 @@ describe('deterministic scoped edits', () => {
     expect(out.fileOps.find((o) => o.path === '/src/pages/Home.tsx')?.content).toBe('a\nB\nc');
     expect(out.fileOps.some((o) => o.path === '/src/pages/New.tsx')).toBe(true);
   });
+  it('turns a page-repair hunk into complete page source', () => {
+    const page = { '/src/pages/Home.tsx': 'import A from "./A";\nexport default function Home(){\n  return <main><section>Hero</section></main>;\n}' };
+    const out = parseFileBlocks('SUMMARY: fix\n<<<EDIT /src/pages/Home.tsx\n<<<<<<< SEARCH\n  return <main><section>Hero</section></main>;\n=======\n  return <main><section id="hero">Hero</section></main>;\n>>>>>>> REPLACE\n>>>END', page, true) as { fileOps: Array<{ type: string; content: string }> };
+    expect(out.fileOps[0].type).toBe('replace');
+    expect(out.fileOps[0].content).toBe('import A from "./A";\nexport default function Home(){\n  return <main><section id="hero">Hero</section></main>;\n}');
+  });
   it('detects page creation requests', () => {
     expect(isPageCreationRequest('Create pages for the new footer links: Specialties')).toBe(true);
     expect(isPageCreationRequest('make the navbar float')).toBe(false);

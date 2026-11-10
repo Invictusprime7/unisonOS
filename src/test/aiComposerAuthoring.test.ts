@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 vi.mock('@/services/builderBrainClient', () => ({ runBuilderTurn: vi.fn() }));
 
-import { repairBuilderCandidate, runComposerRepairLoop } from '@/services/builder/aiRepairLoop';
+import { PAGE_REPAIR_OUTPUT_RULE, repairBuilderCandidate, runComposerRepairLoop } from '@/services/builder/aiRepairLoop';
 import type { AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import { authorSitePages, orderAuthoringPages } from '@/services/launch/siteAuthoringOrchestrator';
 import { planSiteComposition } from '@/services/composition';
@@ -177,6 +177,19 @@ describe('AI composer repair loop', () => {
     const second = JSON.parse(invoke.mock.calls[1][0].messages[0].content);
     expect(second.task).toBe('site_page_repair');
     expect(second.diagnostics[0]).toMatch(/does not resolve/);
+    // A finished page is fixed with hunks, never resent whole (that outran Gemini's window).
+    expect(second.instruction.startsWith(PAGE_REPAIR_OUTPUT_RULE)).toBe(true);
+    expect(second.instruction).toContain('Do not resend unchanged sections or rewrite the whole page');
+  }, 20000);
+
+  it('adds the fix-round output rule once across repeated repairs', async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce(bad('/src/pages/Home.tsx'))
+      .mockResolvedValueOnce(bad('/src/pages/Home.tsx'))
+      .mockResolvedValueOnce(good('/src/pages/Home.tsx', 'Fixed'));
+    await runComposerRepairLoop({ request, baseFiles: base, invoke: invoke as never });
+    const third = JSON.parse(invoke.mock.calls[2][0].messages[0].content);
+    expect(third.instruction.split(PAGE_REPAIR_OUTPUT_RULE)).toHaveLength(2);
   }, 20000);
 
   it('accumulates valid files across repair attempts', async () => {
