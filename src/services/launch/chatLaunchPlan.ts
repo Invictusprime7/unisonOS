@@ -209,7 +209,7 @@ function confirmedPagesFromDirection(direction: string, industry: string | null,
  */
 const NON_DESTINATION = /\b(?:look|feel|style|colou?rs?|vibe|design|fonts?|theme|photos?|images?|animations?|aesthetic|modern|bold|clean|minimal|dark|light|elegant|logo|brand|seo|mobile|responsive|fast|beautiful|professional|my|our music|music|website|site|app)\b/i;
 
-function ownerListedPageNames(text: string): string[] {
+function ownerListedPageNames(text: string, verticalId?: string): string[] {
   const names: string[] = [];
   const quantity = /^(?:multiple|several|many|separate|different|other|more|few|\d+|two|three|four|five|six)$/i;
   for (const match of text.matchAll(/\b(?:with|including|featuring|plus)\s+(?:an?\s+|the\s+)?([A-Za-z0-9&' ,/-]{3,160}?)\s+pages\b/gi)) {
@@ -224,12 +224,14 @@ function ownerListedPageNames(text: string): string[] {
     if (!quantity.test(name) && !NON_DESTINATION.test(name) && !/^(?:single|one|landing|home|new|simple)$/i.test(name)) names.push(name);
   }
   // Feature lists without the word "pages": "with releases, tour dates and fan sign-ups".
-  // Each short noun phrase is a destination the owner asked for.
+  // Only phrases the trade's page vocabulary knows are destinations; others
+  // ("cinematic motion", "live scores") are treatments or interactions.
   for (const match of text.matchAll(/\b(?:with|including|featuring|that has|needs?)\s+([A-Za-z0-9&' ,/-]{3,200}?)(?=[.!?;\n]|$)/gi)) {
     const parts = match[1].split(/,|\/|\band\b|\bplus\b/i).map((part) => part.trim().replace(/^(?:an?|the|some|my)\s+/i, '')).filter(Boolean);
     if (parts.length < 2) continue;
     for (const part of parts) {
       if (part.split(/\s+/).length > 3 || /\bpages?\b/i.test(part) || quantity.test(part) || NON_DESTINATION.test(part)) continue;
+      if (!matchVerticalPageName(part, verticalId)) continue;
       names.push(part);
     }
   }
@@ -266,7 +268,7 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   const profileRoutes = resolvedIndustry ? getIndustryProfile(resolvedIndustry)?.defaultPages.map((page) => page.path) ?? [] : [];
   const pageVertical = resolveIndustryVertical(semanticText) ?? (acceptedDirection ? resolveIndustryVertical(acceptedDirection) : null);
   const confirmedPages = confirmedPagesFromDirection(acceptedDirection, resolvedIndustry, pageVertical?.packId);
-  const listedNames = ownerListedPageNames(semanticText);
+  const listedNames = ownerListedPageNames(semanticText, pageVertical?.packId);
   const listedPages = listedNames.length ? confirmedPagesFromDirection(`Pages: ${listedNames.join(', ')}`, resolvedIndustry, pageVertical?.packId).pages : [];
   const namedCreationPages = uniquePagesByRoute([
     ...mentionedPages.map((page) => pageDetailsForChoice(page, resolvedIndustry)),
