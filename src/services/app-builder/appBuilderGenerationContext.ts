@@ -226,7 +226,9 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     ...(creation.sitePurpose.toLowerCase().includes('editorial')
       ? ['Editorial pages may render static sample articles. When a published articles content type exists, load it through listPublishedContent from @/components/publishedActionRuntime. If no type or published rows are available, keep a local sample/empty state; do not claim CMS editing or publishing without canonical owner authorization.']
       : []),
-  ].join('\n') : renderVerticalKnowledge(vertical);
+  ].join('\n') : '';
+  // Template installs (no prompt) still get their trade knowledge, as advisory context.
+  const templateVerticalContext = creation ? '' : renderVerticalKnowledge(vertical);
   const industryContext = buildIndustryAuthoringContext(business.industry, business.capabilities);
   const iconContext = buildIndustryIconContext(business.industry, business.capabilities, business.intents,
     contract.design.compositionPlan.pages.flatMap((page) => page.target.sectionOrder));
@@ -334,6 +336,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 2, text: commerceSetupContext },
     { priority: 4, text: 'Portable recipe identity: pass stable sectionId from the page composition and componentInstanceId only from an existing canonical functional instance; never invent cmp_ IDs or substitute an implementation ID for an instance ID. Local toggles are component state, not data-ut-intent. Auth submit forms use data-intent-form="auth.login"/"auth.register"; auth.login/auth.register click bindings only open/focus auth.' },
     { priority: 3, text: `Industry ${business.industry}; goals ${business.goals.join(', ') || 'none'}. Intents: ${business.intents.join(', ') || 'none'}; capabilities: ${business.capabilities.join(', ') || 'none'}.` },
+    { priority: 3, trimmable: true, text: templateVerticalContext },
     { priority: 4, text: industryContext },
     { priority: 4, text: logoContext },
     { priority: 4, text: iconContext },
