@@ -392,6 +392,13 @@ export async function runProviderLoop(opts: {
 
         if (!resp.ok) {
           const errText = await resp.text();
+          if (resp.status === 400 && effort && /reasoning|thinking/i.test(errText)) {
+            // A fast refusal of the thinking field, not of the request: retry once without it.
+            console.warn(`[AI-Hybrid] ${model.label} rejected reasoning_effort=${effort}; retrying with its default thinking.`);
+            reasoningRejected = true;
+            modelIndex--;
+            continue;
+          }
           console.warn(`[AI-Hybrid] ${model.label} error ${resp.status}: ${errText.substring(0, 300)}`);
           recordProviderError(model.label, `${resp.status} ${errText.substring(0, 200)}`);
           continue;
