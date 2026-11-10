@@ -63,7 +63,7 @@ export async function storeImportedAssets(input: {
         bucket: IMPORT_ASSET_BUCKET,
         storagePath: outcome.ok ? storagePath : null,
         status: outcome.ok ? 'stored' : 'failed',
-        ...(outcome.ok ? {} : { error: outcome.error }),
+        ...('error' in outcome ? { error: outcome.error } : {}),
       };
       done++;
       input.onProgress?.(done, binaries.length);
@@ -81,7 +81,7 @@ export async function storeImportedAssets(input: {
       storagePath: outcome.ok ? storagePath : null,
       sha256: archiveSha,
       status: outcome.ok ? 'stored' : 'failed',
-      ...(outcome.ok ? {} : { error: outcome.error }),
+      ...('error' in outcome ? { error: outcome.error } : {}),
     };
   }
   return { version: 1, assets: results, originalArchive };
