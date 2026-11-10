@@ -18,7 +18,13 @@ import {
   renderCreativeRequirements,
 } from "@/services/launch/creativePlan";
 import { getIndustryProfile } from "@/platform/core/industryMatrix";
-import { getVerticalPack, inferVerticalPages, resolveIndustryVertical, verticalInteractionRequirements } from "@/services/composition/verticals";
+import { getVerticalPack, inferVerticalPages, matchVerticalPageName, resolveIndustryVertical, verticalInteractionRequirements } from "@/services/composition/verticals";
+
+/**
+ * Page aliases that are also everyday words ("Help me create…", "work",
+ * "updates"). They count as a page only when written next to "page".
+ */
+const AMBIGUOUS_PAGE_ALIASES = new Set(['help', 'support', 'questions', 'updates', 'stories', 'work', 'landing', 'stay', 'stays', 'plans', 'rates', 'fees', 'press', 'location', 'quote', 'reserve', 'room', 'book', 'visit', 'solutions', 'resources', 'team', 'reviews', 'testimonials', 'legal']);
 import {
   matchTopologyPageAliases,
   resolvePageSpecsForRoles,
@@ -105,6 +111,7 @@ function explicitlyRequestsExperiencePage(text: string): boolean {
 function topologyPagesFromPrompt(text: string, industry: string | null): UniversalCreationInput['pages'] {
   return matchTopologyPageAliases(text).flatMap(({ alias, role }) => {
     if (role === 'home') return [];
+    if (AMBIGUOUS_PAGE_ALIASES.has(alias) && !new RegExp(`\\b${alias}\\s+(?:page|section|tab)\\b|\\b(?:page|section)\\s+(?:for|called|named)\\s+${alias}\\b`, 'i').test(text)) return [];
     if (role === 'immersive' && !explicitlyRequestsExperiencePage(text)) return [];
     if (role === 'custom') {
       const slug = alias.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -178,6 +185,9 @@ function confirmedPagesFromDirection(direction: string, industry: string | null)
       pages.push({ ...pageDetailsForChoice(choice, industry), title: name.replace(/\b\w/g, (letter) => letter.toUpperCase()) });
     } else if (topology.length) {
       pages.push({ ...topology[0], title: name.replace(/\b\w/g, (letter) => letter.toUpperCase()) });
+    } else if (matchVerticalPageName(name)) {
+      const page = matchVerticalPageName(name)!;
+      pages.push({ route: page.route, title: name.replace(/\b\w/g, (letter) => letter.toUpperCase()), purpose: `${page.purpose} Named by the owner as "${name}".`, suggestedRole: page.role });
     } else {
       const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       if (slug) pages.push({ route: `/${slug}`, title: name.replace(/\b\w/g, (letter) => letter.toUpperCase()), purpose: `The ${name} page the owner confirmed in the site direction.`, suggestedRole: 'custom' });
@@ -191,13 +201,31 @@ function confirmedPagesFromDirection(direction: string, industry: string | null)
  * pages"). Only lists of two or more count, so "with several pages" never adds
  * a page.
  */
+const NON_DESTINATION = /\b(?:look|feel|style|colou?rs?|vibe|design|fonts?|theme|photos?|images?|animations?|aesthetic|modern|bold|clean|minimal|dark|light|elegant|logo|brand|seo|mobile|responsive|fast|beautiful|professional|my|our music|music|website|site|app)\b/i;
+
 function ownerListedPageNames(text: string): string[] {
   const names: string[] = [];
+  const quantity = /^(?:multiple|several|many|separate|different|other|more|few|\d+|two|three|four|five|six)$/i;
   for (const match of text.matchAll(/\b(?:with|including|featuring|plus)\s+(?:an?\s+|the\s+)?([A-Za-z0-9&' ,/-]{3,160}?)\s+pages\b/gi)) {
     const parts = match[1].split(/,|\/|\band\b/i).map((part) => part.trim()).filter(Boolean);
     if (parts.length < 2) continue;
-    if (parts.some((part) => /^(?:multiple|several|many|separate|different|other|more|few|\d+|two|three|four|five|six)$/i.test(part))) continue;
+    if (parts.some((part) => quantity.test(part))) continue;
     names.push(...parts);
+  }
+  // Single named pages: "an RSVP page", "a dedicated tour dates page".
+  for (const match of text.matchAll(/\b(?:an?|the|dedicated|separate|its own)\s+(?:dedicated\s+|separate\s+)?([A-Za-z&'-]+(?:\s+[A-Za-z&'-]+){0,2}?)\s+page\b/gi)) {
+    const name = match[1].trim();
+    if (!quantity.test(name) && !NON_DESTINATION.test(name) && !/^(?:single|one|landing|home|new|simple)$/i.test(name)) names.push(name);
+  }
+  // Feature lists without the word "pages": "with releases, tour dates and fan sign-ups".
+  // Each short noun phrase is a destination the owner asked for.
+  for (const match of text.matchAll(/\b(?:with|including|featuring|that has|needs?)\s+([A-Za-z0-9&' ,/-]{3,200}?)(?=[.!?;\n]|$)/gi)) {
+    const parts = match[1].split(/,|\/|\band\b|\bplus\b/i).map((part) => part.trim().replace(/^(?:an?|the|some|my|our)\s+/i, '')).filter(Boolean);
+    if (parts.length < 2 || /\bpages\b/i.test(match[1])) continue;
+    for (const part of parts) {
+      if (part.split(/\s+/).length > 3 || quantity.test(part) || NON_DESTINATION.test(part)) continue;
+      names.push(part);
+    }
   }
   return names;
 }
