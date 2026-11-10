@@ -660,6 +660,15 @@ export function refineExperienceDirection(
 
 // ── Projections ───────────────────────────────────────────────────────────────
 
+/**
+ * Whether the conversation carries art-direction evidence. Without any, the
+ * pack is left to the canonical resolver (industry + design seed) at build
+ * time instead of sealing an evidence-free tie-break.
+ */
+export function isArtDirectionSealed(direction: ExperienceDirection): boolean {
+  return direction.artDirection.origin !== 'inferred' || direction.artDirection.evidence.length > 0;
+}
+
 function implementationName(id: string): string {
   return certifiedImplementations().find((implementation) => implementation.variantId === id)?.name ?? id;
 }
@@ -681,7 +690,7 @@ export function experienceRequirements(direction: ExperienceDirection | undefine
   if (!direction) return [];
   const requirementOrigin = (origin: CreativeDecisionOrigin): CreationRequirement['origin'] => origin === 'inferred' ? 'inferred' : origin === 'confirmed' ? 'confirmed' : 'explicit';
   const art = direction.artDirection;
-  const requirements: CreationRequirement[] = [{
+  const requirements: CreationRequirement[] = !isArtDirectionSealed(direction) ? [] : [{
     id: 'req:experience:art-direction',
     kind: 'experience',
     text: `art direction ${art.packId} (${art.packName}, ${art.familyId} family) — compose every page in this grammar${art.evidence.length ? `; chosen for "${art.evidence.join('", "')}"` : ''}`,
@@ -733,9 +742,10 @@ export function designSelectionFromDirection(direction: ExperienceDirection): Pi
       sectionPins[decision.family] = best as VariantId;
     }
   }
+  const sealed = isArtDirectionSealed(direction);
   return {
-    mode: direction.artDirection.origin === 'inferred' && !direction.decisions.length ? 'auto' : 'guided',
-    artDirectionPackId: direction.artDirection.packId as ArtDirectionPackId,
+    mode: !sealed && !direction.decisions.length ? 'auto' : 'guided',
+    ...(sealed ? { artDirectionPackId: direction.artDirection.packId as ArtDirectionPackId } : {}),
     experience: direction.experience.value,
     sectionPins,
     routePins,
