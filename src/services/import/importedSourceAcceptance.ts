@@ -189,7 +189,7 @@ export async function evaluateImportedSourceCandidate(input: {
   if (!initial) {
     const touched = [...changedPaths, ...deletedPaths].filter(isImportRecordPath);
     if (touched.length > 0) return reject('PROTECTED_INFRASTRUCTURE', 'Import records are read-only after the import is accepted.', { paths: touched });
-    if (Object.keys(before).length > 0 && !isImportedSourceVfs(before)) {
+    if (Object.keys(before).length > 0 && !hasValidImportRecords(before)) {
       return reject('SCOPE_ESCAPE', 'An existing Unison project cannot be converted into an imported project.');
     }
   } else if (Object.keys(before).some((p) => !isImportRecordPath(p))) {
@@ -248,6 +248,6 @@ export async function evaluateImportedSourceCandidate(input: {
   return { ...base, ok: true };
 }
 
-function isImportedSourceVfs(files: Record<string, string>): boolean {
+function hasValidImportRecords(files: Record<string, string>): boolean {
   return readImportedSourceRecords(files) !== null;
 }
