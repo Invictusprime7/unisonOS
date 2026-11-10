@@ -44,11 +44,69 @@ const HOME_QUICK_ACTIONS: QuickAction[] = [
     prompt: "Help me create an online store to sell my products.",
   },
   {
+    id: "restaurant-site",
+    label: "Restaurant & reservations",
+    prompt: "Help me create a restaurant website with our menu, opening hours and table reservations.",
+  },
+  {
+    id: "portfolio-site",
+    label: "Creative portfolio",
+    prompt: "Help me create a portfolio website that shows off my best work and brings in new clients.",
+  },
+  {
+    id: "event-site",
+    label: "Event or festival",
+    prompt: "Help me create a website for my event with the lineup, schedule and ticket sales.",
+  },
+  {
+    id: "wedding-site",
+    label: "Wedding website",
+    prompt: "Help me create a wedding website with our story, the day's details and an RSVP form.",
+  },
+  {
+    id: "fitness-site",
+    label: "Gym or fitness studio",
+    prompt: "Help me create a gym website with class schedules, trainer profiles and membership sign-ups.",
+  },
+  {
+    id: "hotel-site",
+    label: "Hotel or rental",
+    prompt: "Help me create a hotel website with rooms, photos, guest reviews and booking enquiries.",
+  },
+  {
+    id: "music-site",
+    label: "Music artist",
+    prompt: "Help me create a website for my music with releases, tour dates and fan sign-ups.",
+  },
+  {
+    id: "sports-site",
+    label: "Sports club",
+    prompt: "Help me create a website for my sports club with fixtures, results, teams and member sign-ups.",
+  },
+  {
+    id: "nonprofit-site",
+    label: "Nonprofit & donations",
+    prompt: "Help me create a website for my nonprofit that explains our mission and accepts donations.",
+  },
+  {
     id: "print-design",
-    label: "Flyer or business card",
+    label: "Flyer",
     prompt: "Help me design a flyer for my business.",
   },
+  {
+    id: "poster-design",
+    label: "Event poster",
+    prompt: "Help me design a poster for my upcoming event.",
+  },
+  {
+    id: "business-card-design",
+    label: "Business card",
+    prompt: "Help me design a business card for my company.",
+  },
 ];
+
+/** Print and graphic prompts open Design Studio, which the Live Demo does not include. */
+const GRAPHIC_QUICK_ACTION_IDS = new Set(["print-design", "poster-design", "business-card-design"]);
 
 export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpen, launchBrief, onLauncherOpenChange, badge, headline, subtitle, chatGlow = false, demoGeneration = false }: HeroSectionProps) {
   const [discoveryActive, setDiscoveryActive] = useState(false);
@@ -227,9 +285,9 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
             <AIAssistantCore
               key={`${user ? `site-discovery:${user.id}` : "site-discovery:anonymous"}:${chatResetKey}`}
               appearance="unison"
-              className={cn("transition-[height] duration-500 motion-reduce:transition-none", launcherOpen || discoveryActive ? "h-[min(740px,85dvh)]" : "h-[250px] sm:h-[270px]")}
+              className={cn("transition-[height] duration-500 motion-reduce:transition-none", launcherOpen || discoveryActive ? "h-[min(740px,85dvh)]" : "h-[360px] sm:h-[330px]")}
               placeholder="Tell Affinity about your idea..."
-              quickActions={demoGeneration ? HOME_QUICK_ACTIONS.filter((action) => action.id !== "print-design") : HOME_QUICK_ACTIONS}
+              quickActions={demoGeneration ? HOME_QUICK_ACTIONS.filter((action) => !GRAPHIC_QUICK_ACTION_IDS.has(action.id)) : HOME_QUICK_ACTIONS}
               aiMode="site-discovery"
               persistenceKey={user ? siteDiscoveryMessagesKey(user.id) : undefined}
               onContinueToWizard={onSiteConfirmed}
@@ -266,7 +324,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
             />
             </div>
             <p className="mt-2 text-center text-xs text-white/40">
-              {launcherOpen || discoveryActive ? "Reply in chat to refine your idea. Create your site when you're ready." : "Describe your idea or choose a starting point above"}
+              {launcherOpen || discoveryActive ? "Reply in chat to refine your idea. Create your site when you're ready." : "Describe your idea or pick one of the floating ideas"}
             </p>
           </motion.div>
           </div>
