@@ -9,9 +9,10 @@
 - [x] F — Scoped source edits and exact rollback through the same writer; records read-only; structural Unison ops refused
 - [ ] G — Publish the same accepted revision (blocked on E; publish stays blocked)
 - [ ] ARIA fidelity fixture run (blocked: ariastudios.zip not uploaded)
-- [ ] Signed-in end-to-end import in the browser (not yet run)
-- [ ] D/E for plain HTML sites: run the original files unchanged in an isolated frame + repeatable visual comparison harness
-- [ ] Drag and drop files, folders or ZIPs onto the Affinity chat to import them (same import path)
+- [ ] Signed-in end-to-end import in the browser (blocked: the preview sign-in belongs to a different account system than the app's Unison backend)
+- [x] D/E for plain HTML sites: original files run unchanged in an isolated frame; repeatable comparison harness (`scripts/import-parity/`) showed 0 differing pixels at 3 sizes on two sites
+- [ ] D/E for React/Vite, TanStack Start, Next and other build-based projects (blocked: needs a hosted build worker; the existing container preview gateway is not configured)
+- [x] Drag and drop files, folders or ZIPs onto the Affinity chat (Home + setup) to import them unchanged
 
 ## Active: Sparse, generic generated pages (2026-11-10)
 - [x] Page rules (design text contracts, form placement, blueprints, business facts) were cut from every page request; now carried in full
