@@ -133,6 +133,20 @@ export function geminiOwnsLeadBudget(
   return !geminiUnavailable && !models.slice(modelIndex + 1).some((candidate) => !isGeminiModelId(candidate.id));
 }
 
+/**
+ * Thinking level sent to the direct Gemini OpenAI-compatible endpoint.
+ * Gemini 3 models think at their (slow) default level unless told otherwise,
+ * and cannot switch thinking fully off, so "none" maps to "low" there.
+ */
+export function directGeminiReasoningEffort(
+  modelId: string,
+  effort?: "none" | "low" | "medium" | "high",
+): "none" | "low" | "medium" | "high" | undefined {
+  if (!effort) return undefined;
+  if (effort === 'none' && /^(?:google\/)?gemini-3/.test(modelId)) return 'low';
+  return effort;
+}
+
 export function buildPlannedChatCompletionRequest(opts: {
   model: ModelSpec;
   aiMessages: Array<{ role: string; content: unknown }>;
@@ -321,8 +335,11 @@ export async function runProviderLoop(opts: {
     ];
 
     let rateRetries = 0;
+    // Set once Gemini rejects the thinking field; the retry then uses its default.
+    let reasoningRejected = false;
     for (let modelIndex = 0; modelIndex < geminiModels.length; modelIndex++) {
       const model = geminiModels[modelIndex];
+      const effort = reasoningRejected ? undefined : directGeminiReasoningEffort(model.id, reasoningEffort);
       throwIfCancelled();
       const remaining = budgetRemaining();
       if (remaining < 8000) {
@@ -345,6 +362,7 @@ export async function runProviderLoop(opts: {
             model: model.id,
             messages: aiMessages,
             max_tokens: model.maxTokens,
+            ...(effort ? { reasoning_effort: effort } : {}),
             ...(hasTools ? { tools, tool_choice: effectiveToolChoice } : {}),
           }),
           signal: attempt.signal,
@@ -374,6 +392,13 @@ export async function runProviderLoop(opts: {
 
         if (!resp.ok) {
           const errText = await resp.text();
+          if (resp.status === 400 && effort && /reasoning|thinking/i.test(errText)) {
+            // A fast refusal of the thinking field, not of the request: retry once without it.
+            console.warn(`[AI-Hybrid] ${model.label} rejected reasoning_effort=${effort}; retrying with its default thinking.`);
+            reasoningRejected = true;
+            modelIndex--;
+            continue;
+          }
           console.warn(`[AI-Hybrid] ${model.label} error ${resp.status}: ${errText.substring(0, 300)}`);
           recordProviderError(model.label, `${resp.status} ${errText.substring(0, 200)}`);
           continue;

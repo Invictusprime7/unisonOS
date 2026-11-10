@@ -235,7 +235,9 @@ export function runAssistantOrchestrator(
     const providerPlan = buildProviderPlan(task, true, { timeoutMs: 110000, maxTokens: task.type === 'site_page_author' ? 16000 : 48000, ...parsed.gatewayOptions }, 'complex', context);
     return runComposerLane(context, corsHeaders, aiMessages => runProviderLoop({
       aiMessages, providerPlan, navPageGen: false,
-      reasoningEffort: parsed.gatewayOptions?.reasoningEffort ?? (task.type === 'site_page_author' ? 'low' : 'medium'), signal,
+      // Page batches and fix rounds are bounded hunks; default Gemini 3 thinking
+      // alone can consume the whole provider window on a large page.
+      reasoningEffort: parsed.gatewayOptions?.reasoningEffort ?? (task.type === 'builder_source_edit' ? 'medium' : 'low'), signal,
       totalBudgetMs: Math.max(1, deadline - Date.now()),
       guestUsageMeter,
     }));
