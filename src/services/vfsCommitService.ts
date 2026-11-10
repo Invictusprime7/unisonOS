@@ -2304,7 +2304,12 @@ async function commitImportedSourceMutation(args: {
   } else {
     working = { ...before };
     for (const op of patch.fileOps) {
-      const path = normalizeAuthoredPath(op.path);
+      let path: string;
+      try {
+        path = normalizeAuthoredPath(op.path);
+      } catch {
+        throw new CommitGuardError('SCOPE_ESCAPE', 'imported-source-scope', `[VFSCommitService] Unsafe file path: ${op.path}`, { path: op.path });
+      }
       if (op.type === 'delete') delete working[path];
       else working[path] = op.contents;
     }
