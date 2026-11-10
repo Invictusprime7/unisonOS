@@ -35,6 +35,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { FileDropZone, DroppedFile } from "@/components/creatives/web-builder/FileDropZone";
+import { FloatingPromptPills } from "./FloatingPromptPills";
 import { useAIFileAnalysis } from "@/hooks/useAIFileAnalysis";
 import {
   buildConfirmedSiteBrief,
