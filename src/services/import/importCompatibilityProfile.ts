@@ -4,9 +4,10 @@
  * Detects what the project IS (framework, toolchain, routes, styles, fonts,
  * aliases, environment names, server capabilities, any Unison brief) without
  * changing a byte. The profile also decides honestly whether Unison has a
- * source-compatible Preview runtime for it. Today no isolated build worker
- * exists, so every framework resolves to a blocked adapter with a reason —
- * Unison never substitutes its own runtime or components to "make it render".
+ * source-compatible Preview runtime for it. Plain HTML sites run unchanged in
+ * an isolated frame; frameworks that need their own build worker resolve to a
+ * blocked adapter with a reason — Unison never substitutes its own runtime or
+ * components to "make it render".
  */
 import { STATIC_HTML_PREVIEW_ADAPTER } from './staticHtmlPreview';
 import type { ImportManifest } from './secureIntake';
