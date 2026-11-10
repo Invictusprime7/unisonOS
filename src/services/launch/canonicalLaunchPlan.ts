@@ -180,6 +180,18 @@ export function resolveCanonicalLaunchContracts(
     projectId: selections.projectId ?? selections.businessId,
     designSelection: selections.designSelection,
   });
+  // Owner-chosen layouts from the conversation pin per planned page, so the
+  // App Builder ranks the certified design the owner described first.
+  const ownerPinsByRoute = pinnedImplementationsByRoute(selections.designSelection, sitePlan.pages.map((page) => page.route));
+  if (Object.keys(ownerPinsByRoute).length) {
+    const allowed = new Set((registryContext.implementations ?? []).map((implementation) => implementation.id));
+    const byPage: Record<string, string[]> = { ...(registryContext.pinnedImplementationIdsByPage ?? {}) };
+    for (const page of sitePlan.pages) {
+      const ids = (ownerPinsByRoute[page.route] ?? []).filter((id) => allowed.has(id));
+      if (ids.length) byPage[page.id] = [...new Set([...(byPage[page.id] ?? []), ...ids])];
+    }
+    registryContext.pinnedImplementationIdsByPage = byPage;
+  }
   const uiFoundationContract: AppBuilderUIFoundation = {
     version: uiFoundation.manifest.version,
     manifestPath: '/.unison/ui-manifest.json',
@@ -230,6 +242,14 @@ export function buildCanonicalLaunchPlan(
     '/src/index.css': resolved.themedCss,
     '/.unison/design-intervention.json': JSON.stringify(resolved.designIntervention, null, 2),
     [WIZARD_REGISTRY_CONTEXT_PATH]: JSON.stringify(resolved.registryContext, null, 2),
+    // The conversational creative brief seals into the site so Preview,
+    // reopen and later Affinity edits read the same owner decisions.
+    ...(selections.universalCreation?.experienceDirection ? {
+      [CREATIVE_BRIEF_PATH]: serializeCreativeBrief(
+        selections.universalCreation.experienceDirection,
+        resolved.sitePlan.pages.map((page) => ({ route: page.route, title: page.title })),
+      ),
+    } : {}),
   };
   infrastructureFiles['/src/App.tsx'] = generateCanonicalRouter(
     resolved.playground.pageRegistry,
