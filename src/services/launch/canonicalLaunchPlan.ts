@@ -249,6 +249,7 @@ export function buildCanonicalLaunchPlan(
       [CREATIVE_BRIEF_PATH]: serializeCreativeBrief(
         selections.universalCreation.experienceDirection,
         resolved.sitePlan.pages.map((page) => ({ route: page.route, title: page.title })),
+        { industry: resolved.sitePlan.industry ?? null, vertical: selections.universalCreation.vertical ?? null },
       ),
     } : {}),
   };
