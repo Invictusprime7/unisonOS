@@ -142,7 +142,8 @@ function topologyPagesFromPrompt(text: string, industry: string | null): Univers
 function uniquePagesByRoute(pages: UniversalCreationInput['pages']): UniversalCreationInput['pages'] {
   const seen = new Set<string>();
   return pages.filter((page) => {
-    const key = page.route.toLowerCase();
+    // "/fan-sign-ups" and "/fan-sign-up" are the same destination.
+    const key = page.route.toLowerCase().replace(/s$/, '');
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -262,9 +263,10 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   const focusedNeed = focusedGoal ? GOAL_CUSTOMER_NEED[focusedGoal] : undefined;
   const resolvedIndustry = !promptFirst && confident ? analysis!.industry : null;
   const profileRoutes = resolvedIndustry ? getIndustryProfile(resolvedIndustry)?.defaultPages.map((page) => page.path) ?? [] : [];
-  const confirmedPages = confirmedPagesFromDirection(acceptedDirection, resolvedIndustry);
+  const pageVertical = resolveIndustryVertical(semanticText) ?? (acceptedDirection ? resolveIndustryVertical(acceptedDirection) : null);
+  const confirmedPages = confirmedPagesFromDirection(acceptedDirection, resolvedIndustry, pageVertical?.packId);
   const listedNames = ownerListedPageNames(semanticText);
-  const listedPages = listedNames.length ? confirmedPagesFromDirection(`Pages: ${listedNames.join(', ')}`, resolvedIndustry).pages : [];
+  const listedPages = listedNames.length ? confirmedPagesFromDirection(`Pages: ${listedNames.join(', ')}`, resolvedIndustry, pageVertical?.packId).pages : [];
   const namedCreationPages = uniquePagesByRoute([
     ...mentionedPages.map((page) => pageDetailsForChoice(page, resolvedIndustry)),
     ...topologyPagesFromPrompt(semanticText, resolvedIndustry),
