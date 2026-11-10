@@ -11,8 +11,8 @@ import { listTopologyPageRoleAliases } from '@/platform/core/siteTopologyPlanner
 import { collectResolvedCompositions } from '@/platform/core/resolvedComposition';
 import { COMPOSER_CONTEXT_LIMIT, packContextBlocks } from './contextBudget';
 import { renderCreativeRequirements } from '@/services/launch/creativePlan';
-import { renderVerticalKnowledge } from '@/services/composition/verticals';
-import { ARCHETYPE_ADVISORY_POLICY, CREATIVE_AUTHORITY_ORDER, MIXED_SECTION_AUTHORING_POLICY } from './creativeAuthorityPolicy';
+import { renderVerticalKnowledge, verticalForIndustry } from '@/services/composition/verticals';
+import { ARCHETYPE_ADVISORY_POLICY, CREATIVE_AUTHORITY_ORDER, MIXED_SECTION_AUTHORING_POLICY, SECTION_CONTENT_DEPTH_POLICY } from './creativeAuthorityPolicy';
 
 /** Home references stay compact so later pages keep room for their own design vocabulary. */
 export const HOME_OBJECT_CONTEXT_LIMIT = 2_500;
@@ -205,6 +205,8 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const materialization = materializeDesignSources(designSources);
   const creation = business.universalCreation;
   const openEnded = creation?.mode === 'open-ended';
+  // Every build gets trade knowledge: the prompt's vertical, else the industry's own pack.
+  const vertical = creation?.vertical ?? verticalForIndustry(business.industry);
   const creationContext = creation ? [
     `VISITOR CREATION SPECIFICATION (${creation.mode}): site purpose: ${creation.sitePurpose}; subject: ${creation.subject}.`,
     `Explicit page plan: ${creation.pages.map((page) => `${page.route} (${page.title}; role ${page.suggestedRole ?? 'custom'}): ${page.purpose}`).join(' | ') || 'Home only.'}`,
@@ -219,12 +221,14 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
       : []),
     renderCreativeRequirements(creation.requirements, creation.designDirection),
     ...(creation.experienceDirection ? ['Experience requirements (req:experience:*) are the owner\'s conversational design choices: REUSE renders the named certified design (its data-ut-variant), ADAPT keeps the named design as the base and marks a site-local derivative with // @unison-derived-from <id>, AUTHOR creates an original site-local component. Realize each on its stated page; never silently substitute a different design or art direction.'] : []),
-    renderVerticalKnowledge(creation.vertical),
+    renderVerticalKnowledge(vertical),
     ...(openEnded ? ['The selected industry is only a compatibility hint; do not replace the visitor subject or purpose with an industry template. Author site-local TSX wherever certified designs do not fit the prompt.'] : []),
     ...(creation.sitePurpose.toLowerCase().includes('editorial')
       ? ['Editorial pages may render static sample articles. When a published articles content type exists, load it through listPublishedContent from @/components/publishedActionRuntime. If no type or published rows are available, keep a local sample/empty state; do not claim CMS editing or publishing without canonical owner authorization.']
       : []),
   ].join('\n') : '';
+  // Template installs (no prompt) still get their trade knowledge, as advisory context.
+  const templateVerticalContext = creation ? '' : renderVerticalKnowledge(vertical);
   const industryContext = buildIndustryAuthoringContext(business.industry, business.capabilities);
   const iconContext = buildIndustryIconContext(business.industry, business.capabilities, business.intents,
     contract.design.compositionPlan.pages.flatMap((page) => page.target.sectionOrder));
@@ -338,6 +342,8 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 4, text: `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.` },
     { priority: 5, text: `Protected paths: ${runtime.protectedPaths.join(', ')}.` },
     { priority: 5, text: `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.` },
+    // Advisory trade knowledge for template installs leaves the capped channel first (continues in overflow).
+    { priority: 6, trimmable: true, text: templateVerticalContext },
   ], budget);
   return {
     contract,
@@ -404,7 +410,7 @@ function renderCertifiedOptions(
   return lines.length
     ? [
       'CERTIFIED OPTIONS FOR THIS PAGE (ranked; REUSE/ADAPT only where they fit the prompt; name[]{a|b?} is an array of objects, ? = optional):',
-      'SECTION CONTENT DEPTH: pass a certified dispatcher props={{...}} using exactly the prop names listed for its variant (unlisted names are ignored and render nothing). Fill every listed text prop: headline plus subheadline/description of one to three specific sentences written from the owner\'s prompt; give heroes and CTA sections one or two ctas to real site routes; give item arrays three or more complete items. Descriptive, evocative copy is expected; only names, prices, dates, addresses, ratings and statistics count as facts that must come from the brief.',
+      SECTION_CONTENT_DEPTH_POLICY,
       ...lines,
     ].join('\n')
     : '';

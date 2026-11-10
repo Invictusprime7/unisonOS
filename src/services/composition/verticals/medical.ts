@@ -1,0 +1,50 @@
+import type { IndustryVerticalPack } from './types';
+
+export const MEDICAL: IndustryVerticalPack = {
+  id: 'medical',
+  label: 'Health clinics & practices',
+  keywords: ['clinic', 'medical', 'medical practice', 'dental', 'dentist', 'dental clinic', 'orthodontist', 'doctor', 'gp practice', 'physician', 'hospital', 'healthcare', 'health care', 'physiotherapy', 'physiotherapist', 'physio', 'chiropractor', 'optometrist', 'optician', 'pharmacy', 'veterinary', 'vet clinic', 'veterinarian', 'dermatology', 'dermatologist', 'paediatric', 'pediatric', 'fertility clinic', 'therapist', 'psychotherapist', 'psychologist', 'counselling', 'counseling', 'mental health', 'nutritionist', 'dietitian', 'aesthetics clinic'],
+  hostIndustry: 'local-service',
+  vocabulary: ['appointments', 'patients', 'treatments', 'practitioners', 'consultation', 'insurance', 'referrals', 'aftercare'],
+  contentObjects: [
+    { id: 'treatment', label: 'Treatment or service', fields: ['name', 'who it helps', 'what to expect', 'duration'], sample: 'Hygiene visit · 45 min' },
+    { id: 'practitioner', label: 'Practitioner', fields: ['name', 'title', 'qualifications (owner-supplied)', 'portrait'], sample: 'Lead physiotherapist' },
+    { id: 'patient-info', label: 'Patient information', fields: ['topic', 'guidance'], sample: 'What to bring to your first visit' },
+    { id: 'hours', label: 'Clinic hours', fields: ['day', 'hours', 'emergency notes'], sample: 'Mon–Fri · 8:00–18:00 (owner hours)' },
+  ],
+  proofMechanisms: ['practitioner qualifications and registrations (owner-supplied)', 'patient testimonials (owner-supplied, with consent)', 'accreditations', 'years serving the community'],
+  interactions: [
+    { id: 'appointment-request', label: 'appointment request', keywords: ['book an appointment', 'request an appointment', 'appointment booking', 'new patients', 'book online'], brief: 'Request an appointment through the registered form with no medical details beyond what is necessary; confirmed only after acknowledgement.', certifiedFamilies: ['contact'], originalComponent: 'AppointmentRequest' },
+    { id: 'practitioner-profiles', label: 'practitioner profiles', keywords: ['meet the team', 'our doctors', 'our dentists', 'practitioners', 'meet the doctor'], brief: 'Practitioners with titles and focus areas from the owner.', certifiedFamilies: ['team'], originalComponent: 'PractitionerProfiles' },
+    { id: 'treatment-guide', label: 'treatment guide', keywords: ['treatments', 'conditions we treat', 'what we treat', 'services we offer'], brief: 'Treatments in plain language: who it helps and what to expect; never diagnosis.', certifiedFamilies: ['services', 'features'], originalComponent: 'TreatmentGuide' },
+    { id: 'new-patient-faq', label: 'new patient information', keywords: ['first visit', 'new patient information', 'insurance accepted', 'patient forms'], brief: 'What to bring, insurance and arrival notes from the owner.', certifiedFamilies: ['faq'], originalComponent: 'NewPatientInfo' },
+    { id: 'emergency-banner', label: 'urgent care notice', keywords: ['emergency appointments', 'urgent care', 'out of hours'], brief: 'A clear notice with the owner’s urgent contact route and a reminder to call emergency services when needed.', certifiedFamilies: ['cta'], originalComponent: 'UrgentCareNotice' },
+  ],
+  variants: [
+    { id: 'clinic', label: 'Medical or dental clinic', keywords: ['clinic', 'medical practice', 'dental', 'dentist', 'dental clinic', 'orthodontist', 'doctor', 'gp practice', 'hospital', 'dermatology', 'fertility clinic', 'aesthetics clinic'], vocabulary: ['check-ups', 'specialists', 'referrals'], signatureInteractions: ['appointment-request', 'treatment-guide', 'practitioner-profiles'],
+      pages: [{ title: 'Treatments', route: '/treatments', role: 'services', purpose: 'What we offer.' }, { title: 'Our Team', route: '/team', role: 'about', purpose: 'Practitioners.' }, { title: 'Patients', route: '/patients', role: 'faq', purpose: 'New patient information.' }, { title: 'Book', route: '/book', role: 'booking', purpose: 'Request an appointment.' }],
+      primaryAction: 'request an appointment', proof: ['qualifications', 'patient reviews'] },
+    { id: 'therapy-allied', label: 'Therapy & allied health', keywords: ['physiotherapy', 'physiotherapist', 'physio', 'chiropractor', 'therapist', 'psychotherapist', 'psychologist', 'counselling', 'counseling', 'mental health', 'nutritionist', 'dietitian'], vocabulary: ['sessions', 'assessment', 'treatment plan', 'telehealth'], signatureInteractions: ['appointment-request', 'treatment-guide', 'new-patient-faq'],
+      pages: [{ title: 'How I Help', route: '/how-i-help', role: 'services', purpose: 'Approach and services.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Background and credentials.' }, { title: 'FAQ', route: '/faq', role: 'faq', purpose: 'Fees and sessions.' }, { title: 'Book', route: '/book', role: 'booking', purpose: 'Book a session.' }],
+      primaryAction: 'book a first session', proof: ['credentials', 'professional registrations'] },
+    { id: 'vet-pharmacy', label: 'Vet, optician or pharmacy', keywords: ['veterinary', 'vet clinic', 'veterinarian', 'optometrist', 'optician', 'pharmacy'], vocabulary: ['pets', 'eye tests', 'prescriptions'], signatureInteractions: ['appointment-request', 'emergency-banner'],
+      pages: [{ title: 'Services', route: '/services', role: 'services', purpose: 'Care we provide.' }, { title: 'Team', route: '/team', role: 'about', purpose: 'Who you will see.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Hours and booking.' }],
+      primaryAction: 'book an appointment', proof: ['qualifications', 'reviews'] },
+  ],
+  imagery: ['calm, bright treatment spaces', 'warm practitioner portraits', 'reassuring human moments'],
+  motion: ['minimal, calm transitions', 'no attention-grabbing effects'],
+  designTerms: ['calm', 'trustworthy', 'clean', 'minimal', 'soft', 'accessible'],
+  honesty: ['Qualifications, registrations, insurance and hours come from the owner.', 'No medical claims, outcomes or diagnosis; patient testimonials only with the owner’s consent.'],
+  roleProfiles: {
+    home: {
+      narrativeGoals: ['reassure and explain the care offered', 'introduce the practitioners', 'make booking simple'],
+      requiredCapabilities: [], domainVocabulary: ['appointments', 'treatments', 'patients'],
+      character: { density: 'medium', mediaDominance: 0.55, informationDensity: 0.65, conversionPressure: 0.7, typographyDominance: 0.55 },
+      preferredFamilies: ['hero', 'services', 'team', 'testimonials', 'faq', 'cta'],
+      sectionOrderCandidates: [['hero', 'services', 'team', 'testimonials', 'cta'], ['hero', 'services', 'faq', 'cta'], ['hero', 'about', 'services', 'testimonials', 'cta']],
+      heroCandidates: ['split-media', 'editorial-intro'], geometryCandidates: ['split', 'grid', 'centered'],
+      preferredCompositionPatterns: ['booking action in the hero', 'plain-language treatment cards'],
+      discouragedCompositionPatterns: ['dramatic dark themes', 'busy motion'], noveltyBudget: 0.35,
+    },
+  },
+};

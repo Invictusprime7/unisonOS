@@ -1,0 +1,50 @@
+import type { IndustryVerticalPack } from './types';
+
+export const PROFESSIONAL_SERVICES: IndustryVerticalPack = {
+  id: 'professional-services',
+  label: 'Legal, finance & professional services',
+  keywords: ['law firm', 'lawyer', 'lawyers', 'attorney', 'attorneys', 'solicitor', 'solicitors', 'barrister', 'legal services', 'legal practice', 'immigration lawyer', 'notary', 'accountant', 'accountants', 'accounting firm', 'accounting', 'bookkeeping', 'bookkeeper', 'tax advisor', 'tax preparation', 'auditor', 'financial advisor', 'financial adviser', 'financial planner', 'wealth management', 'investment firm', 'insurance broker', 'insurance agency', 'hr consultancy', 'recruitment agency', 'staffing agency'],
+  hostIndustry: 'coaching',
+  vocabulary: ['practice areas', 'consultation', 'engagement', 'fees', 'compliance', 'confidential', 'clients'],
+  contentObjects: [
+    { id: 'practice-area', label: 'Practice area or service', fields: ['name', 'who it is for', 'what we handle', 'how fees work (owner-supplied)'], sample: 'Employment law · for employers and employees' },
+    { id: 'professional', label: 'Partner or advisor', fields: ['name', 'title', 'admissions or qualifications (owner-supplied)', 'portrait'], sample: 'Managing partner' },
+    { id: 'insight', label: 'Insight article', fields: ['title', 'date', 'summary'], sample: 'What the new tax year means for freelancers (sample)' },
+    { id: 'step', label: 'Engagement step', fields: ['step', 'description'], sample: '01 · Confidential consultation' },
+  ],
+  proofMechanisms: ['credentials, admissions and registrations (owner-supplied)', 'client testimonials (owner-supplied)', 'sectors served', 'published insights'],
+  interactions: [
+    { id: 'consultation-request', label: 'consultation request', keywords: ['free consultation', 'book a consultation', 'request a consultation', 'case evaluation', 'speak to a lawyer'], brief: 'A confidential enquiry through the registered form that asks only what is needed; no legal or financial advice in the response.', certifiedFamilies: ['contact'], originalComponent: 'ConsultationRequest' },
+    { id: 'practice-areas', label: 'practice areas', keywords: ['practice areas', 'areas of practice', 'our services', 'areas of expertise'], brief: 'Practice areas as clear, scannable rows with who each serves.', certifiedFamilies: ['services'], originalComponent: 'PracticeAreas' },
+    { id: 'insights', label: 'insights & articles', keywords: ['insights', 'articles', 'legal updates', 'tax tips', 'knowledge hub'], brief: 'Dated articles from the owner, labelled when sample.', certifiedFamilies: ['blog-preview'], originalComponent: 'InsightsList' },
+    { id: 'engagement-steps', label: 'how we work', keywords: ['how we work', 'our process', 'what to expect'], brief: 'From first call to resolution in plain steps.', certifiedFamilies: ['features'], originalComponent: 'EngagementSteps' },
+    { id: 'fee-guide', label: 'fee guide', keywords: ['fees', 'fixed fees', 'pricing guide', 'our fees'], brief: 'How fees work, exactly as the owner states; no invented figures.', certifiedFamilies: ['pricing', 'faq'], originalComponent: 'FeeGuide' },
+  ],
+  variants: [
+    { id: 'law', label: 'Law firm', keywords: ['law firm', 'lawyer', 'lawyers', 'attorney', 'attorneys', 'solicitor', 'solicitors', 'barrister', 'legal services', 'legal practice', 'immigration lawyer', 'notary'], vocabulary: ['matters', 'litigation', 'advisory'], signatureInteractions: ['practice-areas', 'consultation-request', 'engagement-steps'],
+      pages: [{ title: 'Practice Areas', route: '/practice-areas', role: 'services', purpose: 'What we handle.' }, { title: 'Our People', route: '/people', role: 'about', purpose: 'Partners and lawyers.' }, { title: 'Insights', route: '/insights', role: 'blog', purpose: 'Legal updates.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Confidential consultation.' }],
+      primaryAction: 'request a consultation', proof: ['admissions', 'client testimonials'] },
+    { id: 'accounting-finance', label: 'Accounting & financial advice', keywords: ['accountant', 'accountants', 'accounting firm', 'accounting', 'bookkeeping', 'bookkeeper', 'tax advisor', 'tax preparation', 'auditor', 'financial advisor', 'financial adviser', 'financial planner', 'wealth management', 'investment firm'], vocabulary: ['returns', 'payroll', 'planning', 'compliance'], signatureInteractions: ['practice-areas', 'fee-guide', 'consultation-request'],
+      pages: [{ title: 'Services', route: '/services', role: 'services', purpose: 'Accounting and advice.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Team and credentials.' }, { title: 'Insights', route: '/insights', role: 'blog', purpose: 'Tax and finance updates.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Book a call.' }],
+      primaryAction: 'book an introductory call', proof: ['qualifications', 'client testimonials'] },
+    { id: 'advisory-people', label: 'Insurance, HR & recruitment', keywords: ['insurance broker', 'insurance agency', 'hr consultancy', 'recruitment agency', 'staffing agency'], vocabulary: ['cover', 'placements', 'candidates', 'policies'], signatureInteractions: ['practice-areas', 'engagement-steps', 'consultation-request'],
+      pages: [{ title: 'Services', route: '/services', role: 'services', purpose: 'What we provide.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Who we are.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Get in touch.' }],
+      primaryAction: 'get in touch', proof: ['sectors served', 'testimonials'] },
+  ],
+  imagery: ['composed portraits of the team', 'considered workspace details', 'documents and signing moments'],
+  motion: ['restrained; subtle fades only'],
+  designTerms: ['trustworthy', 'editorial', 'serif', 'restrained', 'classic', 'minimal'],
+  honesty: ['Admissions, registrations, results and fees only from the owner.', 'Copy never gives legal, tax or investment advice or promises outcomes.'],
+  roleProfiles: {
+    home: {
+      narrativeGoals: ['say who is helped with what', 'establish credibility', 'invite a confidential first conversation'],
+      requiredCapabilities: [], domainVocabulary: ['practice areas', 'consultation', 'clients'],
+      character: { density: 'medium', mediaDominance: 0.4, typographyDominance: 0.8, editoriality: 0.7, informationDensity: 0.65, conversionPressure: 0.6 },
+      preferredFamilies: ['hero', 'services', 'about', 'stats', 'testimonials', 'cta'],
+      sectionOrderCandidates: [['hero', 'services', 'about', 'testimonials', 'cta'], ['hero', 'stats', 'services', 'team', 'cta'], ['hero', 'about', 'services', 'faq', 'cta']],
+      heroCandidates: ['typographic', 'editorial-intro'], geometryCandidates: ['split', 'centered'],
+      preferredCompositionPatterns: ['serif statement hero', 'practice areas as editorial rows'],
+      discouragedCompositionPatterns: ['playful illustrations', 'heavy motion'], noveltyBudget: 0.35,
+    },
+  },
+};

@@ -42,7 +42,7 @@ describe('industry vertical detection', () => {
 
   it('ignores negated trades and unrelated businesses', () => {
     expect(resolveIndustryVertical('A strength gym, no weddings or festivals.')).toMatchObject({ packId: 'fitness', blendPackId: null });
-    expect(resolveIndustryVertical('An accounting firm for small businesses.')).toBeNull();
+    expect(resolveIndustryVertical('A used truck dealership in Tamale.')).toBeNull();
   });
 });
 

@@ -16,13 +16,48 @@ import { WEDDINGS } from './weddings';
 import { FITNESS } from './fitness';
 import { HOSPITALITY } from './hospitality';
 import { PHOTOGRAPHY } from './photography';
+import { RESTAURANT } from './restaurant';
+import { SALON } from './salon';
+import { LOCAL_SERVICE } from './localService';
+import { COACHING } from './coaching';
+import { REAL_ESTATE } from './realEstate';
+import { ECOMMERCE } from './ecommerce';
+import { PORTFOLIO } from './portfolio';
+import { AGENCY } from './agency';
+import { NONPROFIT } from './nonprofit';
+import { SAAS } from './saas';
+import { MEDICAL } from './medical';
+import { PROFESSIONAL_SERVICES } from './professionalServices';
+import { EDUCATION } from './education';
+import { MEDIA } from './media';
 
 export type { IndustryVerticalPack, VerticalInteraction, VerticalPage, VerticalSubVariant } from './types';
 
-export const VERTICAL_PACKS: readonly IndustryVerticalPack[] = [SPORTS, TRAVEL, EVENTS, MUSIC, WEDDINGS, FITNESS, HOSPITALITY, PHOTOGRAPHY];
+// First wave: deep experience verticals. Second wave: every other common
+// website use case, so no prompt falls back to generic industry knowledge.
+export const VERTICAL_PACKS: readonly IndustryVerticalPack[] = [
+  SPORTS, TRAVEL, EVENTS, MUSIC, WEDDINGS, FITNESS, HOSPITALITY, PHOTOGRAPHY,
+  RESTAURANT, SALON, LOCAL_SERVICE, COACHING, REAL_ESTATE, ECOMMERCE, PORTFOLIO,
+  AGENCY, NONPROFIT, SAAS, MEDICAL, PROFESSIONAL_SERVICES, EDUCATION, MEDIA,
+];
 
 export function getVerticalPack(id: string | null | undefined): IndustryVerticalPack | undefined {
   return id ? VERTICAL_PACKS.find((pack) => pack.id === id) : undefined;
+}
+
+/**
+ * The pack for a canonical industry id (salon_spa, real-estate, …) when no
+ * prompt vertical was resolved — template installs and sites launched before
+ * the vertical was sealed still get their trade knowledge.
+ */
+export function verticalForIndustry(industry: string | null | undefined): CreationVertical | null {
+  const key = (industry ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  const aliases: Record<string, string> = {
+    'salon-spa': 'salon', 'creator-portfolio': 'portfolio', 'coaching-consulting': 'coaching', 'real-estate': 'real-estate',
+    'local-service': 'local-service', contractor: 'local-service', legal: 'professional-services', 'non-profit': 'nonprofit',
+  };
+  const pack = getVerticalPack(aliases[key] ?? key);
+  return pack ? { packId: pack.id, variantId: null, blendPackId: null, confidence: 0.5, evidence: [industry ?? pack.id] } : null;
 }
 
 const NEGATION = /\b(?:no|not|without|avoid|exclude|omit|skip|never|don't|do not|doesn't|does not)\b(?:\s+\w+){0,3}\s*$/i;
@@ -200,7 +235,10 @@ export function matchVerticalPageName(name: string, preferredPackId?: string): V
         const title = singular(page.title);
         const slug = singular(page.route.replace(/^\//, ''));
         if (key === title || key === slug) return page;
-        if (!prefix && (key.startsWith(`${title} `) || key.startsWith(`${slug} `))) prefix = page;
+        // Prefix matches ("tour dates" → Tour) stay inside the site's own trade
+        // when it is known: "product details" on a store is not SaaS's Product page.
+        const prefixScope = !preferredPackId || pack.id === preferredPackId;
+        if (!prefix && prefixScope && (key.startsWith(`${title} `) || key.startsWith(`${slug} `))) prefix = page;
       }
     }
   }

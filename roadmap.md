@@ -6,6 +6,13 @@
 - [x] Design sections accept common alternate text names (title/body/buttons)
 - [ ] Live wedding rebuild to confirm richer pages (needs funded Gemini on Unison; no backend deploy required for these fixes)
 
+## Active: All website use cases + persistent enrichment (2026-11-10)
+- [x] Knowledge packs for restaurants, salons, trades, coaching, real estate, stores, portfolios, agencies, nonprofits, SaaS, clinics, legal/finance, education, media
+- [x] Own verified photo library for every use case (real estate, nonprofit, legal/finance, education, media added)
+- [x] Launch seals industry + vertical in the saved brief; edits and later pages reuse trade knowledge, copy depth and photos
+- [x] Pages added later no longer cut their instructions short; template installs get their industry pack
+- [ ] Live AI build per use case (needs funded Gemini on Unison)
+
 ## Active: Industry vertical coverage
 - [x] Deep vertical packs (sports, flights/travel, events, music, weddings, fitness, hotels, photography/film) with sub-variants, vocabulary, content objects, proof, interactions, pages, composition profiles
 - [x] Wire into chat plan (detection, interaction requirements, inferred pages), composition, design ranking, page brief, coverage + library promotion candidates

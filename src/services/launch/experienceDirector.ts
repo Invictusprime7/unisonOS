@@ -20,6 +20,7 @@ import type {
   CreativeDecision,
   CreativeDecisionOrigin,
   CreativeResolution,
+  CreationVertical,
   DesignDirection,
   ExperienceDirection,
   UniversalCreationPage,
@@ -782,14 +783,33 @@ export function describeResolution(decision: CreativeDecision): string {
 
 // ── Persisted brief + edit refinement ────────────────────────────────────────
 
+/**
+ * The launch's industry enrichment, sealed with the brief so later Affinity
+ * edits and new pages keep the same trade knowledge, photo library and copy
+ * depth instead of re-guessing from a short edit instruction.
+ */
+export interface PersistedSiteEnrichment {
+  industry: string | null;
+  vertical: CreationVertical | null;
+}
+
 export interface PersistedCreativeBrief {
   version: 1;
   direction: ExperienceDirection;
   pages: Array<{ route: string; title: string }>;
+  /** Absent on sites launched before enrichment was sealed. */
+  site?: PersistedSiteEnrichment;
 }
 
-export function serializeCreativeBrief(direction: ExperienceDirection, pages: readonly Pick<UniversalCreationPage, 'route' | 'title'>[]): string {
+export function serializeCreativeBrief(
+  direction: ExperienceDirection,
+  pages: readonly Pick<UniversalCreationPage, 'route' | 'title'>[],
+  site?: Partial<PersistedSiteEnrichment> | null,
+): string {
   const brief: PersistedCreativeBrief = { version: 1, direction, pages: pages.map(({ route, title }) => ({ route, title })) };
+  if (site && (site.industry || site.vertical)) {
+    brief.site = { industry: site.industry ?? null, vertical: site.vertical ?? null };
+  }
   return JSON.stringify(brief, null, 2);
 }
 
@@ -819,7 +839,8 @@ export function refinedCreativeBriefFile(files: Readonly<Record<string, string>>
   const brief = readCreativeBrief(files);
   if (!brief || !instruction?.trim()) return null;
   const outcome = refineExperienceDirection(brief.direction, instruction, brief.pages);
-  const contents = serializeCreativeBrief(outcome.direction, brief.pages);
+  // Edits refine decisions only; the sealed industry enrichment rides along unchanged.
+  const contents = serializeCreativeBrief(outcome.direction, brief.pages, brief.site);
   if (contents === files[CREATIVE_BRIEF_PATH]) return null;
   return { contents, changed: outcome.changed, locked: outcome.locked };
 }

@@ -1,0 +1,51 @@
+import type { IndustryVerticalPack } from './types';
+
+export const COACHING: IndustryVerticalPack = {
+  id: 'coaching',
+  label: 'Coaching & consulting',
+  keywords: ['coach', 'coaching', 'life coach', 'business coach', 'executive coach', 'career coach', 'leadership coach', 'health coach', 'mindset coach', 'consultant', 'consulting', 'consultancy', 'mentor', 'mentoring', 'mentorship', 'speaker', 'keynote speaker', 'strategist', 'advisor', 'adviser', 'masterclass', 'group programme', 'group program', 'one-to-one sessions'],
+  hostIndustry: 'coaching',
+  vocabulary: ['programmes', 'sessions', 'discovery call', 'outcomes', 'frameworks', 'cohort', 'retainer'],
+  contentObjects: [
+    { id: 'programme', label: 'Programme or offer', fields: ['name', 'who it is for', 'format', 'duration', 'outcomes', 'investment (owner pricing only)'], sample: '12-week leadership intensive · 1:1' },
+    { id: 'framework', label: 'Method or framework step', fields: ['step', 'title', 'description'], sample: '01 · Clarity · define the one result that matters' },
+    { id: 'client-story', label: 'Client story', fields: ['client', 'before', 'after', 'quote'], sample: 'Founder · from overwhelmed to delegating (owner-supplied)' },
+    { id: 'talk', label: 'Talk or workshop', fields: ['title', 'audience', 'format'], sample: 'Keynote · leading through change' },
+  ],
+  proofMechanisms: ['client outcomes and testimonials (owner-supplied)', 'credentials and certifications', 'logos of organisations served (owner-supplied only)', 'media and speaking appearances'],
+  interactions: [
+    { id: 'discovery-call', label: 'discovery call booking', keywords: ['discovery call', 'book a call', 'free consultation', 'strategy call', 'intro call', 'consultation'], brief: 'Book a call through the registered booking or contact form; confirmed only after backend acknowledgement.', certifiedFamilies: ['contact', 'cta'], originalComponent: 'DiscoveryCall' },
+    { id: 'programme-ladder', label: 'programme ladder', keywords: ['programmes', 'programs', 'packages', 'ways to work with me', 'work with me'], brief: 'Offers from entry to premium with who each is for; pricing only from the owner.', certifiedFamilies: ['pricing', 'services'], originalComponent: 'ProgrammeLadder' },
+    { id: 'method', label: 'signature method', keywords: ['my method', 'my approach', 'framework', 'signature method', 'methodology'], brief: 'The coach’s steps as a numbered, visual journey.', certifiedFamilies: ['features'], originalComponent: 'SignatureMethod' },
+    { id: 'transformations', label: 'client transformations', keywords: ['client results', 'success stories', 'transformations', 'case studies'], brief: 'Before/after narratives in the client’s words; owner-supplied only.', certifiedFamilies: ['testimonials'], originalComponent: 'ClientTransformations' },
+    { id: 'lead-magnet', label: 'free resource signup', keywords: ['free guide', 'lead magnet', 'free download', 'free workbook', 'masterclass signup'], brief: 'A free resource offered in exchange for an email through the registered newsletter or lead form.', certifiedFamilies: ['cta', 'contact'], originalComponent: 'FreeResource' },
+    { id: 'speaking', label: 'speaking & workshops', keywords: ['speaking', 'keynotes', 'workshops', 'book me to speak'], brief: 'Talk topics, formats and a booking enquiry.', certifiedFamilies: ['services', 'contact'], originalComponent: 'SpeakingTopics' },
+  ],
+  variants: [
+    { id: 'personal-coach', label: 'Life, career or wellbeing coach', keywords: ['life coach', 'career coach', 'health coach', 'mindset coach', 'coach'], vocabulary: ['1:1 coaching', 'clarity', 'accountability'], signatureInteractions: ['discovery-call', 'programme-ladder', 'transformations'],
+      pages: [{ title: 'Work With Me', route: '/work-with-me', role: 'services', purpose: 'Programmes and sessions.' }, { title: 'About', route: '/about', role: 'about', purpose: 'My story and credentials.' }, { title: 'Stories', route: '/stories', role: 'custom', purpose: 'Client transformations.' }, { title: 'Book a Call', route: '/book-a-call', role: 'booking', purpose: 'Book a discovery call.' }],
+      primaryAction: 'book a discovery call', proof: ['client stories', 'credentials'] },
+    { id: 'business-consultant', label: 'Business consultant or advisor', keywords: ['business coach', 'executive coach', 'leadership coach', 'consultant', 'consulting', 'consultancy', 'strategist', 'advisor'], vocabulary: ['engagements', 'diagnostics', 'retainers', 'outcomes'], signatureInteractions: ['method', 'transformations', 'discovery-call'],
+      pages: [{ title: 'Services', route: '/services', role: 'services', purpose: 'Engagements and offers.' }, { title: 'Approach', route: '/approach', role: 'custom', purpose: 'How we work.' }, { title: 'Case Studies', route: '/case-studies', role: 'gallery', purpose: 'Results for clients.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Start a conversation.' }],
+      primaryAction: 'book a strategy call', proof: ['case studies', 'client logos (owner-supplied)'] },
+    { id: 'speaker-educator', label: 'Speaker or programme creator', keywords: ['speaker', 'keynote speaker', 'masterclass', 'group programme', 'group program', 'mentor', 'mentorship'], vocabulary: ['cohorts', 'keynotes', 'curriculum'], signatureInteractions: ['speaking', 'lead-magnet', 'programme-ladder'],
+      pages: [{ title: 'Programmes', route: '/programmes', role: 'services', purpose: 'Cohorts and courses.' }, { title: 'Speaking', route: '/speaking', role: 'custom', purpose: 'Talks and workshops.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Background.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Bookings and enquiries.' }],
+      primaryAction: 'join a programme or book a talk', proof: ['audiences spoken to', 'participant testimonials'] },
+  ],
+  imagery: ['warm, confident portraits', 'candid sessions and workshops', 'calm workspace details'],
+  motion: ['gentle section reveals', 'numbered method steps that build in'],
+  designTerms: ['personal', 'editorial', 'warm', 'confident', 'portrait', 'serif'],
+  honesty: ['Outcomes, income claims, client names and logos only from the owner.', 'Never promise results; describe the process and what clients experience.'],
+  roleProfiles: {
+    home: {
+      narrativeGoals: ['name who is helped and the change they want', 'introduce the person behind it', 'invite a low-risk first step'],
+      requiredCapabilities: [], domainVocabulary: ['discovery call', 'programmes', 'outcomes'],
+      character: { density: 'low', mediaDominance: 0.55, typographyDominance: 0.75, editoriality: 0.75, conversionPressure: 0.65 },
+      preferredFamilies: ['hero', 'about', 'features', 'testimonials', 'services', 'cta'],
+      sectionOrderCandidates: [['hero', 'about', 'features', 'testimonials', 'cta'], ['hero', 'services', 'testimonials', 'about', 'cta'], ['hero', 'features', 'about', 'faq', 'cta']],
+      heroCandidates: ['editorial-intro', 'split-media'], geometryCandidates: ['split', 'asymmetric', 'centered'],
+      preferredCompositionPatterns: ['large portrait beside a promise', 'method as numbered steps', 'pull-quote testimonials'],
+      discouragedCompositionPatterns: ['stock-photo feature grids', 'aggressive countdown timers'], noveltyBudget: 0.55,
+    },
+  },
+};

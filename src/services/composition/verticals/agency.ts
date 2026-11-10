@@ -1,0 +1,50 @@
+import type { IndustryVerticalPack } from './types';
+
+export const AGENCY: IndustryVerticalPack = {
+  id: 'agency',
+  label: 'Agencies & studios',
+  keywords: ['agency', 'creative agency', 'marketing agency', 'digital agency', 'branding agency', 'design agency', 'web design agency', 'seo agency', 'social media agency', 'pr agency', 'advertising agency', 'ad agency', 'design studio', 'branding studio', 'digital studio', 'content studio', 'growth agency', 'performance marketing', 'dev shop', 'software agency'],
+  hostIndustry: 'agency',
+  vocabulary: ['clients', 'capabilities', 'case studies', 'engagements', 'retainers', 'discovery', 'deliverables'],
+  contentObjects: [
+    { id: 'case-study', label: 'Case study', fields: ['client', 'challenge', 'what we did', 'result (owner-supplied)', 'images'], sample: 'Repositioning a fintech for SMEs' },
+    { id: 'capability', label: 'Capability', fields: ['name', 'deliverables', 'description'], sample: 'Brand strategy · positioning, naming, voice' },
+    { id: 'team-member', label: 'Team member', fields: ['name', 'role', 'portrait'], sample: 'Strategy lead' },
+    { id: 'process-step', label: 'Process step', fields: ['phase', 'title', 'description'], sample: '02 · Define' },
+  ],
+  proofMechanisms: ['case studies with outcomes (owner-supplied)', 'client logos (owner-supplied only)', 'client quotes', 'awards (owner-supplied only)'],
+  interactions: [
+    { id: 'case-study-index', label: 'case study index', keywords: ['our work', 'case study index', 'work index', 'featured work'], brief: 'Case studies filterable by service or sector, each opening a narrative page.', certifiedFamilies: ['gallery'], originalComponent: 'CaseStudyIndex' },
+    { id: 'capabilities-matrix', label: 'capabilities', keywords: ['capabilities', 'what we do', 'our services', 'expertise'], brief: 'Capabilities grouped by discipline with deliverables.', certifiedFamilies: ['services', 'features'], originalComponent: 'CapabilitiesMatrix' },
+    { id: 'process', label: 'process', keywords: ['our process', 'how we work', 'our approach'], brief: 'The engagement as phases with outputs.', certifiedFamilies: ['features'], originalComponent: 'EngagementProcess' },
+    { id: 'project-brief', label: 'project brief form', keywords: ['start a project', 'project brief', 'project enquiry', 'tell us about your project'], brief: 'Scope, budget band and timeline through the registered form.', certifiedFamilies: ['contact'], originalComponent: 'ProjectBrief' },
+    { id: 'client-wall', label: 'client logos', keywords: ['clients we work with', 'client logos', 'trusted by'], brief: 'Logos of real clients only, supplied by the owner.', certifiedFamilies: ['logo-cloud'], originalComponent: 'ClientWall' },
+  ],
+  variants: [
+    { id: 'creative-branding', label: 'Creative & branding studio', keywords: ['creative agency', 'branding agency', 'design agency', 'design studio', 'branding studio'], vocabulary: ['identity', 'campaigns', 'art direction'], signatureInteractions: ['case-study-index', 'process', 'project-brief'],
+      pages: [{ title: 'Work', route: '/work', role: 'gallery', purpose: 'Case studies.' }, { title: 'Services', route: '/services', role: 'services', purpose: 'Capabilities.' }, { title: 'Studio', route: '/studio', role: 'about', purpose: 'People and culture.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Start a project.' }],
+      primaryAction: 'start a project', proof: ['case studies', 'awards'] },
+    { id: 'marketing-growth', label: 'Marketing & growth agency', keywords: ['marketing agency', 'digital agency', 'seo agency', 'social media agency', 'growth agency', 'performance marketing', 'pr agency', 'advertising agency', 'ad agency'], vocabulary: ['campaigns', 'channels', 'reporting', 'ROI'], signatureInteractions: ['capabilities-matrix', 'case-study-index', 'client-wall'],
+      pages: [{ title: 'Services', route: '/services', role: 'services', purpose: 'Channels and retainers.' }, { title: 'Results', route: '/results', role: 'gallery', purpose: 'Client results.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Team.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Book a strategy call.' }],
+      primaryAction: 'book a strategy call', proof: ['client results', 'logos'] },
+    { id: 'product-dev', label: 'Web & product studio', keywords: ['web design agency', 'digital studio', 'dev shop', 'software agency', 'app development'], vocabulary: ['product', 'design systems', 'MVP', 'sprints'], signatureInteractions: ['process', 'case-study-index', 'project-brief'],
+      pages: [{ title: 'Work', route: '/work', role: 'gallery', purpose: 'Products shipped.' }, { title: 'Services', route: '/services', role: 'services', purpose: 'Design and build.' }, { title: 'Process', route: '/process', role: 'custom', purpose: 'How we ship.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Project brief.' }],
+      primaryAction: 'send a project brief', proof: ['products shipped', 'client quotes'] },
+  ],
+  imagery: ['the work in context', 'the team in the studio', 'process boards'],
+  motion: ['confident type reveals', 'case study hover previews', 'marquee client logos'],
+  designTerms: ['bold', 'typographic', 'editorial', 'asymmetric', 'confident', 'marquee'],
+  honesty: ['Client names, logos, metrics and awards only from the owner.'],
+  roleProfiles: {
+    home: {
+      narrativeGoals: ['state the agency’s point of view', 'prove it with work', 'make starting a project easy'],
+      requiredCapabilities: [], domainVocabulary: ['work', 'capabilities', 'clients'],
+      character: { density: 'medium', mediaDominance: 0.7, typographyDominance: 0.8, editoriality: 0.65, asymmetry: 0.6, conversionPressure: 0.55 },
+      preferredFamilies: ['hero', 'logo-cloud', 'gallery', 'services', 'testimonials', 'cta'],
+      sectionOrderCandidates: [['hero', 'gallery', 'services', 'testimonials', 'cta'], ['hero', 'logo-cloud', 'gallery', 'services', 'cta'], ['hero', 'services', 'gallery', 'stats', 'cta']],
+      heroCandidates: ['typographic', 'immersive-media'], geometryCandidates: ['asymmetric', 'full-bleed', 'grid'],
+      preferredCompositionPatterns: ['manifesto-scale headline', 'work-first scroll'],
+      discouragedCompositionPatterns: ['generic three-icon features', 'stock handshake imagery'], noveltyBudget: 0.65,
+    },
+  },
+};
