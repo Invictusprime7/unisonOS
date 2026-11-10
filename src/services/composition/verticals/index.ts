@@ -189,11 +189,12 @@ const singular = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '
  * ("tour dates", "RSVP", "lineup") to a pack page's route and role. Advisory
  * only — unknown names still become their own custom page.
  */
-export function matchVerticalPageName(name: string): VerticalPage | null {
+export function matchVerticalPageName(name: string, preferredPackId?: string): VerticalPage | null {
   const key = singular(name);
   if (!key) return null;
   let prefix: VerticalPage | null = null;
-  for (const pack of VERTICAL_PACKS) {
+  const packs = [...VERTICAL_PACKS].sort((a, b) => Number(b.id === preferredPackId) - Number(a.id === preferredPackId));
+  for (const pack of packs) {
     for (const variant of pack.variants) {
       for (const page of variant.pages) {
         const title = singular(page.title);

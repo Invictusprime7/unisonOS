@@ -108,10 +108,14 @@ function explicitlyRequestsExperiencePage(text: string): boolean {
     || /\bpages?\b[^.!?\n]{0,120}\b(?:experience|immersive)\b/i.test(text);
 }
 
+function promptPageAliases(text: string) {
+  return matchTopologyPageAliases(text).filter(({ alias }) => !AMBIGUOUS_PAGE_ALIASES.has(alias)
+    || new RegExp(`\\b${alias}\\s+(?:page|section|tab)\\b|\\b(?:page|section)\\s+(?:for|called|named)\\s+${alias}\\b`, 'i').test(text));
+}
+
 function topologyPagesFromPrompt(text: string, industry: string | null): UniversalCreationInput['pages'] {
-  return matchTopologyPageAliases(text).flatMap(({ alias, role }) => {
+  return promptPageAliases(text).flatMap(({ alias, role }) => {
     if (role === 'home') return [];
-    if (AMBIGUOUS_PAGE_ALIASES.has(alias) && !new RegExp(`\\b${alias}\\s+(?:page|section|tab)\\b|\\b(?:page|section)\\s+(?:for|called|named)\\s+${alias}\\b`, 'i').test(text)) return [];
     if (role === 'immersive' && !explicitlyRequestsExperiencePage(text)) return [];
     if (role === 'custom') {
       const slug = alias.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -173,7 +177,7 @@ function findOperationalRequest(text: string, pattern: RegExp): string | null {
 }
 
 /** Pages from an explicit page list in the summary the owner confirmed. */
-function confirmedPagesFromDirection(direction: string, industry: string | null): { pages: UniversalCreationInput['pages']; choices: PageChoice[] } {
+function confirmedPagesFromDirection(direction: string, industry: string | null, verticalId?: string): { pages: UniversalCreationInput['pages']; choices: PageChoice[] } {
   const pages: UniversalCreationInput['pages'] = [];
   const choices: PageChoice[] = [];
   for (const name of confirmedPageNames(direction)) {
@@ -185,8 +189,8 @@ function confirmedPagesFromDirection(direction: string, industry: string | null)
       pages.push({ ...pageDetailsForChoice(choice, industry), title: name.replace(/\b\w/g, (letter) => letter.toUpperCase()) });
     } else if (topology.length) {
       pages.push({ ...topology[0], title: name.replace(/\b\w/g, (letter) => letter.toUpperCase()) });
-    } else if (matchVerticalPageName(name)) {
-      const page = matchVerticalPageName(name)!;
+    } else if (matchVerticalPageName(name, verticalId)) {
+      const page = matchVerticalPageName(name, verticalId)!;
       pages.push({ route: page.route, title: name.replace(/\b\w/g, (letter) => letter.toUpperCase()), purpose: `${page.purpose} Named by the owner as "${name}".`, suggestedRole: page.role });
     } else {
       const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -220,10 +224,10 @@ function ownerListedPageNames(text: string): string[] {
   // Feature lists without the word "pages": "with releases, tour dates and fan sign-ups".
   // Each short noun phrase is a destination the owner asked for.
   for (const match of text.matchAll(/\b(?:with|including|featuring|that has|needs?)\s+([A-Za-z0-9&' ,/-]{3,200}?)(?=[.!?;\n]|$)/gi)) {
-    const parts = match[1].split(/,|\/|\band\b|\bplus\b/i).map((part) => part.trim().replace(/^(?:an?|the|some|my|our)\s+/i, '')).filter(Boolean);
-    if (parts.length < 2 || /\bpages\b/i.test(match[1])) continue;
+    const parts = match[1].split(/,|\/|\band\b|\bplus\b/i).map((part) => part.trim().replace(/^(?:an?|the|some|my)\s+/i, '')).filter(Boolean);
+    if (parts.length < 2) continue;
     for (const part of parts) {
-      if (part.split(/\s+/).length > 3 || quantity.test(part) || NON_DESTINATION.test(part)) continue;
+      if (part.split(/\s+/).length > 3 || /\bpages?\b/i.test(part) || quantity.test(part) || NON_DESTINATION.test(part)) continue;
       names.push(part);
     }
   }
@@ -244,7 +248,7 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   const creative = deriveCreativePlan(semanticText, acceptedDirection);
   const analysis = classifyPromptForWizard(semanticText);
   const confident = Boolean(analysis?.industryIdentityMatched && analysis.confidence > 0.55);
-  const topologyAliases = matchTopologyPageAliases(semanticText);
+  const topologyAliases = promptPageAliases(semanticText);
   const topologyRoles = new Set<string>(topologyAliases.map(({ role }) => role));
   const mentionsBlog = hit(semanticText, ['blog', 'journal', 'articles']);
   const mentionsNews = topologyAliases.some(({ alias }) => alias === 'news');
