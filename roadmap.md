@@ -1,5 +1,11 @@
 # Roadmap
 
+## Active: Sparse, generic generated pages (2026-11-10)
+- [x] Page rules (design text contracts, form placement, blueprints, business facts) were cut from every page request; now carried in full
+- [x] Wedding/events/music/sports/travel/hotel/photography photo libraries replace office/laptop fallbacks
+- [x] Design sections accept common alternate text names (title/body/buttons)
+- [ ] Live wedding rebuild to confirm richer pages (needs funded Gemini on Unison; no backend deploy required for these fixes)
+
 ## Active: Industry vertical coverage
 - [x] Deep vertical packs (sports, flights/travel, events, music, weddings, fitness, hotels, photography/film) with sub-variants, vocabulary, content objects, proof, interactions, pages, composition profiles
 - [x] Wire into chat plan (detection, interaction requirements, inferred pages), composition, design ranking, page brief, coverage + library promotion candidates

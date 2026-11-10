@@ -64,6 +64,8 @@ export interface AppBuilderGenerationContext {
   runtimeContext: string;
   /** Same facts with design-source modules trimmed to what one page may use, packed into `budget` chars. */
   runtimeContextForPage: (pageId: string, budget?: number) => string;
+  /** The page context that did not fit `budget`; callers carry it in the page brief so nothing is lost. */
+  runtimeContextOverflowForPage: (pageId: string, budget?: number) => string;
 }
 
 export interface IndustrySeedDataTarget {
@@ -312,6 +314,9 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 1, text: modules },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
     { priority: 1, text: renderEligiblePresentation(designSources, pageId) },
+    // Prop contracts are what make certified sections render real copy; without
+    // them the author guesses names and sections ship as bare headlines.
+    { priority: 1, text: renderCertifiedOptions(materialization, designSources, pageId) },
     { priority: 1, text: 'PERSISTABLE SECTION CONTRACT: every root uses stable literal data-ut-section-id, data-ut-section-type and data-ut-variant. Shared chrome IDs are site:navbar and site:footer. A body section is either one certified family dispatcher with a listed variantId, or one site-local default-exported component under /src/project-components/ or /src/components/generated/ with a unique custom:<kebab-slug> variant. Every section must render meaningful visible content; empty wrappers and form-only wrappers are invalid. Never use custom variants for chrome. Keep all canonical intent, CTA, resource, slot and component-instance markers unchanged.' },
     { priority: 1, text: CREATIVE_AUTHORITY_ORDER },
     { priority: 1, text: MIXED_SECTION_AUTHORING_POLICY },
@@ -320,7 +325,6 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 1, text: registeredComponentBlueprints(pageId) },
     { priority: 2, trimmable: true, text: buildRegisteredResourceContext(contentTypes) },
     { priority: 1, text: 'DESIGN DIRECTION: the owner\'s prompt and confirmed refinements decide the experience. The resolved art direction pack supplies the site-wide visual language (typography, geometry, spacing cadence, media treatment, motion character) and the theme tokens supply colour; express the prompt through them rather than replacing it. Preserve canonical IDs, bindings, handlers, intents and CTA markers; never invent backend actions, business facts or baseline filler.' },
-    { priority: 3, trimmable: true, text: renderCertifiedOptions(materialization, designSources, pageId) },
     { priority: 1, text: registeredComponentContext(pageId) },
     { priority: 4, text: registeredComponentTemplates(pageId) },
     { priority: 3, text: businessParameterContext },
@@ -334,16 +338,20 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 4, text: `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.` },
     { priority: 5, text: `Protected paths: ${runtime.protectedPaths.join(', ')}.` },
     { priority: 5, text: `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.` },
-  ], budget).text;
+  ], budget);
   return {
     contract,
     designSources,
     materialization,
     // Site-wide reference is not a request payload; only per-page context is budgeted.
-    runtimeContext: compose(renderDesignSourceModules(materialization), undefined, Number.POSITIVE_INFINITY),
+    runtimeContext: compose(renderDesignSourceModules(materialization), undefined, Number.POSITIVE_INFINITY).text,
     runtimeContextForPage: (pageId, budget) => {
       const eligibleIds = designSources.eligibleByPage[pageId] ?? [];
-      return compose(renderDesignSourceModules(materialization, new Set(eligibleIds)), pageId, budget);
+      return compose(renderDesignSourceModules(materialization, new Set(eligibleIds)), pageId, budget).text;
+    },
+    runtimeContextOverflowForPage: (pageId, budget) => {
+      const eligibleIds = designSources.eligibleByPage[pageId] ?? [];
+      return compose(renderDesignSourceModules(materialization, new Set(eligibleIds)), pageId, budget).overflow;
     },
   };
 }
@@ -394,7 +402,11 @@ function renderCertifiedOptions(
     }).join('; ')}`);
   }
   return lines.length
-    ? ['CERTIFIED OPTIONS FOR THIS PAGE (ranked; REUSE/ADAPT only where they fit the prompt; name[]{a|b?} is an array of objects, ? = optional):', ...lines].join('\n')
+    ? [
+      'CERTIFIED OPTIONS FOR THIS PAGE (ranked; REUSE/ADAPT only where they fit the prompt; name[]{a|b?} is an array of objects, ? = optional):',
+      'SECTION CONTENT DEPTH: pass a certified dispatcher props={{...}} using exactly the prop names listed for its variant (unlisted names are ignored and render nothing). Fill every listed text prop: headline plus subheadline/description of one to three specific sentences written from the owner\'s prompt; give heroes and CTA sections one or two ctas to real site routes; give item arrays three or more complete items. Descriptive, evocative copy is expected; only names, prices, dates, addresses, ratings and statistics count as facts that must come from the brief.',
+      ...lines,
+    ].join('\n')
     : '';
 }
 

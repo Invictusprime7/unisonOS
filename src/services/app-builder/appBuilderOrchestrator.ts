@@ -89,7 +89,26 @@ export async function orchestrateAppBuild(
   const roleByPath = new Map(pages.map((page) => [page.filePath, page.role]));
   const sectionImplementations = generation.materialization.manifest.implementations;
   const sharedShellImplementationIds = getAppBuilderSharedShellImplementationIds(baseFiles, sectionImplementations);
-  const photoUrls = verifiedPhotosFor(input.contract.design.resolvedSiteDesignContext?.contract.industry ?? input.contract.business.industry);
+  // Fixed blocks first; the page's rules fill the capped runtime channel and
+  // whatever does not fit continues in the page brief instead of being cut.
+  const pageContextParts = (pageId: string, files: Readonly<Record<string, string>>, homePageId: string | undefined, budget: number) => {
+    const fixed = [
+      homePageId && homePageId !== pageId ? renderHomeObjectContext(input.contract, files, homePageId) : '',
+      input.runtimeContext ?? '',
+    ].filter(Boolean).join('\n');
+    const room = budget - fixed.length - 1;
+    if (room < 1000) {
+      return {
+        runtime: fixed.slice(0, budget),
+        overflow: [fixed.slice(budget), generation.runtimeContextForPage(pageId, Number.POSITIVE_INFINITY)].filter(Boolean).join('\n'),
+      };
+    }
+    return {
+      runtime: [fixed, generation.runtimeContextForPage(pageId, room)].filter(Boolean).join('\n'),
+      overflow: generation.runtimeContextOverflowForPage(pageId, room),
+    };
+  };
+  const photoUrls = verifiedPhotosFor(input.contract.design.resolvedSiteDesignContext?.contract.industry ?? input.contract.business.industry, 6, [input.contract.business.universalCreation?.vertical?.packId, input.contract.business.universalCreation?.vertical?.blendPackId]);
   let unresolvedMarkerBindingIds: string[] = [];
   let systemMaterializedCompositionFiles: Record<string, string> = {};
   let latestSectionMaterialization: AppBuilderSectionMaterializationResult | undefined;
@@ -185,13 +204,10 @@ export async function orchestrateAppBuild(
     registryContext: input.contract.design.registryContext,
     runtimeContext: input.runtimeContext ?? '',
     // Fixed blocks first; the page's design vocabulary is packed into what remains, never tail-cut.
-    runtimeContextForPage: (pageId, files, homePageId, budget = COMPOSER_CONTEXT_LIMIT) => {
-      const fixed = [
-        homePageId && homePageId !== pageId ? renderHomeObjectContext(input.contract, files, homePageId) : '',
-        input.runtimeContext ?? '',
-      ].filter(Boolean).join('\n');
-      return [fixed, generation.runtimeContextForPage(pageId, Math.max(4000, budget - fixed.length - 1))].filter(Boolean).join('\n');
-    },
+    runtimeContextForPage: (pageId, files, homePageId, budget = COMPOSER_CONTEXT_LIMIT) =>
+      pageContextParts(pageId, files, homePageId, budget).runtime,
+    runtimeContextOverflowForPage: (pageId, files, homePageId, budget = COMPOSER_CONTEXT_LIMIT) =>
+      pageContextParts(pageId, files, homePageId, budget).overflow,
     preparePage: (files, page) => {
       const projected = projectPage(files, page);
       if (projected.errors.length) throw new Error(projected.errors.join('\n'));
@@ -304,7 +320,13 @@ export async function orchestrateAppBuild(
       const assembled = await assembleCanonicalAuthoringRequest({
         task: 'site_page_repair',
         page: group.page,
-        brief: 'Repair the reported source-owner checks without changing the sealed design identity or other completed pages.',
+        brief: [
+          'Repair the reported source-owner checks without changing the sealed design identity or other completed pages.',
+          (() => {
+            const overflow = generation.runtimeContextOverflowForPage(group.page.pageId, COMPOSER_CONTEXT_LIMIT - (input.runtimeContext?.length ?? 0) - 1);
+            return overflow ? `RUNTIME / CAPABILITY CONSTRAINTS (continued; same authority):\n${overflow}` : '';
+          })(),
+        ].filter(Boolean).join('\n'),
         knowledgeQuery: `${input.contract.business.industry} ${group.page.role} module design closure`,
         instruction: repairInstruction,
         baseFiles: candidateFiles,

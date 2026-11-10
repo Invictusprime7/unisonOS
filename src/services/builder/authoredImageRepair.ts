@@ -17,6 +17,14 @@ const VERIFIED_PHOTO_IDS = new Set(
 );
 
 const INDUSTRY_HINTS: Array<[string, RegExp]> = [
+  // Vertical packs first: their vocabulary overlaps generic words (menu, session, clients).
+  ['weddings', /\b(wedding|bride|groom|rsvp|newlywed|engagement|bridal)\b/i],
+  ['events', /\b(festival|line-?up|concert|gig|tickets?|headliner|stage times?)\b/i],
+  ['music', /\b(album|single|tour dates|band|musician|tracklist|discography|record label)\b/i],
+  ['sports', /\b(fixtures?|league|match ?day|scoreboard|squad|kick-?off|tournament)\b/i],
+  ['travel', /\b(flights?|destinations?|itinerary|airline|boarding|getaway)\b/i],
+  ['hospitality', /\b(hotel|resort|suites?|guest rooms?|check-?in|boutique stay|lodge)\b/i],
+  ['photography', /\b(photographer|photo shoot|shoots|lens|film stills|cinematograph)\w*/i],
   ['ecommerce', /\b(fashion|apparel|boutique|clothing|garment|wardrobe|streetwear|couture)\b/i],
   ['restaurant', /\b(menu|restaurant|dining|chef|cuisine|reservation|bistro|trattoria|cafe)\b/i],
   ['salon', /\b(salon|spa|stylist|hair|nail|beauty|barber)\b/i],

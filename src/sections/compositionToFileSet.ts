@@ -317,6 +317,64 @@ function assertSanctionedSectionTypes(template: TemplateComposition, pageFilePat
  * fall back to the family's certified default variant, never to a downgraded
  * design.
  */
+/**
+ * Emitted into every certified family module. Authored pages sometimes name a
+ * prop the way most React code does (title, body, buttons) instead of the
+ * variant's contract (headline, description, ctas). Unknown names rendered
+ * nothing, so sections shipped as a bare heading. Canonical names always win;
+ * aliases only fill a missing or empty canonical prop.
+ */
+export const AUTHORED_PROP_NORMALIZER = `
+const TEXT_PROP_ALIASES: Record<string, string[]> = {
+  headline: ['title', 'heading'],
+  subheadline: ['subtitle', 'subheading', 'tagline', 'kicker'],
+  description: ['body', 'text', 'copy', 'content', 'paragraph', 'blurb', 'summary', 'lede', 'intro'],
+};
+const ITEM_TEXT_ALIASES: Record<string, string[]> = {
+  title: ['name', 'heading', 'label'],
+  description: ['body', 'text', 'copy', 'content', 'summary', 'blurb'],
+};
+const hasValue = (value: unknown) => value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0);
+const isCta = (value: any) => Boolean(value && typeof value === 'object' && !Array.isArray(value) && typeof value.label === 'string' && value.label.trim());
+function fillAliases(target: any, aliases: Record<string, string[]>) {
+  for (const canonical of Object.keys(aliases)) {
+    if (hasValue(target[canonical])) continue;
+    const alias = aliases[canonical].find((name) => typeof target[name] === 'string' && target[name].trim());
+    if (alias) target[canonical] = target[alias];
+  }
+}
+function normalizeAuthoredProps(input: any): any {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  const props: any = { ...input };
+  fillAliases(props, TEXT_PROP_ALIASES);
+  if (!hasValue(props.ctas)) {
+    const list = [props.buttons, props.actions].find((value) => Array.isArray(value) && value.some(isCta));
+    const paired = [props.primaryCta, props.secondaryCta].filter(isCta);
+    if (list) props.ctas = list.filter(isCta);
+    else if (paired.length) props.ctas = paired;
+    else if (isCta(props.cta)) props.ctas = [props.cta];
+  }
+  if (!isCta(props.cta) && Array.isArray(props.ctas) && isCta(props.ctas[0])) props.cta = props.ctas[0];
+  if (!hasValue(props.image)) {
+    const image = [props.imageUrl, props.imageSrc, props.photo, props.src].find((value) => typeof value === 'string' && value.trim());
+    if (image) props.image = image;
+  }
+  if (!hasValue(props.items)) {
+    const items = [props.features, props.services, props.cards, props.steps].find((value) => Array.isArray(value) && value.length);
+    if (items) props.items = items;
+  }
+  if (Array.isArray(props.items)) {
+    props.items = props.items.map((item: any) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+      const next: any = { ...item };
+      fillAliases(next, ITEM_TEXT_ALIASES);
+      return next;
+    });
+  }
+  return props;
+}
+`;
+
 function certifiedSectionModule(componentName: string, family: SectionFamilyEmit): string {
   const map = layoutVariantMap(family);
   const defaultVariantId = certifiedDefaultVariantId(componentName, family, map);
@@ -326,10 +384,10 @@ import { THEME } from './theme';
 
 const LAYOUT_VARIANTS: Record<string, string> = ${JSON.stringify(map)};
 const DEFAULT_VARIANT_ID = ${JSON.stringify(defaultVariantId)};
-
+${AUTHORED_PROP_NORMALIZER}
 export default function ${componentName}({ props: explicitProps, variantId, sectionId, componentInstanceId, ...rest }: { props?: any; variantId?: string; sectionId?: string; componentInstanceId?: string; [key: string]: any }) {
   const renderId = React.useId();
-  const props = explicitProps ?? rest;
+  const props = normalizeAuthoredProps(explicitProps ?? rest);
   const requestedId = variantId || (props && LAYOUT_VARIANTS[props.layout]) || DEFAULT_VARIANT_ID;
   if (variantId && !Object.prototype.hasOwnProperty.call(REGISTERED_VARIANTS, variantId)) throw new Error('Unsupported ${componentName} variant: ' + variantId);
   const resolvedId = REGISTERED_VARIANTS[requestedId] ? requestedId : DEFAULT_VARIANT_ID;

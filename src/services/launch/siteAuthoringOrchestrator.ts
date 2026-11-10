@@ -32,6 +32,7 @@ import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import { selectSourceKnowledge } from '@/services/builder/sourceKnowledgeContext';
 import { isImageLedRole, verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
+import { resolveIndustryVertical } from '@/services/composition/verticals';
 import { createSectionAuthoringInvoke, DEFAULT_PAGE_AUTHORING_CONCURRENCY, partitionPageSections, sectionPageBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import {
@@ -111,6 +112,8 @@ export interface SiteAuthoringInput {
   runtimeContext?: string;
   /** Per-page override of runtimeContext (trimmed to the modules that page can use). */
   runtimeContextForPage?: (pageId: string, files: Readonly<Record<string, string>>, homePageId?: string, budget?: number) => string;
+  /** Page context that did not fit the same `budget`; carried verbatim in the page brief. */
+  runtimeContextOverflowForPage?: (pageId: string, files: Readonly<Record<string, string>>, homePageId?: string, budget?: number) => string;
   /** Canonical in-memory projection only; never accepts or persists a revision. */
   preparePage?: (files: Record<string, string>, page: AuthoringPage) => Record<string, string>;
   /** Per-page design-source check run inside each page's repair loop. */
@@ -284,6 +287,13 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
     input.onProgress?.({ page, index, total: ordered.length, phase: 'authoring' });
     const baseFiles = files;
     const planned = compositionPlan.pages.find((p) => p.pageId === page.pageId);
+    const runtimeFixed = () => [
+      referenceHomePath ? `Existing homepage ${referenceHomePath} is read-only design/API reference. Reuse its shared chrome, semantic tokens and imported component contracts; do not rewrite it or change the site's art direction.` : '',
+      input.designContext
+        ? `Industry ${input.designContext.contract.industry}; experience ${input.designContext.contract.experience}; forbidden implementations ${JSON.stringify(input.designContext.hardLegality.forbiddenImplementations)}.`
+        : '',
+    ].filter(Boolean).join('\n');
+    const runtimeRoom = () => COMPOSER_CONTEXT_LIMIT - runtimeFixed().length - 1;
     const buildRequest = async (redundancy: RedundancyIssue | null): Promise<AIComposerRequest> => (await assembleCanonicalAuthoringRequest({
       task: 'site_page_author',
       page: { role: page.role, title: page.title, route: page.route, filePath: page.filePath },
@@ -291,6 +301,13 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       // and the design contract yield space to it, never the reverse.
       brief: (() => {
         const owner = renderOwnerCreativeBrief(input.visionBrief);
+        // Required page rules that did not fit the capped runtime channel
+        // (design prop contracts, form placement, blueprints) continue here
+        // untrimmed; before, they were silently tail-cut from every page.
+        const continuedContext = input.runtimeContextOverflowForPage?.(page.pageId, baseFiles, establishedLanguage?.sourcePageId, runtimeRoom()) ?? '';
+        const continued = continuedContext
+          ? `RUNTIME / CAPABILITY CONSTRAINTS (continued; same authority):\n${continuedContext}`
+          : '';
         const layout = [
           CREATIVE_AUTHORITY_ORDER,
           renderPageBrief(input.designContext, page, input.businessName, establishedLanguage),
@@ -298,10 +315,10 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
         ].filter(Boolean).join('\n');
         // Photo library sits outside the trimmable layout so it can never be cut off.
         const photos = isImageLedRole(page.role)
-          ? `PHOTO LIBRARY (required — this page is image-led and is rejected without photos): render at least one <img src="..."> in the page file itself using these verified URLs, copied exactly; never invent other image URLs:\n${verifiedPhotosFor(input.designContext?.contract.industry).join('\n')}`
+          ? `PHOTO LIBRARY (required — this page is image-led and is rejected without photos): render at least one <img src="..."> in the page file itself using these verified URLs, copied exactly; never invent other image URLs:\n${verifiedPhotosFor(input.designContext?.contract.industry, 6, (() => { const vertical = resolveIndustryVertical(input.visionBrief ?? ''); return [vertical?.packId, vertical?.blendPackId]; })()).join('\n')}`
           : '';
-        const room = COMPOSER_PAGE_BRIEF_LIMIT - owner.length - (photos ? photos.length + 1 : 0) - 2;
-        return [owner, photos, layout.slice(0, Math.max(0, room))].filter(Boolean).join('\n').slice(0, COMPOSER_PAGE_BRIEF_LIMIT);
+        const room = COMPOSER_PAGE_BRIEF_LIMIT - owner.length - (photos ? photos.length + 1 : 0) - (continued ? continued.length + 1 : 0) - 3;
+        return [owner, photos, continued, layout.slice(0, Math.max(0, room))].filter(Boolean).join('\n').slice(0, COMPOSER_PAGE_BRIEF_LIMIT);
       })(),
       knowledgeQuery: `${input.businessName} ${page.role} ${page.title} ${page.route}`,
       baseFiles,
@@ -314,14 +331,8 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       registryContext: input.registryContext,
       runtimeContext: (() => {
         // Small fixed facts lead so the packed page vocabulary that follows is never cut off.
-        const fixed = [
-          referenceHomePath ? `Existing homepage ${referenceHomePath} is read-only design/API reference. Reuse its shared chrome, semantic tokens and imported component contracts; do not rewrite it or change the site's art direction.` : '',
-          input.designContext
-            ? `Industry ${input.designContext.contract.industry}; experience ${input.designContext.contract.experience}; forbidden implementations ${JSON.stringify(input.designContext.hardLegality.forbiddenImplementations)}.`
-            : '',
-        ].filter(Boolean).join('\n');
-        const room = COMPOSER_CONTEXT_LIMIT - fixed.length - 1;
-        const pageContext = input.runtimeContextForPage?.(page.pageId, baseFiles, establishedLanguage?.sourcePageId, room) ?? input.runtimeContext ?? '';
+        const fixed = runtimeFixed();
+        const pageContext = input.runtimeContextForPage?.(page.pageId, baseFiles, establishedLanguage?.sourcePageId, runtimeRoom()) ?? input.runtimeContext ?? '';
         return [fixed, pageContext].filter(Boolean).join('\n').slice(0, COMPOSER_CONTEXT_LIMIT) || undefined;
       })(),
     })).request;

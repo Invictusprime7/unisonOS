@@ -29,10 +29,17 @@ export function isImageLedRole(role: string): boolean {
  * of its own, so without these it either ships a text-only page (rejected by
  * this gate) or invents ids that 404.
  */
-export function verifiedPhotosFor(industry: string | undefined, count = 6): string[] {
-  const key = (industry ?? '').toLowerCase();
-  const pool = CONTEXTUAL_IMAGES[key] ?? [];
-  const merged = [...pool, ...CONTEXTUAL_IMAGES.default, ...CONTEXTUAL_IMAGES.agency, ...CONTEXTUAL_IMAGES.portfolio];
+export function verifiedPhotosFor(industry: string | undefined, count = 6, verticalPackIds: readonly (string | null | undefined)[] = []): string[] {
+  // A recognised vertical (weddings, events, …) is the subject the owner
+  // described; its photos lead. Generic office/laptop pools only fill in when
+  // nothing specific exists, so a wedding site is never handed desk photos.
+  const specific = [
+    ...verticalPackIds.flatMap((id) => (id ? CONTEXTUAL_IMAGES[id.toLowerCase()] ?? [] : [])),
+    ...(CONTEXTUAL_IMAGES[(industry ?? '').toLowerCase()] ?? []),
+  ];
+  const merged = specific.length >= Math.min(count, 4)
+    ? specific
+    : [...specific, ...CONTEXTUAL_IMAGES.default, ...CONTEXTUAL_IMAGES.agency, ...CONTEXTUAL_IMAGES.portfolio];
   return [...new Set(merged)].slice(0, count).map((url) => url.replace(/\?.*$/, '?w=1600&q=80'));
 }
 

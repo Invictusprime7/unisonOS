@@ -108,7 +108,7 @@ function actionMarkup(contract: AppBuildContract, pageId: string): string[] {
       case 'services': case 'pricing': case 'features':
         return { eyebrow: heading, title: family === 'features' ? `Why ${name}` : `${heading} at ${name}`, description: goals[0] ? `${sentence(goals[0])}.` : intro, items: family === 'features' ? pick(trust, goalItems) : pick(catalog, goalItems) };
       case 'gallery':
-        return { eyebrow: heading, title: `Inside ${name}`, description: intro, items: pick(catalog, trust, goalItems).map((item, index) => { const photos = verifiedPhotosFor(industry); return { ...item, imageUrl: photos[index % Math.max(1, photos.length)] ?? imageUrl }; }) };
+        return { eyebrow: heading, title: `Inside ${name}`, description: intro, items: pick(catalog, trust, goalItems).map((item, index) => { const photos = verifiedPhotosFor(industry, 6, [contract.business.universalCreation?.vertical?.packId]); return { ...item, imageUrl: photos[index % Math.max(1, photos.length)] ?? imageUrl }; }) };
       case 'testimonials':
         return { eyebrow: 'Sample reviews', title: `What people say about ${name}`, description: 'Replace with approved client reviews.', items: pick(trust, goalItems).map(item => ({ ...item, title: 'Sample reviewer', description: `Sample review — ${item.description}` })) };
       case 'faq':
@@ -295,7 +295,7 @@ export default function ${page.isHome ? 'Home' : `Page${pageId.replace(/[^a-zA-Z
     registry: AppBuilderScaffoldRegistry,
   ): Record<string, string> {
   const pages = contract.topology.sitePlan.pages;
-  const photos = verifiedPhotosFor(contract.design.resolvedSiteDesignContext.contract.industry);
+  const photos = verifiedPhotosFor(contract.design.resolvedSiteDesignContext.contract.industry, 6, [contract.business.universalCreation?.vertical?.packId, contract.business.universalCreation?.vertical?.blendPackId]);
   const image = photos[0];
     return Object.fromEntries(pages.map((page, index) => {
       const sections = resolvePageSections(contract, page, registry);
