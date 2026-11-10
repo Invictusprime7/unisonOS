@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveChatLaunchPlan } from '@/services/launch/chatLaunchPlan';
-import { buildUniversalCreationPlan } from '@/services/launch/universalCreationPlanner';
+import { planSiteTopology } from '@/platform/core/siteTopologyPlanner';
 
 const routes = (brief: string) =>
   (deriveChatLaunchPlan(brief, { promptFirst: true }).creationInput?.pages ?? []).map((page) => page.route);
@@ -46,7 +46,7 @@ describe('owner-requested pages survive planning', () => {
 
   it('named pages reach the canonical topology', () => {
     const plan = deriveChatLaunchPlan('A wedding website with our story, schedule and an RSVP page.', { promptFirst: true });
-    const built = buildUniversalCreationPlan(plan.creationInput!);
+    const built = planSiteTopology('universal', 'Wedding', { explicitPages: plan.creationInput!.pages, restrictToAdditionalPages: true });
     const planned = JSON.stringify(built);
     expect(planned).toContain('/rsvp');
     expect(planned).toContain('/schedule');
