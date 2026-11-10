@@ -357,3 +357,9 @@ Fallback production configuration remains unverified; no relay, credential chang
 
 - [x] Hide "Build without AI" except when the AI is unavailable; compact contact form now sends enquiries.
 - [ ] Remove hardcoded starter layouts — waiting on owner: the no-AI fallback still needs them.
+
+## P0 Intent-to-Implementation Integrity (uploaded spec)
+- [ ] Phase A: trace where chat-requested pages are lost (music → "faq")
+- [ ] Phase B/C: preserve owner/confirmed page requests as open-ended pages (RSVP, releases, tour dates…)
+- [ ] Regression tests: music, wedding, festival, sports, ecommerce, SaaS plans
+- [ ] Phases D–F: implementation verification + readiness UI (follow-up)
