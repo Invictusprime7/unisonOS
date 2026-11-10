@@ -34,7 +34,6 @@ export function ImportedSourcePreview({ records, files, className }: {
   const runsStaticHtml = adapter.status === 'available' && adapter.adapter === STATIC_HTML_PREVIEW_ADAPTER;
   const pages = useMemo(() => (runsStaticHtml ? listStaticHtmlPages(files) : []), [files, runsStaticHtml]);
   const [page, setPage] = useState<string | null>(null);
-  const [hash, setHash] = useState('');
   const [showDetails, setShowDetails] = useState(false);
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
   const [assetsReady, setAssetsReady] = useState(false);
@@ -76,10 +75,9 @@ export function ImportedSourcePreview({ records, files, className }: {
     if (!runsStaticHtml) return;
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frameRef.current?.contentWindow) return;
-      const data = event.data as { type?: string; path?: string; hash?: string } | null;
+      const data = event.data as { type?: string; path?: string } | null;
       if (data?.type !== IMPORT_NAV_MESSAGE || typeof data.path !== 'string' || !pages.includes(data.path)) return;
       setPage(data.path);
-      setHash(typeof data.hash === 'string' ? data.hash : '');
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -98,7 +96,7 @@ export function ImportedSourcePreview({ records, files, className }: {
     >
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         {pages.length > 1 ? (
-          <Select value={activePage ?? undefined} onValueChange={(next) => { setPage(next); setHash(''); }}>
+          <Select value={activePage ?? undefined} onValueChange={setPage}>
             <SelectTrigger className="h-8 w-56 text-xs" aria-label="Page">
               <SelectValue />
             </SelectTrigger>
@@ -120,7 +118,7 @@ export function ImportedSourcePreview({ records, files, className }: {
       <div className="relative min-h-0 flex-1">
         {served ? (
           <iframe
-            key={`${activePage}${hash}`}
+            key={activePage ?? ''}
             ref={frameRef}
             title="Imported site preview"
             data-import-page={activePage ?? ''}
@@ -128,10 +126,6 @@ export function ImportedSourcePreview({ records, files, className }: {
             sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
             referrerPolicy="no-referrer"
             srcDoc={served.html}
-            onLoad={(event) => {
-              if (!hash) return;
-              try { event.currentTarget.contentWindow?.postMessage({ type: 'unison-import-hash', hash }, '*'); } catch { /* opaque frame */ }
-            }}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading the original files…</div>
