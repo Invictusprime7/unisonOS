@@ -174,6 +174,14 @@ export function confirmedPageNames(confirmedDirection: string): string[] {
       }
     }
   }
+  // Affinity's own summary lists destinations as bold bullets ("- **Tour dates**: …").
+  // Bullets describing identity, look or audience are direction, not pages.
+  for (const line of lines) {
+    const bullet = /^\s*(?:[-*•]|\d+[.)])\s+\*\*([^*]{2,40})\*\*\s*[:–—-]/.exec(line);
+    if (!bullet) continue;
+    if (/\b(?:identity|name|look|feel|style|tone|vibe|colou?rs?|palette|fonts?|typography|audience|brand|design|aesthetic|mood|voice|goal|purpose|imagery|photos?|layout|navigation|footer|header|home ?page|overview|vision)\b/i.test(bullet[1])) continue;
+    names.push(bullet[1]);
+  }
   return [...new Set(names
     .map((name) => name.replace(/\*\*/g, '').replace(/\bpages?\b/gi, '').replace(/[.()[\]"“”]/g, '').trim())
     .filter((name) => name.length >= 2 && name.length <= 40 && /^[A-Za-z0-9&' /-]+$/.test(name)))];
