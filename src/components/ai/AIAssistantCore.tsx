@@ -487,21 +487,13 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
 
       {/* Quick Actions (Unison renders them as floating prompts inside the chat space) */}
       {!selectionActive && quickActions.length > 0 && appearance !== "unison" && (
-        <div className={cn(
-          "p-2 border-b",
-          appearance === "unison" ? "border-0 bg-transparent px-0 pt-0" : "bg-muted/30"
-        )}>
+        <div className="p-2 border-b bg-muted/30">
           <div className="flex flex-wrap gap-1.5">
             {quickActions.map((action) => (
               <button
                 key={action.id}
                 onClick={() => handleQuickAction(action)}
-                className={cn(
-                  "text-xs px-2.5 py-1.5 border rounded-full transition-colors flex items-center gap-1",
-                  appearance === "unison"
-                    ? "bg-white/5 border-cyan-300/20 text-white/75 hover:bg-cyan-400/10 hover:border-cyan-300/50 hover:text-white"
-                    : "bg-background hover:bg-primary/10 hover:border-primary/30"
-                )}
+                className="text-xs px-2.5 py-1.5 border rounded-full transition-colors flex items-center gap-1 bg-background hover:bg-primary/10 hover:border-primary/30"
               >
                 {action.icon}
                 {action.label}
