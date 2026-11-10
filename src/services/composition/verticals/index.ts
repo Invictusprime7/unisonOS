@@ -16,10 +16,30 @@ import { WEDDINGS } from './weddings';
 import { FITNESS } from './fitness';
 import { HOSPITALITY } from './hospitality';
 import { PHOTOGRAPHY } from './photography';
+import { RESTAURANT } from './restaurant';
+import { SALON } from './salon';
+import { LOCAL_SERVICE } from './localService';
+import { COACHING } from './coaching';
+import { REAL_ESTATE } from './realEstate';
+import { ECOMMERCE } from './ecommerce';
+import { PORTFOLIO } from './portfolio';
+import { AGENCY } from './agency';
+import { NONPROFIT } from './nonprofit';
+import { SAAS } from './saas';
+import { MEDICAL } from './medical';
+import { PROFESSIONAL_SERVICES } from './professionalServices';
+import { EDUCATION } from './education';
+import { MEDIA } from './media';
 
 export type { IndustryVerticalPack, VerticalInteraction, VerticalPage, VerticalSubVariant } from './types';
 
-export const VERTICAL_PACKS: readonly IndustryVerticalPack[] = [SPORTS, TRAVEL, EVENTS, MUSIC, WEDDINGS, FITNESS, HOSPITALITY, PHOTOGRAPHY];
+// First wave: deep experience verticals. Second wave: every other common
+// website use case, so no prompt falls back to generic industry knowledge.
+export const VERTICAL_PACKS: readonly IndustryVerticalPack[] = [
+  SPORTS, TRAVEL, EVENTS, MUSIC, WEDDINGS, FITNESS, HOSPITALITY, PHOTOGRAPHY,
+  RESTAURANT, SALON, LOCAL_SERVICE, COACHING, REAL_ESTATE, ECOMMERCE, PORTFOLIO,
+  AGENCY, NONPROFIT, SAAS, MEDICAL, PROFESSIONAL_SERVICES, EDUCATION, MEDIA,
+];
 
 export function getVerticalPack(id: string | null | undefined): IndustryVerticalPack | undefined {
   return id ? VERTICAL_PACKS.find((pack) => pack.id === id) : undefined;

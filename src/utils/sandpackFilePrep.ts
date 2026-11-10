@@ -2251,6 +2251,8 @@ export const CONTEXTUAL_IMAGES: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&q=80',
     'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&q=80',
     'https://images.unsplash.com/photo-1558655146-9f40138edfeb?w=800&q=80',
+    'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=800&q=80',
+    'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800&q=80',
   ],
   contractor: [
     'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80',
@@ -2262,11 +2264,13 @@ export const CONTEXTUAL_IMAGES: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80',
     'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=800&q=80',
     'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=800&q=80',
+    'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=800&q=80',
   ],
   coaching: [
     'https://images.unsplash.com/photo-1552581234-26160f608093?w=800&q=80',
     'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=800&q=80',
     'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&q=80',
+    'https://images.unsplash.com/photo-1544027993-37dbfe43562a?w=800&q=80',
   ],
   // Industry vertical packs (composition/verticals): reachability and subject checked by hand.
   weddings: [
@@ -2321,8 +2325,49 @@ export const CONTEXTUAL_IMAGES: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=800&q=80',
     'https://images.unsplash.com/photo-1554048612-b6a482bc67e5?w=800&q=80',
   ],
+  // Second-wave use cases: reachability and subject checked by hand.
+  'real-estate': [
+    'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80',
+    'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80',
+    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80',
+    'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80',
+    'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800&q=80',
+    'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&q=80',
+    'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80',
+  ],
+  nonprofit: [
+    'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800&q=80',
+    'https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=800&q=80',
+    'https://images.unsplash.com/photo-1469571486292-0ba58a3f068b?w=800&q=80',
+    'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=800&q=80',
+    'https://images.unsplash.com/photo-1593113598332-cd288d649433?w=800&q=80',
+    'https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?w=800&q=80',
+  ],
+  'professional-services': [
+    'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800&q=80',
+    'https://images.unsplash.com/photo-1505664194779-8beaceb93744?w=800&q=80',
+    'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=800&q=80',
+    'https://images.unsplash.com/photo-1521791055366-0d553872125f?w=800&q=80',
+    'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800&q=80',
+  ],
+  education: [
+    'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=800&q=80',
+    'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&q=80',
+    'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&q=80',
+    'https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?w=800&q=80',
+    'https://images.unsplash.com/photo-1513258496099-48168024aec0?w=800&q=80',
+  ],
+  media: [
+    'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&q=80',
+    'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=800&q=80',
+    'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800&q=80',
+    'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&q=80',
+    'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=800&q=80',
+    'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=800&q=80',
+  ],
   'local-service': [
     'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80',
+    'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80',
     'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=800&q=80',
     'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=800&q=80',
   ],
