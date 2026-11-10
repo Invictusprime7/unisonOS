@@ -12,7 +12,7 @@ import { collectResolvedCompositions } from '@/platform/core/resolvedComposition
 import { COMPOSER_CONTEXT_LIMIT, packContextBlocks } from './contextBudget';
 import { renderCreativeRequirements } from '@/services/launch/creativePlan';
 import { renderVerticalKnowledge } from '@/services/composition/verticals';
-import { ARCHETYPE_ADVISORY_POLICY, CREATIVE_AUTHORITY_ORDER, MIXED_SECTION_AUTHORING_POLICY } from './creativeAuthorityPolicy';
+import { ARCHETYPE_ADVISORY_POLICY, CREATIVE_AUTHORITY_ORDER, MIXED_SECTION_AUTHORING_POLICY, SECTION_CONTENT_DEPTH_POLICY } from './creativeAuthorityPolicy';
 
 /** Home references stay compact so later pages keep room for their own design vocabulary. */
 export const HOME_OBJECT_CONTEXT_LIMIT = 2_500;
@@ -404,7 +404,7 @@ function renderCertifiedOptions(
   return lines.length
     ? [
       'CERTIFIED OPTIONS FOR THIS PAGE (ranked; REUSE/ADAPT only where they fit the prompt; name[]{a|b?} is an array of objects, ? = optional):',
-      'SECTION CONTENT DEPTH: pass a certified dispatcher props={{...}} using exactly the prop names listed for its variant (unlisted names are ignored and render nothing). Fill every listed text prop: headline plus subheadline/description of one to three specific sentences written from the owner\'s prompt; give heroes and CTA sections one or two ctas to real site routes; give item arrays three or more complete items. Descriptive, evocative copy is expected; only names, prices, dates, addresses, ratings and statistics count as facts that must come from the brief.',
+      SECTION_CONTENT_DEPTH_POLICY,
       ...lines,
     ].join('\n')
     : '';

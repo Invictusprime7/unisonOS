@@ -94,3 +94,11 @@ export function hasLegacyRegistryOnlyDirective(text: string | null | undefined):
   const value = String(text ?? '');
   return LEGACY_REGISTRY_ONLY_SENTENCES.some((pattern) => new RegExp(pattern.source, pattern.flags.replace('g', '')).test(value));
 }
+
+/**
+ * Copy depth for every section a page turn writes — launch pages, pages added
+ * later and Affinity edits read this same text so enrichment never thins out
+ * after the first build.
+ */
+export const SECTION_CONTENT_DEPTH_POLICY = 'SECTION CONTENT DEPTH: pass a certified dispatcher props={{...}} using exactly the prop names listed for its variant (unlisted names are ignored and render nothing). Fill every listed text prop: headline plus subheadline/description of one to three specific sentences written from the owner\'s prompt; give heroes and CTA sections one or two ctas to real site routes; give item arrays three or more complete items. Descriptive, evocative copy is expected; only names, prices, dates, addresses, ratings and statistics count as facts that must come from the brief.';
+
