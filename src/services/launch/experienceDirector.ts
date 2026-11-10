@@ -743,8 +743,10 @@ export function designSelectionFromDirection(direction: ExperienceDirection): Pi
     }
   }
   const sealed = isArtDirectionSealed(direction);
+  // "guided" records that the owner's own words chose something; suggestions alone stay "auto".
+  const ownerChose = direction.artDirection.origin !== 'inferred' || Object.keys(sectionPins).length > 0 || Object.keys(routePins).length > 0;
   return {
-    mode: !sealed && !direction.decisions.length ? 'auto' : 'guided',
+    mode: ownerChose ? 'guided' : 'auto',
     ...(sealed ? { artDirectionPackId: direction.artDirection.packId as ArtDirectionPackId } : {}),
     experience: direction.experience.value,
     sectionPins,
