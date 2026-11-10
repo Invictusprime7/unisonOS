@@ -37,6 +37,8 @@ import { createExternalPreviewChannel, createExternalPreviewSession } from '@/se
 import { usePreviewAI } from '@/hooks/usePreviewAI';
 import { getGlobalAITerminalBridge } from '@/services/aiTerminalBridge';
 import { buildPreviewArtifactsAsync } from '@/utils/previewArtifacts';
+import { isImportedSourceVfs, readImportedSourceRecords } from '@/services/import/importedSourceRecords';
+import { ImportedSourcePreviewStatus } from '@/components/import/ImportedSourcePreviewStatus';
 import { PreviewPipelineError, isPreviewPipelineError } from '@/services/previewPipelineError';
 import { createVfsHandoffSignature } from '@/services/vfsHandoffSignature';
 import { PreviewRuntimeError } from '@/components/PreviewRuntimeError';
@@ -446,6 +448,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     stableFilesRef.current = { signature: filesSignature, files: rawFiles };
   }
   const files = stableFilesRef.current.files;
+  const importedSourceRecords = useMemo(() => readImportedSourceRecords(files), [files]);
 
   const externalPreviewChannelRef = useRef<BroadcastChannel | null>(null);
   const externalPreviewFilesRef = useRef(files);
@@ -589,6 +592,14 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       }, PREVIEW_ARTIFACT_COMPILE_TIMEOUT_MS);
       activeCompileTimeoutRef.current = compileTimeout;
       try {
+        if (isImportedSourceVfs(request.files)) {
+          // Imported source is never transformed for the built-in runtime.
+          if (!isStale()) {
+            compiledKeyRef.current = compileKey;
+            setPreviewCompile({ sandpackFiles: {}, dependencies: {}, pipelineError: null, emptyDraft: false, compiling: false });
+          }
+          return;
+        }
         const isWizardPreview = resolveSnapshot(request.files, request.launchState).isWizardDraft;
 
         if (!isWizardPreview && !hasRenderablePreviewSource(request.files)) {
@@ -1461,7 +1472,14 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     if (backend === 'local' && LOCAL_PREVIEW_URL) return LOCAL_PREVIEW_URL;
     return null;
   }, [backend, dockerService.session]);
-  
+
+  // UIMP-01: imported projects never run through the Unison preview runtime.
+  // Until a source-compatible isolated runtime exists the preview reports its
+  // real state instead of rendering a transformed design.
+  if (importedSourceRecords) {
+    return <ImportedSourcePreviewStatus records={importedSourceRecords} className={className} />;
+  }
+
   if (pipelineError) {
     const goLauncher = () => {
       try {
