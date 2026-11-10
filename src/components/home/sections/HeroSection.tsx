@@ -285,7 +285,7 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
             <AIAssistantCore
               key={`${user ? `site-discovery:${user.id}` : "site-discovery:anonymous"}:${chatResetKey}`}
               appearance="unison"
-              className={cn("transition-[height] duration-500 motion-reduce:transition-none", launcherOpen || discoveryActive ? "h-[min(740px,85dvh)]" : "h-[360px] sm:h-[330px]")}
+              className={cn("transition-[height] duration-500 motion-reduce:transition-none", launcherOpen || discoveryActive ? "h-[min(740px,85dvh)]" : "h-[480px] sm:h-[330px]")}
               placeholder="Tell Affinity about your idea..."
               quickActions={demoGeneration ? HOME_QUICK_ACTIONS.filter((action) => !GRAPHIC_QUICK_ACTION_IDS.has(action.id)) : HOME_QUICK_ACTIONS}
               aiMode="site-discovery"

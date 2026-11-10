@@ -19,7 +19,7 @@ export function FloatingPromptPills({ actions, onSelect }: FloatingPromptPillsPr
       <p className="mb-3 text-center text-sm text-cyan-100/70">
         Tell Affinity what you have in mind, or start from an idea.
       </p>
-      <ul className="mx-auto flex max-w-2xl flex-wrap justify-center gap-2">
+      <ul className="mx-auto flex max-w-2xl flex-wrap justify-center gap-1.5 sm:gap-2">
         {actions.map((action, index) => (
           <motion.li
             key={action.id}
