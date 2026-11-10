@@ -32,6 +32,7 @@ import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import { selectSourceKnowledge } from '@/services/builder/sourceKnowledgeContext';
 import { isImageLedRole, verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
+import { resolveIndustryVertical } from '@/services/composition/verticals';
 import { createSectionAuthoringInvoke, DEFAULT_PAGE_AUTHORING_CONCURRENCY, partitionPageSections, sectionPageBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
 import {
