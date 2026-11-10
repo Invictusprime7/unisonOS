@@ -35,6 +35,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { FileDropZone, DroppedFile } from "@/components/creatives/web-builder/FileDropZone";
+import { FloatingPromptPills } from "./FloatingPromptPills";
 import { useAIFileAnalysis } from "@/hooks/useAIFileAnalysis";
 import {
   buildConfirmedSiteBrief,
@@ -162,6 +163,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
   const { analyzing, analyzeAndGenerate } = useAIFileAnalysis();
 
@@ -374,6 +376,12 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   // Handle quick action click
   const handleQuickAction = (action: QuickAction) => {
     setInput(action.prompt);
+    requestAnimationFrame(() => {
+      const field = inputRef.current;
+      if (!field) return;
+      field.focus();
+      field.setSelectionRange(action.prompt.length, action.prompt.length);
+    });
   };
 
   // Handle Enter key
@@ -477,23 +485,15 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
         </div>
       )}
 
-      {/* Quick Actions */}
-      {!selectionActive && quickActions.length > 0 && (
-        <div className={cn(
-          "p-2 border-b",
-          appearance === "unison" ? "border-0 bg-transparent px-0 pt-0" : "bg-muted/30"
-        )}>
+      {/* Quick Actions (Unison renders them as floating prompts inside the chat space) */}
+      {!selectionActive && quickActions.length > 0 && appearance !== "unison" && (
+        <div className="p-2 border-b bg-muted/30">
           <div className="flex flex-wrap gap-1.5">
             {quickActions.map((action) => (
               <button
                 key={action.id}
                 onClick={() => handleQuickAction(action)}
-                className={cn(
-                  "text-xs px-2.5 py-1.5 border rounded-full transition-colors flex items-center gap-1",
-                  appearance === "unison"
-                    ? "bg-white/5 border-cyan-300/20 text-white/75 hover:bg-cyan-400/10 hover:border-cyan-300/50 hover:text-white"
-                    : "bg-background hover:bg-primary/10 hover:border-primary/30"
-                )}
+                className="text-xs px-2.5 py-1.5 border rounded-full transition-colors flex items-center gap-1 bg-background hover:bg-primary/10 hover:border-primary/30"
               >
                 {action.icon}
                 {action.label}
@@ -506,7 +506,10 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
       {/* Messages */}
       <ScrollArea className="sleek-scrollbar min-h-0 flex-1 p-3" ref={scrollRef} data-chat-viewport>
         <div className="space-y-3">
-          {messages.length === 0 && (
+          {messages.length === 0 && appearance === "unison" && !selectionActive && quickActions.length > 0 && (
+            <FloatingPromptPills actions={quickActions} onSelect={handleQuickAction} />
+          )}
+          {messages.length === 0 && !(appearance === "unison" && !selectionActive && quickActions.length > 0) && (
             <div className={cn(
               "text-center py-5",
               appearance === "unison" ? "text-cyan-100/70" : "text-muted-foreground py-8"
@@ -645,6 +648,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
           )}
           
           <Textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
