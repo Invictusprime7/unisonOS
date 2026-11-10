@@ -33,6 +33,18 @@ describe('PromptLaunchPanel (chat-only site creation)', () => {
     expect(screen.getByRole('button', { name: 'Restore a Unison export' })).toBeInTheDocument();
   });
 
+  it('shows the Creative Brief Affinity read from the conversation, with where each choice came from', () => {
+    renderPanel({ brief: 'Create a cinematic music artist website with an immersive hero, horizontal releases gallery, tour dates, and fan sign-ups.' });
+    const inspector = screen.getByTestId('creative-brief-inspector');
+    expect(inspector).toHaveTextContent('Cinematic Portfolio');
+    expect(inspector).toHaveTextContent('Rich motion and reveals');
+    expect(inspector).toHaveTextContent('“immersive hero”');
+    expect(inspector).toHaveTextContent('“horizontal releases gallery”');
+    expect(inspector).toHaveTextContent('Your words');
+    // Pages show every planned destination, including ones only the prompt named.
+    expect(screen.getByText(/Tour Dates/, { selector: 'dd' })).toBeInTheDocument();
+  });
+
   it('runs the canonical launch with the prompt-only AI input', async () => {
     runLaunchPipeline.mockRejectedValueOnce(new LaunchFatalError('Gemini timed out.', { stage: 'app-build' }));
     renderPanel();

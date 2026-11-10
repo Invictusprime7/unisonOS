@@ -20,10 +20,74 @@ export interface UniversalCapabilityEvidence {
   reason: string;
 }
 
+/** How a creative decision is realized inside the one App Builder pipeline. */
+export type CreativeResolution = 'reuse' | 'adapt' | 'author';
+/** explicit: owner's first request; confirmed: accepted chat summary; refinement: a later owner message; inferred: Affinity's suggestion. */
+export type CreativeDecisionOrigin = 'explicit' | 'confirmed' | 'refinement' | 'inferred';
+
+/**
+ * One conversational creative decision — the natural-language equivalent of a
+ * former Wizard selection (art direction, experience, hero layout, section
+ * layout) plus original designs the registry does not contain.
+ */
+export interface CreativeDecision {
+  /** Stable identity, e.g. `dec:hero:home`, `dec:section:gallery:releases`. */
+  id: string;
+  target: 'hero' | 'section' | 'original';
+  /** Section family (hero, gallery, blog-preview…) or an original purpose slug (timeline, rsvp…). */
+  family: string;
+  /** Page the decision belongs to; null means wherever the family appears. */
+  pageRoute: string | null;
+  /** The owner's phrase, e.g. "horizontal releases gallery". */
+  value: string;
+  /** Layout/treatment words read from the phrase (horizontal, cinematic, masonry…). */
+  modifiers: string[];
+  origin: CreativeDecisionOrigin;
+  evidence: string;
+  resolution: CreativeResolution;
+  /** Ranked certified matches, best first; empty when authoring an original. */
+  implementationIds: string[];
+  /** Modifiers no certified match carries; realized by adapting or authoring. */
+  unmatched: string[];
+}
+
+/** Site-wide art direction resolved from the conversation (never Modern-first). */
+export interface ExperienceArtDirection {
+  packId: string;
+  packName: string;
+  familyId: string;
+  origin: CreativeDecisionOrigin;
+  /** The owner's (or confirmed/refined) words that selected it. */
+  evidence: string[];
+  /** Next-best packs, for transparency. */
+  alternatives: Array<{ packId: string; score: number }>;
+}
+
+/** The conversational creative brief carried with the launch and sealed into the site. */
+export interface ExperienceDirection {
+  version: 1;
+  artDirection: ExperienceArtDirection;
+  experience: { value: 'standard' | 'motion-rich' | 'immersive'; origin: CreativeDecisionOrigin; evidence: string };
+  decisions: CreativeDecision[];
+  /** Decision IDs a refinement asked to keep unchanged ("leave the rest unchanged"). */
+  locked: string[];
+}
+
+/** Executable design target a requirement is checked against. */
+export interface CreationDesignTarget {
+  kind: 'art-direction' | 'experience' | 'section' | 'original';
+  family?: string;
+  implementationIds?: string[];
+  resolution?: CreativeResolution;
+  packId?: string;
+  experience?: 'standard' | 'motion-rich' | 'immersive';
+  decisionId?: string;
+}
+
 /** One explicit, ID-carrying requirement from the owner's prompt or confirmed refinements. */
 export interface CreationRequirement {
   id: string;
-  kind: 'page' | 'navigation' | 'visual' | 'motion' | 'interaction' | 'capability' | 'reference' | 'content';
+  kind: 'page' | 'navigation' | 'visual' | 'motion' | 'interaction' | 'capability' | 'reference' | 'content' | 'experience';
   text: string;
   /** The owner's own sentence that carries this requirement. */
   evidence?: string;
@@ -34,6 +98,8 @@ export interface CreationRequirement {
   sampleDataRequired?: boolean;
   /** Alternative phrasings that evidence an implementation (any one, all of its words). */
   evidenceTerms?: string[];
+  /** Creative decisions carry the design they must be realized with. */
+  design?: CreationDesignTarget;
 }
 
 /**
@@ -97,6 +163,8 @@ export interface UniversalCreationInput {
   multiPage?: boolean;
   designDirection?: DesignDirection;
   vertical?: CreationVertical;
+  /** Conversational creative brief: art direction, experience, hero/section layouts, originals. */
+  experienceDirection?: ExperienceDirection;
   /** Open questions that block a faithful build; empty when none. */
   clarifications?: string[];
 }

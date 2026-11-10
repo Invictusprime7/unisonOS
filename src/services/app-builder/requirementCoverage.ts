@@ -89,6 +89,97 @@ function linkedIn(sources: readonly string[], route: string): boolean {
   return sources.some((source) => pattern.test(source));
 }
 
+const SECTION_TAG = /<section\b[^>]*>/g;
+const EXPERIENCE_LAYER = /from\s+["']@\/unison\/ui\/experience["']|@react-three\/|from\s+["']three["']/;
+
+function attribute(tag: string, name: string): string | null {
+  return new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`).exec(tag)?.[1] ?? null;
+}
+
+function sealedPackId(files: Readonly<Record<string, string>>): string | null {
+  for (const path of ['/.unison/wizard-registry-context.json', '/.unison/design-intervention.json']) {
+    try {
+      const parsed = JSON.parse(files[path] ?? '') as { artDirectionPackId?: unknown };
+      if (typeof parsed.artDirectionPackId === 'string') return parsed.artDirectionPackId;
+    } catch { /* absent or unreadable — try the next owner */ }
+  }
+  return null;
+}
+
+/**
+ * Conversational creative decisions are checked against the exact source:
+ * the certified design the owner's words selected (REUSE), a site-local
+ * derivative marked with its base (ADAPT) or an original module (AUTHOR) on
+ * the page the decision belongs to.
+ */
+function experienceCoverage(
+  requirement: CreationRequirement,
+  context: {
+    files: Readonly<Record<string, string>>;
+    pages: readonly CoveragePage[];
+    pageSources: readonly string[];
+    moduleWords: ReadonlyArray<{ path: string; words: string }>;
+    adaptedModules: readonly string[];
+    allSource: string;
+  },
+  promotionCandidates: RequirementCoverageReport['promotionCandidates'],
+): RequirementCoverageItem {
+  const design = requirement.design;
+  const label = requirement.evidenceTerms?.[0] ? `${design?.family ?? 'design'}: "${requirement.evidenceTerms[0]}"` : requirement.text.split(' — ')[0];
+  const base = { id: requirement.id, kind: requirement.kind, text: label };
+  if (!design) return { ...base, status: 'unverified', evidence: ['no design target recorded'] };
+  if (design.kind === 'art-direction') {
+    const sealed = sealedPackId(context.files);
+    if (!sealed) return { ...base, status: 'unverified', evidence: ['sealed art direction not in candidate files'] };
+    return { ...base, status: sealed === design.packId ? 'met' : 'missing',
+      evidence: [sealed === design.packId ? `sealed ${sealed}` : `sealed ${sealed}, owner direction was ${design.packId}`] };
+  }
+  if (design.kind === 'experience') {
+    if (design.experience === 'standard') return { ...base, status: 'met', evidence: ['restrained motion budget'] };
+    const layer = EXPERIENCE_LAYER.exec(context.allSource);
+    const motion = MOTION.exec(context.allSource);
+    const met = design.experience === 'immersive' ? Boolean(layer) : Boolean(motion || layer);
+    return { ...base, status: met ? 'met' : motion ? 'partial' : 'missing',
+      evidence: [met ? `${design.experience}: ${(layer ?? motion)![0].slice(0, 40)}` : motion ? 'motion only; no immersive layer' : 'no motion found'] };
+  }
+  const scoped = requirement.pageRoute
+    ? context.pages.filter((page) => page.route.toLowerCase() === requirement.pageRoute!.toLowerCase())
+    : context.pages;
+  const scopedSources = scoped.map((page) => ({ path: page.filePath, source: context.files[page.filePath] ?? '' }));
+  if (requirement.pageRoute && !scopedSources.some((entry) => entry.source.trim())) {
+    return { ...base, status: 'missing', evidence: [`no page for ${requirement.pageRoute}`] };
+  }
+  const phrasings = [...(requirement.evidenceTerms ?? [])].map(termsOf).filter((terms) => terms.length);
+  const matches = (text: string) => phrasings.some((terms) => mentions(text, terms));
+  const family = design.family ?? '';
+  const ids = design.implementationIds ?? [];
+  const tags = scopedSources.flatMap((entry) => [...entry.source.matchAll(SECTION_TAG)].map((match) => ({ path: entry.path, tag: match[0] })));
+  const familyTags = tags.filter(({ tag }) => attribute(tag, 'data-ut-section-type') === family
+    || (attribute(tag, 'data-ut-variant') ?? '').startsWith(`${family}:`));
+  const exact = familyTags.find(({ tag }) => ids.includes(attribute(tag, 'data-ut-variant') ?? ''));
+  const derived = context.adaptedModules.find((path) => ids.some((id) => (context.files[path] ?? '').includes(`@unison-derived-from ${id}`)));
+  const original = context.moduleWords.filter((entry) => matches(entry.words) && !context.adaptedModules.includes(entry.path)).map((entry) => entry.path);
+  const custom = tags.find(({ tag }) => (attribute(tag, 'data-ut-variant') ?? '').startsWith('custom:')
+    && (matches(wordsOf(tag)) || attribute(tag, 'data-ut-section-type') === family));
+  if (design.kind === 'original') {
+    for (const path of original) promotionCandidates.push({ requirementId: requirement.id, modulePath: path });
+    const mentioned = scopedSources.some((entry) => matches(wordsOf(entry.source)));
+    return { ...base, status: original.length || custom ? 'met' : mentioned ? 'partial' : 'missing',
+      evidence: original.length ? original.map((path) => `authored in ${path}`) : custom ? [`custom section in ${custom.path}`]
+        : mentioned ? ['only mentioned in page copy; no original component implements it'] : ['no source implements it'] };
+  }
+  if (exact) return { ...base, status: 'met', evidence: [`${attribute(exact.tag, 'data-ut-variant')} in ${exact.path}`] };
+  if (derived) return { ...base, status: 'met', evidence: [`adapted in ${derived}`] };
+  if (design.resolution !== 'reuse' && (original.length || custom)) {
+    return { ...base, status: 'met', evidence: original.length ? original.map((path) => `authored in ${path}`) : [`custom section in ${custom!.path}`] };
+  }
+  if (familyTags.length) {
+    return { ...base, status: 'partial',
+      evidence: [`used ${attribute(familyTags[0].tag, 'data-ut-variant') ?? family} instead of ${ids[0] ?? 'the requested design'}`] };
+  }
+  return { ...base, status: 'missing', evidence: [`no ${family} section${requirement.pageRoute ? ` on ${requirement.pageRoute}` : ''}`] };
+}
+
 export function buildRequirementCoverage(input: {
   requirements: readonly CreationRequirement[];
   files: Readonly<Record<string, string>>;
@@ -170,6 +261,10 @@ export function buildRequirementCoverage(input: {
         } else {
           items.push({ ...base, status: 'unverified', evidence: ['design judgement — review in Preview'] });
         }
+        break;
+      }
+      case 'experience': {
+        items.push(experienceCoverage(requirement, { files, pages, pageSources, moduleWords, adaptedModules, allSource }, promotionCandidates));
         break;
       }
       default:

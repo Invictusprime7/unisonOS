@@ -134,6 +134,15 @@ function redactUniversalCreation(
       purpose: redact(page.purpose),
     })),
     ...(creation.vertical ? { vertical: { ...creation.vertical, evidence: creation.vertical.evidence.map(redact) } } : {}),
+    ...(creation.experienceDirection ? {
+      experienceDirection: {
+        ...creation.experienceDirection,
+        experience: { ...creation.experienceDirection.experience, evidence: redact(creation.experienceDirection.experience.evidence) },
+        decisions: creation.experienceDirection.decisions.map((decision) => ({
+          ...decision, value: redact(decision.value), evidence: redact(decision.evidence),
+        })),
+      },
+    } : {}),
   };
 }
 

@@ -104,9 +104,15 @@ describe('creative plan (B1/B2)', () => {
 
   it('launches an unmapped style on its provisional base and says so in the brief', () => {
     const { input } = buildPromptLaunchInput('A cinematic noir portfolio for a film director');
-    expect(input.theme.id).toBe('bold');
+    // No family was named, so the direction stays provisional — but the token
+    // base follows the art direction the owner's words selected (Conversational
+    // Experience guide), never an unrelated default.
+    expect(input.universalCreation?.experienceDirection?.artDirection).toMatchObject({ packId: 'cinematic-portfolio', origin: 'explicit' });
+    expect(input.theme.id).toBe('editorial');
+    expect(input.designSelection?.artDirectionPackId).toBe('cinematic-portfolio');
     expect(input.universalCreation?.designDirection?.origin).toBe('provisional');
     expect(input.visionPrompt).toContain('PROVISIONAL');
+    expect(input.visionPrompt).toContain('[req:experience:art-direction]');
     expect(input.visionPrompt.split('\n')[0]).toContain('cinematic noir portfolio');
   });
 });

@@ -25,6 +25,7 @@ import {
 import type { AppBuildGenerationMode } from '@/services/app-builder/appBuilderContracts';
 import { ImportProjectZipButton } from '@/components/onboarding/ImportProjectZipButton';
 import { ImportUnisonSiteZipButton } from '@/components/onboarding/ImportUnisonSiteZipButton';
+import { CreativeBriefInspector } from '@/components/launch/CreativeBriefInspector';
 
 /** Key prefix of answers saved by the retired guided setup; they may hold private contact details. */
 export const RETIRED_INTERVIEW_DRAFT_PREFIX = 'unison.launch-interview.';
@@ -225,7 +226,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
           </div>
           <div className="space-y-1">
             <dt className="text-xs text-muted-foreground">Pages</dt>
-            <dd className="font-medium">{preview.plan.selectedPages.length ? preview.plan.selectedPages.join(', ') : 'Home'}</dd>
+            <dd className="font-medium">{preview.plan.creationInput.pages.map((page) => page.title).join(', ') || 'Home'}</dd>
           </div>
           {preview.plan.creationInput.requestedCapabilities.length > 0 && (
             <div className="space-y-1 sm:col-span-2">
@@ -236,6 +237,9 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
         </dl>
       ) : (
         <p role="alert" className="text-sm text-destructive">Describe the site you want to create in the chat first.</p>
+      )}
+      {preview?.plan.creationInput.experienceDirection && (
+        <CreativeBriefInspector direction={preview.plan.creationInput.experienceDirection} pages={preview.plan.creationInput.pages} />
       )}
       {error && (
         <div role="alert" className="space-y-2 rounded-md border border-destructive p-3 text-sm text-destructive">

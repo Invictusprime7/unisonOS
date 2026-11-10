@@ -19,6 +19,7 @@ import {
 } from "@/services/launch/creativePlan";
 import { getIndustryProfile } from "@/platform/core/industryMatrix";
 import { getVerticalPack, inferVerticalPages, matchVerticalPageName, resolveIndustryVertical, verticalInteractionRequirements } from "@/services/composition/verticals";
+import { deriveExperienceDirection, experienceRequirements } from "@/services/launch/experienceDirector";
 
 /**
  * Page aliases that are also everyday words ("Help me create…", "work",
@@ -208,7 +209,9 @@ function confirmedPagesFromDirection(direction: string, industry: string | null,
  */
 const NON_DESTINATION = /\b(?:look|feel|style|colou?rs?|vibe|design|fonts?|theme|photos?|images?|animations?|aesthetic|modern|bold|clean|minimal|dark|light|elegant|logo|brand|seo|mobile|responsive|fast|beautiful|professional|my|our music|music|website|site|app)\b/i;
 
-function ownerListedPageNames(text: string): string[] {
+const TREATMENT_PHRASE = /\b(?:motion|animations?|animated|cinematic|parallax|transitions?|style|styling|look|feel|vibe|aesthetic|design|colou?rs?|palette|fonts?|typography|imagery|photography|layouts?|hero|gradients?|visuals?)\b/i;
+
+function ownerListedPageNames(text: string, verticalId?: string): string[] {
   const names: string[] = [];
   const quantity = /^(?:multiple|several|many|separate|different|other|more|few|\d+|two|three|four|five|six)$/i;
   for (const match of text.matchAll(/\b(?:with|including|featuring|plus)\s+(?:an?\s+|the\s+)?([A-Za-z0-9&' ,/-]{3,160}?)\s+pages\b/gi)) {
@@ -223,12 +226,15 @@ function ownerListedPageNames(text: string): string[] {
     if (!quantity.test(name) && !NON_DESTINATION.test(name) && !/^(?:single|one|landing|home|new|simple)$/i.test(name)) names.push(name);
   }
   // Feature lists without the word "pages": "with releases, tour dates and fan sign-ups".
-  // Each short noun phrase is a destination the owner asked for.
+  // Each short noun phrase is a destination the owner asked for — except
+  // design treatments ("cinematic motion", "a bold look"), which the creative
+  // brief owns.
   for (const match of text.matchAll(/\b(?:with|including|featuring|that has|needs?)\s+([A-Za-z0-9&' ,/-]{3,200}?)(?=[.!?;\n]|$)/gi)) {
     const parts = match[1].split(/,|\/|\band\b|\bplus\b/i).map((part) => part.trim().replace(/^(?:an?|the|some|my)\s+/i, '')).filter(Boolean);
     if (parts.length < 2) continue;
     for (const part of parts) {
       if (part.split(/\s+/).length > 3 || /\bpages?\b/i.test(part) || quantity.test(part) || NON_DESTINATION.test(part)) continue;
+      if (TREATMENT_PHRASE.test(part) && !matchVerticalPageName(part, verticalId)) continue;
       names.push(part);
     }
   }
@@ -265,7 +271,7 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   const profileRoutes = resolvedIndustry ? getIndustryProfile(resolvedIndustry)?.defaultPages.map((page) => page.path) ?? [] : [];
   const pageVertical = resolveIndustryVertical(semanticText) ?? (acceptedDirection ? resolveIndustryVertical(acceptedDirection) : null);
   const confirmedPages = confirmedPagesFromDirection(acceptedDirection, resolvedIndustry, pageVertical?.packId);
-  const listedNames = ownerListedPageNames(semanticText);
+  const listedNames = ownerListedPageNames(semanticText, pageVertical?.packId);
   const listedPages = listedNames.length ? confirmedPagesFromDirection(`Pages: ${listedNames.join(', ')}`, resolvedIndustry, pageVertical?.packId).pages : [];
   const namedCreationPages = uniquePagesByRoute([
     ...mentionedPages.map((page) => pageDetailsForChoice(page, resolvedIndustry)),
@@ -328,6 +334,16 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   );
   const requestedCapabilities = capabilityEvidence.map(({ capabilityId }) => capabilityId);
   const ownerMessages = conversationDetails ? conversationDetails.split('\n').map((line) => line.trim()).filter(Boolean) : [];
+  // Conversational creative direction: the natural-language equivalent of the
+  // retired Wizard's art direction, experience, hero and section-layout picks.
+  const experienceDirection = deriveExperienceDirection({
+    ownerText: ownerMessages[0] ?? semanticText,
+    confirmedDirection: acceptedDirection || undefined,
+    refinements: ownerMessages.slice(1),
+    pages: [{ route: '/', title: 'Home' }, ...creationPages],
+    designDirection: creative.designDirection,
+    vertical: verticalPack ? { designTerms: verticalPack.designTerms, hostIndustry: verticalPack.hostIndustry } : null,
+  });
   const creationInput: UniversalCreationInput = {
     mode: promptFirst || !confident ? 'open-ended' : 'guided',
     originalPrompt: semanticText,
@@ -357,10 +373,12 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
         text: `operational capability ${evidence.capabilityId} (explicitly requested; still requires authorization)`,
         evidence: evidence.reason, origin: 'explicit' as const,
       })),
+      ...experienceRequirements(experienceDirection),
     ],
     multiPage: creative.multiPage,
     designDirection: creative.designDirection,
     ...(vertical ? { vertical } : {}),
+    experienceDirection,
     clarifications: [],
   };
   return {

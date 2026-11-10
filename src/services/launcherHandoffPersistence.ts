@@ -33,6 +33,7 @@ const COMPACT_UNISON_METADATA_PATHS = new Set([
   '/.unison/draft-classification.json',
   '/.unison/integrity-report.json',
   '/.unison/wizard-registry-context.json',
+  '/.unison/creative-brief.json',
   CANONICAL_METADATA_FILE_PATHS.publishedRuntime,
 ]);
 

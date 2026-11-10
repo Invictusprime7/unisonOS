@@ -1,6 +1,10 @@
-import { resolveEligibleImplementations } from '@/services/designImplementationEligibility';
+import { isProductionEligible, resolveEligibleImplementations } from '@/services/designImplementationEligibility';
 import { getDesignImplementation as getImplementationForEligibility } from '@/services/designImplementationRegistry';
 const isKnownImplementation = (id: string) => Boolean(getImplementationForEligibility(id as never));
+const isOwnerPinEligible = (id: string) => {
+  const implementation = getImplementationForEligibility(id as never);
+  return Boolean(implementation && isProductionEligible(implementation));
+};
 /**
  * Wizard Registry Aggregation — Single unified registry context for launch.
  *
@@ -226,6 +230,14 @@ export function buildWizardAggregatedRegistryContext(options: {
     const pinnedForSection = (options.pinnedImplementationIds ?? []).filter((id) =>
       id.startsWith(`${type}:`) && executableIds.includes(id) && isKnownImplementation(id),
     );
+    // Owner-chosen layouts (conversational section/route pins) are certified
+    // designs the owner asked for by description; outside the pack's
+    // recommended set they are advisory, not illegal, so they stay available.
+    const ownerPins = [
+      ...Object.values(options.designSelection?.sectionPins ?? {}),
+      ...Object.values(options.designSelection?.routePins ?? {}).flatMap((pins) => Object.values(pins)),
+    ].map(String).filter((id) => id.startsWith(`${type}:`) && !pinnedForSection.includes(id) && isOwnerPinEligible(id));
+    pinnedForSection.push(...ownerPins);
     const experiencePreference = options.designSelection?.experience;
     const ranked = resolveEligibleImplementations({
       sectionType: type,

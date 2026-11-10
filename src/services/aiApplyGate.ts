@@ -26,6 +26,7 @@ import {
   type PublishBlockerSummary,
 } from '@/services/vfsCommitService';
 import { assertPatchPlan, legacyFilesToPatchPlan } from '@/types/patchPlan';
+import { CREATIVE_BRIEF_PATH, refinedCreativeBriefFile } from '@/services/launch/experienceDirector';
 import { describeStaleCandidate, rebaseCandidate, recordCommit, runExclusive } from '@/services/builder/builderMutationCoordinator';
 import type { BuilderIdentity } from '@/types/builderIdentity';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
@@ -67,7 +68,18 @@ export function buildAiCandidatePatch(ctx: AiCommitContext): PatchPlan {
     }
     candidate = rebase.candidate;
   }
-  if (!candidate) return legacyFilesToPatchPlan(ctx.nextFiles, 'ai-builder legacy candidate');
+  // A creative refinement ("make the hero more cinematic") is recorded in the
+  // site's sealed creative brief inside this same canonical commit.
+  const refinedBrief = refinedCreativeBriefFile(ctx.beforeFiles, ctx.label);
+  const briefOp = refinedBrief ? { type: 'replace' as const, path: CREATIVE_BRIEF_PATH, contents: refinedBrief.contents } : null;
+  if (!candidate) {
+    const legacy = legacyFilesToPatchPlan(ctx.nextFiles, 'ai-builder legacy candidate');
+    if (briefOp) {
+      // A full file map may carry the unchanged brief; the refined one replaces it.
+      legacy.fileOps = [...legacy.fileOps.filter((operation) => operation.path !== CREATIVE_BRIEF_PATH), briefOp];
+    }
+    return legacy;
+  }
   if (!candidate.id.trim()) {
     throw new Error('[aiApplyGate] candidate identity is required.');
   }
@@ -105,6 +117,7 @@ export function buildAiCandidatePatch(ctx: AiCommitContext): PatchPlan {
       attempt: candidate.attempt,
     },
   };
+  if (briefOp && !patch.fileOps.some((operation) => operation.path === CREATIVE_BRIEF_PATH)) patch.fileOps.push(briefOp);
   assertPatchPlan(patch, 'aiApplyGate');
   return patch;
 }

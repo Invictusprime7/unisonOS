@@ -30,10 +30,16 @@ describe('1 · Whistle Blower regression', () => {
     expect(input.visionPrompt).toContain('[req:interaction:match-centre]');
   });
 
-  it('knows the sports vertical and proposes its typical pages, marked inferred', () => {
+  it('knows the sports vertical and maps the owner-listed destinations onto its pages', () => {
     expect(creation.vertical).toMatchObject({ packId: 'sports', variantId: 'fan-media' });
-    const inferred = (creation.requirements ?? []).filter((requirement) => requirement.kind === 'page' && requirement.origin === 'inferred');
-    expect(inferred.map((requirement) => requirement.pageRoute)).toEqual(expect.arrayContaining(['/live', '/match-centre']));
+    // "live scores, a match centre, fixtures and match reports" are destinations
+    // the owner listed, so they are owner pages (P0 intent-to-implementation),
+    // mapped through the sports page vocabulary — never replaced by inferred ones.
+    const pageRequirements = (creation.requirements ?? []).filter((requirement) => requirement.kind === 'page');
+    expect(pageRequirements.map((requirement) => requirement.pageRoute)).toEqual(expect.arrayContaining(['/live', '/match-centre', '/match-reports']));
+    expect(pageRequirements.every((requirement) => requirement.origin !== 'inferred')).toBe(true);
+    // "cinematic motion" is a treatment the creative brief owns, not a page.
+    expect(pageRequirements.map((requirement) => requirement.pageRoute)).not.toContain('/cinematic-motion');
     expect(renderVerticalKnowledge(creation.vertical)).toContain('INDUSTRY KNOWLEDGE (Sports · Fan blog / sports media');
   });
 
@@ -43,6 +49,7 @@ describe('1 · Whistle Blower regression', () => {
     { route: '/blog', filePath: '/src/pages/Blog.tsx', title: 'Blog', visibleInNav: true },
     { route: '/live', filePath: '/src/pages/Live.tsx', title: 'Live Scores', visibleInNav: true },
     { route: '/match-centre', filePath: '/src/pages/MatchCentrePage.tsx', title: 'Match Centre', visibleInNav: true },
+    { route: '/match-reports', filePath: '/src/pages/MatchReports.tsx', title: 'Match Reports', visibleInNav: true },
   ];
   const requirements = [
     ...(creation.requirements ?? []),
@@ -51,8 +58,9 @@ describe('1 · Whistle Blower regression', () => {
 
   it('passes as complete only with original, labelled, routed and navigable source', () => {
     const files = {
-      '/src/App.tsx': router(['Fixtures', 'Blog', 'Live', 'MatchCentrePage']),
-      '/src/project-components/site/SiteNav.tsx': nav(['/', '/fixtures', '/blog', '/live', '/match-centre']),
+      '/src/App.tsx': router(['Fixtures', 'Blog', 'Live', 'MatchCentrePage', 'MatchReports']),
+      '/src/project-components/site/SiteNav.tsx': nav(['/', '/fixtures', '/blog', '/live', '/match-centre', '/match-reports']),
+      '/src/pages/MatchReports.tsx': 'export default function MatchReports(){return <main>Match reports</main>}',
       '/src/pages/Blog.tsx': 'export default function Blog(){return <main>Match reports</main>}',
       '/src/pages/Live.tsx': 'export default function Live(){return <main>Live</main>}',
       '/src/pages/MatchCentrePage.tsx': 'export default function MatchCentrePage(){return <main>Match</main>}',

@@ -216,6 +216,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
       ? [`Design direction is PROVISIONAL: ${creation.designDirection.note} Never treat the token base as the requested style.`]
       : []),
     renderCreativeRequirements(creation.requirements, creation.designDirection),
+    ...(creation.experienceDirection ? ['Experience requirements (req:experience:*) are the owner\'s conversational design choices: REUSE renders the named certified design (its data-ut-variant), ADAPT keeps the named design as the base and marks a site-local derivative with // @unison-derived-from <id>, AUTHOR creates an original site-local component. Realize each on its stated page; never silently substitute a different design or art direction.'] : []),
     renderVerticalKnowledge(creation.vertical),
     ...(openEnded ? ['The selected industry is only a compatibility hint; do not replace the visitor subject or purpose with an industry template. Author site-local TSX wherever certified designs do not fit the prompt.'] : []),
     ...(creation.sitePurpose.toLowerCase().includes('editorial')

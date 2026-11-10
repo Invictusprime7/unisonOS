@@ -3,6 +3,7 @@ import type {
   UnisonBuilderTurnContext,
 } from '@/types/unisonBuilderConnector';
 import { readMaterializedDesignSources } from '@/services/app-builder/design/designSourceMaterializer';
+import { readCreativeBrief, renderCreativeBriefDirective } from '@/services/launch/experienceDirector';
 
 // Canonical Unison token roles (values are always supplied by the project's sealed theme).
 const TOKEN_NAMES = [
@@ -67,6 +68,7 @@ export function createUnisonBuilderContext(input: UnisonBuilderConnectorInput): 
       ...(!catalogSummary ? ['catalog' as const] : []),
       ...(!registry ? ['registry' as const] : []),
     ],
+    creativeBrief: renderCreativeBriefDirective(readCreativeBrief(input.files), input.requestEnvelope?.summary) || null,
   };
 }
 
@@ -84,6 +86,7 @@ export function renderUnisonBuilderDirective(context: UnisonBuilderTurnContext):
     'App Builder is the sole source author. Import verified public recipe exports, never recipe internals or invented component IDs. Preserve sectionId and componentInstanceId; componentInstanceId belongs to the canonical functional instance, not the variant ID. Never manufacture cmp_ IDs.',
     'Local disclosure, menu, lightbox and billing toggles stay in component state with no backend intent. auth.login/auth.register on links open or focus authentication; forms use data-intent-form="auth.login"/"auth.register" and auth.submit slot, never duplicate click intents on submit buttons.',
     `Sealed Art Direction: ${context.registry.artDirectionPackId ?? 'not supplied; preserve existing theme'}`,
+    context.creativeBrief ?? '',
     `Design token roles: ${context.designSystem.tokenNames.join(', ')}`,
     'Capability and binding validation remain mandatory; missing business capability readiness blocks publishing, not a safe preview draft.',
     context.catalog.summary ? `Connected catalog context:\n${context.catalog.summary}` : '',

@@ -15,6 +15,12 @@ export interface UnisonBuilderTurnContext {
   designSystem: DesignSystemConstraints;
   sourceTargets: readonly string[];
   unavailable: readonly ('element' | 'catalog' | 'registry')[];
+  /**
+   * The site's sealed conversational creative brief, scoped to this request:
+   * which owner decisions it may change and which stay locked. Null on sites
+   * launched before the brief existed.
+   */
+  creativeBrief?: string | null;
 }
 
 export interface EnforcedElementTarget {

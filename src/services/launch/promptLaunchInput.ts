@@ -19,6 +19,7 @@ import {
 import type { LaunchOrchestratorInput } from '@/services/launch/launchOrchestrator';
 import type { AppBuildGenerationMode } from '@/services/app-builder/appBuilderContracts';
 import { createWizardDesignSelection, type WizardExperiencePreference } from '@/services/wizardDesignSelection';
+import { designSelectionFromDirection, isArtDirectionSealed } from '@/services/launch/experienceDirector';
 
 /** Optional saved business details that pre-fill public/contact parameters. */
 export interface PromptLaunchPrefill {
@@ -107,7 +108,12 @@ export function extractPromptSocialLinks(prompt: string): Record<string, string>
  * preset) and the creative brief stays authoritative.
  */
 function resolveTheme(plan: ChatLaunchPlan): ThemePreset {
-  const id = plan.themePresetId ?? plan.designDirection.familyId;
+  // With no named family, the art direction the owner's words selected
+  // supplies the token base instead of the provisional default.
+  const direction = plan.creationInput.experienceDirection;
+  const conversational = plan.designDirection.origin === 'provisional' && direction && isArtDirectionSealed(direction)
+    ? direction.artDirection.familyId : null;
+  const id = plan.themePresetId ?? conversational ?? plan.designDirection.familyId;
   return THEME_PRESETS.find((preset) => preset.id === id)
     ?? THEME_PRESETS.find((preset) => preset.id === plan.designDirection.familyId)
     ?? THEME_PRESETS[0];
@@ -140,10 +146,11 @@ export function buildPromptLaunchInput(prompt: string, options: PromptLaunchOpti
     }),
     universalCreation: projectUniversalCreationInput(plan, plan.selectedPages, { promptFirst: true }),
     theme,
-    designSelection: createWizardDesignSelection({
-      mode: 'auto',
-      experience: inferPromptExperience(plan.creationInput.originalPrompt),
-    }),
+    // The conversation seals what the Wizard used to select: art direction,
+    // experience budget and owner-named hero/section layouts.
+    designSelection: createWizardDesignSelection(plan.creationInput.experienceDirection
+      ? designSelectionFromDirection(plan.creationInput.experienceDirection)
+      : { mode: 'auto', experience: inferPromptExperience(plan.creationInput.originalPrompt) }),
     businessName,
     businessParameters: {
       ownerEmail,
