@@ -108,7 +108,7 @@ export async function orchestrateAppBuild(
       overflow: generation.runtimeContextOverflowForPage(pageId, room),
     };
   };
-  const photoUrls = verifiedPhotosFor(input.contract.design.resolvedSiteDesignContext?.contract.industry ?? input.contract.business.industry);
+  const photoUrls = verifiedPhotosFor(input.contract.design.resolvedSiteDesignContext?.contract.industry ?? input.contract.business.industry, 6, [input.contract.business.universalCreation?.vertical?.packId, input.contract.business.universalCreation?.vertical?.blendPackId]);
   let unresolvedMarkerBindingIds: string[] = [];
   let systemMaterializedCompositionFiles: Record<string, string> = {};
   let latestSectionMaterialization: AppBuilderSectionMaterializationResult | undefined;

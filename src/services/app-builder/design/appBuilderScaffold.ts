@@ -295,7 +295,7 @@ export default function ${page.isHome ? 'Home' : `Page${pageId.replace(/[^a-zA-Z
     registry: AppBuilderScaffoldRegistry,
   ): Record<string, string> {
   const pages = contract.topology.sitePlan.pages;
-  const photos = verifiedPhotosFor(contract.design.resolvedSiteDesignContext.contract.industry);
+  const photos = verifiedPhotosFor(contract.design.resolvedSiteDesignContext.contract.industry, 6, [contract.business.universalCreation?.vertical?.packId, contract.business.universalCreation?.vertical?.blendPackId]);
   const image = photos[0];
     return Object.fromEntries(pages.map((page, index) => {
       const sections = resolvePageSections(contract, page, registry);

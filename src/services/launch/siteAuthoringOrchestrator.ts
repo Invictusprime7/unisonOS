@@ -314,7 +314,7 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
         ].filter(Boolean).join('\n');
         // Photo library sits outside the trimmable layout so it can never be cut off.
         const photos = isImageLedRole(page.role)
-          ? `PHOTO LIBRARY (required — this page is image-led and is rejected without photos): render at least one <img src="..."> in the page file itself using these verified URLs, copied exactly; never invent other image URLs:\n${verifiedPhotosFor(input.designContext?.contract.industry).join('\n')}`
+          ? `PHOTO LIBRARY (required — this page is image-led and is rejected without photos): render at least one <img src="..."> in the page file itself using these verified URLs, copied exactly; never invent other image URLs:\n${verifiedPhotosFor(input.designContext?.contract.industry, 6, (() => { const vertical = resolveIndustryVertical(input.visionBrief ?? ''); return [vertical?.packId, vertical?.blendPackId]; })()).join('\n')}`
           : '';
         const room = COMPOSER_PAGE_BRIEF_LIMIT - owner.length - (photos ? photos.length + 1 : 0) - (continued ? continued.length + 1 : 0) - 3;
         return [owner, photos, continued, layout.slice(0, Math.max(0, room))].filter(Boolean).join('\n').slice(0, COMPOSER_PAGE_BRIEF_LIMIT);
