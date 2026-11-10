@@ -99,6 +99,9 @@ export interface ComposerLoopInput {
   resume?: ComposerLoopResume;
 }
 
+/** Output rule for App Builder page fix rounds: targeted hunks, never a whole-page resend. */
+export const PAGE_REPAIR_OUTPUT_RULE = 'REPAIR OUTPUT: fix only the reported diagnostics. For files that exist in FILES return <<<EDIT SEARCH/REPLACE hunks copied exactly from FILES (Composer applies them into complete source). Do not resend unchanged sections or rewrite the whole page. Use FILE create only for a missing new module.';
+
 /** Provider replies that mean the key's balance is empty; they never recover on retry. */
 export const PROVIDER_CREDITS_EXHAUSTED = /prepayment credits (?:are )?depleted|out of (?:prepaid )?credit|no credits remaining|insufficient[_\s-]*(?:quota|credits?|funds?)|credits? (?:are )?(?:depleted|exhausted)|exceeded your current quota|payment required|\b402\b/i;
 
