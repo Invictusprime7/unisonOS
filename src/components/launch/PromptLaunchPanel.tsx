@@ -225,7 +225,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
           </div>
           <div className="space-y-1">
             <dt className="text-xs text-muted-foreground">Pages</dt>
-            <dd className="font-medium">{preview.plan.selectedPages.length ? preview.plan.selectedPages.join(', ') : 'Home'}</dd>
+            <dd className="font-medium">{preview.plan.creationInput.pages.map((page) => page.title).join(', ') || 'Home'}</dd>
           </div>
           {preview.plan.creationInput.requestedCapabilities.length > 0 && (
             <div className="space-y-1 sm:col-span-2">
