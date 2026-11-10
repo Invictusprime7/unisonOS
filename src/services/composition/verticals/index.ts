@@ -45,6 +45,21 @@ export function getVerticalPack(id: string | null | undefined): IndustryVertical
   return id ? VERTICAL_PACKS.find((pack) => pack.id === id) : undefined;
 }
 
+/**
+ * The pack for a canonical industry id (salon_spa, real-estate, …) when no
+ * prompt vertical was resolved — template installs and sites launched before
+ * the vertical was sealed still get their trade knowledge.
+ */
+export function verticalForIndustry(industry: string | null | undefined): CreationVertical | null {
+  const key = (industry ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  const aliases: Record<string, string> = {
+    'salon-spa': 'salon', 'creator-portfolio': 'portfolio', 'coaching-consulting': 'coaching', 'real-estate': 'real-estate',
+    'local-service': 'local-service', contractor: 'local-service', legal: 'professional-services', 'non-profit': 'nonprofit',
+  };
+  const pack = getVerticalPack(aliases[key] ?? key);
+  return pack ? { packId: pack.id, variantId: null, blendPackId: null, confidence: 0.5, evidence: [industry ?? pack.id] } : null;
+}
+
 const NEGATION = /\b(?:no|not|without|avoid|exclude|omit|skip|never|don't|do not|doesn't|does not)\b(?:\s+\w+){0,3}\s*$/i;
 
 function escape(value: string): string {

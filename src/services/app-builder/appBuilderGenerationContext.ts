@@ -11,7 +11,7 @@ import { listTopologyPageRoleAliases } from '@/platform/core/siteTopologyPlanner
 import { collectResolvedCompositions } from '@/platform/core/resolvedComposition';
 import { COMPOSER_CONTEXT_LIMIT, packContextBlocks } from './contextBudget';
 import { renderCreativeRequirements } from '@/services/launch/creativePlan';
-import { renderVerticalKnowledge } from '@/services/composition/verticals';
+import { renderVerticalKnowledge, verticalForIndustry } from '@/services/composition/verticals';
 import { ARCHETYPE_ADVISORY_POLICY, CREATIVE_AUTHORITY_ORDER, MIXED_SECTION_AUTHORING_POLICY, SECTION_CONTENT_DEPTH_POLICY } from './creativeAuthorityPolicy';
 
 /** Home references stay compact so later pages keep room for their own design vocabulary. */
@@ -205,6 +205,8 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const materialization = materializeDesignSources(designSources);
   const creation = business.universalCreation;
   const openEnded = creation?.mode === 'open-ended';
+  // Every build gets trade knowledge: the prompt's vertical, else the industry's own pack.
+  const vertical = creation?.vertical ?? verticalForIndustry(business.industry);
   const creationContext = creation ? [
     `VISITOR CREATION SPECIFICATION (${creation.mode}): site purpose: ${creation.sitePurpose}; subject: ${creation.subject}.`,
     `Explicit page plan: ${creation.pages.map((page) => `${page.route} (${page.title}; role ${page.suggestedRole ?? 'custom'}): ${page.purpose}`).join(' | ') || 'Home only.'}`,
@@ -219,12 +221,12 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
       : []),
     renderCreativeRequirements(creation.requirements, creation.designDirection),
     ...(creation.experienceDirection ? ['Experience requirements (req:experience:*) are the owner\'s conversational design choices: REUSE renders the named certified design (its data-ut-variant), ADAPT keeps the named design as the base and marks a site-local derivative with // @unison-derived-from <id>, AUTHOR creates an original site-local component. Realize each on its stated page; never silently substitute a different design or art direction.'] : []),
-    renderVerticalKnowledge(creation.vertical),
+    renderVerticalKnowledge(vertical),
     ...(openEnded ? ['The selected industry is only a compatibility hint; do not replace the visitor subject or purpose with an industry template. Author site-local TSX wherever certified designs do not fit the prompt.'] : []),
     ...(creation.sitePurpose.toLowerCase().includes('editorial')
       ? ['Editorial pages may render static sample articles. When a published articles content type exists, load it through listPublishedContent from @/components/publishedActionRuntime. If no type or published rows are available, keep a local sample/empty state; do not claim CMS editing or publishing without canonical owner authorization.']
       : []),
-  ].join('\n') : '';
+  ].join('\n') : renderVerticalKnowledge(vertical);
   const industryContext = buildIndustryAuthoringContext(business.industry, business.capabilities);
   const iconContext = buildIndustryIconContext(business.industry, business.capabilities, business.intents,
     contract.design.compositionPlan.pages.flatMap((page) => page.target.sectionOrder));

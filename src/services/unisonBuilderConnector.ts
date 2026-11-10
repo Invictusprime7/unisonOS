@@ -4,7 +4,7 @@ import type {
 } from '@/types/unisonBuilderConnector';
 import { readMaterializedDesignSources } from '@/services/app-builder/design/designSourceMaterializer';
 import { readCreativeBrief, renderCreativeBriefDirective, type PersistedCreativeBrief } from '@/services/launch/experienceDirector';
-import { getVerticalPack, renderVerticalKnowledge } from '@/services/composition/verticals';
+import { getVerticalPack, renderVerticalKnowledge, verticalForIndustry } from '@/services/composition/verticals';
 import { photoLibraryKey, verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
 import { SECTION_CONTENT_DEPTH_POLICY } from '@/services/app-builder/creativeAuthorityPolicy';
 import type { CreationVertical } from '@/platform/core/universalCreation';
@@ -90,8 +90,7 @@ export function resolveSiteEnrichment(
   const industry = brief?.site?.industry ?? registryIndustry ?? null;
   const sealed = brief?.site?.vertical ?? null;
   if (sealed && getVerticalPack(sealed.packId)) return { industry, vertical: sealed };
-  const pack = getVerticalPack(photoLibraryKey(industry));
-  return { industry, vertical: pack ? { packId: pack.id, variantId: null, blendPackId: null, confidence: 0.5, evidence: [industry ?? pack.id] } : null };
+  return { industry, vertical: verticalForIndustry(industry) ?? verticalForIndustry(photoLibraryKey(industry)) };
 }
 
 /** Edit-time and new-page enrichment: trade knowledge, copy depth and the site's photo library. */
