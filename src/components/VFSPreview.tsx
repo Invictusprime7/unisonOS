@@ -38,7 +38,7 @@ import { usePreviewAI } from '@/hooks/usePreviewAI';
 import { getGlobalAITerminalBridge } from '@/services/aiTerminalBridge';
 import { buildPreviewArtifactsAsync } from '@/utils/previewArtifacts';
 import { isImportedSourceVfs, readImportedSourceRecords } from '@/services/import/importedSourceRecords';
-import { ImportedSourcePreviewStatus } from '@/components/import/ImportedSourcePreviewStatus';
+import { ImportedSourcePreview } from '@/components/import/ImportedSourcePreview';
 import { PreviewPipelineError, isPreviewPipelineError } from '@/services/previewPipelineError';
 import { createVfsHandoffSignature } from '@/services/vfsHandoffSignature';
 import { PreviewRuntimeError } from '@/components/PreviewRuntimeError';
@@ -1474,10 +1474,11 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   }, [backend, dockerService.session]);
 
   // UIMP-01: imported projects never run through the Unison preview runtime.
-  // Until a source-compatible isolated runtime exists the preview reports its
-  // real state instead of rendering a transformed design.
+  // A source-compatible adapter runs the original files unchanged in an
+  // isolated frame; without one the preview reports its real state instead of
+  // rendering a transformed design.
   if (importedSourceRecords) {
-    return <ImportedSourcePreviewStatus records={importedSourceRecords} className={className} />;
+    return <ImportedSourcePreview records={importedSourceRecords} files={files} className={className} />;
   }
 
   if (pipelineError) {

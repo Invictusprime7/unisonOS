@@ -19,7 +19,7 @@ import { IMPORTED_SOURCE_ACCEPTANCE_PROFILE, type ImportProvenanceRecord } from 
 
 export type ExternalImportInput =
   | { kind: 'zip'; file: File }
-  | { kind: 'files'; files: File[] };
+  | { kind: 'files'; files: File[]; /** Folder-relative paths, parallel to `files` (drag-and-drop folders). */ relativePaths?: string[] };
 
 export interface ExternalImportResult {
   projectId: string;
@@ -55,9 +55,9 @@ async function resolveBusinessId(userId: string, preferred: string | null | unde
   return created.id;
 }
 
-async function readFiles(files: File[]): Promise<Array<{ path: string; bytes: Uint8Array }>> {
-  return Promise.all(files.map(async (file) => ({
-    path: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
+async function readFiles(files: File[], relativePaths?: string[]): Promise<Array<{ path: string; bytes: Uint8Array }>> {
+  return Promise.all(files.map(async (file, index) => ({
+    path: relativePaths?.[index] || (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
     bytes: new Uint8Array(await file.arrayBuffer()),
   })));
 }
@@ -71,7 +71,7 @@ export async function importExternalProject(
   const archiveBytes = input.kind === 'zip' ? new Uint8Array(await input.file.arrayBuffer()) : null;
   const intake = input.kind === 'zip'
     ? await intakeZipArchive(archiveBytes!, { name: input.file.name })
-    : await intakeLooseFiles(await readFiles(input.files));
+    : await intakeLooseFiles(await readFiles(input.files, input.relativePaths));
 
   stage('checking');
   const parity = await verifyIntakeHashParity(intake);
