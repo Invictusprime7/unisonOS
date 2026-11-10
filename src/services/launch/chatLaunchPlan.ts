@@ -19,6 +19,7 @@ import {
 } from "@/services/launch/creativePlan";
 import { getIndustryProfile } from "@/platform/core/industryMatrix";
 import { getVerticalPack, inferVerticalPages, matchVerticalPageName, resolveIndustryVertical, verticalInteractionRequirements } from "@/services/composition/verticals";
+import { deriveExperienceDirection, experienceRequirements } from "@/services/launch/experienceDirector";
 
 /**
  * Page aliases that are also everyday words ("Help me create…", "work",
@@ -328,6 +329,16 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   );
   const requestedCapabilities = capabilityEvidence.map(({ capabilityId }) => capabilityId);
   const ownerMessages = conversationDetails ? conversationDetails.split('\n').map((line) => line.trim()).filter(Boolean) : [];
+  // Conversational creative direction: the natural-language equivalent of the
+  // retired Wizard's art direction, experience, hero and section-layout picks.
+  const experienceDirection = deriveExperienceDirection({
+    ownerText: ownerMessages[0] ?? semanticText,
+    confirmedDirection: acceptedDirection || undefined,
+    refinements: ownerMessages.slice(1),
+    pages: [{ route: '/', title: 'Home' }, ...creationPages],
+    designDirection: creative.designDirection,
+    vertical: verticalPack ? { designTerms: verticalPack.designTerms, hostIndustry: verticalPack.hostIndustry } : null,
+  });
   const creationInput: UniversalCreationInput = {
     mode: promptFirst || !confident ? 'open-ended' : 'guided',
     originalPrompt: semanticText,
@@ -357,10 +368,12 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
         text: `operational capability ${evidence.capabilityId} (explicitly requested; still requires authorization)`,
         evidence: evidence.reason, origin: 'explicit' as const,
       })),
+      ...experienceRequirements(experienceDirection),
     ],
     multiPage: creative.multiPage,
     designDirection: creative.designDirection,
     ...(vertical ? { vertical } : {}),
+    experienceDirection,
     clarifications: [],
   };
   return {
