@@ -8,6 +8,7 @@
  * exists, so every framework resolves to a blocked adapter with a reason —
  * Unison never substitutes its own runtime or components to "make it render".
  */
+import { STATIC_HTML_PREVIEW_ADAPTER } from './staticHtmlPreview';
 import type { ImportManifest } from './secureIntake';
 
 export type ImportFramework =
@@ -70,6 +71,24 @@ export interface ImportCompatibilityProfile {
   nestedAppRoots: string[];
   counts: { files: number; sourceFiles: number; assets: number; excluded: number };
   previewAdapter: { status: 'available' | 'unavailable'; adapter: string | null; reason: string; requires: string[] };
+}
+
+/** Static sites run in the browser itself, so their original files can run unchanged. */
+export const STATIC_HTML_ADAPTER_INFO: ImportCompatibilityProfile['previewAdapter'] = {
+  status: 'available',
+  adapter: STATIC_HTML_PREVIEW_ADAPTER,
+  reason: 'Runs the original HTML, styles and scripts unchanged in an isolated frame. Local file links point at the saved files; nothing in the saved source is changed.',
+  requires: [],
+};
+
+/**
+ * Live adapter decision for an imported revision. Imports saved before an
+ * adapter existed keep their frozen profile record, so the decision is made
+ * from the detected framework and the files actually present.
+ */
+export function resolveImportPreviewAdapter(profile: ImportCompatibilityProfile, files: Record<string, string>): ImportCompatibilityProfile['previewAdapter'] {
+  if (profile.framework === 'static-html' && Object.keys(files).some((p) => /\.html?$/i.test(p) && !p.startsWith('/.unison-import/'))) return STATIC_HTML_ADAPTER_INFO;
+  return profile.previewAdapter;
 }
 
 interface PackageJson {
@@ -365,12 +384,11 @@ export function analyzeImportedProject(input: {
   else if (framework === 'remix' || framework === 'react-router-framework') requires.push('Remix / React Router framework server');
   else if (framework === 'astro' || framework === 'sveltekit' || framework === 'nuxt' || framework === 'vue-vite') requires.push(`${framework} build toolchain`);
   else if (framework === 'vite-react' || framework === 'create-react-app') requires.push('the project\'s own Vite/webpack build with its pinned dependencies');
-  else if (framework === 'static-html') requires.push('a static file server for the original HTML and assets');
   else requires.push('a build toolchain matching the source');
   if (tailwind === '4') requires.push('Tailwind CSS 4 compiler');
   if (serverCapabilities.size > 0) requires.push(`server runtime for ${[...serverCapabilities].join(', ')}`);
   if (Object.keys(aliases).length > 0) requires.push(`path aliases ${Object.keys(aliases).join(', ')}`);
-  const previewAdapter: ImportCompatibilityProfile['previewAdapter'] = {
+  const previewAdapter: ImportCompatibilityProfile['previewAdapter'] = framework === 'static-html' && routes.length > 0 ? STATIC_HTML_ADAPTER_INFO : {
     status: 'unavailable',
     adapter: null,
     reason: 'Unison does not yet run imported projects in an isolated, source-compatible build. The built-in preview runtime would have to change this project\'s code, styles or components to display it, so the preview stays off instead of showing a different design.',
