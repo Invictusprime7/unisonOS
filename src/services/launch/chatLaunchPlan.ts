@@ -209,6 +209,8 @@ function confirmedPagesFromDirection(direction: string, industry: string | null,
  */
 const NON_DESTINATION = /\b(?:look|feel|style|colou?rs?|vibe|design|fonts?|theme|photos?|images?|animations?|aesthetic|modern|bold|clean|minimal|dark|light|elegant|logo|brand|seo|mobile|responsive|fast|beautiful|professional|my|our music|music|website|site|app)\b/i;
 
+const TREATMENT_PHRASE = /\b(?:motion|animations?|animated|cinematic|parallax|transitions?|style|styling|look|feel|vibe|aesthetic|design|colou?rs?|palette|fonts?|typography|imagery|photography|layouts?|hero|gradients?|visuals?)\b/i;
+
 function ownerListedPageNames(text: string, verticalId?: string): string[] {
   const names: string[] = [];
   const quantity = /^(?:multiple|several|many|separate|different|other|more|few|\d+|two|three|four|five|six)$/i;
@@ -224,14 +226,15 @@ function ownerListedPageNames(text: string, verticalId?: string): string[] {
     if (!quantity.test(name) && !NON_DESTINATION.test(name) && !/^(?:single|one|landing|home|new|simple)$/i.test(name)) names.push(name);
   }
   // Feature lists without the word "pages": "with releases, tour dates and fan sign-ups".
-  // Only phrases the trade's page vocabulary knows are destinations; others
-  // ("cinematic motion", "live scores") are treatments or interactions.
+  // Each short noun phrase is a destination the owner asked for — except
+  // design treatments ("cinematic motion", "a bold look"), which the creative
+  // brief owns.
   for (const match of text.matchAll(/\b(?:with|including|featuring|that has|needs?)\s+([A-Za-z0-9&' ,/-]{3,200}?)(?=[.!?;\n]|$)/gi)) {
     const parts = match[1].split(/,|\/|\band\b|\bplus\b/i).map((part) => part.trim().replace(/^(?:an?|the|some|my)\s+/i, '')).filter(Boolean);
     if (parts.length < 2) continue;
     for (const part of parts) {
       if (part.split(/\s+/).length > 3 || /\bpages?\b/i.test(part) || quantity.test(part) || NON_DESTINATION.test(part)) continue;
-      if (!matchVerticalPageName(part, verticalId)) continue;
+      if (TREATMENT_PHRASE.test(part) && !matchVerticalPageName(part, verticalId)) continue;
       names.push(part);
     }
   }
