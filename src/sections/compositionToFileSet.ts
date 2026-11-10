@@ -324,7 +324,7 @@ function assertSanctionedSectionTypes(template: TemplateComposition, pageFilePat
  * nothing, so sections shipped as a bare heading. Canonical names always win;
  * aliases only fill a missing or empty canonical prop.
  */
-const AUTHORED_PROP_NORMALIZER = `
+export const AUTHORED_PROP_NORMALIZER = `
 const TEXT_PROP_ALIASES: Record<string, string[]> = {
   headline: ['title', 'heading'],
   subheadline: ['subtitle', 'subheading', 'tagline', 'kicker'],
