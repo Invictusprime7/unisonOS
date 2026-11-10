@@ -34,6 +34,7 @@ import {
   type GeneratedUiManifest,
 } from '@/platform/core/generatedUiFoundation';
 import { getRequiredRadixPrimitives } from '@/sections/variants';
+import { CREATIVE_BRIEF_PATH, pinnedImplementationsByRoute, serializeCreativeBrief } from '@/services/launch/experienceDirector';
 import type { VariantId } from '@/sections/variants/types';
 import { collectResolvedCompositions } from '@/platform/core/resolvedComposition';
 import {
