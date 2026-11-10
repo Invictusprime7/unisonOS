@@ -24,6 +24,7 @@ import { GENERATED_RUNTIME_PROFILE } from '@/platform/core/generatedRuntimeCapab
  */
 
 import { ensureReactImports, sanitizeSvgElements } from '@/utils/aiCodeCleaner';
+import { isImportedSourceVfs } from '@/services/import/importedSourceRecords';
 import { LAUNCHER_BASE_THEME } from '@/sections/themes';
 import {
   isSandpackAllowedImport,
