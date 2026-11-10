@@ -2231,9 +2231,9 @@ describe('UIMP-01 imported-source acceptance profile', () => {
 
     const structural = await commitMutation({
       source: 'playground-edit', identity: next, current: { vfsFiles: edit.vfsFiles },
-      patch: { ...emptyPatchPlan(), presentationOps: [{ type: 'set_section_variant', pageId: 'home', sectionId: 'hero', variantId: 'hero-centered' } as never] },
+      patch: { ...emptyPatchPlan(), playgroundOps: [{ type: 'addSection', pageId: 'home', sectionId: 'hero', payload: {} }] },
     }).catch((e) => e);
-    expect(structural.message, String(structural.stack)).toBe('x');
+    expect(structural.code).toBe('SCOPE_ESCAPE');
 
     const secret = await commitMutation({
       source: 'ai-builder', identity: next, current: { vfsFiles: edit.vfsFiles },
