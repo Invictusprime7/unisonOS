@@ -1,69 +1,70 @@
 /**
- * ImportProjectZipButton — drag-in compiler runtime for `.zip` files that
- * were exported from Unison (Mode B) or any Vite + React project. Drops the
- * contents into a fresh launcher handoff and navigates straight into the
- * WebBuilder, skipping the 4-step wizard.
+ * ImportProjectZipButton — imports an external project (ZIP archive, picked
+ * folder, or individual source/asset files) through the UIMP-01 pipeline:
+ * secure intake → compatibility profile → canonical accepted revision.
  *
- * Renders as a compact chip that doubles as a full-viewport drop target when
- * a file is dragged over it — mount it next to any "Launch" / "New Site" CTA.
+ * The source is preserved byte-for-byte. Nothing is redesigned, re-themed or
+ * replaced with Unison components; the Builder opens the saved revision and
+ * reports honestly whether it can be previewed here.
  */
 
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Upload, Loader2, FolderArchive } from 'lucide-react';
+import { Upload, Loader2, FolderArchive, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { importSourceProjectZip } from '@/services/export/importSourceProjectZip';
 import { persistLauncherHandoff } from '@/services/launcherHandoffPersistence';
 import { createLaunchState } from '@/types/launchState';
+import { ImportIntakeError } from '@/services/import/secureIntake';
+import { importExternalProject, type ExternalImportInput, type ExternalImportStage } from '@/services/import/externalProjectImport';
 
 interface ImportProjectZipButtonProps {
   /** Visual variant — pill (chip) or block (large dropzone card). */
   variant?: 'pill' | 'block';
+  /** Business that should own the imported project, when already chosen. */
+  businessId?: string | null;
   /** Called after import succeeds and navigation is queued. */
   onImported?: () => void;
   className?: string;
 }
 
+const STAGE_LABEL: Record<ExternalImportStage, string> = {
+  reading: 'Reading files…',
+  checking: 'Checking files…',
+  'saving-assets': 'Saving images and fonts…',
+  'saving-version': 'Saving the first version…',
+};
+
+function pickEntryPoint(files: Record<string, string>, entrypoints: string[]): string {
+  const preferred = entrypoints.map((p) => `/${p}`).find((p) => /\.(tsx|jsx|ts|js)$/.test(p) && p in files);
+  return preferred
+    ?? Object.keys(files).find((p) => /^\/src\/.+\.(tsx|jsx)$/.test(p))
+    ?? Object.keys(files).find((p) => !p.startsWith('/.unison-import/'))
+    ?? '/index.html';
+}
+
 export const ImportProjectZipButton = ({
   variant = 'pill',
+  businessId,
   onImported,
   className,
 }: ImportProjectZipButtonProps) => {
   const navigate = useNavigate();
   const [isDragging, setIsDragging] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [stage, setStage] = useState<string | null>(null);
+  const zipInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const isImporting = stage !== null;
 
-  const handleZipFile = useCallback(
-    async (file: File) => {
-      if (!file.name.toLowerCase().endsWith('.zip')) {
-        toast.error('Only .zip project archives are supported');
-        return;
-      }
-      setIsImporting(true);
+  const runImport = useCallback(
+    async (input: ExternalImportInput) => {
+      setStage(STAGE_LABEL.reading);
       try {
-        const result = await importSourceProjectZip(file, { fallbackName: file.name.replace(/\.zip$/i, '') });
-        if (result.warnings.length) {
-          console.warn('[ImportProjectZip] warnings', result.warnings);
-        }
-
-        // Recover the wizard themePresetId from the exported runtime manifest
-        // or the site-bundle snapshot so themed CSS threads through Stage 4b
-        // on the very first preview render (no wizard re-run required).
-        let recoveredPresetId: string | undefined =
-          (result.runtimeManifest as unknown as { themePresetId?: string })?.themePresetId
-          || undefined;
-        if (!recoveredPresetId) {
-          const snapRaw = result.vfsFiles['/.unison/site-bundle-snapshot.json'];
-          if (typeof snapRaw === 'string') {
-            try {
-              const snap = JSON.parse(snapRaw) as { meta?: { themePresetId?: string } };
-              recoveredPresetId = snap?.meta?.themePresetId || undefined;
-            } catch { /* ignore */ }
-          }
-        }
-
+        const result = await importExternalProject(input, {
+          businessId,
+          onStage: (next, detail) => setStage(detail ? `${STAGE_LABEL[next].replace(/…$/, '')} (${detail})…` : STAGE_LABEL[next]),
+        });
+        const entryPoint = pickEntryPoint(result.vfsFiles, result.profile.entrypoints);
         const launchState = createLaunchState({
           systemType: 'content',
           systemName: result.projectName,
@@ -73,39 +74,58 @@ export const ImportProjectZipButton = ({
           aesthetic: 'imported',
           vfsFiles: result.vfsFiles,
           preloadedIntents: [],
-          entryPoint: result.entryPoint,
-          runtimeManifest: result.runtimeManifest,
-          themePresetId: recoveredPresetId,
+          entryPoint,
           startInPreview: true,
+          businessId: result.businessId,
+          projectId: result.projectId,
         });
-
         const routeState = {
           fromLauncher: true,
-          fromImport: true,
+          fromImportedSource: true,
           templateName: result.projectName,
-          templateCategory: 'landing',
+          projectName: result.projectName,
+          templateCategory: 'landing' as const,
           systemType: 'content',
           systemName: result.projectName,
           startInPreview: true,
+          businessId: result.businessId,
+          projectId: result.projectId,
+          draftId: result.draftId,
+          revisionId: result.revisionId,
           vfsFiles: result.vfsFiles,
-          runtimeManifest: result.runtimeManifest,
-          entryPoint: result.entryPoint,
-          themePresetId: recoveredPresetId,
+          entryPoint,
+          launchReliabilityMode: 'imported-source',
         };
-
-
         persistLauncherHandoff({ routeState, launchState });
-        toast.success(`Imported ${result.fileCount} files • Opening builder…`);
+        const blocked = result.provenance.readiness.runtimeCompatibility === 'blocked';
+        toast.success(`Imported ${result.fileCount} files unchanged`, {
+          description: blocked
+            ? 'Saved as your first version. Preview is off for this project type, so a different design is never shown.'
+            : 'Saved as your first version.',
+        });
         onImported?.();
         navigate('/web-builder', { replace: true, state: routeState });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        toast.error(`Import failed: ${msg}`);
+        toast.error(err instanceof ImportIntakeError ? 'Import stopped' : 'Import failed', { description: msg });
       } finally {
-        setIsImporting(false);
+        setStage(null);
       }
     },
-    [navigate, onImported],
+    [businessId, navigate, onImported],
+  );
+
+  const handleFiles = useCallback(
+    async (list: FileList | null | undefined) => {
+      const files = Array.from(list ?? []);
+      if (files.length === 0) return;
+      if (files.length === 1 && files[0].name.toLowerCase().endsWith('.zip')) {
+        await runImport({ kind: 'zip', file: files[0] });
+        return;
+      }
+      await runImport({ kind: 'files', files });
+    },
+    [runImport],
   );
 
   const handleDrop = useCallback(
@@ -113,13 +133,37 @@ export const ImportProjectZipButton = ({
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
-      const file = e.dataTransfer.files?.[0];
-      if (file) await handleZipFile(file);
+      await handleFiles(e.dataTransfer.files);
     },
-    [handleZipFile],
+    [handleFiles],
   );
 
-  const openPicker = () => inputRef.current?.click();
+  const inputs = (
+    <>
+      <input
+        ref={zipInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        aria-label="Choose a .zip or project files"
+        onChange={(e) => {
+          void handleFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        className="hidden"
+        aria-label="Choose a project folder"
+        {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+        onChange={(e) => {
+          void handleFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+    </>
+  );
 
   if (variant === 'block') {
     return (
@@ -131,7 +175,7 @@ export const ImportProjectZipButton = ({
           isImporting && 'pointer-events-none opacity-70',
           className,
         )}
-        onClick={openPicker}
+        onClick={() => zipInputRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
         onDrop={handleDrop}
@@ -146,61 +190,51 @@ export const ImportProjectZipButton = ({
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-white/90">
-              {isImporting ? 'Compiling project…' : 'Import an exported .zip'}
+              {stage ?? 'Import a project'}
             </div>
             <p className="text-[11px] text-white/40 mt-0.5">
-              Drop a Unison export or any Vite + React project. We rehydrate the VFS and open the Builder.
+              Drop a .zip, a folder or source files. Your code, styles, images and fonts are kept exactly as they are.
             </p>
           </div>
         </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".zip,application/zip"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void handleZipFile(f);
-            e.target.value = '';
-          }}
-        />
+        {inputs}
       </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={openPicker}
-      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-      onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-      onDrop={handleDrop}
-      disabled={isImporting}
-      className={cn(
-        'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all',
-        'border border-white/10 bg-white/[0.03] text-white/70 hover:text-white hover:border-cyan-500/40 hover:bg-cyan-500/[0.06]',
-        isDragging && 'border-cyan-400 text-cyan-300 bg-cyan-500/10',
-        isImporting && 'opacity-60 cursor-wait',
-        className,
+    <span className={cn('inline-flex flex-wrap items-center gap-2', className)}>
+      <button
+        type="button"
+        onClick={() => zipInputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+        onDrop={handleDrop}
+        disabled={isImporting}
+        className={cn(
+          'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+          'border border-white/10 bg-white/[0.03] text-white/70 hover:text-white hover:border-cyan-500/40 hover:bg-cyan-500/[0.06]',
+          isDragging && 'border-cyan-400 text-cyan-300 bg-cyan-500/10',
+          isImporting && 'opacity-60 cursor-wait',
+        )}
+      >
+        {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+        <span>{stage ?? 'Import .zip or files'}</span>
+      </button>
+      {!isImporting && (
+        <button
+          type="button"
+          onClick={() => folderInputRef.current?.click()}
+          className={cn(
+            'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+            'border border-white/10 bg-white/[0.03] text-white/70 hover:text-white hover:border-cyan-500/40 hover:bg-cyan-500/[0.06]',
+          )}
+        >
+          <FolderOpen className="w-3.5 h-3.5" />
+          <span>Import folder</span>
+        </button>
       )}
-    >
-      {isImporting ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-      ) : (
-        <Upload className="w-3.5 h-3.5" />
-      )}
-      <span>{isImporting ? 'Importing…' : 'Import .zip'}</span>
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".zip,application/zip"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void handleZipFile(f);
-          e.target.value = '';
-        }}
-      />
-    </button>
+      {inputs}
+    </span>
   );
 };
