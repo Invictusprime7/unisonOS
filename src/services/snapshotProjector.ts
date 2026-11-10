@@ -930,13 +930,11 @@ function reconcilePendingVfsOperations(
 }
 
 /**
- * Snapshot-as-primary projection bridge. A wizard SiteBundleSnapshot owns the
- * entire executable VFS, not only files that resemble a minimal placeholder.
- * A legacy template preset is valid React and therefore cannot be detected by
- * a fallback-content heuristic; preserving it lets a template silently render
- * over the deterministic snapshot manifest. Snapshot files must win every
- * overlapping path — EXCEPT paths with a newer live edit that the snapshot has
- * not absorbed yet.
+ * Snapshot projection bridge. The live VFS is the preview authority: every
+ * `/src/**` byte it holds renders, and the sealed SiteBundleSnapshot only
+ * supplies paths the VFS lacks plus `/.unison/` metadata. Root-level files
+ * outside the snapshot are dropped so stale legacy routers cannot compete
+ * after Sandpack flattening.
  */
 export type PendingSourceConflictPolicy = 'block' | 'accepted-only';
 
