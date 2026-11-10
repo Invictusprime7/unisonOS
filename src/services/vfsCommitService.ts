@@ -1,4 +1,6 @@
 import { emitAgentEvent } from '@/services/agent-runtime/agentEvents';
+import { IMPORTED_SOURCE_ACCEPTANCE_PROFILE, IMPORT_RECORD_ROOT, isImportedSourceVfs } from '@/services/import/importedSourceRecords';
+import { evaluateImportedSourceCandidate } from '@/services/import/importedSourceAcceptance';
 import { updateResolvedCompositionVariants } from '@/sections/compositionToFileSet';
 import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
 import { isCustomizerPageEdit } from '@/services/builder/customizerDraft';
@@ -161,6 +163,11 @@ export interface CommitMutationInput {
     selections?: CanonicalCommitInput['selections'];
     /** Explicit user-requested regeneration/reset after launch handoff. */
     explicitAuthorityReset?: boolean;
+    /**
+     * UIMP-01: accept an externally imported project without running any
+     * Unison compiler stage. Implied whenever the base VFS carries import records.
+     */
+    acceptanceProfile?: typeof IMPORTED_SOURCE_ACCEPTANCE_PROFILE;
     /** Exact Wizard artifact already approved by the user. */
     reviewedArtifact?: {
       siteBundleSnapshot: SiteBundleSnapshot;
@@ -827,6 +834,15 @@ async function commitMutationInner(
       customizerPagePath,
       filePaths: input.patch.fileOps.map((operation) => operation.path),
     });
+  }
+
+  // 1b. Imported-source acceptance profile (UIMP-01) -------------------------
+  // An externally imported project keeps its own structure: no Unison
+  // router, theme, section, snapshot or readiness compiler may run over it.
+  if (input.options?.acceptanceProfile === IMPORTED_SOURCE_ACCEPTANCE_PROFILE
+    || isImportedSourceVfs(input.current.vfsFiles)
+    || (restoredRevision && isImportedSourceVfs(restoredRevision.vfsFiles))) {
+    return commitImportedSourceMutation({ input, restoredRevision, diagnostics, log });
   }
 
   // 2. Patch normalisation ---------------------------------------------------
@@ -2311,7 +2327,8 @@ async function finalize(args: {
     source: input.source,
     operationIds,
     candidateId,
-    compilerOwnedPaths: [
+    // Imported projects own every path except their read-only import records.
+    compilerOwnedPaths: isImportedSourceVfs(vfsFiles) ? [`${IMPORT_RECORD_ROOT}/**`] : [
       '/.unison/**',
       '/src/unison/**',
       '/src/integrations/**',
