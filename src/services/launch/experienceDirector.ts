@@ -192,7 +192,7 @@ const BREAK_WORDS = new Set([
   'a', 'an', 'the', 'with', 'and', 'or', 'plus', 'of', 'for', 'to', 'in', 'on', 'at', 'our', 'my', 'your', 'their', 'its', 'his', 'her',
   'that', 'which', 'is', 'are', 'be', 'should', 'must', 'has', 'have', 'include', 'including', 'featuring', 'features?', 'very', 'really',
   'some', 'also', 'but', 'page', 'pages', 'site', 'website', 'make', 'create', 'build', 'add', 'want', 'need', 'like', 'use', 'using', 'from',
-  'into', 'this', 'it', 'as', 'by', 'more', 'less', 'much', 'even', 'way', 'too', 'than', 'dedicated', 'separate', 'own', 'new',
+  'into', 'this', 'it', 'as', 'by', 'more', 'less', 'much', 'even', 'way', 'too', 'than', 'dedicated', 'separate', 'own', 'new', ',',
 ]);
 const POSTFIX_SKIP = new Set(['is', 'be', 'feel', 'feels', 'look', 'looks', 'should', 'must', 'more', 'much', 'even', 'a', 'bit', 'lot', 'way', 'to', 'far', 'really', 'very', 'extra', 'super', 'so', 'and', 'become', 'made', 'make']);
 const REPLACE_WORDS = /\b(?:instead|replace|swap|switch (?:it )?to|change (?:it |the \w+ )?(?:to|into)|turn (?:it )?into|use an?|rather than)\b/i;
