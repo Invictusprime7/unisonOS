@@ -320,7 +320,13 @@ export async function orchestrateAppBuild(
       const assembled = await assembleCanonicalAuthoringRequest({
         task: 'site_page_repair',
         page: group.page,
-        brief: 'Repair the reported source-owner checks without changing the sealed design identity or other completed pages.',
+        brief: [
+          'Repair the reported source-owner checks without changing the sealed design identity or other completed pages.',
+          (() => {
+            const overflow = generation.runtimeContextOverflowForPage(group.page.pageId, COMPOSER_CONTEXT_LIMIT - (input.runtimeContext?.length ?? 0) - 1);
+            return overflow ? `RUNTIME / CAPABILITY CONSTRAINTS (continued; same authority):\n${overflow}` : '';
+          })(),
+        ].filter(Boolean).join('\n'),
         knowledgeQuery: `${input.contract.business.industry} ${group.page.role} module design closure`,
         instruction: repairInstruction,
         baseFiles: candidateFiles,
