@@ -1,4 +1,6 @@
 import { emitAgentEvent } from '@/services/agent-runtime/agentEvents';
+import { IMPORTED_SOURCE_ACCEPTANCE_PROFILE, IMPORT_RECORD_ROOT, isImportedSourceVfs } from '@/services/import/importedSourceRecords';
+import { evaluateImportedSourceCandidate } from '@/services/import/importedSourceAcceptance';
 import { updateResolvedCompositionVariants } from '@/sections/compositionToFileSet';
 import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
 import { isCustomizerPageEdit } from '@/services/builder/customizerDraft';
@@ -161,6 +163,11 @@ export interface CommitMutationInput {
     selections?: CanonicalCommitInput['selections'];
     /** Explicit user-requested regeneration/reset after launch handoff. */
     explicitAuthorityReset?: boolean;
+    /**
+     * UIMP-01: accept an externally imported project without running any
+     * Unison compiler stage. Implied whenever the base VFS carries import records.
+     */
+    acceptanceProfile?: typeof IMPORTED_SOURCE_ACCEPTANCE_PROFILE;
     /** Exact Wizard artifact already approved by the user. */
     reviewedArtifact?: {
       siteBundleSnapshot: SiteBundleSnapshot;
@@ -827,6 +834,15 @@ async function commitMutationInner(
       customizerPagePath,
       filePaths: input.patch.fileOps.map((operation) => operation.path),
     });
+  }
+
+  // 1b. Imported-source acceptance profile (UIMP-01) -------------------------
+  // An externally imported project keeps its own structure: no Unison
+  // router, theme, section, snapshot or readiness compiler may run over it.
+  if (input.options?.acceptanceProfile === IMPORTED_SOURCE_ACCEPTANCE_PROFILE
+    || isImportedSourceVfs(input.current.vfsFiles)
+    || (restoredRevision && isImportedSourceVfs(restoredRevision.vfsFiles))) {
+    return commitImportedSourceMutation({ input, restoredRevision, diagnostics, log });
   }
 
   // 2. Patch normalisation ---------------------------------------------------
@@ -2254,6 +2270,107 @@ function buildVfsDelta(
   return { files, deletedPaths: deletedPaths.sort() };
 }
 
+/**
+ * UIMP-01 imported-source acceptance. File operations only; records stay
+ * read-only; the first revision must equal the intake manifest; restores
+ * reinstate an earlier imported revision's exact bytes. Readiness comes from
+ * the provenance record and keeps publish blocked until a source-compatible
+ * preview and parity check exist.
+ */
+async function commitImportedSourceMutation(args: {
+  input: CommitMutationInput;
+  restoredRevision: Awaited<ReturnType<typeof loadRevision>>;
+  diagnostics: CommitDiagnostic[];
+  log: (stage: string, level: CommitDiagnostic['level'], message: string, detail?: unknown, code?: CommitRejectionCode) => void;
+}): Promise<CommitMutationResult> {
+  const { input, restoredRevision, diagnostics, log } = args;
+  const patch = input.patch;
+  if (patch.playgroundOps.length || patch.bindingOps.length || patch.dataOps.length || patch.backendOps.length
+    || patch.presentationOps.length || patch.routeOps?.length || patch.businessSystem || patch.themeEdit
+    || input.options?.reviewedArtifact || input.options?.reviewedComposition || input.options?.compositionUpgrade
+    || input.options?.customizerPagePath) {
+    throw new CommitGuardError('SCOPE_ESCAPE', 'imported-source-scope', '[VFSCommitService] Imported projects keep their original structure. Only source file edits are accepted; Unison page, section, theme and binding operations need an explicit migration.', {
+      source: input.source,
+    });
+  }
+
+  const before = input.current.vfsFiles;
+  let working: Record<string, string>;
+  if (restoredRevision) {
+    if (!isImportedSourceVfs(restoredRevision.vfsFiles)) {
+      throw new CommitGuardError('SCOPE_ESCAPE', 'imported-source-restore', '[VFSCommitService] Only earlier versions of this imported project can be restored here.');
+    }
+    working = { ...restoredRevision.vfsFiles };
+  } else {
+    working = { ...before };
+    for (const op of patch.fileOps) {
+      let path: string;
+      try {
+        path = normalizeAuthoredPath(op.path);
+      } catch {
+        throw new CommitGuardError('SCOPE_ESCAPE', 'imported-source-scope', `[VFSCommitService] Unsafe file path: ${op.path}`, { path: op.path });
+      }
+      if (op.type === 'delete') delete working[path];
+      else working[path] = op.contents;
+    }
+  }
+
+  // A restore reinstates an already-accepted imported revision of this project
+  // (ownership checked above), so it is evaluated against its own bytes.
+  const evaluation = await evaluateImportedSourceCandidate({
+    before: restoredRevision ? restoredRevision.vfsFiles : before,
+    after: working,
+  });
+  if (!evaluation.ok && evaluation.rejection) {
+    throw new CommitGuardError(evaluation.rejection.code, 'imported-source-acceptance', `[VFSCommitService] ${evaluation.rejection.message}`, evaluation.rejection.detail);
+  }
+  if (evaluation.unresolvedImports.length > 0) {
+    log('imported-source-imports', 'warn', `${evaluation.unresolvedImports.length} local import(s) do not resolve inside the imported project.`, evaluation.unresolvedImports.slice(0, 25));
+  }
+  for (const finding of evaluation.secretFindings.filter((f) => f.severity === 'advisory')) {
+    log('imported-source-secrets', 'warn', `Possible credential in ${finding.path}:${finding.line} (${finding.kind}).`);
+  }
+  log('imported-source-acceptance', 'info', evaluation.initial
+    ? 'Imported source accepted byte-for-byte.'
+    : `Imported source edit accepted (${evaluation.changedPaths.length} changed, ${evaluation.deletedPaths.length} removed).`);
+
+  const readiness = evaluation.readiness;
+  const publishBlockers: PublishBlockerSummary[] = (readiness?.blockers ?? []).map((blocker) => ({
+    source: 'preview',
+    code: blocker.code,
+    message: blocker.message,
+  }));
+  return finalize({
+    input,
+    status: 'committed',
+    vfsFiles: working,
+    siteBundleSnapshot: null,
+    runtimeManifest: null,
+    playground: null,
+    readinessReport: {
+      acceptanceProfile: IMPORTED_SOURCE_ACCEPTANCE_PROFILE,
+      importReadiness: readiness,
+      importAcceptance: {
+        initial: evaluation.initial,
+        changedPaths: evaluation.changedPaths.slice(0, 200),
+        deletedPaths: evaluation.deletedPaths.slice(0, 200),
+        unchangedOriginalFiles: evaluation.unchangedOriginalFiles,
+        originalTextFiles: evaluation.originalTextFiles,
+        unresolvedImports: evaluation.unresolvedImports.slice(0, 50),
+        restoredFromRevisionId: restoredRevision?.id ?? null,
+      },
+    },
+    publishReady: false,
+    publishBlockers,
+    vfsHash: await hashVfsFiles(working),
+    backendOpsApplied: [],
+    dataOpsApplied: [],
+    diagnostics,
+    parentRevisionId: input.identity.revisionId || null,
+    rejectMessage: null,
+  });
+}
+
 async function finalize(args: {
   input: CommitMutationInput;
   status: 'committed' | 'rejected';
@@ -2311,7 +2428,8 @@ async function finalize(args: {
     source: input.source,
     operationIds,
     candidateId,
-    compilerOwnedPaths: [
+    // Imported projects own every path except their read-only import records.
+    compilerOwnedPaths: isImportedSourceVfs(vfsFiles) ? [`${IMPORT_RECORD_ROOT}/**`] : [
       '/.unison/**',
       '/src/unison/**',
       '/src/integrations/**',

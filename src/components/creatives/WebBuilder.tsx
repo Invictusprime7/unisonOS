@@ -113,6 +113,7 @@ import { supabase as supabaseClient } from "@/integrations/supabase/client";
 const supabase = supabaseClient as any;
 import { buildPageStructureContext } from "@/utils/pageStructureContext";
 import { extractCleanCode, looksLikeCode, ensureReactImports } from "@/utils/aiCodeCleaner";
+import { isImportedSourceVfs } from "@/services/import/importedSourceRecords";
 import { AIActivityPanel } from "@/components/ai-agent/AIActivityPanel";
 import { useAIActivityMonitor } from "@/hooks/useAIActivityMonitor";
 import {
@@ -2169,6 +2170,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     if (lastSyncedRouterKeyRef.current === syncKey) return;
     try {
       const currentFiles = virtualFS.getSandpackFiles();
+      // Imported projects own their routing; the registry never writes a router over them.
+      if (isImportedSourceVfs(currentFiles)) {
+        lastSyncedRouterKeyRef.current = syncKey;
+        return;
+      }
       const filesToImport: Record<string, string> = {};
       const currentRouter = currentFiles[launchEntryPoint] || currentFiles['/src/App.tsx'] || '';
 
@@ -2675,7 +2681,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       return null;
     }
 
-    const safeEntrySource = /\.(tsx|jsx)$/.test(entryPath)
+    // Imported projects open their exact bytes; nothing is added to the editor buffer.
+    const safeEntrySource = /\.(tsx|jsx)$/.test(entryPath) && !isImportedSourceVfs(files)
       ? ensureReactImports(entrySource)
       : entrySource;
 
@@ -2784,7 +2791,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         normalizedEntryPoint || launchEntryPoint,
       );
 
-      if (appKey && normalizedFiles[appKey] && !normalizedFiles['/src/template.css']) {
+      if (appKey && normalizedFiles[appKey] && !normalizedFiles['/src/template.css'] && !isImportedSourceVfs(normalizedFiles)) {
         const { cleanCode, css } = extractEmbeddedCSS(normalizedFiles[appKey]);
         if (css) {
           normalizedFiles[appKey] = cleanCode;
@@ -6289,7 +6296,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         ) || activePagePath;
         const entry = editableEntryPath ? vfsFiles[editableEntryPath] : undefined;
         const safeEntry = entry
-          ? (wizardResolution.isWizardDraft ? entry : ensureReactImports(entry))
+          ? (wizardResolution.isWizardDraft || isImportedSourceVfs(vfsFiles) ? entry : ensureReactImports(entry))
           : undefined;
         const importedFiles = editableEntryPath && safeEntry && entry !== safeEntry
           ? { ...vfsFiles, [editableEntryPath]: safeEntry }
@@ -6329,7 +6336,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         // Auto-hydrate Creator's Playground from imported VFS
         setTimeout(() => {
           const files = virtualFS.getSandpackFiles();
-          if (Object.keys(files).length > 0) {
+          if (Object.keys(files).length > 0 && !isImportedSourceVfs(files)) {
             const result = creatorPlayground.hydrateFromVFS(virtualFS.nodes, files);
             console.log('[WebBuilder] Playground hydrated from VFS import:', result.stats);
             if (result.stats.pagesDetected > 0) {

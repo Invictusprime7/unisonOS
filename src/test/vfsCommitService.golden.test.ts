@@ -2141,3 +2141,127 @@ describe('P0 rejection fixtures', () => {
     })]);
   });
 });
+
+describe('UIMP-01 imported-source acceptance profile', () => {
+  const enc = (s: string) => new TextEncoder().encode(s);
+  const ROOT_CSS = '@import "tailwindcss";\r\n@theme { --font-display: "Fraunces", serif; }\r\n';
+  const INDEX_ROUTE = "import { createFileRoute } from '@tanstack/react-router';\nexport const Route = createFileRoute('/')({ component: () => <h1 className=\"font-display\">ARIA</h1> });\n";
+
+  async function importedFiles() {
+    const { intakeLooseFiles } = await import('@/services/import/secureIntake');
+    const { analyzeImportedProject } = await import('@/services/import/importCompatibilityProfile');
+    const { buildImportedSourceVfs } = await import('@/services/import/importedSourceAcceptance');
+    const intake = await intakeLooseFiles([
+      { path: 'aria/package.json', bytes: enc('{"name":"aria","dependencies":{"@tanstack/react-start":"^1.0.0","react":"^19.0.0"},"devDependencies":{"@tailwindcss/vite":"^4.0.0","tailwindcss":"^4.0.0","vite":"^6.0.0"}}') },
+      { path: 'aria/src/styles.css', bytes: enc(ROOT_CSS) },
+      { path: 'aria/src/routes/__root.tsx', bytes: enc("import '../styles.css';\nexport const Route = {};\n") },
+      { path: 'aria/src/routes/index.tsx', bytes: enc(INDEX_ROUTE) },
+      { path: 'aria/public/hero.png', bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]) },
+    ]);
+    const profile = analyzeImportedProject(intake);
+    const assets = {
+      version: 1 as const,
+      assets: intake.manifest.files.filter((f) => f.storage === 'binary').map((f) => ({
+        path: f.path, sha256: f.sha256, size: f.size, mime: f.mime, kind: f.kind,
+        bucket: 'user-files', storagePath: `${IDENTITY.userId}/imports/${IDENTITY.projectId}/blobs/${f.sha256}.png`, status: 'stored' as const,
+      })),
+      originalArchive: null,
+    };
+    return { intake, profile, ...buildImportedSourceVfs({ intake, profile, assets, importedBy: IDENTITY.userId, importedAt: '2026-11-10T00:00:00.000Z' }) };
+  }
+
+  async function adopt(files: Record<string, string>) {
+    return commitMutation({
+      source: 'system-restore', identity: IDENTITY, current: { vfsFiles: {} },
+      patch: legacyFilesToPatchPlan(files, 'Import'), options: { acceptanceProfile: 'imported-source' },
+    });
+  }
+
+  it('accepts the original source byte-for-byte without running any Unison compiler stage', async () => {
+    const { files, profile } = await importedFiles();
+    expect(profile.framework).toBe('tanstack-start');
+    expect(profile.toolchain.tailwind).toBe('4');
+    expect(profile.routing.routes.map((r) => r.path)).toContain('/');
+    const result = await adopt(files);
+    expect(result.status).toBe('committed');
+    expect(result.vfsFiles).toEqual(files);
+    expect(result.vfsFiles['/src/styles.css']).toBe(ROOT_CSS);
+    expect(result.vfsFiles['/src/App.tsx']).toBeUndefined();
+    expect(result.vfsFiles['/src/index.css']).toBeUndefined();
+    expect(commitToPipeline).not.toHaveBeenCalled();
+    expect(runFullPreflight).not.toHaveBeenCalled();
+    expect(buildCanonicalLaunchArtifacts).not.toHaveBeenCalled();
+    expect(result.publishReady).toBe(false);
+    expect(result.publishBlockers.map((b) => b.code)).toEqual(expect.arrayContaining(['imported-runtime-unsupported', 'imported-visual-parity-unverified']));
+    expect(result.readinessReport).toMatchObject({ acceptanceProfile: 'imported-source', importReadiness: { sourcePreserved: 'verified', assetsPreserved: 'verified', previewRendered: 'blocked', publishReady: false } });
+    expect(revisionStore).toHaveLength(1);
+    expect(revisionStore[0].source).toBe('system-restore');
+  });
+
+  it('refuses a first revision whose bytes differ from the intake manifest', async () => {
+    const { files } = await importedFiles();
+    const err = await adopt({ ...files, '/src/styles.css': ROOT_CSS.replace(/\r\n/g, '\n') }).catch((e) => e);
+    expect(err.code).toBe('SOURCE_PROJECTION_REWRITE');
+    const extra = await adopt({ ...files, '/src/index.css': ':root{}' }).catch((e) => e);
+    expect(extra.code).toBe('SOURCE_PROJECTION_REWRITE');
+    expect(revisionStore).toHaveLength(0);
+  });
+
+  it('accepts scoped source edits, keeps records read-only and refuses Unison structural operations', async () => {
+    const { files } = await importedFiles();
+    const first = await adopt(files);
+    const identity = { ...IDENTITY, revisionId: first.persistedRevisionId! };
+    const edited = INDEX_ROUTE.replace('ARIA', 'ARIA Studios');
+    const edit = await commitMutation({
+      source: 'ai-builder', identity, current: { vfsFiles: first.vfsFiles },
+      patch: legacyFilesToPatchPlan({ ...first.vfsFiles, '/src/routes/index.tsx': edited }, 'Rename heading'),
+    });
+    expect(edit.status).toBe('committed');
+    expect(edit.vfsFiles['/src/routes/index.tsx']).toBe(edited);
+    expect(edit.vfsFiles['/src/styles.css']).toBe(ROOT_CSS);
+    expect((edit.readinessReport.importAcceptance as { changedPaths: string[] }).changedPaths).toEqual(['/src/routes/index.tsx']);
+    expect(commitToPipeline).not.toHaveBeenCalled();
+
+    const next = { ...IDENTITY, revisionId: edit.persistedRevisionId! };
+    const recordEdit = await commitMutation({
+      source: 'ai-builder', identity: next, current: { vfsFiles: edit.vfsFiles },
+      patch: legacyFilesToPatchPlan({ '/.unison-import/provenance.json': edit.vfsFiles['/.unison-import/provenance.json'].replace('"publishReady": false', '"publishReady": true') }),
+    }).catch((e) => e);
+    expect(recordEdit.code).toBe('PROTECTED_INFRASTRUCTURE');
+
+    const structural = await commitMutation({
+      source: 'playground-edit', identity: next, current: { vfsFiles: edit.vfsFiles },
+      patch: { ...emptyPatchPlan(), presentationOps: [{ type: 'set_section_variant', pageId: 'home', sectionId: 'hero', variantId: 'hero-centered' } as never] },
+    }).catch((e) => e);
+    expect(structural.message, String(structural.stack)).toBe('x');
+
+    const secret = await commitMutation({
+      source: 'ai-builder', identity: next, current: { vfsFiles: edit.vfsFiles },
+      patch: legacyFilesToPatchPlan({ '/src/pay.ts': `export const key = "sk_live_${'9'.repeat(30)}";` }),
+    }).catch((e) => e);
+    expect(secret.code).toBe('SCOPE_ESCAPE');
+    expect(String(secret.message)).not.toContain('9'.repeat(30));
+  });
+
+  it('restores an earlier imported revision exactly', async () => {
+    const { files } = await importedFiles();
+    const first = await adopt(files);
+    const edit = await commitMutation({
+      source: 'ai-builder', identity: { ...IDENTITY, revisionId: first.persistedRevisionId! }, current: { vfsFiles: first.vfsFiles },
+      patch: legacyFilesToPatchPlan({ '/src/routes/index.tsx': 'export const Route = null;\n', '/src/new.ts': 'export {};\n' }),
+    });
+    const restored = await restoreRevision({ targetRevisionId: first.persistedRevisionId!, identity: { ...IDENTITY, revisionId: edit.persistedRevisionId! } });
+    expect(restored.status).toBe('committed');
+    expect(restored.vfsFiles).toEqual(files);
+    expect(commitToPipeline).not.toHaveBeenCalled();
+  });
+
+  it('never converts an existing Unison project into an imported one', async () => {
+    const { files } = await importedFiles();
+    const err = await commitMutation({
+      source: 'system-restore', identity: IDENTITY, current: { vfsFiles: { '/src/App.tsx': 'export default 1;' } },
+      patch: legacyFilesToPatchPlan(files), options: { acceptanceProfile: 'imported-source' },
+    }).catch((e) => e);
+    expect(err.code).toBe('SCOPE_ESCAPE');
+  });
+});

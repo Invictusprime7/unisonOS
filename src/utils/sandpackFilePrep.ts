@@ -24,6 +24,7 @@ import { GENERATED_RUNTIME_PROFILE } from '@/platform/core/generatedRuntimeCapab
  */
 
 import { ensureReactImports, sanitizeSvgElements } from '@/utils/aiCodeCleaner';
+import { isImportedSourceVfs } from '@/services/import/importedSourceRecords';
 import { LAUNCHER_BASE_THEME } from '@/sections/themes';
 import {
   isSandpackAllowedImport,
@@ -4407,6 +4408,9 @@ export function normalizeLauncherFiles(
     injectCssIfMissing?: boolean;
   }
 ): Record<string, string> {
+  // UIMP-01: an externally imported project keeps its own entry, styles and
+  // structure. No scaffold, CSS or router is ever synthesized over it.
+  if (isImportedSourceVfs(files)) return { ...files };
   // ── Unwrap JSON envelope leaked into file content ──────────────────────
   // The AI sometimes wraps output in {"files":{...}} — if ANY file's content
   // is such a wrapper, extract the inner files and replace the input map.
