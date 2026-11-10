@@ -27,5 +27,11 @@ it('diag', () => {
   const unbounded = g.runtimeContextForPage(c.contract.topology.sitePlan.pages[0].id, 1e9);
   console.log('UNBOUNDED', unbounded.length);
   const blocks = unbounded.split('\n').map(l => l.slice(0, 70));
-  console.log(blocks.filter(l=>/^[A-Z][A-Z ]{6,}/.test(l)).join('\n'));
+  const lines = unbounded.split('\n'); let cur='START', n=0; const out: string[] = [];
+  for (const l of lines) { if (/^[A-Z][A-Z \-]{6,}[:(—]/.test(l)) { out.push(cur+' '+n); cur=l.slice(0,50); n=0; } n += l.length+1; }
+  out.push(cur+' '+n); console.log(out.join('\n'));
+  const noCreation = curateMarketplaceTemplate(ALL_COMPOSITIONS.find((x) => x.id === 'salon-premium')!, THEME_PRESETS[0]);
+  const g2 = buildAppBuilderGenerationContext(noCreation.contract);
+  const p0 = noCreation.contract.topology.sitePlan.pages[0].id;
+  console.log('SALON no creation', g2.runtimeContextForPage(p0, 12000).includes('CERTIFIED OPTIONS'), g2.runtimeContextForPage(p0, 1e9).length);
 });
