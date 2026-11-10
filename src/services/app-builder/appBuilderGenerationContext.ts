@@ -340,9 +340,10 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 4, text: logoContext },
     { priority: 4, text: iconContext },
     { priority: 4, text: `Approved experience capabilities: ${runtime.approvedExperienceCapabilities.join(', ') || 'none'}.` },
-    { priority: 5, trimmable: true, text: templateVerticalContext },
     { priority: 5, text: `Protected paths: ${runtime.protectedPaths.join(', ')}.` },
     { priority: 5, text: `Available runtime dependencies (already pinned for this site): ${(runtime.availableRuntimeDependencies ?? []).join(', ')}. You may also import any valid browser npm package; the shared site dependency resolver will add it to the site graph and preview will verify installation. Never import Node builtins or server-only packages.` },
+    // Advisory trade knowledge for template installs leaves the capped channel first (continues in overflow).
+    { priority: 6, trimmable: true, text: templateVerticalContext },
   ], budget);
   return {
     contract,
