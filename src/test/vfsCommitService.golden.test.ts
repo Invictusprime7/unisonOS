@@ -2233,7 +2233,7 @@ describe('UIMP-01 imported-source acceptance profile', () => {
       source: 'playground-edit', identity: next, current: { vfsFiles: edit.vfsFiles },
       patch: { ...emptyPatchPlan(), presentationOps: [{ type: 'set_section_variant', pageId: 'home', sectionId: 'hero', variantId: 'hero-centered' } as never] },
     }).catch((e) => e);
-    expect(structural.code).toBe('SCOPE_ESCAPE');
+    expect(structural.message, String(structural.stack)).toBe('x');
 
     const secret = await commitMutation({
       source: 'ai-builder', identity: next, current: { vfsFiles: edit.vfsFiles },
