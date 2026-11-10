@@ -257,7 +257,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
       <details className="border-t border-border pt-3 text-sm" data-testid="prompt-launch-import">
         <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Already have a site? Import it instead</summary>
         <div className="mt-3 flex flex-wrap gap-2">
-          <ImportProjectZipButton onImported={onClose} />
+          <ImportProjectZipButton businessId={prefill?.businessId} onImported={onClose} />
           {prefill?.businessId && <ImportUnisonSiteZipButton businessId={prefill.businessId} onImported={onClose} />}
         </div>
       </details>
