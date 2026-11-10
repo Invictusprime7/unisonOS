@@ -413,7 +413,9 @@ function clauseOf(sentence: string, index: number): string {
 
 function phrasesIn(sentence: string, pages: readonly Pick<UniversalCreationPage, 'route' | 'title'>[]): PhraseMatch[] {
   const normalized = normalize(sentence);
-  const tokens = [...normalized.matchAll(/[a-z0-9_][a-z0-9_-]*/g)].map((match) => ({ word: match[0], index: match.index ?? 0 }));
+  // Punctuation is a hard phrase boundary ("gallery, tour dates" are two phrases).
+  const tokens = [...normalized.matchAll(/[a-z0-9_][a-z0-9_-]*|[,;:()&/]/g)]
+    .map((match) => ({ word: /^[,;:()&/]$/.test(match[0]) ? ',' : match[0], index: match.index ?? 0 }));
   const sentenceScope = sentencePageScope(normalized, pages);
   const replace = REPLACE_WORDS.test(normalized);
   const matches: PhraseMatch[] = [];
