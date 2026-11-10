@@ -1,0 +1,52 @@
+import type { IndustryVerticalPack } from './types';
+
+export const NONPROFIT: IndustryVerticalPack = {
+  id: 'nonprofit',
+  label: 'Nonprofits, charities & communities',
+  keywords: ['nonprofit', 'non-profit', 'not-for-profit', 'charity', 'charities', 'foundation', 'ngo', 'donate', 'donations', 'volunteer', 'volunteers', 'fundraiser', 'fundraising', 'church', 'mosque', 'synagogue', 'temple', 'ministry', 'congregation', 'community organisation', 'community organization', 'community centre', 'community center', 'association', 'social enterprise', 'humanitarian', 'relief fund', 'animal rescue', 'shelter'],
+  hostIndustry: 'nonprofit',
+  vocabulary: ['mission', 'impact', 'programmes', 'beneficiaries', 'volunteers', 'donors', 'partners', 'annual report'],
+  contentObjects: [
+    { id: 'programme', label: 'Programme', fields: ['name', 'who it serves', 'what happens', 'image'], sample: 'After-school reading club' },
+    { id: 'impact-stat', label: 'Impact figure', fields: ['figure (owner-supplied)', 'label', 'period'], sample: 'Owner-supplied impact figures only' },
+    { id: 'story', label: 'Impact story', fields: ['person or community', 'story', 'image', 'quote'], sample: 'How one well changed a village (owner-supplied)' },
+    { id: 'event', label: 'Service or event', fields: ['title', 'date', 'time', 'place'], sample: 'Sunday service · 9:00' },
+    { id: 'partner', label: 'Partner or funder', fields: ['name', 'logo'], sample: 'Owner-supplied partners only' },
+  ],
+  proofMechanisms: ['impact figures (owner-supplied)', 'beneficiary stories', 'registered charity number (owner-supplied)', 'partners and funders', 'annual reports'],
+  interactions: [
+    { id: 'donate', label: 'donation options', keywords: ['donate', 'donation', 'give now', 'monthly giving', 'sponsor a child', 'support us'], brief: 'Suggested amounts with what each funds; payment only through a connected donation checkout, otherwise a pledge enquiry.', certifiedFamilies: ['pricing', 'cta'], originalComponent: 'DonationPicker' },
+    { id: 'volunteer-signup', label: 'volunteer signup', keywords: ['volunteer', 'volunteer signup', 'get involved', 'join us', 'volunteer form'], brief: 'Interests and availability through the registered form.', certifiedFamilies: ['contact'], originalComponent: 'VolunteerSignup' },
+    { id: 'impact-counters', label: 'impact counters', keywords: ['our impact', 'impact numbers', 'impact report', 'impact stats'], brief: 'Owner-supplied impact figures with honest periods; never invented.', certifiedFamilies: ['stats'], originalComponent: 'ImpactCounters' },
+    { id: 'fundraising-progress', label: 'campaign progress', keywords: ['fundraising goal', 'campaign progress', 'appeal', 'progress bar'], brief: 'A campaign goal and progress from owner data or connected totals, labelled when sample.', certifiedFamilies: ['stats', 'cta'], originalComponent: 'CampaignProgress', sampleDataRequired: true },
+    { id: 'service-times', label: 'service times & events', keywords: ['service times', 'events calendar', 'upcoming events', 'weekly schedule'], brief: 'Regular gatherings and upcoming events from the owner.', certifiedFamilies: ['features'], originalComponent: 'GatheringTimes' },
+    { id: 'stories', label: 'impact stories', keywords: ['stories', 'impact stories', 'testimonies', 'field updates'], brief: 'Editorial stories of the people served, with consent noted by the owner.', certifiedFamilies: ['blog-preview', 'testimonials'], originalComponent: 'ImpactStories' },
+  ],
+  variants: [
+    { id: 'charity', label: 'Charity or NGO', keywords: ['charity', 'ngo', 'nonprofit', 'non-profit', 'foundation', 'humanitarian', 'relief fund', 'social enterprise'], vocabulary: ['appeals', 'programmes', 'field work'], signatureInteractions: ['donate', 'impact-counters', 'stories'],
+      pages: [{ title: 'Our Work', route: '/our-work', role: 'services', purpose: 'Programmes.' }, { title: 'Impact', route: '/impact', role: 'custom', purpose: 'Results and stories.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Mission and team.' }, { title: 'Donate', route: '/donate', role: 'custom', purpose: 'Give.' }],
+      primaryAction: 'donate', proof: ['impact figures', 'stories'] },
+    { id: 'faith-community', label: 'Church or faith community', keywords: ['church', 'mosque', 'synagogue', 'temple', 'ministry', 'congregation'], vocabulary: ['services', 'sermons', 'ministries', 'fellowship'], signatureInteractions: ['service-times', 'volunteer-signup', 'donate'],
+      pages: [{ title: 'Visit', route: '/visit', role: 'contact', purpose: 'Times and location.' }, { title: 'Ministries', route: '/ministries', role: 'services', purpose: 'Groups and outreach.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Beliefs and leaders.' }, { title: 'Give', route: '/give', role: 'custom', purpose: 'Support the community.' }],
+      primaryAction: 'plan a visit', proof: ['community stories'] },
+    { id: 'community-group', label: 'Community group or rescue', keywords: ['community organisation', 'community organization', 'community centre', 'community center', 'association', 'animal rescue', 'shelter', 'volunteers'], vocabulary: ['members', 'events', 'adoptions', 'drop-ins'], signatureInteractions: ['volunteer-signup', 'service-times', 'fundraising-progress'],
+      pages: [{ title: 'What We Do', route: '/what-we-do', role: 'services', purpose: 'Activities.' }, { title: 'Get Involved', route: '/get-involved', role: 'contact', purpose: 'Volunteer or join.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Who we are.' }],
+      primaryAction: 'get involved', proof: ['members and events', 'stories'] },
+  ],
+  imagery: ['real people and places served, with dignity', 'volunteers at work', 'community gatherings'],
+  motion: ['counters that settle once', 'gentle story reveals'],
+  designTerms: ['human', 'warm', 'hopeful', 'editorial', 'story-led', 'full-bleed'],
+  honesty: ['Impact numbers, registration details and partners only from the owner.', 'Never take donations without a connected checkout; never portray beneficiaries without the owner’s images.'],
+  roleProfiles: {
+    home: {
+      narrativeGoals: ['state the mission in human terms', 'show real impact', 'offer clear ways to help'],
+      requiredCapabilities: [], domainVocabulary: ['mission', 'impact', 'donate', 'volunteer'],
+      character: { density: 'medium', mediaDominance: 0.75, editoriality: 0.7, conversionPressure: 0.7 },
+      preferredFamilies: ['hero', 'about', 'stats', 'services', 'testimonials', 'cta'],
+      sectionOrderCandidates: [['hero', 'about', 'stats', 'services', 'cta'], ['hero', 'stats', 'testimonials', 'services', 'cta'], ['hero', 'services', 'about', 'testimonials', 'cta']],
+      heroCandidates: ['immersive-media', 'editorial-intro'], geometryCandidates: ['full-bleed', 'split'],
+      preferredCompositionPatterns: ['human photograph with a mission line', 'impact band', 'ways-to-help trio before the final ask'],
+      discouragedCompositionPatterns: ['corporate logo walls first', 'pricing tables'], noveltyBudget: 0.5,
+    },
+  },
+};

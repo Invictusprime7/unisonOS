@@ -1,0 +1,50 @@
+import type { IndustryVerticalPack } from './types';
+
+export const PORTFOLIO: IndustryVerticalPack = {
+  id: 'portfolio',
+  label: 'Creative portfolios & freelancers',
+  keywords: ['portfolio', 'my portfolio', 'creative portfolio', 'personal website', 'personal site', 'graphic designer', 'designer', 'ux designer', 'ui designer', 'product designer', 'illustrator', 'animator', 'motion designer', '3d artist', 'artist portfolio', 'painter', 'visual artist', 'architect', 'architecture firm', 'interior designer', 'interior design', 'freelancer', 'freelance', 'web developer', 'software engineer', 'developer portfolio', 'copywriter', 'creative director', 'art director', 'ceramicist', 'sculptor'],
+  hostIndustry: 'portfolio',
+  vocabulary: ['selected work', 'case studies', 'process', 'clients', 'commissions', 'availability', 'CV'],
+  contentObjects: [
+    { id: 'project', label: 'Project', fields: ['title', 'client', 'year', 'role', 'cover image', 'summary', 'outcome'], sample: 'Rebrand for a coffee roaster · 2025' },
+    { id: 'case-study', label: 'Case study', fields: ['challenge', 'approach', 'result', 'images'], sample: 'From brief to launch in 6 weeks' },
+    { id: 'artwork', label: 'Artwork', fields: ['title', 'medium', 'size', 'year', 'availability'], sample: 'Untitled II · oil on linen · 2024' },
+    { id: 'capability', label: 'Capability', fields: ['name', 'tools', 'description'], sample: 'Brand identity · Figma, Illustrator' },
+  ],
+  proofMechanisms: ['selected work', 'client names and quotes (owner-supplied)', 'awards and exhibitions (owner-supplied only)', 'process artefacts'],
+  interactions: [
+    { id: 'work-index', label: 'filterable work index', keywords: ['selected work', 'work index', 'project grid', 'filter by discipline', 'projects'], brief: 'A work index filterable by discipline, each tile opening its project.', certifiedFamilies: ['gallery'], originalComponent: 'WorkIndex' },
+    { id: 'case-study-page', label: 'case study pages', keywords: ['case study', 'case studies', 'project page', 'project write-up'], brief: 'Challenge → approach → result narrative with large imagery.', certifiedFamilies: ['about', 'gallery', 'features'], originalComponent: 'CaseStudy' },
+    { id: 'availability', label: 'availability status', keywords: ['available for work', 'availability', 'open to commissions', 'hire me'], brief: 'A clear availability note and a hire-me action, worded by the owner.', certifiedFamilies: ['cta'], originalComponent: 'AvailabilityBadge' },
+    { id: 'artwork-viewer', label: 'artwork viewer', keywords: ['artwork viewer', 'exhibition', 'artworks', 'collection of works', 'lightbox'], brief: 'Full-screen artwork viewing with medium, size and availability.', certifiedFamilies: ['gallery'], originalComponent: 'ArtworkViewer' },
+    { id: 'cv-timeline', label: 'experience timeline', keywords: ['cv', 'resume', 'résumé', 'experience timeline', 'career timeline'], brief: 'Roles, studios and exhibitions as a readable timeline.', certifiedFamilies: ['about', 'features'], originalComponent: 'ExperienceTimeline' },
+  ],
+  variants: [
+    { id: 'designer', label: 'Designer or developer', keywords: ['graphic designer', 'ux designer', 'ui designer', 'product designer', 'web developer', 'software engineer', 'developer portfolio', 'designer', 'creative director', 'art director', 'motion designer'], vocabulary: ['brand identity', 'interfaces', 'systems', 'prototypes'], signatureInteractions: ['work-index', 'case-study-page', 'availability'],
+      pages: [{ title: 'Work', route: '/work', role: 'gallery', purpose: 'Selected projects.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Background and approach.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Start a project.' }],
+      primaryAction: 'start a project', proof: ['case studies', 'client quotes'] },
+    { id: 'artist', label: 'Artist or illustrator', keywords: ['artist portfolio', 'illustrator', 'painter', 'visual artist', 'ceramicist', 'sculptor', '3d artist', 'animator'], vocabulary: ['works', 'series', 'exhibitions', 'commissions', 'prints'], signatureInteractions: ['artwork-viewer', 'cv-timeline', 'availability'],
+      pages: [{ title: 'Works', route: '/works', role: 'gallery', purpose: 'Bodies of work.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Statement and CV.' }, { title: 'Commissions', route: '/commissions', role: 'contact', purpose: 'Commission or buy.' }],
+      primaryAction: 'enquire about a work or commission', proof: ['exhibitions', 'collections'] },
+    { id: 'architecture-interiors', label: 'Architecture & interiors', keywords: ['architect', 'architecture firm', 'interior designer', 'interior design'], vocabulary: ['residential', 'commercial', 'concept', 'build'], signatureInteractions: ['work-index', 'case-study-page'],
+      pages: [{ title: 'Projects', route: '/projects', role: 'gallery', purpose: 'Built work.' }, { title: 'Studio', route: '/studio', role: 'about', purpose: 'Practice and people.' }, { title: 'Services', route: '/services', role: 'services', purpose: 'How we work.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Discuss a project.' }],
+      primaryAction: 'discuss a project', proof: ['built projects', 'awards (owner-supplied)'] },
+  ],
+  imagery: ['the work itself, large and uncropped', 'process sketches', 'a candid portrait'],
+  motion: ['hover reveals on work tiles', 'smooth page-to-project transitions'],
+  designTerms: ['minimal', 'editorial', 'gallery', 'asymmetric', 'typographic', 'whitespace'],
+  honesty: ['Clients, awards and results only from the owner; placeholder projects are labelled as samples.'],
+  roleProfiles: {
+    home: {
+      narrativeGoals: ['say who this is and what they make', 'put the best work first', 'invite contact'],
+      requiredCapabilities: [], domainVocabulary: ['selected work', 'clients', 'case studies'],
+      character: { density: 'low', mediaDominance: 0.85, typographyDominance: 0.75, editoriality: 0.7, asymmetry: 0.65, conversionPressure: 0.4 },
+      preferredFamilies: ['hero', 'gallery', 'about', 'testimonials', 'logo-cloud', 'cta'],
+      sectionOrderCandidates: [['hero', 'gallery', 'about', 'cta'], ['hero', 'gallery', 'testimonials', 'cta'], ['hero', 'about', 'gallery', 'logo-cloud', 'cta']],
+      heroCandidates: ['typographic', 'editorial-intro'], geometryCandidates: ['asymmetric', 'grid'],
+      preferredCompositionPatterns: ['oversized name or statement', 'work grid in the first scroll'],
+      discouragedCompositionPatterns: ['pricing tables', 'stock icon feature grids'], noveltyBudget: 0.7,
+    },
+  },
+};

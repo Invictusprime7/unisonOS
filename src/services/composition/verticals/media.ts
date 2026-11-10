@@ -1,0 +1,50 @@
+import type { IndustryVerticalPack } from './types';
+
+export const MEDIA: IndustryVerticalPack = {
+  id: 'media',
+  label: 'Blogs, podcasts & publishing',
+  keywords: ['podcast', 'podcasts', 'magazine', 'online magazine', 'publication', 'news site', 'news website', 'blogger', 'personal blog', 'lifestyle blog', 'food blog', 'tech blog', 'newsletter publication', 'substack', 'journal', 'zine', 'author website', 'novelist', 'author', 'poet', 'book launch', 'youtube channel', 'content creator', 'influencer', 'vlog'],
+  hostIndustry: 'portfolio',
+  vocabulary: ['episodes', 'articles', 'issues', 'categories', 'subscribers', 'archive', 'guests', 'reading time'],
+  contentObjects: [
+    { id: 'article', label: 'Article', fields: ['title', 'category', 'author', 'date', 'reading time', 'cover image', 'excerpt'], sample: 'The quiet return of slow cooking (sample)' },
+    { id: 'episode', label: 'Episode', fields: ['number', 'title', 'guest', 'duration', 'listen links'], sample: 'Ep. 12 · building in public (sample)' },
+    { id: 'book', label: 'Book', fields: ['title', 'cover', 'blurb', 'buy links'], sample: 'Owner-supplied titles only' },
+    { id: 'category', label: 'Category', fields: ['name', 'description'], sample: 'Recipes' },
+  ],
+  proofMechanisms: ['audience and subscriber numbers (owner-supplied)', 'press and features (owner-supplied)', 'reader or listener quotes', 'notable guests'],
+  interactions: [
+    { id: 'article-feed', label: 'article feed with categories', keywords: ['latest posts', 'article feed', 'blog posts', 'categories', 'latest articles'], brief: 'A browsable feed with category filters; posts are owner content or labelled samples.', certifiedFamilies: ['blog-preview'], originalComponent: 'ArticleFeed', sampleDataRequired: true },
+    { id: 'episode-player', label: 'episode list & player', keywords: ['episodes', 'episode player', 'listen now', 'latest episode', 'podcast player'], brief: 'Episodes with show notes and links to the owner’s platforms; embed only owner links.', certifiedFamilies: ['blog-preview', 'features'], originalComponent: 'EpisodeList' },
+    { id: 'subscribe', label: 'subscribe', keywords: ['subscribe', 'newsletter signup', 'join the newsletter', 'get the newsletter'], brief: 'Email subscription through the registered newsletter form; success only after acknowledgement.', certifiedFamilies: ['cta', 'contact'], originalComponent: 'SubscribeBand' },
+    { id: 'featured-story', label: 'featured story', keywords: ['featured story', 'cover story', 'editor’s pick', 'featured post'], brief: 'A magazine-style lead story with a large image.', certifiedFamilies: ['hero', 'blog-preview'], originalComponent: 'FeaturedStory' },
+    { id: 'books-shelf', label: 'books', keywords: ['my books', 'books', 'buy the book', 'reading list'], brief: 'Covers with blurbs and the owner’s buy links.', certifiedFamilies: ['gallery', 'services'], originalComponent: 'BookShelf' },
+  ],
+  variants: [
+    { id: 'blog-magazine', label: 'Blog or online magazine', keywords: ['personal blog', 'lifestyle blog', 'food blog', 'tech blog', 'blogger', 'magazine', 'online magazine', 'publication', 'news site', 'news website', 'journal', 'zine', 'substack'], vocabulary: ['issues', 'columns', 'contributors'], signatureInteractions: ['featured-story', 'article-feed', 'subscribe'],
+      pages: [{ title: 'Journal', route: '/journal', role: 'blog', purpose: 'All stories.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Who writes here.' }, { title: 'Subscribe', route: '/subscribe', role: 'custom', purpose: 'Join the newsletter.' }],
+      primaryAction: 'read and subscribe', proof: ['subscriber count (owner-supplied)', 'press'] },
+    { id: 'podcast', label: 'Podcast or channel', keywords: ['podcast', 'podcasts', 'youtube channel', 'vlog', 'content creator', 'influencer'], vocabulary: ['seasons', 'hosts', 'guests', 'sponsors'], signatureInteractions: ['episode-player', 'subscribe'],
+      pages: [{ title: 'Episodes', route: '/episodes', role: 'blog', purpose: 'All episodes.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Hosts and show.' }, { title: 'Work With Us', route: '/work-with-us', role: 'contact', purpose: 'Sponsorships and guests.' }],
+      primaryAction: 'listen and subscribe', proof: ['notable guests', 'listener quotes'] },
+    { id: 'author', label: 'Author or writer', keywords: ['author website', 'novelist', 'author', 'poet', 'book launch'], vocabulary: ['books', 'events', 'readings', 'press kit'], signatureInteractions: ['books-shelf', 'subscribe'],
+      pages: [{ title: 'Books', route: '/books', role: 'gallery', purpose: 'All titles.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Biography.' }, { title: 'Contact', route: '/contact', role: 'contact', purpose: 'Events and press.' }],
+      primaryAction: 'buy the book or join the list', proof: ['reviews and press (owner-supplied)'] },
+  ],
+  imagery: ['editorial cover images', 'studio or desk details', 'author or host portraits'],
+  motion: ['restrained reading-first motion', 'hover lift on story cards'],
+  designTerms: ['editorial', 'typographic', 'serif', 'magazine', 'grid', 'reading'],
+  honesty: ['Audience numbers, press and sponsors only from the owner; sample posts and episodes are labelled.'],
+  roleProfiles: {
+    home: {
+      narrativeGoals: ['lead with the best story or episode', 'show the range of content', 'convert readers into subscribers'],
+      requiredCapabilities: [], domainVocabulary: ['stories', 'episodes', 'subscribe'],
+      character: { density: 'medium', mediaDominance: 0.7, typographyDominance: 0.8, editoriality: 0.9, conversionPressure: 0.5 },
+      preferredFamilies: ['hero', 'about', 'features', 'gallery', 'testimonials', 'cta'],
+      sectionOrderCandidates: [['hero', 'features', 'about', 'cta'], ['hero', 'gallery', 'about', 'testimonials', 'cta'], ['hero', 'about', 'features', 'cta']],
+      heroCandidates: ['editorial-intro', 'typographic'], geometryCandidates: ['asymmetric', 'grid'],
+      preferredCompositionPatterns: ['magazine cover hero', 'subscribe band mid-page'],
+      discouragedCompositionPatterns: ['pricing tables', 'icon feature grids'], noveltyBudget: 0.6,
+    },
+  },
+};

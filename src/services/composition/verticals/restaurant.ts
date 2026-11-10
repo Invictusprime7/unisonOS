@@ -1,0 +1,45 @@
+import type { IndustryVerticalPack } from './types';
+
+/** Composition profiles come from the dedicated restaurant registry entries. */
+export const RESTAURANT: IndustryVerticalPack = {
+  id: 'restaurant',
+  label: 'Restaurants, cafés & food',
+  keywords: ['restaurant', 'restaurants', 'cafe', 'café', 'coffee shop', 'bakery', 'patisserie', 'bistro', 'brasserie', 'trattoria', 'pizzeria', 'diner', 'eatery', 'food truck', 'catering', 'caterer', 'cocktail bar', 'wine bar', 'brewery', 'taproom', 'chophouse', 'steakhouse', 'sushi bar', 'tasting menu', 'fine dining', 'street food', 'juice bar', 'tea room', 'chop bar'],
+  hostIndustry: 'restaurant',
+  vocabulary: ['menu', 'dishes', 'seasonal', 'reservations', 'covers', 'private dining', 'chef', 'tasting menu', 'opening hours', 'takeaway'],
+  contentObjects: [
+    { id: 'menu-item', label: 'Menu item', fields: ['name', 'description', 'dietary tags', 'price (owner pricing only)'], sample: 'Charred aubergine · smoked yoghurt, dukkah · V' },
+    { id: 'menu-section', label: 'Menu section', fields: ['title', 'served when', 'items'], sample: 'Small plates · served all day' },
+    { id: 'opening-hours', label: 'Opening hours', fields: ['day', 'open', 'close', 'kitchen closes'], sample: 'Tue–Sat · 12:00–22:00' },
+    { id: 'chef', label: 'Chef or team member', fields: ['name', 'role', 'story', 'portrait'], sample: 'Head chef · trained in Lisbon' },
+    { id: 'event', label: 'Special or event', fields: ['title', 'date', 'description'], sample: 'Thursday supper club' },
+  ],
+  proofMechanisms: ['guest reviews (owner-supplied or connected)', 'press mentions (owner-supplied only)', 'signature dish photography', 'chef story'],
+  interactions: [
+    { id: 'menu-browser', label: 'menu with categories', keywords: ['menu', 'our menu', 'food menu', 'drinks menu', 'wine list'], brief: 'A readable menu grouped by section with dietary tags; prices only from the owner.', certifiedFamilies: ['services', 'features'], originalComponent: 'MenuBoard' },
+    { id: 'table-booking', label: 'table reservations', keywords: ['reservation', 'reservations', 'book a table', 'table booking', 'reserve a table'], brief: 'Date, time and party size through the registered booking or contact form; confirmed only after backend acknowledgement.', certifiedFamilies: ['contact'], originalComponent: 'TableBooking' },
+    { id: 'order-online', label: 'online ordering', keywords: ['order online', 'online ordering', 'takeaway orders', 'delivery orders', 'click and collect'], brief: 'Links to the owner’s ordering provider, or a cart only when commerce is connected.', certifiedFamilies: ['cta', 'services'], originalComponent: 'OrderOnline' },
+    { id: 'opening-hours', label: 'opening hours & location', keywords: ['opening hours', 'hours and location', 'find us', 'directions'], brief: 'Hours by day, address and a directions action; hours come from the owner.', certifiedFamilies: ['contact', 'features'], originalComponent: 'HoursAndLocation' },
+    { id: 'private-dining', label: 'private dining & events enquiry', keywords: ['private dining', 'private events', 'private hire', 'catering enquiry', 'group bookings'], brief: 'Spaces, capacities and an enquiry through the registered form.', certifiedFamilies: ['services', 'contact'], originalComponent: 'PrivateDining' },
+    { id: 'dish-gallery', label: 'signature dishes gallery', keywords: ['signature dishes', 'food gallery', 'dish photos'], brief: 'Large, appetising dish photography with short captions.', certifiedFamilies: ['gallery'], originalComponent: 'SignatureDishes' },
+  ],
+  variants: [
+    { id: 'restaurant', label: 'Restaurant', keywords: ['restaurant', 'bistro', 'brasserie', 'trattoria', 'fine dining', 'tasting menu', 'steakhouse'], vocabulary: ['à la carte', 'set menu', 'sommelier'], signatureInteractions: ['menu-browser', 'table-booking', 'dish-gallery'],
+      pages: [{ title: 'Menu', route: '/menu', role: 'services', purpose: 'Dishes and drinks.' }, { title: 'About', route: '/about', role: 'about', purpose: 'Chef and story.' }, { title: 'Reservations', route: '/reservations', role: 'booking', purpose: 'Book a table.' }, { title: 'Private Dining', route: '/private-dining', role: 'services', purpose: 'Events and group bookings.' }],
+      primaryAction: 'book a table', proof: ['guest reviews', 'press mentions'] },
+    { id: 'cafe-bakery', label: 'Café or bakery', keywords: ['cafe', 'café', 'coffee shop', 'bakery', 'patisserie', 'tea room', 'juice bar'], vocabulary: ['brunch', 'pastries', 'roast', 'baked daily'], signatureInteractions: ['menu-browser', 'opening-hours', 'order-online'],
+      pages: [{ title: 'Menu', route: '/menu', role: 'services', purpose: 'Coffee, bakes and brunch.' }, { title: 'Our Story', route: '/our-story', role: 'about', purpose: 'Who bakes and roasts.' }, { title: 'Visit', route: '/visit', role: 'contact', purpose: 'Hours and how to find us.' }],
+      primaryAction: 'visit or order ahead', proof: ['regulars’ reviews'] },
+    { id: 'bar-brewery', label: 'Bar or brewery', keywords: ['cocktail bar', 'wine bar', 'brewery', 'taproom', 'pub'], vocabulary: ['on tap', 'happy hour', 'tasting flights'], signatureInteractions: ['menu-browser', 'private-dining'],
+      pages: [{ title: 'Drinks', route: '/drinks', role: 'services', purpose: 'What’s pouring.' }, { title: 'Events', route: '/events', role: 'custom', purpose: 'Live nights and tastings.' }, { title: 'Book', route: '/book', role: 'booking', purpose: 'Tables and private hire.' }],
+      primaryAction: 'book a table or private hire', proof: ['guest reviews'] },
+    { id: 'catering', label: 'Catering or food truck', keywords: ['catering', 'caterer', 'food truck', 'street food', 'meal prep'], vocabulary: ['menus for events', 'per head', 'service style'], signatureInteractions: ['private-dining', 'dish-gallery'],
+      pages: [{ title: 'Menus', route: '/menus', role: 'services', purpose: 'Event menus.' }, { title: 'Gallery', route: '/gallery', role: 'gallery', purpose: 'Events we have served.' }, { title: 'Enquire', route: '/enquire', role: 'contact', purpose: 'Get a quote for your event.' }],
+      primaryAction: 'request a catering quote', proof: ['events served', 'client testimonials'] },
+  ],
+  imagery: ['close, warm dish photography', 'the room at service', 'hands at work in the kitchen'],
+  motion: ['slow image reveals', 'menu sections that expand gently'],
+  designTerms: ['warm', 'editorial', 'appetising', 'menu', 'split image', 'serif'],
+  honesty: ['Prices, opening hours, allergens and addresses come from the owner.', 'Reviews and press only when the owner supplies or connects them.'],
+  roleProfiles: {},
+};

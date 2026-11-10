@@ -1,0 +1,50 @@
+import type { IndustryVerticalPack } from './types';
+
+export const EDUCATION: IndustryVerticalPack = {
+  id: 'education',
+  label: 'Schools, courses & tutoring',
+  keywords: ['school', 'schools', 'academy', 'tutoring', 'tutor', 'tutors', 'online course', 'online courses', 'courses', 'e-learning', 'elearning', 'learning platform', 'university', 'college', 'kindergarten', 'preschool', 'nursery school', 'daycare', 'childcare', 'montessori', 'language school', 'driving school', 'coding bootcamp', 'training centre', 'training center', 'workshops', 'curriculum', 'students', 'admissions', 'enrolment', 'enrollment'],
+  hostIndustry: 'coaching',
+  vocabulary: ['courses', 'classes', 'curriculum', 'enrolment', 'term dates', 'teachers', 'modules', 'certificates'],
+  contentObjects: [
+    { id: 'course', label: 'Course or programme', fields: ['title', 'level', 'format', 'duration', 'outcomes', 'fee (owner pricing only)'], sample: 'Beginner Python · 8 weeks · online' },
+    { id: 'module', label: 'Module or lesson', fields: ['number', 'title', 'summary'], sample: 'Module 3 · Loops and logic' },
+    { id: 'teacher', label: 'Teacher or tutor', fields: ['name', 'subject', 'qualifications (owner-supplied)', 'portrait'], sample: 'Maths tutor · A-level and IB' },
+    { id: 'term', label: 'Term or intake', fields: ['name', 'start date', 'deadline'], sample: 'September intake (owner dates only)' },
+  ],
+  proofMechanisms: ['student and parent testimonials (owner-supplied)', 'accreditations and inspections (owner-supplied)', 'outcomes and results (owner-supplied only)', 'teacher credentials'],
+  interactions: [
+    { id: 'course-catalog', label: 'course catalogue', keywords: ['course catalog', 'course catalogue', 'browse courses', 'our courses', 'programmes offered'], brief: 'Courses filterable by level and format; samples labelled.', certifiedFamilies: ['services'], originalComponent: 'CourseCatalog', sampleDataRequired: true },
+    { id: 'curriculum', label: 'curriculum outline', keywords: ['curriculum', 'syllabus', 'course outline', 'what you will learn', 'modules'], brief: 'An expandable module-by-module outline.', certifiedFamilies: ['faq', 'features'], originalComponent: 'CurriculumOutline' },
+    { id: 'enrol', label: 'enrolment or admissions enquiry', keywords: ['enrol', 'enroll', 'apply now', 'admissions', 'book a tour', 'register interest', 'enrolment'], brief: 'Application or tour request through the registered form; confirmed only after acknowledgement.', certifiedFamilies: ['contact'], originalComponent: 'EnrolmentEnquiry' },
+    { id: 'trial-lesson', label: 'trial lesson booking', keywords: ['trial lesson', 'free trial class', 'book a lesson', 'book a tutor'], brief: 'A trial lesson request via the registered booking or contact form.', certifiedFamilies: ['contact', 'cta'], originalComponent: 'TrialLesson' },
+    { id: 'term-dates', label: 'term dates & timetable', keywords: ['term dates', 'timetable', 'class schedule', 'intake dates'], brief: 'Owner-supplied dates in a readable table.', certifiedFamilies: ['features'], originalComponent: 'TermDates' },
+  ],
+  variants: [
+    { id: 'school', label: 'School or nursery', keywords: ['school', 'schools', 'kindergarten', 'preschool', 'nursery school', 'daycare', 'childcare', 'montessori', 'academy', 'college', 'university'], vocabulary: ['admissions', 'pastoral care', 'facilities', 'parents'], signatureInteractions: ['enrol', 'term-dates'],
+      pages: [{ title: 'About', route: '/about', role: 'about', purpose: 'Ethos and leadership.' }, { title: 'Learning', route: '/learning', role: 'services', purpose: 'Curriculum and activities.' }, { title: 'Admissions', route: '/admissions', role: 'contact', purpose: 'Apply or book a tour.' }, { title: 'Parents', route: '/parents', role: 'faq', purpose: 'Term dates and information.' }],
+      primaryAction: 'book a tour or apply', proof: ['inspection reports', 'parent testimonials'] },
+    { id: 'online-course', label: 'Online course or bootcamp', keywords: ['online course', 'online courses', 'e-learning', 'elearning', 'learning platform', 'coding bootcamp', 'courses'], vocabulary: ['cohort', 'self-paced', 'certificate', 'community'], signatureInteractions: ['course-catalog', 'curriculum', 'enrol'],
+      pages: [{ title: 'Courses', route: '/courses', role: 'services', purpose: 'All courses.' }, { title: 'Curriculum', route: '/curriculum', role: 'custom', purpose: 'What you will learn.' }, { title: 'Pricing', route: '/pricing', role: 'pricing', purpose: 'Plans and fees.' }, { title: 'FAQ', route: '/faq', role: 'faq', purpose: 'Questions.' }],
+      primaryAction: 'enrol', proof: ['student outcomes (owner-supplied)', 'reviews'] },
+    { id: 'tutoring', label: 'Tutoring or lessons', keywords: ['tutoring', 'tutor', 'tutors', 'language school', 'driving school', 'training centre', 'training center', 'workshops'], vocabulary: ['lessons', 'subjects', 'levels', 'progress'], signatureInteractions: ['trial-lesson', 'course-catalog'],
+      pages: [{ title: 'Subjects', route: '/subjects', role: 'services', purpose: 'What we teach.' }, { title: 'Tutors', route: '/tutors', role: 'about', purpose: 'Who teaches.' }, { title: 'Book', route: '/book', role: 'booking', purpose: 'Book a lesson.' }],
+      primaryAction: 'book a trial lesson', proof: ['student results (owner-supplied)', 'parent reviews'] },
+  ],
+  imagery: ['learners engaged in real classrooms or at home', 'teachers in action', 'campus and materials'],
+  motion: ['curriculum accordions', 'gentle progress reveals'],
+  designTerms: ['friendly', 'clear', 'structured', 'warm', 'accessible', 'grid'],
+  honesty: ['Accreditations, results, fees and dates only from the owner.', 'Children’s images only from the owner, with consent.'],
+  roleProfiles: {
+    home: {
+      narrativeGoals: ['say who learns what and how', 'build trust with families or learners', 'invite enrolment or a tour'],
+      requiredCapabilities: [], domainVocabulary: ['courses', 'admissions', 'learners'],
+      character: { density: 'medium', mediaDominance: 0.65, informationDensity: 0.65, conversionPressure: 0.65 },
+      preferredFamilies: ['hero', 'services', 'about', 'stats', 'testimonials', 'faq', 'cta'],
+      sectionOrderCandidates: [['hero', 'services', 'about', 'testimonials', 'cta'], ['hero', 'stats', 'services', 'faq', 'cta'], ['hero', 'about', 'services', 'testimonials', 'cta']],
+      heroCandidates: ['split-media', 'immersive-media'], geometryCandidates: ['split', 'grid'],
+      preferredCompositionPatterns: ['learner photography with a clear promise', 'programmes as cards with level and format'],
+      discouragedCompositionPatterns: ['dense corporate copy'], noveltyBudget: 0.45,
+    },
+  },
+};
