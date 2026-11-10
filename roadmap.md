@@ -363,3 +363,11 @@ Fallback production configuration remains unverified; no relay, credential chang
 - [x] Phase B/C: preserve owner/confirmed page requests as open-ended pages (RSVP, releases, tour dates…)
 - [x] Regression tests (planning level): music, wedding, festival, sports, ecommerce, SaaS plans
 - [ ] Phases D–F: implementation verification + readiness UI (follow-up)
+
+## Affinity Conversational Experience (uploaded spec 2026-11-10)
+- [x] Read art direction, motion budget, hero/section layouts and originals from the chat (explicit / confirmed / refined / suggested)
+- [x] REUSE/ADAPT/AUTHOR resolution against certified designs; owner pins (site-wide and per page) reach App Builder
+- [x] ID-carrying experience requirements in the never-truncated brief; source coverage checks design + page
+- [x] Creative brief sealed in the site; Affinity edits read it, record scoped refinements and lock the rest
+- [x] Compact Creative Brief in the chat launch summary
+- [ ] Live AI generation of the three acceptance prompts + scoped hero edit in Preview (needs UNISON deployment, funded Gemini and a signed-in session)
