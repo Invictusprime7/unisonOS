@@ -30,7 +30,9 @@ import {
   type AppRepairRequest,
 } from './appBuilderContracts';
 import { orchestrateAppBuild } from './appBuilderOrchestrator';
-import { createUnisonBuilderContext, renderUnisonBuilderDirective } from '@/services/unisonBuilderConnector';
+import { createUnisonBuilderContext, renderUnisonBuilderDirective, resolveSiteEnrichment } from '@/services/unisonBuilderConnector';
+import { readCreativeBrief } from '@/services/launch/experienceDirector';
+import { packContextBlocks, type ContextBlock } from './contextBudget';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
 import { runBuilderTurn } from '@/services/builderBrainClient';
 import { resolveAppBuilderAIOptions } from './appBuilderAISettings';
