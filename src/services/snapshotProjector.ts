@@ -940,6 +940,23 @@ function reconcilePendingVfsOperations(
  */
 export type PendingSourceConflictPolicy = 'block' | 'accepted-only';
 
+/**
+ * True when the live VFS byte for a snapshot-owned path should render. Live
+ * bytes always win except a placeholder stub over a real body, or a theme
+ * stylesheet that dropped every token while the sealed one still has them.
+ */
+function liveVfsByteRenders(path: string, live: string, snapshotContent: string): boolean {
+  if (isMinimalPreviewFallbackSource(live) && !isMinimalPreviewFallbackSource(snapshotContent)) {
+    console.warn(`[snapshotProjector] Ignoring placeholder stub at ${path}; keeping the saved page body.`);
+    return false;
+  }
+  if (/\/index\.css$/.test(path) && !TOKEN_PROBE_RE.test(live) && TOKEN_PROBE_RE.test(snapshotContent)) {
+    console.warn(`[snapshotProjector] ${path} lost its theme tokens; keeping the sealed stylesheet.`);
+    return false;
+  }
+  return true;
+}
+
 export function projectSnapshotVfsFiles(
   files: Record<string, string>,
   resolution: SnapshotResolution,
