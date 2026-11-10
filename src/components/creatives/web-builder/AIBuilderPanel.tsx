@@ -2059,7 +2059,8 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                   backendStateContext,
                   behaviorContext,
                   unisonContext,
-                ].filter(Boolean).join('\n').slice(0, 12000),
+                // generatePages packs this whole-block; the part that does not fit continues in the page brief.
+                ].filter(Boolean).join('\n'),
                 signal: globalAbort.signal,
                 budgetMs: 240_000,
                 concurrency: 3,
