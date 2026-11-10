@@ -43,6 +43,7 @@ describe('page context is never silently cut', () => {
   it('delivers every page rule, including design prop contracts, to each wedding page', () => {
     const contract = weddingContract();
     const generation = buildAppBuilderGenerationContext(contract);
+    let pagesWithOptions = 0;
     for (const page of contract.topology.sitePlan.pages) {
       const full = generation.runtimeContextForPage(page.id, Number.POSITIVE_INFINITY);
       const runtime = generation.runtimeContextForPage(page.id, COMPOSER_CONTEXT_LIMIT);
@@ -51,11 +52,13 @@ describe('page context is never silently cut', () => {
       expect(headings(`${runtime}\n${overflow}`).sort()).toEqual(headings(full).sort());
       // Prop contracts ride in the capped channel itself, early, not only in overflow.
       if (full.includes('CERTIFIED OPTIONS FOR THIS PAGE')) {
+        pagesWithOptions += 1;
         expect(runtime).toContain('CERTIFIED OPTIONS FOR THIS PAGE');
         expect(runtime).toContain('SECTION CONTENT DEPTH');
         expect(runtime).toMatch(/props \{headline/);
       }
     }
+    expect(pagesWithOptions).toBeGreaterThan(0);
   });
 });
 
