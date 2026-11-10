@@ -930,15 +930,30 @@ function reconcilePendingVfsOperations(
 }
 
 /**
- * Snapshot-as-primary projection bridge. A wizard SiteBundleSnapshot owns the
- * entire executable VFS, not only files that resemble a minimal placeholder.
- * A legacy template preset is valid React and therefore cannot be detected by
- * a fallback-content heuristic; preserving it lets a template silently render
- * over the deterministic snapshot manifest. Snapshot files must win every
- * overlapping path — EXCEPT paths with a newer live edit that the snapshot has
- * not absorbed yet.
+ * Snapshot projection bridge. The live VFS is the preview authority: every
+ * `/src/**` byte it holds renders, and the sealed SiteBundleSnapshot only
+ * supplies paths the VFS lacks plus `/.unison/` metadata. Root-level files
+ * outside the snapshot are dropped so stale legacy routers cannot compete
+ * after Sandpack flattening.
  */
 export type PendingSourceConflictPolicy = 'block' | 'accepted-only';
+
+/**
+ * True when the live VFS byte for a snapshot-owned path should render. Live
+ * bytes always win except a placeholder stub over a real body, or a theme
+ * stylesheet that dropped every token while the sealed one still has them.
+ */
+function liveVfsByteRenders(path: string, live: string, snapshotContent: string): boolean {
+  if (isMinimalPreviewFallbackSource(live) && !isMinimalPreviewFallbackSource(snapshotContent)) {
+    console.warn(`[snapshotProjector] Ignoring placeholder stub at ${path}; keeping the saved page body.`);
+    return false;
+  }
+  if (/\/index\.css$/.test(path) && !TOKEN_PROBE_RE.test(live) && TOKEN_PROBE_RE.test(snapshotContent)) {
+    console.warn(`[snapshotProjector] ${path} lost its theme tokens; keeping the sealed stylesheet.`);
+    return false;
+  }
+  return true;
+}
 
 export function projectSnapshotVfsFiles(
   files: Record<string, string>,
@@ -1029,36 +1044,37 @@ export function projectSnapshotVfsFiles(
       continue;
     }
 
-    // The snapshot embedded in the live VFS travels in the same file map as
-    // the sources. A committed Builder edit updates the source byte, but the
-    // embedded copy is not rewritten on every save, and the accepted revision
-    // id (from LaunchState) can already acknowledge the pending operation. The
-    // live working byte for a snapshot-owned path is therefore the newest one;
-    // paths outside the snapshot still never leak in (stale legacy routers).
-    if (resolution.snapshotFromLiveVfs) {
-      const live = files[path] ?? files[rawPath] ?? files[path.slice(1)];
-      if (typeof live === 'string' && live !== content) {
-        next[path] = live;
-        preserved.push(path);
-        continue;
-      }
+    // VFS WRITES ARE PREVIEW AUTHORITY. Whatever the live VFS holds for a
+    // snapshot-owned path is what Live Preview renders — AI-authored custom
+    // TSX, Affinity edits and toolbar saves alike — no matter whether the
+    // snapshot came from the VFS's own embedded copy or from navigation
+    // state. The snapshot (embedded copy or route state) is not rewritten on
+    // every save, so it can never replace a newer working byte. It only
+    // fills paths the VFS does not carry. Two narrow guards keep a broken
+    // byte from blanking the site: a placeholder stub never replaces a real
+    // page, and a stylesheet that lost every theme token keeps the sealed
+    // Stage 4b stylesheet.
+    const live = files[path] ?? files[rawPath] ?? files[path.slice(1)];
+    if (typeof live === 'string' && live !== content && liveVfsByteRenders(path, live, content)) {
+      next[path] = live;
+      preserved.push(path);
+      continue;
     }
 
     next[path] = content;
   }
 
-  // Files a committed edit created under `/src/` exist only in the live VFS
-  // until the embedded snapshot copy refreshes. Root-level legacy paths are
-  // still excluded; pending deletions below keep winning.
-  if (resolution.snapshotFromLiveVfs) {
-    for (const [rawPath, content] of Object.entries(files)) {
-      const path = normalizeVfsPath(rawPath);
-      if (!path.startsWith('/src/') || typeof content !== 'string') continue;
-      if (Object.prototype.hasOwnProperty.call(next, path)) continue;
-      if (pendingChanges.get(path)?.type === 'delete') continue;
-      next[path] = content;
-      preserved.push(path);
-    }
+  // Files the VFS added under `/src/` (AI-authored components, new pages,
+  // custom modules) render even when the snapshot never listed them.
+  // Root-level legacy paths are still excluded so they cannot compete after
+  // Sandpack flattening; pending deletions below keep winning.
+  for (const [rawPath, content] of Object.entries(files)) {
+    const path = normalizeVfsPath(rawPath);
+    if (!path.startsWith('/src/') || typeof content !== 'string') continue;
+    if (Object.prototype.hasOwnProperty.call(next, path)) continue;
+    if (pendingChanges.get(path)?.type === 'delete') continue;
+    next[path] = content;
+    preserved.push(path);
   }
 
   // Pending creates and deletes may have no corresponding stale snapshot path.

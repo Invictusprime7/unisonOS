@@ -43,7 +43,7 @@ function sealedSnapshot(files: Record<string, string>): SiteBundleSnapshot {
 }
 
 describe('committed Wizard runtime projection', () => {
-  it('keeps Stage 4b CSS, variants, and motion authoritative over legacy outer files', () => {
+  it('renders the saved VFS bytes over the sealed snapshot copy, keeping Stage 4b CSS when tokens were lost', () => {
     const canonicalFiles = {
       '/src/App.tsx': "import Home from './pages/Home'; export default Home;",
       '/src/pages/Home.tsx': "export default function Home(){ return <main data-ut-variant='hero:split-image'>Stage 4b</main>; }",
@@ -55,14 +55,13 @@ describe('committed Wizard runtime projection', () => {
     const result = projectCommittedWizardRuntime({
       files: {
         ...canonicalFiles,
-        '/src/pages/Home.tsx': 'export default function Home(){ return <main>Legacy template</main>; }',
+        '/src/pages/Home.tsx': 'export default function Home(){ return <main>AI authored festival home</main>; }',
         '/src/index.css': 'body { color: #111; background: #fff; } /* LEGACY_CSS */',
-        '/src/unison/ui/motion.tsx': 'export const Reveal = ({ children }: any) => children;',
       },
       siteBundleSnapshot: snapshot,
     });
 
-    expect(result.files['/src/pages/Home.tsx']).toContain("data-ut-variant='hero:split-image'");
+    expect(result.files['/src/pages/Home.tsx']).toContain('AI authored festival home');
     expect(result.files['/src/index.css']).toContain('STAGE_4B_CSS');
     expect(result.files['/src/index.css']).not.toContain('LEGACY_CSS');
     expect(result.files['/src/unison/ui/motion.tsx']).toContain('STAGE_4B_MOTION');
