@@ -134,10 +134,18 @@ export function createUnisonAppBuilder(
         navOrder: page.navOrder,
         createdBy: 'ai' as const,
       }));
+      // New pages inherit the launch's sealed enrichment (trade, copy depth,
+      // photos) instead of re-guessing it from the short "add a page" request.
+      const enrichment = resolveSiteEnrichment(readCreativeBrief(input.currentFiles), connector.registry.industry ?? input.industry);
+      const contextBlocks: ContextBlock[] = [
+        { priority: 1, text: renderUnisonBuilderDirective(connector) },
+        { priority: 2, text: input.runtimeContext ?? '', trimmable: true },
+      ];
       const authored = await authorSite({
         pages: input.pages.map(({ pageId, title, route, filePath, role }) => ({ pageId, title, route, filePath, role })),
         designContext: input.designContext ?? null,
-        industry: input.industry,
+        industry: enrichment.industry ?? input.industry,
+        vertical: enrichment.vertical,
         existingRoutes: input.existingRoutes,
         businessName: input.businessName,
         visionBrief: input.visionBrief,
@@ -146,7 +154,9 @@ export function createUnisonAppBuilder(
         candidateOrigin: 'builder',
         initialRouteOps: routeOps,
         registryContext: input.registryContext,
-        runtimeContext: [renderUnisonBuilderDirective(connector), input.runtimeContext].filter(Boolean).join('\n'),
+        // Packed whole-block: what does not fit continues in the page brief, never tail-cut.
+        runtimeContextForPage: (_pageId, _files, _home, budget) => packContextBlocks(contextBlocks, budget).text,
+        runtimeContextOverflowForPage: (_pageId, _files, _home, budget) => packContextBlocks(contextBlocks, budget).overflow,
         signal: input.signal,
         budgetMs: input.budgetMs,
         gatewayOptions: resolveAppBuilderAIOptions(input.gatewayOptions),
