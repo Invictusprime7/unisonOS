@@ -5,7 +5,7 @@
 - [x] B — Secure intake (ZIP, folder, files): traversal/symlink/bomb/duplicate/case/quota refusal, secret blocking, .env names only, hashes + frozen manifest; assets stored unchanged in the owner's storage
 - [x] C — Compatibility profile (framework, toolchain, Tailwind, routes, fonts, aliases, env names, server features, Unison brief)
 - [x] D — Canonical adoption: one accepted revision, byte-for-byte, no Unison stages; builder never scaffolds, re-routes or re-themes imports
-- [ ] E — Isolated source-compatible Preview runtime + visual parity harness (blocked: needs an isolated build worker that runs the project's own toolchain; preview honestly shows "Preserved + blocked")
+- [ ] E — Isolated source-compatible Preview + visual parity: done for plain HTML sites (below); build-based projects still blocked and show "Preserved + blocked"
 - [x] F — Scoped source edits and exact rollback through the same writer; records read-only; structural Unison ops refused
 - [ ] G — Publish the same accepted revision (blocked on E; publish stays blocked)
 - [ ] ARIA fidelity fixture run (blocked: ariastudios.zip not uploaded)
