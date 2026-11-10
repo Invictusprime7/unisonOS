@@ -182,6 +182,31 @@ export function inferVerticalPages(
   return pages;
 }
 
+const singular = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/s\b/g, '');
+
+/**
+ * Page vocabulary across every pack: resolves an owner-named destination
+ * ("tour dates", "RSVP", "lineup") to a pack page's route and role. Advisory
+ * only — unknown names still become their own custom page.
+ */
+export function matchVerticalPageName(name: string, preferredPackId?: string): VerticalPage | null {
+  const key = singular(name);
+  if (!key) return null;
+  let prefix: VerticalPage | null = null;
+  const packs = [...VERTICAL_PACKS].sort((a, b) => Number(b.id === preferredPackId) - Number(a.id === preferredPackId));
+  for (const pack of packs) {
+    for (const variant of pack.variants) {
+      for (const page of variant.pages) {
+        const title = singular(page.title);
+        const slug = singular(page.route.replace(/^\//, ''));
+        if (key === title || key === slug) return page;
+        if (!prefix && (key.startsWith(`${title} `) || key.startsWith(`${slug} `))) prefix = page;
+      }
+    }
+  }
+  return prefix;
+}
+
 /** Composition industry for a build: dedicated industry profiles win, then the vertical. */
 export function compositionIndustryFor(
   industry: string,
