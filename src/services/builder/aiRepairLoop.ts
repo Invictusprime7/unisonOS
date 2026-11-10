@@ -99,6 +99,9 @@ export interface ComposerLoopInput {
   resume?: ComposerLoopResume;
 }
 
+/** Output rule for App Builder page fix rounds: targeted hunks, never a whole-page resend. */
+export const PAGE_REPAIR_OUTPUT_RULE = 'REPAIR OUTPUT: fix only the reported diagnostics. For files that exist in FILES return <<<EDIT SEARCH/REPLACE hunks copied exactly from FILES (Composer applies them into complete source). Do not resend unchanged sections or rewrite the whole page. Use FILE create only for a missing new module.';
+
 /** Provider replies that mean the key's balance is empty; they never recover on retry. */
 export const PROVIDER_CREDITS_EXHAUSTED = /prepayment credits (?:are )?depleted|out of (?:prepaid )?credit|no credits remaining|insufficient[_\s-]*(?:quota|credits?|funds?)|credits? (?:are )?(?:depleted|exhausted)|exceeded your current quota|payment required|\b402\b/i;
 
@@ -297,6 +300,11 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
     request = {
       ...request,
       task: request.task === 'builder_source_edit' ? 'builder_source_edit' : 'site_page_repair',
+      // Page fixes answer with hunks: resending a finished multi-section page
+      // outran the provider window after every batch had already been paid for.
+      instruction: request.task === 'builder_source_edit' || request.instruction?.startsWith(PAGE_REPAIR_OUTPUT_RULE)
+        ? request.instruction
+        : [PAGE_REPAIR_OUTPUT_RULE, request.instruction].filter(Boolean).join('\n'),
       diagnostics: prepared.errors.slice(0, 30).map((item) => item.slice(0, 1000)),
       // Repair receives the complete accumulated candidate. A later response
       // may return only the failing file without discarding valid files from

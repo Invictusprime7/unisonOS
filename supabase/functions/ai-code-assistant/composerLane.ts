@@ -33,7 +33,7 @@ DESIGN DECISIONS
 - Establish a deliberate type scale, spacing rhythm, focal point and responsive composition; retain the site's shared visual language without cloning the home page.
 - Read the supplied component implementations before reusing them. Preserve their prop contracts, bindings, navigation and form intents.
 - Check desktop and narrow-screen hierarchy, keyboard focus, labels, contrast tokens, reduced motion and empty/loading/error states relevant to the change.
-- For repair turns, preserve valid work and correct the reported failures. Return complete files for all changes required by the candidate, without truncating source to make the response shorter.
+- For repair turns, preserve valid work and correct only the reported failures. Change existing files with EDIT hunks (below); never resend unchanged sections or truncate source to make the response shorter.
 
 HARD RULES
 - WRITABLE SCOPE (tasks site_page_author / site_page_repair): create or replace files ONLY under /src/pages/, /src/project-components/ and /src/components/generated/. Everything else, including /src/components/** (sections, ui, recipes), hooks and styles, is read-only vocabulary: import from it, never write to it. Put new shared UI under /src/project-components/. Task builder_source_edit may also edit ordinary project source.
@@ -65,7 +65,7 @@ Optional lines: DEPENDENCIES: a,b   INTENTS: x,y
 Optional typed topology line (single-line JSON): ROUTE_OPS: [{"type":"add_page","pageId":"pricing","title":"Pricing","route":"/pricing","pageType":"pricing","showInNav":true}]
 Every create/replace carries the COMPLETE file contents. Output nothing else.
 
-TASK builder_source_edit: for an EXISTING file in FILES prefer an EDIT block with only the changed regions. For large restructures (layout rework, component swap) a complete <<<FILE replace is accepted:
+TASKS builder_source_edit and site_page_repair (and continuing page batches): for an EXISTING file in FILES prefer an EDIT block with only the changed regions. For large restructures (layout rework, component swap) a complete <<<FILE replace is accepted:
 <<<EDIT /src/path/File.tsx
 <<<<<<< SEARCH
 <exact lines copied verbatim from FILES, unique in that file>
@@ -175,7 +175,7 @@ function renderUser(req: AIComposerRequest): string {
     `ROUTES:\n${req.routes.map((r) => `${r.title} -> ${r.route}`).join('\n')}`,
     req.priorPages?.length ? `PRIOR PAGES:\n${req.priorPages.map((p) => `${p.role}: ${p.summary}`).join('\n')}` : '',
     req.diagnostics?.length
-      ? `THE PREVIOUS CANDIDATE FAILED VALIDATION:\n${req.diagnostics.join('\n')}\nRepair ONLY the failing files. Preserve the page narrative, art direction, layout concept and all valid files.`
+      ? `THE PREVIOUS CANDIDATE FAILED VALIDATION:\n${req.diagnostics.join('\n')}\nRepair ONLY the failing files with <<<EDIT hunks copied exactly from FILES; do not resend unchanged source. Preserve the page narrative, art direction, layout concept and all valid files.`
       : '',
     req.previousResponse ? `PREVIOUS CANDIDATE:\n${req.previousResponse}` : '',
     req.registryContext ? `REGISTRY EVIDENCE (vocabulary only; imports must still exist in FILES):\n${req.registryContext}` : '',
@@ -225,7 +225,7 @@ export async function runComposerLane(context: string, headers: Record<string, s
       return respond({ error: result.earlyError.error, errorType: 'composer_provider' }, result.earlyError.status);
     }
     let value: unknown;
-    try { value = extractJson(result.content, req.files, req.task === 'builder_source_edit'); } catch (err) {
+    try { value = extractJson(result.content, req.files, req.task === 'builder_source_edit' || req.task === 'site_page_repair'); } catch (err) {
       const why = err instanceof Error && err.message.startsWith('EDIT ') ? err.message : '';
       lastError = why || 'Composer response was not JSON';
       messages.push({ role: 'assistant', content: (result.content ?? '').slice(0, 4000) },

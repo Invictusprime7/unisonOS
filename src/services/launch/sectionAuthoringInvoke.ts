@@ -115,10 +115,12 @@ export function createSectionAuthoringInvoke(
       const scope = [
         `BOUNDED PAGE WORK ${index + 1}/${chunks.length}: author ONLY these next body sections, in order: ${families.join(', ')}.`,
         index === 0
-          ? 'Create the page shell using the existing shared site nav and footer. Replace baseline body content with only this batch; later batches add the remaining sections.'
-          : 'Continue the paid draft in FILES. Preserve every completed section, shared chrome, literal section ID, image, item and binding. Add only this batch immediately before the shared footer. Prefer SEARCH/REPLACE hunks; never re-author completed sections.',
-        `Every batch MUST return the complete target page source at ${request.page.filePath}: use FILE replace if it exists in FILES, otherwise FILE create. Include all previously completed sections plus this batch; a component-only response or section fragment is invalid.`,
-        'FILE create/replace blocks must contain COMPLETE exported modules, not fragments or patch text. EDIT blocks are structured SEARCH/REPLACE instructions applied by Composer before fileOps are returned; never put unapplied patches in fileOps.content.',
+          ? `Create the page shell using the existing shared site nav and footer. Replace baseline body content with only this batch; later batches add the remaining sections. Write ${request.page.filePath} as a complete module: FILE replace if it exists in FILES, otherwise FILE create.`
+          : 'Continue the paid draft in FILES. Every completed section, shared chrome, literal section ID, image, item and binding is final: do NOT resend, rewrite or re-author them.',
+        ...(index === 0 ? [] : [
+          `Every batch MUST update the target page ${request.page.filePath}. Return ONE <<<EDIT block for it: one hunk that extends the import lines you need, and one hunk whose SEARCH is the exact line(s) just before the shared footer (for example the closing </main> or <SiteFooter />) and whose REPLACE inserts this batch there. Composer applies the hunks into the complete page source. Use FILE replace for the page only when an EDIT cannot express the change; a component-only response with no page change is invalid.`,
+        ]),
+        'New project-local modules use FILE create with COMPLETE exported modules. Never put patch markers inside a FILE block.',
         'The full design brief is reference for the completed page, NOT a request to write other batches now. Partial section counts are intentional; final page checks run after all batches. Do not change routes or other pages. Preserve all planned content quantities; do not shorten lists to fit.',
       ].join('\n');
       let instruction = `${scope}\n${request.instruction ?? ''}`;
@@ -158,7 +160,7 @@ export function createSectionAuthoringInvoke(
         }
         if (attempt === 0) {
           if (deadline - Date.now() <= SECTION_PROVIDER_TIMEOUT_MS + SECTION_TRANSPORT_RESERVE_MS) break;
-          instruction = `CORRECTION: the previous batch was rejected: ${violations.join('; ')}. Return complete corrected source for the same sections only.\n${instruction}`;
+          instruction = `CORRECTION: the previous batch was rejected: ${violations.join('; ')}. Return corrected work for the same sections only${index > 0 ? ` (EDIT hunks on ${request.page.filePath}; never resend completed sections)` : ''}.\n${instruction}`;
         }
       }
       if (!accepted) return { data: null, error: { status: 400, message: violations.join('; ') } };

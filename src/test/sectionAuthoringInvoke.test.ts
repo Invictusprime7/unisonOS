@@ -95,7 +95,10 @@ describe('bounded page-section authoring', () => {
     expect(invoke).toHaveBeenCalledTimes(3);
     const secondRequest = JSON.parse(invoke.mock.calls[1][0].messages[0].content);
     const correctionRequest = JSON.parse(invoke.mock.calls[2][0].messages[0].content);
-    expect(secondRequest.instruction).toContain(`Every batch MUST return the complete target page source at ${path}`);
+    expect(secondRequest.instruction).toContain(`Every batch MUST update the target page ${path}. Return ONE <<<EDIT block`);
+    expect(secondRequest.instruction).toContain('do NOT resend, rewrite or re-author them');
+    const firstRequest = JSON.parse(invoke.mock.calls[0][0].messages[0].content);
+    expect(firstRequest.instruction).not.toContain('<<<EDIT');
     expect(correctionRequest.instruction).toContain('Batch must return the complete target page source');
     expect(JSON.parse(result.data?.content as string).fileOps.find((op: { path: string }) => op.path === path).content).toBe(final);
   });
