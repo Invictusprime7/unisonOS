@@ -59,6 +59,8 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
   const [startError, setStartError] = useState<string | null>(null);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const activePage = page && pages.includes(page) ? page : pages[0] ?? null;
+  const shownPageRef = useRef<string | null>(null);
+  shownPageRef.current = activePage;
   const availableForAssetPreview = runsStaticHtml || usesIsolatedWorker || runsSourceBuild;
   const [checking, setChecking] = useState(false);
   const [summary, setSummary] = useState<VerificationSummary | null>(null);
@@ -162,10 +164,11 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
     setSaveMessage(null);
     const results: RouteProbe[] = [];
     for (const path of pages) {
-      const loaded = new Promise<void>((resolve) => { loadWaiter.current = resolve; window.setTimeout(resolve, 8000); });
-      setPage(path);
-      if (path === activePage) frameRef.current?.contentWindow?.location.reload?.();
-      await loaded;
+      if (shownPageRef.current !== path) {
+        const loaded = new Promise<void>((resolve) => { loadWaiter.current = resolve; window.setTimeout(resolve, 8000); });
+        setPage(path);
+        await loaded;
+      }
       await new Promise((r) => window.setTimeout(r, 1200));
       const probe = await new Promise<Omit<RouteProbe, 'path'>>((resolve) => {
         const timer = window.setTimeout(() => resolve({ textLength: 0, elementCount: 0, imagesBroken: [], errors: ['The page did not respond.'] }), 8000);

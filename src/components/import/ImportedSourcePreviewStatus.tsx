@@ -31,7 +31,7 @@ function StateIcon({ state }: { state: VerificationState | 'supported' | 'blocke
  * a transformed version of the design; it reports what is preserved and what
  * still blocks a faithful preview and publishing.
  */
-export function ImportedSourcePreviewStatus({ records, adapter, running, className }: {
+export function ImportedSourcePreviewStatus({ records, adapter, running, publishReady, starting, preparingAssets, error, onStart, className }: {
   records: ImportedSourceRecords;
   /** Live adapter decision; defaults to the profile frozen at import time. */
   adapter?: ImportCompatibilityProfile['previewAdapter'];
