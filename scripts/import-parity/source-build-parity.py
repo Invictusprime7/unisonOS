@@ -28,6 +28,8 @@ SCROLLS = [0, 1200]
 NOISE = 8
 DETERMINISM = "(() => { let s = 0x2545f491; Math.random = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 1e9) / 1e9; }; })();"
 SETTLE_MS = 2500
+# Infinite CSS/Web animations are pinned to t=0 on both sides before every capture (disclosed).
+FREEZE = "() => { for (const a of document.getAnimations()) { a.pause(); a.currentTime = 0; } }"
 root = Path(__file__).resolve().parents[2]
 doc_path = OUT / "runtime-document.json"
 args = ["bun", str(root / "scripts/import-parity/render-source-preview.ts"), str(PROJECT), REF, str(doc_path)] + ([POINTER] if POINTER else [])
@@ -81,7 +83,7 @@ async def route_pointer(ctx):
 
 async def main():
     report = {"project": str(PROJECT), "reference": REF, "framework": DOC.get("framework"), "build": {"ok": DOC["ok"], "diagnostics": DOC["diagnostics"], "adaptations": DOC["adaptations"]},
-              "noiseThreshold": NOISE, "masks": [], "determinism": ["seeded Math.random on both sides", "prefers-reduced-motion on both sides", f"{SETTLE_MS} ms settle"],
+              "noiseThreshold": NOISE, "masks": [], "determinism": ["seeded Math.random on both sides", "prefers-reduced-motion on both sides", "running animations paused at t=0 on both sides", f"{SETTLE_MS} ms settle"],
               "pointerOrigin": POINTER or None, "cases": []}
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -99,11 +101,13 @@ async def main():
                 await pre.wait_for_load_state("networkidle")
                 frame = next(f for f in pre.frames if f != pre.main_frame)
                 await settle(ref.main_frame); await settle(frame); await ref.wait_for_timeout(SETTLE_MS)
+                await ref.evaluate(FREEZE); await frame.evaluate(FREEZE); await ref.wait_for_timeout(400)
                 geo_ref, geo_pre = await ref.evaluate(GEOMETRY), await frame.evaluate(GEOMETRY)
                 geo_mismatch = sum(1 for x, y in zip(geo_ref, geo_pre) if x != y) + abs(len(geo_ref) - len(geo_pre))
                 for y in SCROLLS:
                     await ref.evaluate(f"window.scrollTo(0,{y})"); await frame.evaluate(f"window.scrollTo(0,{y})")
                     await ref.wait_for_timeout(300)
+                    await ref.evaluate(FREEZE); await frame.evaluate(FREEZE); await ref.wait_for_timeout(400)
                     slug = route.strip("/").replace("/", "_") or "home"
                     name = f"{slug}_{w}x{h}_y{y}"
                     a, b = OUT / f"original_{name}.png", OUT / f"preview_{name}.png"
