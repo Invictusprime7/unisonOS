@@ -11,6 +11,7 @@
  */
 import { STATIC_HTML_PREVIEW_ADAPTER } from './staticHtmlPreview';
 import type { ImportManifest } from './secureIntake';
+import { planSourceBuild, SOURCE_BUILD_ADAPTER } from '@/services/import/sourceBuild/sourceBuildPlan';
 
 export type ImportFramework =
   | 'tanstack-start'
@@ -91,11 +92,20 @@ export const ISOLATED_SOURCE_PREVIEW_ADAPTER = 'isolated-source-worker-v1';
  */
 export function resolveImportPreviewAdapter(profile: ImportCompatibilityProfile, files: Record<string, string>): ImportCompatibilityProfile['previewAdapter'] {
   if (profile.framework === 'static-html' && Object.keys(files).some((p) => /\.html?$/i.test(p) && !p.startsWith('/.unison-import/'))) return STATIC_HTML_ADAPTER_INFO;
+  const sourceBuild = planSourceBuild(profile, files);
+  if (sourceBuild.status === 'supported') {
+    return {
+      status: 'available',
+      adapter: SOURCE_BUILD_ADAPTER,
+      reason: `${sourceBuild.reason} The project runs in a sealed frame with no access to your Unison account.`,
+      requires: [],
+    };
+  }
   if (profile.scripts.dev || profile.scripts.start) {
     return {
       status: 'unavailable',
       adapter: ISOLATED_SOURCE_PREVIEW_ADAPTER,
-      reason: `This ${profile.framework} project can preview only in an isolated source runtime. The preview worker is not configured in this environment, so Unison will not substitute or rewrite the imported design.`,
+      reason: `${sourceBuild.reason} It can preview only on a build server running its own toolchain, which is not configured in this environment, so Unison will not substitute or rewrite the imported design.`,
       requires: [...new Set([...profile.previewAdapter.requires, 'isolated preview worker'])],
     };
   }

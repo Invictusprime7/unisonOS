@@ -31,12 +31,14 @@ function StateIcon({ state }: { state: VerificationState | 'supported' | 'blocke
  * a transformed version of the design; it reports what is preserved and what
  * still blocks a faithful preview and publishing.
  */
-export function ImportedSourcePreviewStatus({ records, adapter, running, className }: {
+export function ImportedSourcePreviewStatus({ records, adapter, running, publishReady, starting, preparingAssets, error, onStart, className }: {
   records: ImportedSourceRecords;
   /** Live adapter decision; defaults to the profile frozen at import time. */
   adapter?: ImportCompatibilityProfile['previewAdapter'];
   /** True while the original files are running in the isolated preview frame. */
   running?: boolean;
+  /** A passing, owner-confirmed page check is saved for this exact version. */
+  publishReady?: boolean;
   starting?: boolean;
   preparingAssets?: boolean;
   error?: string | null;
@@ -63,8 +65,16 @@ export function ImportedSourcePreviewStatus({ records, adapter, running, classNa
       state: running ? 'unverified' : runtimeState === 'supported' ? 'unverified' : 'blocked',
       detail: running ? 'Showing the original files, unchanged' : runtimeState === 'supported' ? 'Not opened yet' : 'Off, so a different design is never shown',
     },
-    { label: 'Matches the original', state: r.visualParity, detail: 'Not compared yet' },
-    { label: 'Ready to publish', state: r.publishReady ? 'verified' : 'blocked', detail: r.publishReady ? 'Ready' : 'Blocked until the preview matches the original' },
+    {
+      label: 'Matches the original',
+      state: publishReady ? 'verified' : r.visualParity,
+      detail: publishReady ? 'Every page checked and confirmed by you' : running ? 'Use "Check pages", then confirm it matches' : 'Not compared yet',
+    },
+    {
+      label: 'Ready to publish',
+      state: publishReady || r.publishReady ? 'verified' : 'blocked',
+      detail: publishReady || r.publishReady ? 'This saved version can be published' : 'Blocked until every page is checked and you confirm it matches',
+    },
   ];
 
   return (
