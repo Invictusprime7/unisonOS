@@ -331,6 +331,7 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
 
   const env: Record<string, unknown> = { MODE: 'production', DEV: false, PROD: true, SSR: false, BASE_URL: '/' };
   let output = '';
+  const bareImports = new Set<string>();
   try {
     const result = await esbuild.build({
       entryPoints: [ENTRY],
@@ -354,6 +355,9 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
       plugins: [plugin],
     });
     output = result.outputFiles?.find((f) => f.path.endsWith('.js'))?.text ?? '';
+    for (const out of Object.values((result.metafile?.outputs ?? {}) as Record<string, { imports?: Array<{ path: string; external?: boolean }> }>)) {
+      for (const imp of out.imports ?? []) if (imp.external && !/^(https?:|data:)/.test(imp.path)) bareImports.add(imp.path);
+    }
     for (const warning of result.warnings.slice(0, 20)) diagnostics.push({ level: 'info', code: 'build-warning', message: warning.text, path: warning.location?.file });
   } catch (error) {
     const errors = (error as { errors?: Array<{ text: string; location?: { file?: string; line?: number } }> }).errors;
@@ -363,15 +367,24 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
   }
 
   // ── import map: exact versions, shared single copies ─────────────────────
+  // Every shared package is marked external for every other one, so the page
+  // gets one copy of each at the pinned version. The CDN accepts scoped names
+  // in that list only in query form, so each specifier the bundle imports gets
+  // an exact entry; prefix entries cover deeper subpaths CDN modules request.
   const shared = [...new Set([...usedPackages, ...Object.keys(plan.packages)])].filter((n) => pkgVersion(n) || usedPackages.has(n)).sort();
   const imports: Record<string, string> = {};
+  const at = (name: string) => `${cdn}/${name}${pkgVersion(name) ? `@${pkgVersion(name)}` : ''}`;
   for (const name of shared) {
-    const version = pkgVersion(name);
     const others = shared.filter((n) => n !== name && pkgVersion(n));
-    const opts = `${others.length ? `&external=${others.join(',')}` : ''}&target=es2022`;
-    const base = `${cdn}/${name}${version ? `@${version}` : ''}${opts}`;
-    imports[name] = base;
-    imports[`${name}/`] = `${base}/`;
+    const unscoped = others.filter((n) => !n.startsWith('@'));
+    imports[name] = `${at(name)}?${others.length ? `external=${others.join(',')}&` : ''}target=es2022`;
+    imports[`${name}/`] = `${at(name)}${unscoped.length ? `&external=${unscoped.join(',')}` : ''}&target=es2022/`;
+  }
+  for (const specifier of [...bareImports].sort()) {
+    const name = packageNameOf(specifier);
+    if (specifier === name) continue;
+    const others = shared.filter((n) => n !== name && pkgVersion(n));
+    imports[specifier] = `${at(name)}${specifier.slice(name.length)}?${others.length ? `external=${others.join(',')}&` : ''}target=es2022`;
   }
   for (const name of plan.unpinned) if (usedPackages.has(name)) diagnostics.push({ level: 'warning', code: 'package-unpinned', message: `${name} has no lockfile entry; version ${plan.packages[name]} from package.json was used.` });
 
