@@ -72,7 +72,7 @@ BEGIN
 		RAISE EXCEPTION 'The checked files do not match this saved version' USING ERRCODE = '23514';
 	END IF;
 	IF p_status NOT IN ('passed', 'failed')
-		OR p_adapter NOT IN ('static-html-v1', 'browser-source-build-v1')
+		OR p_adapter NOT IN ('static-html-sandbox', 'browser-source-build-v1')
 		OR p_artifact_hash !~ '^[0-9a-f]{64}$'
 		OR jsonb_typeof(COALESCE(p_routes, '[]'::jsonb)) <> 'array'
 		OR jsonb_array_length(COALESCE(p_routes, '[]'::jsonb)) = 0
