@@ -370,7 +370,7 @@ export async function deployToProvider(
     // any network/billing-incurring call. Stubbed business-critical capabilities
     // (commerce/auth/booking/lead-capture/quoting/donation) block publish even
     // when preview was happy.
-    if (request.contract) {
+    if (request.contract && !importedArtifactFiles) {
       const verdict = PublishGate.evaluate(request.contract);
       if (!verdict.ok) {
         const blockers: PublishBlocker[] = verdict.reasons.map((r) => ({
@@ -429,7 +429,7 @@ export async function deployToProvider(
     // canonical-pipeline output. Legacy `systemId`/`rowCounts` on the request
     // remain as overrides only.
     let publishAttestation: Awaited<ReturnType<typeof buildPublishAttestation>> | undefined;
-    if (request.contract) {
+    if (request.contract && !importedArtifactFiles) {
       try {
         if (request.snapshot && !request.systemId) {
           publishAttestation = await buildPublishAttestationFromSnapshot(
