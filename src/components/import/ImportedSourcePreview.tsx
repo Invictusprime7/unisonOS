@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ExternalLink, Info, RefreshCw, Square, X } from 'lucide-react';
+import { CheckCircle2, ClipboardCheck, ExternalLink, Info, Loader2, Square, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,13 +8,25 @@ import type { ImportedSourceRecords } from '@/services/import/importedSourceReco
 import { toVfsPath } from '@/services/import/importedSourceRecords';
 import { ISOLATED_SOURCE_PREVIEW_ADAPTER, resolveImportPreviewAdapter } from '@/services/import/importCompatibilityProfile';
 import { startImportedPreviewSession, stopImportedPreviewSession, type ImportedPreviewSession } from '@/services/import/importedPreviewSession';
+import { SOURCE_BUILD_ADAPTER } from '@/services/import/sourceBuild/sourceBuildPlan';
+import {
+  findSavedImportedRevision,
+  loadLatestImportedVerification,
+  saveImportedVerification,
+  summarizeVerification,
+  type RouteProbe,
+  type VerificationSummary,
+} from '@/services/import/importedSourceVerification';
 import {
   IMPORT_NAV_MESSAGE,
+  IMPORT_PROBE_MESSAGE,
   STATIC_HTML_PREVIEW_ADAPTER,
   buildStaticHtmlPreviewDocument,
   listStaticHtmlPages,
 } from '@/services/import/staticHtmlPreview';
 import { ImportedSourcePreviewStatus } from './ImportedSourcePreviewStatus';
+import { ImportedSourceRuntimeFrame } from './ImportedSourceRuntimeFrame';
+import { ImportedVerificationPanel } from './ImportedVerificationPanel';
 
 const SIGNED_URL_SECONDS = 60 * 60;
 
@@ -36,6 +48,7 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
   const adapter = useMemo(() => resolveImportPreviewAdapter(records.profile, files), [records.profile, files]);
   const runsStaticHtml = adapter.status === 'available' && adapter.adapter === STATIC_HTML_PREVIEW_ADAPTER;
   const usesIsolatedWorker = adapter.adapter === ISOLATED_SOURCE_PREVIEW_ADAPTER;
+  const runsSourceBuild = adapter.status === 'available' && adapter.adapter === SOURCE_BUILD_ADAPTER;
   const pages = useMemo(() => (runsStaticHtml ? listStaticHtmlPages(files) : []), [files, runsStaticHtml]);
   const [page, setPage] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -46,7 +59,26 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
   const [startError, setStartError] = useState<string | null>(null);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const activePage = page && pages.includes(page) ? page : pages[0] ?? null;
-  const availableForAssetPreview = runsStaticHtml || usesIsolatedWorker;
+  const availableForAssetPreview = runsStaticHtml || usesIsolatedWorker || runsSourceBuild;
+  const [checking, setChecking] = useState(false);
+  const [summary, setSummary] = useState<VerificationSummary | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [publishReady, setPublishReady] = useState(false);
+  const probeWaiter = useRef<((probe: Omit<RouteProbe, 'path'>) => void) | null>(null);
+  const loadWaiter = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!projectId || !runsStaticHtml) return;
+    let cancelled = false;
+    void findSavedImportedRevision(projectId, files).then(async (revision) => {
+      if (!revision || cancelled) return;
+      const latest = await loadLatestImportedVerification(projectId, revision.id);
+      if (!cancelled) setPublishReady(revision.publishReady && latest?.status === 'passed' && latest.owner_confirmed === true);
+    });
+    return () => { cancelled = true; };
+  }, [files, projectId, runsStaticHtml]);
 
   useEffect(() => onSessionChange?.(session), [onSessionChange, session]);
 
@@ -109,13 +141,64 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
     if (!runsStaticHtml) return;
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frameRef.current?.contentWindow) return;
-      const data = event.data as { type?: string; path?: string } | null;
+      const data = event.data as ({ type?: string; path?: string } & Partial<RouteProbe>) | null;
+      if (data?.type === `${IMPORT_PROBE_MESSAGE}-result`) {
+        probeWaiter.current?.({ textLength: data.textLength ?? 0, elementCount: data.elementCount ?? 0, imagesBroken: data.imagesBroken ?? [], errors: data.errors ?? [] });
+        probeWaiter.current = null;
+        return;
+      }
       if (data?.type !== IMPORT_NAV_MESSAGE || typeof data.path !== 'string' || !pages.includes(data.path)) return;
       setPage(data.path);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [pages, runsStaticHtml]);
+
+  const checkStaticPages = async () => {
+    if (checking) return;
+    setChecking(true);
+    setSummary(null);
+    setConfirmed(false);
+    setSaveMessage(null);
+    const results: RouteProbe[] = [];
+    for (const path of pages) {
+      const loaded = new Promise<void>((resolve) => { loadWaiter.current = resolve; window.setTimeout(resolve, 8000); });
+      setPage(path);
+      if (path === activePage) frameRef.current?.contentWindow?.location.reload?.();
+      await loaded;
+      await new Promise((r) => window.setTimeout(r, 1200));
+      const probe = await new Promise<Omit<RouteProbe, 'path'>>((resolve) => {
+        const timer = window.setTimeout(() => resolve({ textLength: 0, elementCount: 0, imagesBroken: [], errors: ['The page did not respond.'] }), 8000);
+        probeWaiter.current = (p) => { window.clearTimeout(timer); resolve(p); };
+        frameRef.current?.contentWindow?.postMessage({ type: IMPORT_PROBE_MESSAGE }, '*');
+      });
+      results.push({ ...probe, path });
+    }
+    setSummary(summarizeVerification(results, pages));
+    setChecking(false);
+  };
+
+  const saveStaticCheck = async () => {
+    if (!summary || !projectId || saving) return;
+    setSaving(true);
+    setSaveMessage(null);
+    try {
+      const result = await saveImportedVerification({ projectId, files, records, adapter: STATIC_HTML_PREVIEW_ADAPTER, summary, ownerConfirmed: confirmed, adaptations: [] });
+      setPublishReady(result.publishReady);
+      setSaveMessage(result.publishReady ? 'Saved. This version can now be published.' : 'Saved. Publishing stays off until every page passes and you confirm it matches.');
+    } catch (error) {
+      setSaveMessage(error instanceof Error ? error.message : 'The check could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (runsSourceBuild) {
+    if (!assetsReady) {
+      return <div className={cn('flex h-full items-center justify-center rounded-lg border border-border bg-background text-xs text-muted-foreground', className)}><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />Preparing your images and media…</div>;
+    }
+    return <ImportedSourceRuntimeFrame records={records} files={files} assetUrls={assetUrls} projectId={projectId} adapter={adapter} className={className} />;
+  }
 
   if (session) {
     return (
@@ -189,7 +272,14 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
         <span className="truncate text-xs text-muted-foreground">
           Original files, unchanged{missing > 0 ? ` · ${missing} file link${missing === 1 ? '' : 's'} could not be found` : ''}
         </span>
-        <Button variant="ghost" size="sm" className="ml-auto h-8 gap-1.5 text-xs" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}>
+        {publishReady && (
+          <span className="flex items-center gap-1 text-xs text-primary"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden />Ready to publish</span>
+        )}
+        <Button type="button" variant="ghost" size="sm" className="ml-auto h-8 gap-1.5 text-xs" onClick={checkStaticPages} disabled={checking || !served}>
+          {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <ClipboardCheck className="h-3.5 w-3.5" aria-hidden />}
+          {checking ? 'Checking pages…' : 'Check pages'}
+        </Button>
+        <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}>
           {showDetails ? <X className="h-3.5 w-3.5" aria-hidden /> : <Info className="h-3.5 w-3.5" aria-hidden />}
           {showDetails ? 'Close' : 'Import details'}
         </Button>
@@ -205,9 +295,22 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
             sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
             referrerPolicy="no-referrer"
             srcDoc={served.html}
+            onLoad={() => { loadWaiter.current?.(); loadWaiter.current = null; }}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading the original files…</div>
+        )}
+        {summary && !showDetails && (
+          <ImportedVerificationPanel
+            summary={summary}
+            confirmed={confirmed}
+            onConfirmedChange={setConfirmed}
+            onSave={saveStaticCheck}
+            onClose={() => setSummary(null)}
+            saving={saving}
+            canSave={Boolean(projectId)}
+            message={saveMessage}
+          />
         )}
         {showDetails && (
           <div className="absolute inset-0 overflow-auto bg-background">
@@ -223,7 +326,7 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
                 </ul>
               </div>
             )}
-            <ImportedSourcePreviewStatus records={records} adapter={adapter} running className="h-auto overflow-visible rounded-none border-0" />
+            <ImportedSourcePreviewStatus records={records} adapter={adapter} running publishReady={publishReady} className="h-auto overflow-visible rounded-none border-0" />
           </div>
         )}
       </div>
