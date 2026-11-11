@@ -183,6 +183,65 @@ describe('AppBuildContract', () => {
       .toThrow('UniversalCreation finalized selections drift from the canonical AppBuildContract');
   });
 
+  it('assigns unscoped booking interactions and the single form host to the booking page', () => {
+    const input = makeInput();
+    const booking = createBuilderPage('page-booking', 'Booking', '/booking', 'booking', {
+      filePath: '/src/pages/Booking.tsx',
+      pageRole: 'booking',
+      createdAt,
+      updatedAt: createdAt,
+    });
+    input.pageRegistry = {
+      ...input.pageRegistry,
+      pages: { ...input.pageRegistry.pages, [booking.pageId]: booking },
+    };
+    input.sitePlan = {
+      ...input.sitePlan,
+      pages: [...input.sitePlan.pages, {
+        id: booking.pageId, name: 'booking', title: 'Booking', route: '/booking', role: 'booking',
+        filePath: booking.filePath!, visibleInNav: true, isHome: false, generatedBy: 'wizard',
+      }],
+      navItems: [...input.sitePlan.navItems, booking.pageId],
+    };
+    input.registeredComponentInstances = [createCanonicalComponentInstance('booking-scheduler', {
+      usedOnPages: [booking.pageId],
+      bindings: { calendarId: 'calendar-booking' },
+    })!];
+    input.universalCreation = {
+      mode: 'guided',
+      originalPrompt: 'A restaurant site with interactive reservations.',
+      sitePurpose: 'Show the restaurant and accept reservations.',
+      subject: 'Sabor do Brasil',
+      pages: [
+        { route: '/', title: 'Home', purpose: 'Introduce the restaurant.', suggestedRole: 'home' },
+        { route: '/booking', title: 'Booking', purpose: 'Accept table reservations.', suggestedRole: 'booking' },
+      ],
+      visualRequirements: [],
+      requestedCapabilities: ['booking'],
+      requirements: [
+        { id: 'req:reservation-prompt', kind: 'interaction', text: 'interactive reservation prompt', origin: 'explicit' },
+        { id: 'req:table-reservations', kind: 'interaction', text: 'table reservations', origin: 'explicit' },
+        { id: 'req:appointment-booking', kind: 'interaction', text: 'appointment booking', origin: 'explicit' },
+      ],
+    };
+    const contract = buildAppBuildContract(input);
+    const generation = buildAppBuilderGenerationContext(contract);
+    const homeContext = generation.runtimeContextForPage('page-home');
+    const bookingContext = generation.runtimeContextForPage('page-booking');
+
+    expect(homeContext).toContain('BOOKING INTERACTION PLACEMENT');
+    expect(homeContext).toContain('belong on Booking (/booking)');
+    expect(homeContext).not.toContain('[req:table-reservations] table reservations');
+    expect(bookingContext).toContain('BOOKING INTERACTION OWNER (required)');
+    expect(bookingContext).toContain('[req:table-reservations] table reservations');
+    expect(bookingContext).toContain('Put exactly one <form data-intent-form="booking.create">');
+    expect(bookingContext).toContain('/src/project-components/ReservationExperience.tsx');
+    expect(bookingContext).toContain('serviceId, slotId, customerName, customerEmail');
+    expect(bookingContext).toContain('custom:project-components-reservation-experience-default');
+    expect(bookingContext).toContain('visible heading and supporting reservation guidance outside its form');
+    expect(bookingContext).toContain('do not invent custom:booking-experience');
+  });
+
   it('verifies every approved canonical component against its runtime registry contract', () => {
     const issues = validateCanonicalComponentRegistry();
     expect(issues).toEqual([]);

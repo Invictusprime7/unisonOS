@@ -33,14 +33,9 @@ describe('PromptLaunchPanel (chat-only site creation)', () => {
     expect(screen.getByRole('button', { name: 'Restore a Unison export' })).toBeInTheDocument();
   });
 
-  it('shows the Creative Brief Affinity read from the conversation, with where each choice came from', () => {
+  it('shows the conversation-derived launch plan without the removed brief inspector', () => {
     renderPanel({ brief: 'Create a cinematic music artist website with an immersive hero, horizontal releases gallery, tour dates, and fan sign-ups.' });
-    const inspector = screen.getByTestId('creative-brief-inspector');
-    expect(inspector).toHaveTextContent('Cinematic Portfolio');
-    expect(inspector).toHaveTextContent('Rich motion and reveals');
-    expect(inspector).toHaveTextContent('“immersive hero”');
-    expect(inspector).toHaveTextContent('“horizontal releases gallery”');
-    expect(inspector).toHaveTextContent('Your words');
+    expect(screen.queryByTestId('creative-brief-inspector')).not.toBeInTheDocument();
     // Pages show every planned destination, including ones only the prompt named.
     expect(screen.getByText(/Tour Dates/, { selector: 'dd' })).toBeInTheDocument();
   });
@@ -55,11 +50,12 @@ describe('PromptLaunchPanel (chat-only site creation)', () => {
     expect(input.universalCreation.originalPrompt).toBe(BRIEF);
   });
 
-  it('offers "Build without AI" only when the AI provider is unavailable', async () => {
+  it('does not switch to scaffold generation when the AI provider is unavailable', async () => {
     runLaunchPipeline.mockRejectedValueOnce(new LaunchFatalError('Gemini timed out before the page finished.', { stage: 'app-build' }));
     renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'Create my site' }));
-    expect(await screen.findByRole('button', { name: 'Build without AI' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Build without AI' })).not.toBeInTheDocument();
   });
 
   it('does not offer the starter fallback for a design validation failure', async () => {

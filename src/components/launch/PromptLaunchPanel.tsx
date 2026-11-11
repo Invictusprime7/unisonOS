@@ -9,7 +9,7 @@
 import type { RequirementCoverageReport } from '@/services/app-builder/requirementCoverage';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Monitor, PanelsTopLeft, Smartphone, Sparkle } from 'lucide-react';
+import { Loader2, Monitor, Smartphone, Sparkle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { VFSPreview } from '@/components/VFSPreview';
 import { LaunchStageTimeline } from '@/components/onboarding/wizard/LaunchStageTimeline';
@@ -22,10 +22,8 @@ import {
   type LaunchFailureReport,
   type LaunchRunSnapshot,
 } from '@/services/launch/launchRun';
-import type { AppBuildGenerationMode } from '@/services/app-builder/appBuilderContracts';
 import { ImportProjectZipButton } from '@/components/onboarding/ImportProjectZipButton';
 import { ImportUnisonSiteZipButton } from '@/components/onboarding/ImportUnisonSiteZipButton';
-import { CreativeBriefInspector } from '@/components/launch/CreativeBriefInspector';
 
 /** Key prefix of answers saved by the retired guided setup; they may hold private contact details. */
 export const RETIRED_INTERVIEW_DRAFT_PREFIX = 'unison.launch-interview.';
@@ -44,9 +42,6 @@ export function clearRetiredInterviewDrafts(storage: Pick<Storage, 'length' | 'k
     // Storage may be unavailable (private mode); nothing to clean up.
   }
 }
-
-/** Provider outages only; validation failures never offer the starter fallback. */
-export const AI_UNAVAILABLE_PATTERN = /timed? ?out|timeout|quota|credit|rate.?limit|429|402|unavailable|provider|no managed ai|not configured/i;
 
 interface ReviewCandidate {
   files: Record<string, string>;
@@ -89,7 +84,6 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
     ?? creation?.designDirection?.familyId
     ?? 'Auto-matched';
   const [launching, setLaunching] = useState(false);
-  const [mode, setMode] = useState<AppBuildGenerationMode>('ai');
   const [status, setStatus] = useState('');
   const [activity, setActivity] = useState<string[]>([]);
   const [progress, setProgress] = useState<LaunchRunSnapshot | null>(null);
@@ -114,12 +108,11 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
   const handlePreviewReady = useCallback(() => { setPreviewReady(true); setError(null); }, []);
   const handlePreviewError = useCallback((message: string) => { setPreviewReady(false); setError(`Preview could not render: ${message}`); }, []);
 
-  const launch = async (generationMode: AppBuildGenerationMode) => {
+  const launch = async () => {
     if (launching) return;
     const run = ++runRef.current;
     decisionRef.current?.(false);
     decisionRef.current = null;
-    setMode(generationMode);
     setLaunching(true);
     setReview(null);
     setPreviewReady(false);
@@ -128,11 +121,10 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
     setProgress(null);
     setActivity([]);
     progressRef.current = null;
-    setStatus(generationMode === 'deterministic' ? 'Building starter pages…' : 'Preparing your site…');
+    setStatus('Preparing your site…');
     const live = () => run === runRef.current && mountedRef.current;
     try {
       const { input } = buildPromptLaunchInput(brief, {
-        generationMode,
         demoGeneration,
         prefill,
         regenerationNonce: run > 1 ? `take-${run}` : null,
@@ -178,8 +170,6 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
     }
   };
 
-  const aiUnavailable = Boolean(failure && failure.stage === 'app-build' && mode === 'ai' && AI_UNAVAILABLE_PATTERN.test(failure.message));
-
   if (review) {
     return (
       <section className="mt-3 flex flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground" data-testid="prompt-launch-review">
@@ -209,7 +199,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
         <div className="flex flex-col-reverse gap-2 border-t border-border p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => { decisionRef.current?.(false); decisionRef.current = null; setReview(null); }}>Keep chatting</Button>
-            <Button variant="outline" onClick={() => void launch('ai')}>Try another</Button>
+            <Button variant="outline" onClick={() => void launch()}>Try another</Button>
           </div>
           <Button disabled={!previewReady || launching} onClick={() => { setLaunching(true); decisionRef.current?.(true); decisionRef.current = null; }}>
             {launching ? <Loader2 className="animate-spin" /> : <Sparkle />}
@@ -225,7 +215,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
     return (
       <div className="mt-3 rounded-lg border border-border bg-card p-4 text-card-foreground" aria-live="polite">
         {progress
-          ? <LaunchStageTimeline snapshot={progress} statusText={status} activity={activity} generationMode={mode} className="w-full" />
+          ? <LaunchStageTimeline snapshot={progress} statusText={status} activity={activity} generationMode="ai" className="w-full" />
           : <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />{status || 'Preparing your site…'}</p>}
       </div>
     );
@@ -298,21 +288,15 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
       ) : (
         <p role="alert" className="text-sm text-destructive">Describe the site you want to create in the chat first.</p>
       )}
-      {preview?.plan.creationInput.experienceDirection && (
-        <CreativeBriefInspector direction={preview.plan.creationInput.experienceDirection} pages={preview.plan.creationInput.pages} />
-      )}
       {error && (
         <div role="alert" className="space-y-2 rounded-md border border-destructive p-3 text-sm text-destructive">
           <p>{error}</p>
           {failure && <details><summary className="cursor-pointer text-xs font-medium">Technical details</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(failure, null, 2)}</pre></details>}
-          {aiUnavailable && (
-            <Button variant="outline" onClick={() => void launch('deterministic')}><PanelsTopLeft />Build without AI</Button>
-          )}
         </div>
       )}
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="ghost" onClick={onClose}>Keep chatting</Button>
-        <Button disabled={!preview} onClick={() => void launch('ai')}><Sparkle />{error ? 'Try again' : 'Create my site'}</Button>
+        <Button disabled={!preview} onClick={() => void launch()}><Sparkle />{error ? 'Try again' : 'Create my site'}</Button>
       </div>
       <details className="border-t border-border pt-3 text-sm" data-testid="prompt-launch-import">
         <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Already have a site? Import it instead</summary>

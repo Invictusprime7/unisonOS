@@ -17,7 +17,6 @@ import {
   type ChatLaunchPlan,
 } from '@/services/launch/chatLaunchPlan';
 import type { LaunchOrchestratorInput } from '@/services/launch/launchOrchestrator';
-import type { AppBuildGenerationMode } from '@/services/app-builder/appBuilderContracts';
 import { createWizardDesignSelection, type WizardExperiencePreference } from '@/services/wizardDesignSelection';
 import { designSelectionFromDirection, isArtDirectionSealed } from '@/services/launch/experienceDirector';
 
@@ -32,7 +31,6 @@ export interface PromptLaunchPrefill {
 }
 
 export interface PromptLaunchOptions {
-  generationMode?: AppBuildGenerationMode;
   demoGeneration?: boolean;
   regenerationNonce?: string | null;
   prefill?: PromptLaunchPrefill | null;
@@ -133,7 +131,7 @@ export function buildPromptLaunchInput(prompt: string, options: PromptLaunchOpti
   const publicEmail = prefill?.email?.trim() || undefined;
   const ownerEmail = prefill?.notificationEmail?.trim() || undefined;
   const input: LaunchOrchestratorInput = {
-    generationMode: options.generationMode ?? 'ai',
+    generationMode: 'ai',
     demoGeneration: options.demoGeneration,
     systemId: 'content',
     industry: 'universal',

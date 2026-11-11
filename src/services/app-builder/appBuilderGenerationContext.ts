@@ -13,6 +13,7 @@ import { COMPOSER_CONTEXT_LIMIT, packContextBlocks } from './contextBudget';
 import { renderCreativeRequirements } from '@/services/launch/creativePlan';
 import { renderVerticalKnowledge, verticalForIndustry } from '@/services/composition/verticals';
 import { ARCHETYPE_ADVISORY_POLICY, CREATIVE_AUTHORITY_ORDER, MIXED_SECTION_AUTHORING_POLICY, SECTION_CONTENT_DEPTH_POLICY } from './creativeAuthorityPolicy';
+import { isBookingInteractionRequirement, requirementOwnerRoute } from './requirementCoverage';
 
 /** Home references stay compact so later pages keep room for their own design vocabulary. */
 export const HOME_OBJECT_CONTEXT_LIMIT = 2_500;
@@ -205,6 +206,14 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const materialization = materializeDesignSources(designSources);
   const creation = business.universalCreation;
   const openEnded = creation?.mode === 'open-ended';
+  const requirementPages = contract.topology.sitePlan.pages.map((page) => ({
+    route: page.route, filePath: page.filePath, title: page.title, visibleInNav: page.visibleInNav,
+  }));
+  const bookingRequirements = (creation?.requirements ?? []).filter(isBookingInteractionRequirement);
+  const bookingOwnerRoute = bookingRequirements
+    .map((requirement) => requirementOwnerRoute(requirement, requirementPages))
+    .find((route): route is string => Boolean(route));
+  const bookingOwner = requirementPages.find((page) => page.route.toLowerCase() === bookingOwnerRoute?.toLowerCase());
   // Every build gets trade knowledge: the prompt's vertical, else the industry's own pack.
   const vertical = creation?.vertical ?? verticalForIndustry(business.industry);
   const creationContext = creation ? [
@@ -233,14 +242,21 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     const target = contract.topology.sitePlan.pages.find((page) => page.id === pageId);
     if (!target) return '';
     const finalizedPage = creation.finalizedSelections?.pages.find((page) => page.route.toLowerCase() === target.route.toLowerCase());
-    const relevantRequirements = (creation.requirements ?? []).filter((requirement) =>
-      !requirement.pageRoute || requirement.pageRoute.toLowerCase() === target.route.toLowerCase(),
-    );
+    const relevantRequirements = (creation.requirements ?? []).filter((requirement) => {
+      const ownerRoute = requirementOwnerRoute(requirement, requirementPages);
+      return !ownerRoute || ownerRoute.toLowerCase() === target.route.toLowerCase();
+    });
+    const bookingOwnershipContext = bookingOwner && bookingRequirements.length
+      ? target.route.toLowerCase() === bookingOwner.route.toLowerCase()
+        ? `BOOKING INTERACTION OWNER (required): implement ${bookingRequirements.map((requirement) => `"${requirement.text}"`).join(', ')} as one original, interactive experience on this page. Create /src/project-components/ReservationExperience.tsx as a default-exported site-local section component with a visible heading and supporting reservation guidance outside its form, plus service and available-time selectors backed by the registered booking runtime (slot labels provide the date/time), customer details, and optional phone/notes; if table party size is requested, capture it in notes rather than inventing a backend field. Import and render this component exactly once from ${target.filePath} inside <section data-ut-section-id="<pageId>:booking:<n>" data-ut-section-type="booking" data-ut-variant="custom:project-components-reservation-experience-default">. This path-derived variant ID is mandatory; do not invent custom:booking-experience. Put exactly one <form data-intent-form="booking.create"> in ReservationExperience.tsx and include every registered required field listed below. Do not use a Contact design host on this page and do not add another booking form or booking.create control. Submission must use the registered booking runtime; never show local success before its acknowledgement.`
+        : `BOOKING INTERACTION PLACEMENT: ${bookingRequirements.map((requirement) => `"${requirement.text}"`).join(', ')} belong on ${bookingOwner.title} (${bookingOwner.route}). Do not render booking forms, reservation inputs, or a second booking workflow here. Preserve any assigned CTA marker; it may link visitors to ${bookingOwner.route}.`
+      : '';
     return [
       `PAGE-SPECIFIC OWNER INTENT (required): ${target.title}; route ${target.route}; role ${target.role}.`,
       `Page purpose: ${finalizedPage?.purpose ?? target.purpose ?? `Serve the ${target.role} intent for ${business.businessName}.`}`,
       `Site purpose: ${creation.sitePurpose}. Visitor actions: ${creation.finalizedSelections?.visitorActions.join(', ') || creation.requestedCapabilities.join(', ') || 'content and navigation'}.`,
       `Requirements for this page: ${relevantRequirements.map((requirement) => `[${requirement.id}] ${requirement.text}`).join('; ') || 'follow the page purpose above without repeating another page\'s content.'}`,
+      bookingOwnershipContext,
       'Render only content and interactions serving this page purpose. Do not copy another page, duplicate a section/form/component, or use a generic page template in place of its requested intent.',
     ].join('\n');
   };

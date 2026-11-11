@@ -28,6 +28,20 @@ The shared `prepareSandpackFiles` path handles preview package/import/entry adap
 
 The active Builder does not automatically fall back to ECS/Docker or static HTML after a compile failure. Older preview services in the repository are compatibility/tooling, not runtime ownership. Existing saved sites reopen from their accepted revision, never a default seed.
 
+## Imported source runtime
+
+External imports use `ImportedSourcePreview` inside the existing `VFSPreview` owner. Static HTML keeps its opaque-origin browser adapter. Projects with a `dev` or `start` script can request the `isolated-source-worker-v1` adapter; the canonical Sandpack compiler is never run for those files.
+
+The worker start request is sent through `/api/preview/start` and contains:
+
+- `projectId` and `files`, where `files` contains the current imported source paths and original text bytes, but excludes `/.unison-import/**`, `.env` files, `.git`, and `node_modules`.
+- `importedRuntime.protocolVersion`, `framework`, `packageManager`, `startScript` (the script key, not a shell command), and detected entrypoints.
+- `assets`, containing original VFS paths, MIME types, and short-lived signed URLs for stored binary files.
+
+The worker response must contain a session ID and an HTTPS `iframeUrl` on an origin separate from Unison. The browser only accepts a separate origin and tears down the session when the imported preview unmounts. The `start` API proxy forwards the user's Authorization header; the worker must validate project membership, enforce per-session resource/TTL limits, treat every file and package script as untrusted code, and run each project in an ephemeral sandbox with no Unison credentials or host filesystem access. Runtime overlays and installed dependencies belong only to the worker workspace and never flow back into VFS.
+
+The repository includes the gateway and worker implementation under `services/import-preview-worker/` plus a parameterized ECS stack under `infra/import-preview/`. The isolated worker implements the `importedRuntime` v1 and `assets` fields; generic legacy Vite workers that only accept `projectId`/`files` do not meet this contract. The stack is not deployed yet: AWS CLI credentials, an ACM wildcard certificate, DNS records, and `PREVIEW_GATEWAY_URL` are required. Without a configured gateway, the import remains saved and editable, and Preview reports the missing worker instead of substituting a Unison-rendered design.
+
 ## Preview signals versus save outcomes
 
 `src/services/builder/previewVerification.ts` tracks pending/loaded/error state and emits agent events. The activity ribbon can report “Updating preview”, “Preview updated” or a preview error after source edits. These signals reflect compile/load observations; they do not prove every route, field or business workflow.

@@ -1308,12 +1308,14 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
       pages: [], visualRequirements: [], requestedCapabilities: [],
       requirements: [{ id: 'req:interaction:match-centre', kind: 'interaction', text: 'interactions: match centre', origin: 'explicit' }],
     };
-    const result = await createTestBuilder({ authorSite: async (input) => ({
+    const runComposer = vi.fn(async () => { throw new Error('Open-ended Affinity builds must not start a parallel repair author.'); });
+    const result = await createTestBuilder({ runComposer, authorSite: async (input) => ({
       files: scaffoldAuthoredPages(appContract, { '/src/pages/Home.tsx': { body: '<p>Visit our Match Centre soon</p>' } }, input.files),
       revisionId: input.revisionId,
       outcomes: input.pages.map((page) => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
-    }) }).generate({ operationId: 'registry-only', contract: appContract, initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null, budgetMs: 50_000 });
+    }) }).generate({ operationId: 'registry-only', contract: appContract, initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null, budgetMs: 280_000 });
     const coverage = result.candidate.requirementCoverage;
+    expect(runComposer).not.toHaveBeenCalled();
     expect(result.candidate.status).toBe('rejected');
     expect(result.candidate.diagnostics.join(' ')).toContain('Owner-requested requirement');
     expect(coverage?.complete).toBe(false);

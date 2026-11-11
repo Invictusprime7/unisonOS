@@ -5,7 +5,15 @@ import { isImportRecordPath, toVfsPath, type ImportedSourceRecords } from './imp
 const MAX_FILE_BYTES = 1_000_000;
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 const SESSION_ID = /^[a-zA-Z0-9_-]{8,128}$/;
-const PREVIEW_API_BASE = (import.meta.env.VITE_PREVIEW_API_URL || '/api/preview').replace(/\/+$/, '');
+
+function previewApiBase(): string {
+  const explicit = import.meta.env.VITE_PREVIEW_API_URL;
+  const legacyGateway = import.meta.env.DEV === true ? import.meta.env.VITE_PREVIEW_GATEWAY_URL : '';
+  const configured = explicit || legacyGateway;
+  if (!configured) return '/api/preview';
+  const base = configured.replace(/\/+$/, '');
+  return /\/api\/preview$/i.test(base) ? base : `${base}/api/preview`;
+}
 
 export interface ImportedPreviewSession {
   id: string;
@@ -38,7 +46,10 @@ function sourceFiles(files: Record<string, string>): Record<string, string> {
   for (const [rawPath, content] of Object.entries(files)) {
     const path = toVfsPath(rawPath);
     if (isImportRecordPath(path)) continue;
-    if (/^\/(?:\.env(?:\.(?!example$|sample$|template$)[^/]+)?|\.git|node_modules)(?:\/|$)/i.test(path)) continue;
+    const segments = path.split('/').filter(Boolean);
+    const name = segments[segments.length - 1] ?? '';
+    if (segments.includes('.git') || segments.includes('node_modules')) continue;
+    if (/^\.env(?:\.|$)/i.test(name) && !/^\.env\.(?:example|sample|template)$/i.test(name)) continue;
     if (!content || typeof content !== 'string') continue;
     if (path.split('/').some((part) => part === '..')) throw new Error(`Unsafe imported file path: ${path}`);
     if (new TextEncoder().encode(content).byteLength > MAX_FILE_BYTES) {
@@ -101,7 +112,7 @@ export async function startImportedPreviewSession(input: {
     throw new Error('Imported project is too large for this preview gateway.');
   }
 
-  const response = await fetch(`${PREVIEW_API_BASE}/start`, {
+  const response = await fetch(`${previewApiBase()}/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...await authHeaders() },
     credentials: 'same-origin',
@@ -111,6 +122,7 @@ export async function startImportedPreviewSession(input: {
   if (!response.ok || result.success !== true) {
     const reason = typeof result.error === 'string' ? result.error : `Preview worker request failed (${response.status}).`;
     if (response.status === 410) throw new Error('No isolated preview worker is configured in this environment.');
+    if (response.status === 404) throw new Error('The isolated preview API is not available in this environment.');
     throw new Error(reason);
   }
 
@@ -126,7 +138,7 @@ export async function startImportedPreviewSession(input: {
 
 export async function stopImportedPreviewSession(sessionId: string): Promise<void> {
   if (!SESSION_ID.test(sessionId)) return;
-  await fetch(`${PREVIEW_API_BASE}/${sessionId}/stop`, {
+  await fetch(`${previewApiBase()}/${sessionId}/stop`, {
     method: 'POST',
     headers: await authHeaders(),
     credentials: 'same-origin',

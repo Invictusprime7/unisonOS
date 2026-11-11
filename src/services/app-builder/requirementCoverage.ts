@@ -47,6 +47,23 @@ export interface CoveragePage {
   visibleInNav?: boolean;
 }
 
+const BOOKING_INTERACTION = /\b(?:book(?:ing)?|reservation|reserve|appointment)s?\b/i;
+
+export function isBookingInteractionRequirement(requirement: Pick<CreationRequirement, 'kind' | 'text' | 'evidence' | 'evidenceTerms'>): boolean {
+  return requirement.kind === 'interaction'
+    && BOOKING_INTERACTION.test([requirement.text, requirement.evidence, ...(requirement.evidenceTerms ?? [])].filter(Boolean).join(' '));
+}
+
+/** Unrouted booking requirements belong to the site's single booking/reservation page. */
+export function requirementOwnerRoute(
+  requirement: CreationRequirement,
+  pages: readonly CoveragePage[],
+): string | undefined {
+  if (requirement.pageRoute) return requirement.pageRoute;
+  if (!isBookingInteractionRequirement(requirement)) return undefined;
+  return pages.find((page) => /(?:booking|reservation|appointment|reserve)/i.test(`${page.route} ${page.title}`))?.route;
+}
+
 const AUTHORED = /^\/src\/(?:project-components|components\/generated)\//;
 const DESIGN_SOURCE = /^\/src\/unison\/design-sources\//;
 const CHROME = /^\/src\/project-components\/site\/|\/Site(?:Nav|Navbar|Footer)\.[jt]sx?$/;
@@ -252,9 +269,18 @@ export function buildRequirementCoverage(input: {
         // Any one phrasing evidences the experience (e.g. "flight status" or a DeparturesBoard module).
         const phrasings = [requirement.text, ...(requirement.evidenceTerms ?? [])].map(termsOf).filter((terms) => terms.length);
         const matches = (text: string) => phrasings.some((terms) => mentions(text, terms));
-        const inModule = moduleWords.filter((entry) => matches(entry.words)).map((entry) => entry.path);
-        const inPage = pageWords.filter((entry) => matches(entry.words)).map((entry) => entry.path);
-        const customOnPage = pageSources.some((source) => [...source.matchAll(SECTION_VARIANT)]
+        const ownerRoute = requirementOwnerRoute(requirement, pages);
+        const relevantPages = ownerRoute
+          ? pages.filter((page) => page.route.toLowerCase() === ownerRoute.toLowerCase())
+          : pages;
+        const relevantPagePaths = new Set(relevantPages.map((page) => page.filePath));
+        const reachableFromOwner = ownerRoute && relevantPages[0]
+          ? new Set(collectLocalImportClosure(files, relevantPages[0].filePath, (path) => AUTHORED.test(path) || DESIGN_SOURCE.test(path)))
+          : null;
+        const inModule = moduleWords.filter((entry) => AUTHORED.test(entry.path)
+          && (!reachableFromOwner || reachableFromOwner.has(entry.path)) && matches(entry.words)).map((entry) => entry.path);
+        const inPage = pageWords.filter((entry) => relevantPagePaths.has(entry.path) && matches(entry.words)).map((entry) => entry.path);
+        const customOnPage = relevantPages.some((page) => [...(files[page.filePath] ?? '').matchAll(SECTION_VARIANT)]
           .some((match) => match[1].startsWith('custom:') && matches(wordsOf(match[0] + match[1]))));
         for (const path of inModule) {
           if (siteLocalModules.includes(path) && !adaptedModules.includes(path)) promotionCandidates.push({ requirementId: requirement.id, modulePath: path });

@@ -29,7 +29,7 @@ async function ariaLike() {
 
 describe('imported-source compatibility profile', () => {
   it('detects a TanStack Start + Tailwind 4 project with its Unison brief and blocks the unsupported runtime honestly', async () => {
-    const { profile } = await ariaLike();
+    const { profile, files } = await ariaLike();
     expect(profile.framework).toBe('tanstack-start');
     expect(profile.packageManager).toBe('bun');
     expect(profile.toolchain.tailwind).toBe('4');
@@ -42,7 +42,7 @@ describe('imported-source compatibility profile', () => {
     expect(profile.unisonBrief).toMatchObject({ projectName: 'ARIA Studios', industry: 'agency', pages: ['home', 'work'] });
     expect(profile.previewAdapter.status).toBe('unavailable');
     expect(profile.previewAdapter.requires.join(' ')).toMatch(/TanStack Start/);
-    expect(resolveImportPreviewAdapter(profile, (await ariaLike()).files).adapter).toBe(ISOLATED_SOURCE_PREVIEW_ADAPTER);
+    expect(resolveImportPreviewAdapter(profile, files).adapter).toBe(ISOLATED_SOURCE_PREVIEW_ADAPTER);
   });
 
   it('reports unresolved local imports and resolves tsconfig aliases', async () => {
@@ -71,6 +71,7 @@ describe('isolated imported preview session', () => {
   it('sends original source bytes and runtime metadata without private import records', async () => {
     const { files } = await ariaLike();
     const records = readImportedSourceRecords(files)!;
+    const filesWithEnvironment = { ...files, '/.env.local': 'PRIVATE_TOKEN=never-send' };
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       success: true,
       session: { id: 'preview_session_1', iframeUrl: 'https://preview.example.test/session_1', status: 'running' },
@@ -78,7 +79,7 @@ describe('isolated imported preview session', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     try {
-      const session = await startImportedPreviewSession({ projectId: 'project-1', records, files });
+      const session = await startImportedPreviewSession({ projectId: 'project-1', records, files: filesWithEnvironment });
       const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
         files: Record<string, string>;
         importedRuntime: Record<string, unknown>;
@@ -94,7 +95,7 @@ describe('isolated imported preview session', () => {
         packageManager: 'bun',
         startScript: 'dev',
       });
-      expect(request.files).not.toHaveProperty('/.env');
+      expect(request.files).not.toHaveProperty('/.env.local');
     } finally {
       vi.unstubAllGlobals();
     }

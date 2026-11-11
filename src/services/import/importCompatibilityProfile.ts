@@ -83,6 +83,8 @@ export const STATIC_HTML_ADAPTER_INFO: ImportCompatibilityProfile['previewAdapte
 };
 
 export const ISOLATED_SOURCE_PREVIEW_ADAPTER = 'isolated-source-worker-v1';
+const ISOLATED_SOURCE_FRAMEWORKS = new Set<ImportFramework>(['tanstack-start', 'vite-react', 'vue-vite']);
+const ISOLATED_SOURCE_PACKAGE_MANAGERS = new Set<ImportCompatibilityProfile['packageManager']>(['npm', 'pnpm', 'yarn', 'bun']);
 
 /**
  * Live adapter decision for an imported revision. Imports saved before an
@@ -91,11 +93,13 @@ export const ISOLATED_SOURCE_PREVIEW_ADAPTER = 'isolated-source-worker-v1';
  */
 export function resolveImportPreviewAdapter(profile: ImportCompatibilityProfile, files: Record<string, string>): ImportCompatibilityProfile['previewAdapter'] {
   if (profile.framework === 'static-html' && Object.keys(files).some((p) => /\.html?$/i.test(p) && !p.startsWith('/.unison-import/'))) return STATIC_HTML_ADAPTER_INFO;
-  if (profile.scripts.dev || profile.scripts.start) {
+  if (ISOLATED_SOURCE_FRAMEWORKS.has(profile.framework)
+    && ISOLATED_SOURCE_PACKAGE_MANAGERS.has(profile.packageManager)
+    && (profile.scripts.dev || profile.scripts.start)) {
     return {
       status: 'unavailable',
       adapter: ISOLATED_SOURCE_PREVIEW_ADAPTER,
-      reason: `This ${profile.framework} project can preview only in an isolated source runtime. The preview worker is not configured in this environment, so Unison will not substitute or rewrite the imported design.`,
+      reason: `This ${profile.framework} project requires an isolated source runtime. Start a preview worker to run the original files; Unison will not substitute or rewrite the imported design.`,
       requires: [...new Set([...profile.previewAdapter.requires, 'isolated preview worker'])],
     };
   }

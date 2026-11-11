@@ -30,23 +30,27 @@ describe("homepage site confirmation", () => {
     expect(isSiteConfirmation("maybe")).toBe(false);
   });
 
-  it("only opens the wizard after an assistant explicitly requested confirmation", () => {
+  it("only opens the wizard after the assistant marks the final confirmation", () => {
     expect(hasSiteConfirmationRequest(message(
       "assistant",
       `Does this direction look right?\n${SITE_CONFIRMATION_MARKER}`,
     ))).toBe(true);
     expect(hasSiteConfirmationRequest(message(
       "assistant",
+      `Does this direction look right? ${SITE_CONFIRMATION_MARKER}\nWhat pages do you need?`,
+    ))).toBe(false);
+    expect(hasSiteConfirmationRequest(message(
+      "assistant",
       "Great! Is that a complete and accurate summary of the website you want to build?",
-    ))).toBe(true);
+    ))).toBe(false);
     expect(hasSiteConfirmationRequest(message(
       "assistant",
       "Does that sound like the right direction for your website?",
-    ))).toBe(true);
+    ))).toBe(false);
     expect(hasSiteConfirmationRequest(message(
       "assistant",
       "Excellent! We have a clear direction. You're all set to build your portfolio. Unison is ready to help you configure this!",
-    ))).toBe(true);
+    ))).toBe(false);
     expect(hasSiteConfirmationRequest(message("assistant", "What pages do you need?"))).toBe(false);
     expect(hasSiteConfirmationRequest(message("assistant", "What kind of visual style do you envision?"))).toBe(false);
     expect(hasSiteConfirmationRequest(message("user", SITE_CONFIRMATION_MARKER))).toBe(false);
