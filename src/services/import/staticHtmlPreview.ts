@@ -230,8 +230,9 @@ export function buildStaticHtmlPreviewDocument(input: {
   out.push(source.slice(last));
   let html = out.join('');
   const overlays: StaticHtmlPreviewDocument['overlays'] = [];
-  if (pages.size > 0) {
-    overlays.push('page-navigation-bridge');
+  {
+    // Always present: answers the builder's page check; link handling only when pages link to each other.
+    overlays.push(pages.size > 0 ? 'page-navigation-bridge' : 'page-check');
     const bridge = navigationBridge(pages);
     const body = /<\/body\s*>/i.exec(html);
     html = body ? `${html.slice(0, body.index)}${bridge}${html.slice(body.index)}` : `${html}${bridge}`;
