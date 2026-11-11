@@ -32,7 +32,8 @@ walk(dir);
 const intake = await intakeLooseFiles(entries, { name: 'fixture' });
 const profile = analyzeImportedProject({ manifest: intake.manifest, textFiles: intake.textFiles });
 const files: Record<string, string> = Object.fromEntries(Object.entries(intake.textFiles).map(([p, t]) => [`/${p}`, t]));
-const assetUrls: Record<string, string> = Object.fromEntries(Object.keys(intake.binaryFiles).map((p) => [`/${p}`, `${assetBase.replace(/\/$/, '')}/${p.split('/').map(encodeURIComponent).join('/')}`]));
+// The reference dev server serves public/ at the site root and source files at their paths.
+const assetUrls: Record<string, string> = Object.fromEntries(Object.keys(intake.binaryFiles).map((p) => [`/${p}`, `${assetBase.replace(/\/$/, '')}/${p.replace(/^public\//, '').split('/').map(encodeURIComponent).join('/')}`]));
 const plan = planSourceBuild(profile, files);
 if (plan.status !== 'supported') { writeFileSync(out, JSON.stringify({ plan })); console.log('unsupported:', plan.reason); process.exit(2); }
 const t0 = performance.now();
