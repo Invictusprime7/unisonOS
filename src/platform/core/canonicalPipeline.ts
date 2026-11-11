@@ -44,6 +44,7 @@ import {
 import type { ThemeTokens } from '@/sections/types';
 import type { GeneratedSitePlan } from './siteTopologyPlanner';
 import type { BusinessSystemState } from './capabilityRegistry';
+import { normalizeUniversalCreation, type UniversalCreationInput } from './universalCreation';
 import { normalizeWizardThemeTokens } from '@/utils/wizardThemeTokenNormalizer';
 import type { WizardInteractionManifest } from '@/services/wizardInteractionEnrichment';
 import { assertSnapshotThemeSeed, assertThemeSeed } from './themeSeedAssert';
@@ -293,6 +294,8 @@ export interface SiteBundleSnapshotMeta {
   };
   /** Bounded connected-gateway research and route-specific generation plan. */
   generationBrief?: WizardGenerationBrief;
+  /** Confirmed creator intent retained with the accepted revision; never replayed on reopen. */
+  universalCreation?: UniversalCreationInput;
   /** Deterministic composition, interaction, and motion recipes for this launch. */
   designIntervention?: WizardDesignIntervention;
   /** Unified registry context aggregating sections, variants, artifacts, and catalog surfaces for this launch. */
@@ -374,6 +377,19 @@ function readSnapshotDesignIntervention(
     });
   } catch {
     return null;
+  }
+}
+
+function readSnapshotUniversalCreation(files: Record<string, string>): UniversalCreationInput | undefined {
+  const rawSnapshot = files['/.unison/site-bundle-snapshot.json'];
+  if (!rawSnapshot) return undefined;
+  try {
+    const snapshot = JSON.parse(rawSnapshot) as { meta?: { universalCreation?: UniversalCreationInput } };
+    return snapshot.meta?.universalCreation
+      ? normalizeUniversalCreation(snapshot.meta.universalCreation)
+      : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -693,6 +709,7 @@ export function recompileFromPlayground(
       templateId: options?.selectedTemplateId,
       wizardSeedId: recoveredSeedId,
       designSelection: recoveredDesignSelection,
+      universalCreation: readSnapshotUniversalCreation(existingVfsFiles),
       themeTokens: options.themeTokens,
     },
     'recompile',
@@ -741,6 +758,7 @@ function projectToSiteBundleSnapshot(
     uiFoundation?: GeneratedUiManifest;
     designIntervention?: WizardDesignIntervention;
     designSelection?: import('@/services/wizardDesignSelection').WizardDesignSelection;
+    universalCreation?: UniversalCreationInput;
   },
   source: SiteBundleSnapshotMeta['source'] = 'wizard',
   uiFoundation?: GeneratedUiManifest,
@@ -913,6 +931,9 @@ function projectToSiteBundleSnapshot(
         };
       })(),
       generationBrief,
+      universalCreation: selections.universalCreation
+        ? normalizeUniversalCreation(selections.universalCreation)
+        : undefined,
       designIntervention,
     },
   };

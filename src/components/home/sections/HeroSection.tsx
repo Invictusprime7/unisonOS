@@ -322,6 +322,11 @@ export function HeroSection({ user, onAuthRequired, onSiteConfirmed, launcherOpe
               businessName="Unison site planning"
               showFileUpload={false}
               allowClearHistory
+              onClearHistory={() => {
+                setDiscoveryActive(false);
+                setGraphicRequest(null);
+                onLauncherOpenChange(false);
+              }}
               hideHeader
             />
             </div>

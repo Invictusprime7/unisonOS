@@ -1,5 +1,5 @@
 import type { LaunchState } from '@/types/launchState';
-import { findUnresolvedLocalImports, describeUnresolvedImports } from '@/services/laneBCompanionModules';
+import { findUnresolvedLocalImports, describeUnresolvedImports, normalizeVfsPath } from '@/services/laneBCompanionModules';
 import {
   buildPublishedRuntimeModule,
   CANONICAL_METADATA_FILE_PATHS,
@@ -276,7 +276,13 @@ function buildFallbackRouteState(routeState: Record<string, unknown>) {
   const compactFiles = routeState.siteBundleSnapshot
     ? compactedSourceFiles
     : restorePublishedRuntimeModule(compactedSourceFiles);
-  const unresolved = findUnresolvedLocalImports(compactFiles);
+  const importedToolchainFiles = routeState.fromImportedSource === true && Array.isArray(routeState.importToolchainConfigFiles)
+    ? new Set(routeState.importToolchainConfigFiles.filter(nonEmptyString).map(normalizeVfsPath))
+    : null;
+  const filesToCheck = importedToolchainFiles?.size
+    ? Object.fromEntries(Object.entries(compactFiles).filter(([path]) => !importedToolchainFiles.has(normalizeVfsPath(path))))
+    : compactFiles;
+  const unresolved = findUnresolvedLocalImports(filesToCheck);
   if (unresolved.length > 0) {
     throw new Error(
       `[LauncherHandoff] canonical handoff has unresolved local imports: ${describeUnresolvedImports(unresolved)}`,

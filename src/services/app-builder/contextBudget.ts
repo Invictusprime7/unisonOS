@@ -7,8 +7,8 @@
  * larger) page brief so the author still receives it.
  */
 
-export const COMPOSER_CONTEXT_LIMIT = 12_000;
-export const COMPOSER_PAGE_BRIEF_LIMIT = 52_000;
+export const COMPOSER_CONTEXT_LIMIT = 20_000;
+export const COMPOSER_PAGE_BRIEF_LIMIT = 96_000;
 
 export interface ContextBlock {
   text: string;

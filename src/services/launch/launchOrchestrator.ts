@@ -131,6 +131,7 @@ import {
 import { createWizardCompileArtifact } from '@/platform/core/snapshotSeal';
 import { resolveBusinessLaunchPlan } from '@/services/launch/launchCapabilities';
 import { planUniversalCreation } from '@/services/launch/universalCreationPlanner';
+import { resolveTopologyPageRoleAlias } from '@/platform/core/siteTopologyPlanner';
 
 export interface LaunchOrchestratorInput {
   generationMode?: AppBuildGenerationMode;
@@ -445,9 +446,12 @@ async function runReservedLaunchPipeline(
       ? '' as PrimaryGoal
       : input.primaryGoal || preselect?.primaryGoal || "collect_leads";
     const customerNeeds = uniqueValues<CustomerNeed>(openEnded ? [] : input.customerNeeds);
-    const requestedPageRoles = openEnded
-      ? (input.universalCreation?.pages ?? []).map((page) => page.suggestedRole || 'custom')
-      : input.selectedPages;
+    const creationPageRoles = (input.universalCreation?.pages ?? [])
+      .map((page) => resolveTopologyPageRoleAlias(page.suggestedRole || page.title) || 'custom');
+    const requestedPageRoles = uniqueValues<string>([
+      ...(openEnded ? [] : input.selectedPages),
+      ...creationPageRoles,
+    ]);
     const requestedPages = uniqueValues<string>(["home", ...requestedPageRoles]);
     const goalNeeds = GOAL_TO_NEEDS[primaryGoal] || {};
 
@@ -725,6 +729,7 @@ async function runReservedLaunchPipeline(
     canonicalPlan,
     plan.selections,
     candidateFiles,
+    appBuildContract.business.universalCreation,
   );
 
   const baseBusinessProfile: BusinessProfileDTO = loadedBusinessProfile || {

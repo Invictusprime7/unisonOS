@@ -53,8 +53,12 @@ export function readSiteDiscoveryMessages(
 export function writeSiteDiscoveryMessages(
   key: string,
   messages: AIMessage[],
-  storage: Pick<Storage, "setItem"> = window.localStorage,
+  storage: Pick<Storage, "setItem" | "removeItem"> = window.localStorage,
 ): void {
+  if (messages.length === 0) {
+    storage.removeItem(key);
+    return;
+  }
   storage.setItem(key, JSON.stringify({
     version: STORAGE_VERSION,
     messages: messages.slice(-MAX_PERSISTED_MESSAGES).map((message) => ({

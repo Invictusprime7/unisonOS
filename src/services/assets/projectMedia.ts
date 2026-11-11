@@ -68,8 +68,15 @@ export async function refreshProjectMediaUrls(
   const refreshed = { ...files };
   const refreshedAssets = new Map<string, ProjectMediaAsset>();
   for (const asset of assets) {
-    if (asset.bucket !== 'user-files' || !asset.storagePath.startsWith(`${input.userId}/`)) {
+    const userOwnedPath = asset.storagePath.startsWith(`${input.userId}/`)
+      || asset.storagePath.startsWith(`generated/${input.userId}/`);
+    if (asset.bucket !== 'user-files' || !userOwnedPath) {
       throw new Error('Project media asset is outside the signed-in user storage scope.');
+    }
+    // Legacy service-role URLs are long-lived; browser RLS cannot re-sign their old key layout.
+    if (asset.storagePath.startsWith(`generated/${input.userId}/`)) {
+      refreshedAssets.set(asset.storagePath, asset);
+      continue;
     }
     const url = await input.createSignedUrl(asset.bucket, asset.storagePath);
     if (!url.startsWith('https://')) throw new Error('Storage returned an invalid preview URL.');

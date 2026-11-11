@@ -87,6 +87,7 @@ export interface SiteAuthoringInput {
   businessName: string;
   /** Owner's own description from the home-page planning chat. */
   visionBrief?: string;
+  generatedHeroImage?: { url: string; prompt: string };
   /** Sealed launch vertical; wins over re-reading a short edit instruction. */
   vertical?: import('@/platform/core/universalCreation').CreationVertical | null;
   files: Record<string, string>;
@@ -221,7 +222,11 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
   const deadline = now() + (input.budgetMs ?? 240_000);
   // Avoid multiplying token/request bursts against the owner's shared Gemini quota.
   const concurrency = Math.max(1, Math.floor(input.concurrency ?? DEFAULT_PAGE_AUTHORING_CONCURRENCY));
-  const ordered = orderAuthoringPages(input.pages, input.homePageId).slice(0, input.maxPages ?? Infinity);
+  const ordered = orderAuthoringPages(input.pages, input.homePageId);
+  if (input.maxPages !== undefined && ordered.length > input.maxPages) {
+    const omitted = ordered.slice(Math.max(0, input.maxPages)).map((page) => `${page.title} (${page.route})`);
+    throw new Error(`Refusing to omit requested pages beyond maxPages=${input.maxPages}: ${omitted.join(', ')}. Increase the page limit or explicitly revise the launch plan.`);
+  }
   const routes = [...(input.existingRoutes ?? []), ...ordered.map((p) => ({ title: p.title, route: p.route }))];
   let files = input.files;
   let revisionId = input.revisionId;
@@ -316,11 +321,14 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
           renderCompositionBrief(planned, visualMemory.entries(), redundancy),
         ].filter(Boolean).join('\n');
         // Photo library sits outside the trimmable layout so it can never be cut off.
+        const generatedHero = (page.pageId === input.homePageId || page.route === '/') && input.generatedHeroImage
+          ? `GENERATED HOMEPAGE HERO IMAGE (required): use this exact URL as the primary homepage hero image, with an appropriate alt description: ${input.generatedHeroImage.url}`
+          : '';
         const photos = isImageLedRole(page.role)
           ? `PHOTO LIBRARY (required — this page is image-led and is rejected without photos): render at least one <img src="..."> in the page file itself using these verified URLs, copied exactly; never invent other image URLs:\n${verifiedPhotosFor(input.designContext?.contract.industry ?? input.industry, 6, (() => { const vertical = input.vertical ?? resolveIndustryVertical(input.visionBrief ?? ''); return [vertical?.packId, vertical?.blendPackId]; })()).join('\n')}`
           : '';
-        const room = COMPOSER_PAGE_BRIEF_LIMIT - owner.length - (photos ? photos.length + 1 : 0) - (continued ? continued.length + 1 : 0) - 3;
-        return [owner, photos, continued, layout.slice(0, Math.max(0, room))].filter(Boolean).join('\n').slice(0, COMPOSER_PAGE_BRIEF_LIMIT);
+        const room = COMPOSER_PAGE_BRIEF_LIMIT - owner.length - (generatedHero ? generatedHero.length + 1 : 0) - (photos ? photos.length + 1 : 0) - (continued ? continued.length + 1 : 0) - 3;
+        return [owner, generatedHero, photos, continued, layout.slice(0, Math.max(0, room))].filter(Boolean).join('\n').slice(0, COMPOSER_PAGE_BRIEF_LIMIT);
       })(),
       knowledgeQuery: `${input.businessName} ${page.role} ${page.title} ${page.route}`,
       baseFiles,

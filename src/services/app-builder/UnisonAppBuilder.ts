@@ -34,10 +34,12 @@ import { createUnisonBuilderContext, renderUnisonBuilderDirective, resolveSiteEn
 import { readCreativeBrief } from '@/services/launch/experienceDirector';
 import { packContextBlocks, type ContextBlock } from './contextBudget';
 import { resolveBuilderRegistryContext } from '@/services/builderRegistryContext';
+import { generateSiteImage } from '@/services/media/generateSiteImage';
 import { runBuilderTurn } from '@/services/builderBrainClient';
 import { resolveAppBuilderAIOptions } from './appBuilderAISettings';
 import { listContentTypes } from '@/services/cmsRecordService';
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
+import { readImportedSourceRecords } from '@/services/import/importedSourceRecords';
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
@@ -51,6 +53,7 @@ export interface UnisonAppBuilderDependencies {
   runComposer?: (input: ComposerLoopInput) => Promise<ComposerLoopResult>;
   invokePage?: import('@/services/builder/aiRepairLoop').ComposerInvoke;
   loadContentTypes?: (scope: { businessId: string; projectId: string }) => Promise<ContentTypeRow[]>;
+  generateSiteImage?: typeof generateSiteImage;
 }
 
 function stopReason(reason: ComposerLoopResult['reason']): AppBuildCandidateStopReason {
@@ -71,9 +74,30 @@ export function createUnisonAppBuilder(
 ): UnisonAppBuilder {
   const authorSite = dependencies.authorSite ?? authorSitePages;
   const runComposer = dependencies.runComposer ?? runComposerRepairLoop;
+  const createSiteImage = dependencies.generateSiteImage ?? generateSiteImage;
   const service: UnisonAppBuilder = {
     async generate(input) {
-      return orchestrateAppBuild({ ...input, gatewayOptions: resolveAppBuilderAIOptions(input.gatewayOptions) }, {
+      const buildStartedAt = Date.now();
+      const visionBrief = input.contract.business.visionBrief?.trim();
+      let generatedHeroImage: AppBuildRequest['generatedHeroImage'];
+      if (visionBrief && input.generationMode !== 'deterministic' && !input.signal?.aborted) {
+        try {
+          generatedHeroImage = await createSiteImage(
+            `Create an original landscape homepage hero image based on the visitor's app request: ${visionBrief.slice(0, 1200)}. The image is for ${input.contract.business.businessName}, a ${input.contract.business.industry} business. No text, logo, or interface elements.`,
+            { kind: 'background', section: 'Homepage hero', width: 1536, height: 1024 },
+            {
+              projectId: input.contract.identity.projectId,
+              businessId: input.contract.identity.businessId,
+              industry: input.contract.business.industry,
+              siteStyle: `Art direction: ${input.contract.design.artDirection.storagePackId}; theme: ${input.contract.design.themePresetId}; experience: ${input.contract.design.resolvedSiteDesignContext.contract.experience}`,
+            },
+          );
+        } catch (error) {
+          console.warn('[UnisonAppBuilder] Contextual hero image unavailable; continuing with verified photo assets.', error);
+        }
+      }
+      const budgetMs = Math.max(1, (input.budgetMs ?? 280_000) - (Date.now() - buildStartedAt));
+      return orchestrateAppBuild({ ...input, generatedHeroImage, budgetMs, gatewayOptions: resolveAppBuilderAIOptions(input.gatewayOptions) }, {
         authorSite,
         runComposer,
         loadContentTypes: dependencies.loadContentTypes ?? ((scope) => listContentTypes(scope)),
@@ -218,6 +242,7 @@ export function createUnisonAppBuilder(
       });
       const assembled = await assembleCanonicalAuthoringRequest({
         task: 'builder_source_edit',
+        importedSource: input.importedSource,
         page: input.page,
         brief: input.brief ?? 'Edit the accepted React project without changing unrelated source.',
         knowledgeQuery: input.knowledgeQuery ?? `${input.instruction} ${input.page.role}`,
@@ -260,6 +285,10 @@ export function createUnisonAppBuilder(
         initialRouteOps: input.initialRouteOps,
         candidateOrigin: input.diagnostics?.length ? 'repair' : 'builder',
         candidateIntent: input.instruction.slice(0, 240),
+        resolveDependencies: input.importedSource ? false : undefined,
+        importAliases: input.importedSource
+          ? readImportedSourceRecords(input.currentFiles as Record<string, string>)?.profile.aliases
+          : undefined,
       });
       const accepted = composer.ok && composer.prepared;
       return {

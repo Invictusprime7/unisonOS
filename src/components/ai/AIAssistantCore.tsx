@@ -49,6 +49,163 @@ import {
   readSiteDiscoveryMessages,
   writeSiteDiscoveryMessages,
 } from "./siteDiscoveryPersistence";
+import { CUSTOMER_NEEDS, PAGE_CHOICES, PRIMARY_GOALS } from "@/components/onboarding/wizard/wizardCatalog";
+import { ART_DIRECTION_FAMILIES, ART_DIRECTION_FAMILY_IDS } from "@/sections/variants/artDirectionFamilies";
+import { getAllIndustries } from "@/platform/core/industryMatrix";
+import { deriveChatLaunchPlan } from "@/services/launch/chatLaunchPlan";
+
+export type AffinitySetupStep = "purpose" | "industry" | "goals" | "questions" | "pages" | "brand" | "aesthetic" | "experience";
+
+const AFFINITY_SETUP_STEPS: readonly AffinitySetupStep[] = ["purpose", "industry", "goals", "questions", "pages", "brand", "aesthetic", "experience"];
+
+const REQUIRED_SETUP_PROMPTS: Record<AffinitySetupStep, string> = {
+  purpose: "Before I finalize your plan, what is the main purpose of this site?",
+  industry: "Which business or industry should Affinity plan for?",
+  goals: "What is the primary outcome you want from the site?",
+  questions: "What should visitors be able to do on the site?",
+  pages: "Which pages should be included? Home is included automatically.",
+  brand: "What should the business or site be called?",
+  aesthetic: "What visual direction should guide the site?",
+  experience: "How much motion or immersive experience do you want?",
+};
+
+function nextRequiredAffinityStep(messages: readonly AIMessage[]): AffinitySetupStep | undefined {
+  const answered = new Set(messages
+    .filter((message) => message.role === "user" && message.setupStepAnswer)
+    .map((message) => message.setupStepAnswer!));
+  const plan = deriveChatLaunchPlan(buildConfirmedSiteBrief([...messages]), { promptFirst: true });
+  const creation = plan.creationInput;
+  const hasInteractionRequest = (creation.requirements ?? []).some((requirement) =>
+    requirement.kind === "interaction" && requirement.origin !== "inferred",
+  );
+  const hasVisualDirection = Boolean(
+    creation.designDirection?.origin === "explicit"
+    || creation.designDirection?.origin === "confirmed"
+    || creation.creativeBrief && Object.values(creation.creativeBrief).some((values) => values.length > 0),
+  );
+
+  if ((!creation.sitePurpose || creation.sitePurpose === "Website purpose described by the visitor") && !answered.has("purpose")) return "purpose";
+  if (!creation.industryHint && !creation.vertical && !answered.has("industry")) return "industry";
+  if (!plan.primaryGoal && !plan.customerNeeds.length && !creation.requestedCapabilities.length && !answered.has("goals")) return "goals";
+  if (!creation.requestedCapabilities.length && !hasInteractionRequest && !answered.has("questions")) return "questions";
+  if (!creation.pages.some((page) => page.route !== "/")
+    && !/\b(?:home[- ]only|single[- ]page|one[- ]page)\b/i.test(creation.originalPrompt)
+    && !answered.has("pages")) return "pages";
+  if (!plan.businessName && !answered.has("brand")) return "brand";
+  if (!hasVisualDirection && !answered.has("aesthetic")) return "aesthetic";
+  if (creation.experienceDirection?.experience.origin === "inferred" && !answered.has("experience")) return "experience";
+  return undefined;
+}
+
+function resolveAffinitySetupStep(data: unknown, content: string): AffinitySetupStep | undefined {
+  const record = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  const nestedMessage = (record.choices as Array<{ message?: Record<string, unknown> }> | undefined)?.[0]?.message;
+  const marker = content.match(/<UNISON_WIZARD_STEP:(purpose|industry|goals|questions|pages|aesthetic|experience|brand)>/i)?.[1];
+  const value = record.wizardStep ?? nestedMessage?.wizardStep ?? marker;
+  if (typeof value === "string" && AFFINITY_SETUP_STEPS.includes(value.toLowerCase() as AffinitySetupStep)) {
+    return value.toLowerCase() as AffinitySetupStep;
+  }
+  const question = stripSiteConfirmationMarker(content).toLowerCase();
+  if (!question.includes("?")) return undefined;
+  if (/\b(?:purpose of (?:this|the) site|what (?:is|should be) the purpose)\b/.test(question)) return "purpose";
+  if (/\b(?:brand|business|company|site) name\b|\bwhat should (?:we|i) call\b/.test(question)) return "brand";
+  if (/\b(?:visitor actions?|what can visitors|visitors? (?:should|can) do|customers? (?:should|can) do)\b/.test(question)) return "questions";
+  if (/\b(?:which|what) pages?\b|\bpages? (?:to include|do you need)\b/.test(question)) return "pages";
+  if (/\b(?:main|primary|site|business) goal\b|\bwhat (?:is|should be) the goal\b|\boutcome matters most\b/.test(question)) return "goals";
+  if (/\b(?:business type|industry|what kind of business|what does your business do)\b/.test(question)) return "industry";
+  if (/\b(?:motion level|immersive experience|experience preference)\b/.test(question)) return "experience";
+  if (/\b(?:visual direction|art direction|visual style|look and feel|style should)\b/.test(question)) return "aesthetic";
+  return undefined;
+}
+
+function AffinityChoiceTurn({
+  step,
+  appearance,
+  onSelect,
+}: {
+  step: AffinitySetupStep;
+  appearance: "default" | "unison";
+  onSelect: (answer: string, step: AffinitySetupStep) => void;
+}) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const multi = step === "questions" || step === "pages";
+  const options = step === "industry"
+    ? getAllIndustries().map((profile) => ({ id: profile.industry, label: profile.name }))
+    : step === "goals"
+      ? PRIMARY_GOALS.map(({ id, label }) => ({ id, label }))
+      : step === "questions"
+        ? CUSTOMER_NEEDS.map(({ id, label }) => ({ id, label }))
+        : step === "pages"
+          ? PAGE_CHOICES.map(({ id, label }) => ({ id, label }))
+          : step === "aesthetic"
+            ? ART_DIRECTION_FAMILY_IDS.map((id) => ({ id, label: ART_DIRECTION_FAMILIES[id].label }))
+            : step === "experience"
+              ? ([['standard', 'Standard'], ['motion-rich', 'Motion rich'], ['immersive', 'Immersive 3D']] as const).map(([id, label]) => ({ id, label }))
+            : [];
+  const title = step === "purpose" ? "Describe the site purpose"
+    : step === "industry" ? "Choose a business type"
+    : step === "goals" ? "Choose a main goal"
+      : step === "questions" ? "Choose visitor actions"
+        : step === "pages" ? "Choose pages"
+          : step === "aesthetic" ? "Choose a visual direction"
+            : step === "experience" ? "Choose an experience level"
+              : "Reply in chat";
+  const [freeText, setFreeText] = useState("");
+  const send = (values: string[]) => {
+    const labels = options.filter((option) => values.includes(option.id)).map((option) => option.label);
+    if (step === "industry") onSelect(`My industry is ${labels[0]}.`, step);
+    else if (step === "goals") onSelect(`My main goal is ${labels[0]}.`, step);
+    else if (step === "questions") onSelect(labels.length ? `Visitors should be able to ${labels.join(", ")}.` : "No additional visitor actions.", step);
+    else if (step === "pages") onSelect(labels.length ? `Please include these pages: ${labels.join(", ")}.` : "Home only; no additional pages.", step);
+    else if (step === "aesthetic") onSelect(`Use a ${labels[0]} visual direction.`, step);
+    else if (step === "experience") onSelect(`I prefer a ${labels[0].toLowerCase()} experience.`, step);
+  };
+
+  return (
+    <div className={cn("mt-3 space-y-2 border-t pt-3", appearance === "unison" ? "border-white/10" : "border-border")} role="group" aria-label={title}>
+      <p className={cn("text-xs font-medium", appearance === "unison" ? "text-cyan-100/70" : "text-muted-foreground")}>{title}</p>
+      {(step === "purpose" || step === "brand") && (
+        <div className="space-y-2">
+          <Textarea
+            value={freeText}
+            onChange={(event) => setFreeText(event.target.value)}
+            placeholder={step === "purpose" ? "What should the site help the business accomplish?" : "Business or site name"}
+            aria-label={step === "purpose" ? "Site purpose" : "Business or site name"}
+            rows={2}
+            className={cn("min-h-16 resize-y", appearance === "unison" && "border-cyan-300/25 bg-white/5 text-white placeholder:text-white/45")}
+          />
+          <Button type="button" size="sm" disabled={!freeText.trim()} onClick={() => onSelect(step === "purpose" ? `The site purpose is ${freeText.trim()}.` : `The business name is ${freeText.trim()}.`, step)} className="h-7 px-2.5 text-xs">Continue</Button>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((option) => {
+          const pressed = selected.includes(option.id);
+          return (
+            <Button
+              key={option.id}
+              type="button"
+              size="sm"
+              variant={pressed ? "default" : "outline"}
+              aria-pressed={multi ? pressed : undefined}
+              onClick={() => multi
+                ? setSelected((current) => current.includes(option.id) ? current.filter((value) => value !== option.id) : [...current, option.id])
+                : send([option.id])}
+              className={cn("h-7 px-2.5 text-xs", appearance === "unison" && !pressed && "border-cyan-300/20 bg-white/5 text-cyan-50 hover:bg-cyan-300/10")}
+            >
+              {option.label}
+            </Button>
+          );
+        })}
+      </div>
+      {multi && (
+        <div className="flex gap-2 pt-1">
+          <Button type="button" size="sm" onClick={() => send(selected)} disabled={!selected.length} className="h-7 px-2.5 text-xs">Send choices</Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => send([])} className="h-7 px-2.5 text-xs">Skip</Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export interface AIMessage {
   role: "user" | "assistant";
@@ -56,6 +213,8 @@ export interface AIMessage {
   timestamp: Date;
   hasCode?: boolean;
   code?: string;
+  wizardStep?: AffinitySetupStep;
+  setupStepAnswer?: AffinitySetupStep;
 }
 
 export interface QuickAction {
@@ -103,6 +262,8 @@ export interface AIAssistantCoreProps {
   showFileUpload?: boolean;
   /** Whether to allow clearing history */
   allowClearHistory?: boolean;
+  /** Clear parent-owned content associated with this conversation. */
+  onClearHistory?: () => void;
   /** Compact mode for smaller spaces */
   compact?: boolean;
   /** Header content override */
@@ -138,6 +299,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   persistenceKey,
   showFileUpload = true,
   allowClearHistory = true,
+  onClearHistory,
   compact = false,
   headerContent,
   hideHeader = false,
@@ -202,8 +364,12 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   };
 
   // Clear conversation
+  const hasClearableHistory = messages.length > 0 || selectionActive || Boolean(conversationContent);
   const handleClearHistory = () => {
     setMessages([]);
+    setDroppedFiles([]);
+    setShowFileZone(false);
+    onClearHistory?.();
     toast({ title: "Conversation cleared" });
   };
 
@@ -221,16 +387,23 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
   };
 
   // Send message
-  const handleSend = async (selectionAnswer?: string) => {
+  const handleSend = async (selectionAnswer?: string, selectionStep?: AffinitySetupStep) => {
     const trimmedInput = (selectionAnswer ?? input).trim();
     if (!trimmedInput && droppedFiles.length === 0) return;
     if (isLoading) return;
     if (onBeforeSend && !onBeforeSend(trimmedInput)) return;
 
+    const previousAssistantMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    const setupStepAnswer = selectionStep
+      ?? (aiMode === "site-discovery" ? previousAssistantMessage?.wizardStep : undefined);
+
     const userMessage: AIMessage = {
       role: "user",
       content: trimmedInput || "Analyze these files",
       timestamp: new Date(),
+      ...(setupStepAnswer ? { setupStepAnswer } : {}),
     };
 
     const localReply = trimmedInput && droppedFiles.length === 0 ? onLocalReply?.(trimmedInput) ?? null : null;
@@ -245,15 +418,28 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
       return;
     }
 
-    const previousAssistantMessage = [...messages]
-      .reverse()
-      .find((message) => message.role === "assistant");
     if (
       onSiteConfirmed
       && isSiteConfirmation(trimmedInput)
       && hasSiteConfirmationRequest(previousAssistantMessage)
     ) {
-      onSiteConfirmed(buildConfirmedSiteBrief([...messages, userMessage]));
+      const confirmedMessages = [...messages, userMessage];
+      const missingStep = nextRequiredAffinityStep(confirmedMessages);
+      if (missingStep) {
+        setMessages((previous) => [
+          ...previous,
+          userMessage,
+          {
+            role: "assistant",
+            content: REQUIRED_SETUP_PROMPTS[missingStep],
+            timestamp: new Date(),
+            wizardStep: missingStep,
+          },
+        ]);
+        setInput("");
+        return;
+      }
+      onSiteConfirmed(buildConfirmedSiteBrief(confirmedMessages));
       setMessages((previous) => [
         ...previous,
         userMessage,
@@ -272,7 +458,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
     setIsLoading(true);
 
     try {
-      let response: { content: string; code?: string } | null = null;
+      let response: { content: string; code?: string; wizardStep?: AffinitySetupStep } | null = null;
 
       // Use custom handler if provided
       if (customSendHandler) {
@@ -320,6 +506,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
         }
 
         const content = data?.choices?.[0]?.message?.content || data?.content || "I couldn't generate a response.";
+        const wizardStep = aiMode === "site-discovery" ? resolveAffinitySetupStep(data, content) : undefined;
         
         // Extract code blocks if present
         const codeMatch = content.match(/```(?:html|jsx|tsx|javascript|typescript)?\n?([\s\S]*?)```/);
@@ -327,6 +514,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
         response = {
           content,
           code: codeMatch ? codeMatch[1].trim() : undefined,
+          wizardStep,
         };
       }
 
@@ -340,6 +528,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
           timestamp: new Date(),
           hasCode: !!response.code,
           code: response.code,
+          wizardStep: response.wizardStep,
         };
 
         setMessages(prev => [...prev, assistantMessage]);
@@ -443,6 +632,20 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
       className
     )}>
       {/* Header */}
+      {hideHeader && allowClearHistory && hasClearableHistory && (
+        <div className="flex justify-end px-3 pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearHistory}
+            aria-label="Clear conversation"
+            className="h-7 gap-1.5 px-2 text-white hover:bg-white/10 hover:text-cyan-100 focus-visible:ring-2 focus-visible:ring-cyan-300"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Clear
+          </Button>
+        </div>
+      )}
       {!hideHeader && (
         <div className="flex items-center justify-between p-3 border-b bg-gradient-to-r from-purple-600 to-blue-600 text-white">
           {headerContent || (
@@ -451,7 +654,7 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
               <span className="font-semibold">Affinity</span>
             </div>
           )}
-          {allowClearHistory && messages.length > 0 && (
+          {allowClearHistory && hasClearableHistory && (
             <Button
               variant="ghost"
               size="icon"
@@ -581,6 +784,9 @@ export const AIAssistantCore: React.FC<AIAssistantCoreProps> = ({
                         )}
                       </Button>
                     </div>
+                  )}
+                  {aiMode === "site-discovery" && message.role === "assistant" && message.wizardStep && index === messages.length - 1 && !hasSiteConfirmationRequest(message) && (
+                    <AffinityChoiceTurn step={message.wizardStep} appearance={appearance} onSelect={(answer, step) => { void handleSend(answer, step); }} />
                   )}
                 </div>
 

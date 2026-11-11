@@ -58,11 +58,27 @@ export function resolveLocalImport(
   fromPath: string,
   spec: string,
   files: Readonly<Record<string, string>>,
+  aliases: Readonly<Record<string, string>> = {},
 ): string | null | undefined {
   let target: string;
-  if (spec.startsWith('@/')) target = '/src/' + spec.slice(2);
-  else if (spec.startsWith('.')) target = `${dirname(fromPath)}/${spec}`;
-  else return null;
+  if (spec.startsWith('.')) {
+    target = `${dirname(fromPath)}/${spec}`;
+  } else if (spec.startsWith('/')) {
+    target = spec;
+  } else {
+    const alias = Object.entries(aliases)
+      .map(([key, value]) => ({ prefix: key.endsWith('*') ? key.slice(0, -1) : key, value }))
+      .filter(({ prefix }) => prefix && (spec === prefix || spec.startsWith(prefix)))
+      .sort((a, b) => b.prefix.length - a.prefix.length)[0];
+    if (alias) {
+      const base = alias.value.replace(/^\.\//, '').replace(/\*$/, '');
+      target = `${base}${spec.slice(alias.prefix.length)}`;
+    } else if (spec.startsWith('@/')) {
+      target = `/src/${spec.slice(2)}`;
+    } else {
+      return null;
+    }
+  }
   const base = normalize(target);
   for (const ext of EXTENSIONS) if (base + ext in files) return base + ext;
   return undefined;
@@ -120,7 +136,7 @@ export function sampleLabelViolations(
 export async function runCandidateGates(build: CandidateBuildResult, affinity?: {
   language?: HomepageVisualLanguage;
   forbiddenImplementations?: Readonly<Record<string, readonly string[] | undefined>>;
-}, pageCheck?: PageCheck): Promise<CandidateGateResult> {
+}, pageCheck?: PageCheck, importAliases?: Readonly<Record<string, string>>): Promise<CandidateGateResult> {
   const files = build.candidateFiles;
   const touched = build.changeSet.fileOps.filter((o) => o.type !== 'delete').map((o) => o.path);
   const deleted = new Set(build.changeSet.fileOps.filter((o) => o.type === 'delete').map((o) => o.path));
@@ -146,7 +162,7 @@ export async function runCandidateGates(build: CandidateBuildResult, affinity?: 
 
   for (const path of touched.filter((p) => CODE_RE.test(p))) {
     for (const spec of localImports(files[path])) {
-      if (resolveLocalImport(path, spec, files) === undefined) {
+      if (resolveLocalImport(path, spec, files, importAliases) === undefined) {
         failures.push({ gate: 'import-graph', path, message: `Import "${spec}" does not resolve.` });
       }
     }
@@ -204,6 +220,7 @@ export async function prepareAICandidate(input: CandidateOperationInput & {
   attempt?: number;
   resolveDependencies?: boolean;
   pageCheck?: PageCheck;
+  importAliases?: Readonly<Record<string, string>>;
   preflight?: (changed: Record<string, string>) => Record<string, string>;
   affinity?: {
     language?: HomepageVisualLanguage;
@@ -258,7 +275,7 @@ export async function prepareAICandidate(input: CandidateOperationInput & {
       resolveDependencies: input.resolveDependencies,
     });
   }
-  const gates = await runCandidateGates(build, input.affinity, input.pageCheck);
+  const gates = await runCandidateGates(build, input.affinity, input.pageCheck, input.importAliases);
   const candidate = build.changeSet;
   const hasChanges = candidate.fileOps.length > 0 || candidate.routeOps.length > 0
     || !!candidate.playgroundOps?.length || !!candidate.bindingOps?.length

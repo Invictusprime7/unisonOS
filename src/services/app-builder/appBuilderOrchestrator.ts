@@ -87,6 +87,8 @@ export async function orchestrateAppBuild(
   const manifestSource = baseFiles['/.unison/design-source-manifest.json'];
   const contractPages = input.contract.design.resolvedSiteDesignContext.contract.pages;
   const roleByPath = new Map(pages.map((page) => [page.filePath, page.role]));
+  const homePagePath = pages.find((page) => page.pageId === input.contract.topology.sitePlan.homePageId)?.filePath
+    ?? pages.find((page) => page.route === '/')?.filePath;
   const sectionImplementations = generation.materialization.manifest.implementations;
   const sharedShellImplementationIds = getAppBuilderSharedShellImplementationIds(baseFiles, sectionImplementations);
   // Fixed blocks first; the page's rules fill the capped runtime channel and
@@ -165,7 +167,8 @@ export async function orchestrateAppBuild(
     messages.push(...(input.pageCheck?.(path, source, files) ?? []));
     const role = roleByPath.get(path);
     if (role) {
-      const requirement = pageStructureRequirement(role, contractPages[role]?.densityBudget?.min, photoUrls);
+      const requiredImageUrl = path === homePagePath ? input.generatedHeroImage?.url : undefined;
+      const requirement = pageStructureRequirement(role, contractPages[role]?.densityBudget?.min, photoUrls, requiredImageUrl);
       messages.push(...findPageStructureIssues(path, source, files ?? { [path]: source }, requirement));
     }
     return messages;
@@ -187,6 +190,7 @@ export async function orchestrateAppBuild(
     designContext: input.contract.design.resolvedSiteDesignContext,
     businessName: input.contract.business.businessName,
     visionBrief: input.contract.business.visionBrief,
+    generatedHeroImage: input.generatedHeroImage,
     files: { ...baseFiles },
     revisionId: input.baseRevisionId,
     signal: input.signal,
@@ -267,10 +271,42 @@ export async function orchestrateAppBuild(
         : input.pageCheck?.(page.filePath, files[page.filePath] ?? '', files) ?? []).map((message) => ({
         severity: 'blocker' as const, code: 'page-contract', path: page.filePath, message,
       })));
+    const requirements = input.contract.business.universalCreation?.requirements ?? [];
+    const requirementCoverage = requirements.length
+      ? buildRequirementCoverage({
+        requirements,
+        files,
+        pages: input.contract.topology.sitePlan.pages.map((page) => ({
+          route: page.route, filePath: page.filePath, title: page.title, visibleInNav: page.visibleInNav,
+        })),
+      })
+      : undefined;
+    const explicitLiveDataRequested = requirements.some((requirement) =>
+      requirement.origin !== 'inferred'
+      && requirement.kind === 'interaction'
+      && (requirement.sampleDataRequired || /\b(?:live|score|scores|stat|stats|statistics|ticker|standings|league|leaderboard|scoreboard|fixtures?|results?)\b/i.test(requirement.text)),
+    );
+    const requirementIssues = (requirementCoverage?.items ?? []).flatMap((item) => {
+      if (item.status !== 'missing' && item.status !== 'partial') return [];
+      const requirement = requirements.find((candidate) => candidate.id === item.id);
+      const explicitlyRequested = requirement?.origin === 'explicit' || requirement?.origin === 'confirmed';
+      const requiredSampleLabel = item.id === 'req:data:labelled-sample' && explicitLiveDataRequested;
+      if (!explicitlyRequested && !requiredSampleLabel) return [];
+      const page = requirement?.pageRoute
+        ? pages.find((candidate) => candidate.route.toLowerCase() === requirement.pageRoute!.toLowerCase())
+        : pages.find((candidate) => candidate.route === '/') ?? pages[0];
+      return [{
+        severity: 'blocker' as const,
+        code: 'requested-requirement-coverage',
+        path: page?.filePath,
+        message: `Owner-requested requirement "${item.text}" is ${item.status}: ${item.evidence.join('; ')}. Implement it in the page source before accepting this candidate.`,
+      }];
+    });
     return {
       ...report,
-      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0 && sectionModelIssues.length === 0 && authorshipIssues.length === 0,
-      issues: [...report.issues, ...bindingIssues, ...sectionModelIssues, ...coverageAdvisories, ...authorshipIssues, ...pageIssues],
+      ok: report.ok && pageIssues.length === 0 && bindingIssues.length === 0 && sectionModelIssues.length === 0
+        && authorshipIssues.length === 0 && requirementIssues.length === 0,
+      issues: [...report.issues, ...bindingIssues, ...sectionModelIssues, ...coverageAdvisories, ...authorshipIssues, ...pageIssues, ...requirementIssues],
     };
   };
   const normalizeCandidateFiles = (files: Record<string, string>) => {

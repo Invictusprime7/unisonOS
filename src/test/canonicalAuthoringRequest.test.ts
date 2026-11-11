@@ -67,15 +67,15 @@ describe('canonical AI authorship request assembly', () => {
     const assembled = await assembleCanonicalAuthoringRequest({
       task: 'site_page_author',
       page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' },
-      brief: 'Sealed page contract. '.repeat(2272),
+      brief: 'Sealed page contract. '.repeat(3600),
       knowledgeQuery: 'home',
       baseFiles: files,
       routes: [],
       registryContext,
     });
 
-    expect(assembled.request.brief.length).toBeGreaterThan(30_000);
-    expect(assembled.request.brief.length).toBeLessThanOrEqual(60_000);
+    expect(assembled.request.brief.length).toBeGreaterThan(60_000);
+    expect(assembled.request.brief.length).toBeLessThanOrEqual(100_000);
     expect(assembled.request.brief).toContain('Sealed page contract.');
     expect(assembled.request.brief).toContain('[source-authority@');
     expect(aiComposerRequestSchema.safeParse(assembled.request).success).toBe(true);
@@ -89,7 +89,7 @@ describe('canonical AI authorship request assembly', () => {
       attachmentContext, runtimeContext: 'Optional site context'.repeat(2000),
     });
     expect(assembled.request.runtimeContext?.startsWith(attachmentContext)).toBe(true);
-    expect(assembled.request.runtimeContext?.length).toBe(12000);
+    expect(assembled.request.runtimeContext?.length).toBe(20_000);
     expect(aiComposerRequestSchema.safeParse(assembled.request).success).toBe(true);
   });
 

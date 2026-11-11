@@ -1243,7 +1243,15 @@ async function commitMutationInner(
   // A reviewed artifact is already a complete candidate, not a page template.
   // Capture before preflight can mutate even the input map in place. Protect
   // hooks, styles, assets and original components as well as registered pages.
-  const reviewedSourceBaseline = reviewedArtifact ? { ...files } : null;
+    // The exact media manifest is derived from these reviewed URLs but is added to the preflight map later.
+  const reviewedSourceBaseline = reviewedArtifact
+    ? {
+      ...files,
+      ...(typeof projectMediaManifestContent === 'string'
+        ? { [PROJECT_MEDIA_MANIFEST]: projectMediaManifestContent }
+        : {}),
+    }
+    : null;
   let projectionRestored = false;
   if (sourcePreservationBaseline) {
     // The projection may refresh compiler-owned files but must not author user
@@ -2483,19 +2491,19 @@ async function finalize(args: {
     PERSIST_IN_FLIGHT.add(breakerKey);
     let rpcResult: { data: unknown; error: { message?: string } | null };
     try {
+      const importedSource = readinessReport.acceptanceProfile === IMPORTED_SOURCE_ACCEPTANCE_PROFILE
+        && isImportedSourceVfs(vfsFiles);
       const siteBundleSnapshotPayload = snapshotForRevision
         ? Object.fromEntries(Object.entries(snapshotForRevision).filter(([key]) => key !== 'vfsFiles'))
         : {};
-      const compactRpcPayload = {
+      const sharedRpcPayload = {
         p_project_id: input.identity.projectId,
         p_business_id: input.identity.businessId,
         p_draft_id: input.identity.draftId,
         p_parent_revision_id: parentRevisionId,
         p_source: input.source,
-        p_status: status,
         p_patch_json: patchForPersistence,
         p_vfs_files: vfsDelta.files,
-        p_site_bundle_snapshot: siteBundleSnapshotPayload,
         p_runtime_manifest: runtimeManifest ?? {},
         p_playground_state: playground ?? {},
         p_readiness_report: readinessReport,
@@ -2504,8 +2512,18 @@ async function finalize(args: {
         p_publish_blockers: publishBlockers,
         p_backend_ops_applied: backendOpsApplied,
         p_vfs_hash: vfsHash,
-        p_active_page_path: input.current.activePagePath ?? null,
       };
+      const rpcName = importedSource
+        ? 'commit_imported_source_revision_v1'
+        : 'commit_canonical_site_revision_v2';
+      const compactRpcPayload = importedSource
+        ? sharedRpcPayload
+        : {
+          ...sharedRpcPayload,
+          p_status: status,
+          p_site_bundle_snapshot: siteBundleSnapshotPayload,
+          p_active_page_path: input.current.activePagePath ?? null,
+        };
       // The commit RPC is idempotent for a given (vfs_hash, parent) pair, so a
       // gateway/statement timeout that did NOT commit can be retried safely.
       // Large sites serialize multi-MB JSONB payloads; a single slow attempt
@@ -2523,8 +2541,8 @@ async function finalize(args: {
           });
         }
         try {
-          rpcResult = await (supabase.rpc as any)('commit_canonical_site_revision_v2', compactRpcPayload);
-          if (rpcResult.error && isLegacyCanonicalVfsContractError(rpcResult.error)) {
+          rpcResult = await (supabase.rpc as any)(rpcName, compactRpcPayload);
+          if (!importedSource && rpcResult.error && isLegacyCanonicalVfsContractError(rpcResult.error)) {
             rpcResult = await (supabase.rpc as any)('commit_canonical_site_revision_v2', {
               ...compactRpcPayload,
               p_vfs_files: vfsFiles,

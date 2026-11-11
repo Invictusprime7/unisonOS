@@ -17,6 +17,7 @@
 
 const MODULE_EXTENSIONS = ['.tsx', '.jsx', '.ts', '.js'] as const;
 const EXPLICIT_MODULE_EXTENSION = /\.(?:tsx?|jsx?|json)$/i;
+const NON_MODULE_IMPORT = /\.(?:css|scss|less|svg|png|jpe?g|webp|gif)(?:[?#].*)?$/i;
 
 /** Files Lane A / Stage 4b owns. Lane B may never overwrite these. */
 const LANE_A_AUTHORITY_PATHS = new Set([
@@ -143,7 +144,7 @@ export function findUnresolvedLocalImports(
     importRegex.lastIndex = 0;
     while ((match = importRegex.exec(content)) !== null) {
       const importPath = match[1];
-      if (/\.(css|scss|less|svg|png|jpe?g|webp|gif)$/i.test(importPath)) continue;
+      if (NON_MODULE_IMPORT.test(importPath)) continue;
       if (resolveRelativeModule(filePath, importPath, existingPaths)) continue;
       unresolved.push({ filePath, importPath });
     }
@@ -182,7 +183,7 @@ export function collectLocalImportClosure(
     let match: RegExpExecArray | null;
     while ((match = importRegex.exec(content)) !== null) {
       const raw = match[1];
-      if (/\.(css|scss|less|svg|png|jpe?g|webp|gif)$/i.test(raw)) continue;
+      if (NON_MODULE_IMPORT.test(raw)) continue;
       const resolved = resolveRelativeModule(filePath, raw.startsWith('@/') ? `/src/${raw.slice(2)}` : raw, existingPaths);
       if (!resolved || seen.has(resolved) || !include(resolved)) continue;
       seen.add(resolved);

@@ -61,6 +61,30 @@ describe('Builder actual import enforcement', () => {
     expect(result.prepared).toBeDefined();
     expect(JSON.parse(result.prepared!.build.candidateFiles['/package.json']).dependencies.unapproved).toBe('latest');
   });
+  it('repairs imported framework files only inside explicit existing source targets', async () => {
+    const importedPath = '/app/routes/index.tsx';
+    const importedRequest: AIComposerRequest = {
+      ...req,
+      importedSource: true,
+      page: { ...req.page, filePath: importedPath },
+      files: { [importedPath]: "import View from './view';\nexport default View;" },
+      sourceTargets: [importedPath],
+    };
+    const generate = vi.fn().mockResolvedValueOnce({
+      content: `<<<EDIT ${importedPath}\n<<<<<<< SEARCH\nimport View from './view';\n=======\nimport View from './View';\n>>>>>>> REPLACE\n>>>END`,
+    });
+
+    const result = await runComposerLane(JSON.stringify(importedRequest), {}, generate);
+
+    expect(result.status).toBe(200);
+    expect(generate).toHaveBeenCalledOnce();
+    const candidate = JSON.parse((await result.json()).content) as AIComposerResponse;
+    expect(candidate.fileOps[0]).toMatchObject({ type: 'replace', path: importedPath });
+    expect(composerProposalViolations(importedRequest, {
+      ...candidate,
+      fileOps: [{ type: 'replace', path: '/.unison-import/provenance.json', content: '{}' }],
+    })).toContain('/.unison-import/provenance.json: outside the imported source repair targets');
+  });
   it('keeps launch on its existing dependency intake path', () => {
     expect(composerProposalViolations({ ...req, task: 'site_page_author' }, response("import X from 'unapproved';"))).toEqual([]);
   });

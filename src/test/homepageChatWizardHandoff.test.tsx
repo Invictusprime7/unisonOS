@@ -42,16 +42,46 @@ it('lets users manually clear the headerless homepage conversation', () => {
   expect(screen.getByText('Tell Affinity what you have in mind.')).toBeInTheDocument();
 });
 
-it('keeps discovery questions as plain chat and ignores legacy guided-step markers', async () => {
+it('renders setup choices beneath discovery questions and submits answers into the same chat', async () => {
   vi.mocked(invokeAIFunction)
-    .mockResolvedValueOnce({ data: { mode: 'site-discovery', content: 'What should visitors do first? <UNISON_WIZARD_STEP:goals>', wizardStep: 'goals' }, error: null } as never);
+    .mockResolvedValueOnce({ data: { mode: 'site-discovery', content: 'What can visitors do on the site?' }, error: null } as never)
+    .mockResolvedValueOnce({ data: { mode: 'site-discovery', content: 'Which pages do you need?' }, error: null } as never);
   render(<AIAssistantCore aiMode="site-discovery" showFileUpload={false} />);
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'I run a salon.' } });
   fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
-  expect(await screen.findByText('What should visitors do first?')).toBeInTheDocument();
+  expect(await screen.findByText('What can visitors do on the site?')).toBeInTheDocument();
   expect(screen.queryByText(/UNISON_WIZARD_STEP/)).not.toBeInTheDocument();
-  expect(screen.getByRole('textbox')).toBeInTheDocument();
+  expect(screen.getByRole('group', { name: 'Choose visitor actions' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Book a service' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Send choices' }));
+  expect(await screen.findByText('Which pages do you need?')).toBeInTheDocument();
+  expect(vi.mocked(invokeAIFunction).mock.calls[1][1].messages).toContainEqual({
+    role: 'user', content: 'Visitors should be able to Book a service.',
+  });
+  expect(screen.getByRole('group', { name: 'Choose pages' })).toBeInTheDocument();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('asks a missing required setup question before revealing the launch plan', () => {
+  const onSiteConfirmed = vi.fn();
+  render(<AIAssistantCore
+    aiMode="site-discovery"
+    appearance="unison"
+    showFileUpload={false}
+    initialMessages={[
+      { role: 'user', content: 'I need a website for my business.', timestamp: new Date(0) },
+      { role: 'assistant', content: `A website for your business. Does this look right? ${SITE_CONFIRMATION_MARKER}`, timestamp: new Date(1) },
+    ]}
+    onSiteConfirmed={onSiteConfirmed}
+  />);
+
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Yes, please!' } });
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', shiftKey: false });
+
+  expect(onSiteConfirmed).not.toHaveBeenCalled();
+  expect(screen.getByText('Before I finalize your plan, what is the main purpose of this site?')).toBeInTheDocument();
+  expect(screen.getByRole('group', { name: 'Describe the site purpose' })).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Site purpose' })).toBeInTheDocument();
 });
 
 it('keeps the discovery conversation when confirmation reveals inline selections', () => {

@@ -56,6 +56,54 @@ describe('1 · Whistle Blower regression', () => {
     { id: 'req:page:fixtures', kind: 'page' as const, text: 'page /fixtures', origin: 'explicit' as const, pageRoute: '/fixtures' },
   ];
 
+  it('does not count inferred suggestions as failed owner requests', () => {
+    const report = buildRequirementCoverage({
+      requirements: [{ id: 'req:interaction:recommended-map', kind: 'interaction', text: 'interactive venue map', origin: 'inferred' }],
+      files: { '/src/pages/Home.tsx': 'export default function Home(){return <main>Welcome</main>}' },
+      pages: [{ route: '/', filePath: '/src/pages/Home.tsx', title: 'Home' }],
+    });
+
+    expect(report.complete).toBe(true);
+    expect(report.items[0]).toMatchObject({ origin: 'inferred', status: 'missing' });
+    expect(report.summary).toContain('1 inferred suggestion');
+  });
+
+  it('uses only page-reachable certified design sources as request evidence', () => {
+    const requirement: CreationRequirement = {
+      id: 'req:interaction:class-schedule',
+      kind: 'interaction',
+      text: 'interactions: interactive class schedules',
+      origin: 'explicit',
+    };
+    const pages = [{ route: '/', filePath: '/src/pages/Home.tsx', title: 'Home' }];
+    const page = `import { ClassSchedule } from '@/unison/design-sources/Services';
+export default function Home(){return <main><ClassSchedule variantId="services:schedule" /></main>}`;
+    const files = {
+      '/src/pages/Home.tsx': page,
+      '/src/unison/design-sources/Services.tsx': 'export const ClassSchedule=()=> <section>Class schedule by weekday</section>;',
+      '/src/unison/design-sources/unused/FacilityMap.tsx': 'export const FacilityMap=()=> <section>Interactive facility map</section>;',
+    };
+
+    const report = buildRequirementCoverage({ requirements: [requirement], files, pages });
+
+    expect(report.items[0]).toMatchObject({ status: 'met', evidence: expect.arrayContaining([expect.stringContaining('/Services.tsx')]) });
+    expect(report.items[0].evidence.join(' ')).not.toContain('FacilityMap');
+    expect(report.promotionCandidates).toEqual([]);
+  });
+
+  it('does not require intentionally hidden requested routes in navigation', () => {
+    const report = buildRequirementCoverage({
+      requirements: [{ id: 'req:page:checkout', kind: 'page', text: 'page /checkout', origin: 'explicit', pageRoute: '/checkout' }],
+      files: {
+        '/src/App.tsx': 'const checkoutRoute = "/checkout";',
+        '/src/pages/Checkout.tsx': 'export default function Checkout(){return <main>Checkout</main>}',
+      },
+      pages: [{ route: '/checkout', filePath: '/src/pages/Checkout.tsx', title: 'Checkout', visibleInNav: false }],
+    });
+
+    expect(report.items[0]).toMatchObject({ status: 'met', evidence: expect.arrayContaining(['intentionally hidden from navigation']) });
+  });
+
   it('passes as complete only with original, labelled, routed and navigable source', () => {
     const files = {
       '/src/App.tsx': router(['Fixtures', 'Blog', 'Live', 'MatchCentrePage', 'MatchReports']),
@@ -113,6 +161,18 @@ describe('3 · Salon booking', () => {
     expect(notAsked.requestedCapabilities).not.toContain('booking');
     const report = buildRequirementCoverage({ requirements: asked.requirements ?? [], files: {}, pages: [] });
     expect(report.items.find((item) => item.id === 'req:capability:booking')?.status).toBe('unverified');
+  });
+});
+
+describe('fitness interaction requests', () => {
+  it('preserves multiword schedule and facility interactions as separate requirements', () => {
+    const creation = buildPromptLaunchInput('Create a fitness website with interactive class schedules and an interactive facility map.').input.universalCreation!;
+    const interactions = (creation.requirements ?? []).filter((requirement) => requirement.kind === 'interaction').map((requirement) => requirement.text.toLowerCase());
+
+    expect(interactions).toEqual(expect.arrayContaining([
+      expect.stringContaining('interactive class schedules'),
+      expect.stringContaining('interactive facility map'),
+    ]));
   });
 });
 

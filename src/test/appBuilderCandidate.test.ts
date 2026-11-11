@@ -145,6 +145,29 @@ function contactCrmContract(): AppBuildContract {
 const contactCrmPage = '<section data-ut-component-slug="contact-form"><form data-intent-form="contact.submit"><input name="name" required /><input name="email" required /><textarea name="message" required /><button type="submit" data-ut-cta="cta.form-submit">Send</button></form></section>';
 
 describe('App Builder candidate closure', () => {
+  it('rejects duplicate registered component instances and same-intent forms on one page', async () => {
+    const componentContract = contactCrmContract();
+    const duplicateHost = `<main>${contactCrmPage}${contactCrmPage}</main>`;
+    const componentReport = await validateAppBuildCandidate({
+      contract: componentContract,
+      files: { ...initialFiles, '/src/pages/Contact.tsx': duplicateHost },
+      initialFiles,
+    });
+    expect(componentReport.issues).toContainEqual(expect.objectContaining({
+      code: 'registered-component-duplicate-instance', path: '/src/pages/Contact.tsx',
+    }));
+
+    const duplicateForm = contactCrmPage.replace('</form>', '</form><form data-intent-form="contact.submit"><input name="name" /><input name="email" /><textarea name="message"></textarea></form>');
+    const formReport = await validateAppBuildCandidate({
+      contract: componentContract,
+      files: { ...initialFiles, '/src/pages/Contact.tsx': duplicateForm },
+      initialFiles,
+    });
+    expect(formReport.issues).toContainEqual(expect.objectContaining({
+      code: 'registered-component-duplicate-form', path: '/src/pages/Contact.tsx',
+    }));
+  });
+
   it('repairs selected contact controls deterministically through JSX handler spans', async () => {
     const value = contract();
     value.business.capabilities = ['contact'];

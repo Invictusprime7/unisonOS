@@ -72,6 +72,25 @@ export default function Home() { return <><SiteNav /><main><CinematicHero /><Ser
     expect(findPageStructureIssues('/src/pages/Home.tsx', files['/src/pages/Home.tsx'], files, pageStructureRequirement('home', 3))).toEqual([]);
   });
 
+  it('requires the generated homepage image in the rendered page tree', () => {
+    const generatedUrl = 'https://storage.example/generated/hero.png';
+    const page = `import { SiteNav } from '../project-components/site/SiteNav';
+import { SiteFooter } from '../project-components/site/SiteFooter';
+import { Hero } from '../project-components/home/Hero';
+export default function Home(){return <><SiteNav/><main><Hero/><section>Services</section><section>Book</section></main><SiteFooter/></>}`;
+    const files = {
+      '/src/pages/Home.tsx': page,
+      '/src/project-components/site/SiteNav.tsx': 'export const SiteNav = () => <nav />;',
+      '/src/project-components/site/SiteFooter.tsx': 'export const SiteFooter = () => <footer />;',
+      '/src/project-components/home/Hero.tsx': 'export const Hero = () => <img src="https://images.unsplash.com/photo-1" alt="Spa" />;',
+    };
+    const requirement = pageStructureRequirement('home', 3, undefined, generatedUrl);
+
+    expect(findPageStructureIssues('/src/pages/Home.tsx', page, files, requirement).join(' ')).toContain(generatedUrl);
+    files['/src/project-components/home/Hero.tsx'] = `export const Hero = () => <img src="${generatedUrl}" alt="Spa" />;`;
+    expect(findPageStructureIssues('/src/pages/Home.tsx', page, files, requirement).some((issue) => issue.includes(generatedUrl))).toBe(false);
+  });
+
   it('accepts every page of a real previously generated site', () => {
     const dump = '/tmp/probe/draft.json';
     if (!existsSync(dump)) return;

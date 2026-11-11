@@ -69,6 +69,25 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
   const preview = useMemo(() => {
     try { return buildPromptLaunchInput(brief, { prefill }); } catch { return null; }
   }, [brief, prefill]);
+  const creation = preview?.plan.creationInput;
+  const designSelection = preview?.input.designSelection;
+  const planPages = creation?.pages ?? [];
+  const interactionRequirements = (creation?.requirements ?? [])
+    .filter((requirement) => requirement.kind === 'interaction')
+    .map((requirement) => requirement.text.replace(/^interactions?:\s*/i, ''));
+  const requestedActions = [...new Set([
+    ...interactionRequirements,
+    ...(preview?.plan.customerNeeds ?? []).map((need) => need.replace(/[_-]+/g, ' ')),
+  ])];
+  const sectionPins = Object.entries(designSelection?.sectionPins ?? {}).map(([section, variant]) =>
+    `${section.replace(/[_-]+/g, ' ')}: ${variant.split(':').at(-1)?.replace(/-/g, ' ') ?? variant}`,
+  );
+  const experience = designSelection?.experience ?? creation?.experienceDirection?.experience.value ?? 'standard';
+  const experienceLabel = experience === 'immersive' ? 'Immersive 3D' : experience === 'motion-rich' ? 'Motion rich' : 'Standard';
+  const artDirection = designSelection?.artDirectionPackId
+    ?? creation?.experienceDirection?.artDirection.packName
+    ?? creation?.designDirection?.familyId
+    ?? 'Auto-matched';
   const [launching, setLaunching] = useState(false);
   const [mode, setMode] = useState<AppBuildGenerationMode>('ai');
   const [status, setStatus] = useState('');
@@ -219,22 +238,63 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
         <p className="text-xs text-muted-foreground">Affinity builds from your conversation. Everything below is a starting point you can change later by chatting.</p>
       </div>
       {preview ? (
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <div className="space-y-1">
-            <dt className="text-xs text-muted-foreground">Working name</dt>
-            <dd className="font-medium">{preview.input.businessName}</dd>
-          </div>
-          <div className="space-y-1">
-            <dt className="text-xs text-muted-foreground">Pages</dt>
-            <dd className="font-medium">{preview.plan.creationInput.pages.map((page) => page.title).join(', ') || 'Home'}</dd>
-          </div>
-          {preview.plan.creationInput.requestedCapabilities.length > 0 && (
-            <div className="space-y-1 sm:col-span-2">
-              <dt className="text-xs text-muted-foreground">Requested features</dt>
-              <dd className="font-medium">{preview.plan.creationInput.requestedCapabilities.join(', ')}</dd>
+        <section aria-label="Affinity launch plan" data-testid="prompt-launch-plan" className="space-y-3 rounded-md border border-border bg-background/50 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold">Affinity launch plan</h3>
+              <p className="mt-1 text-xs text-muted-foreground">The confirmed conversation, page requests, and design choices passed to generation.</p>
             </div>
-          )}
-        </dl>
+            <span className="shrink-0 rounded-sm border border-border px-2 py-1 text-[11px] text-muted-foreground">UniversalCreation v1</span>
+          </div>
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">Site purpose</dt>
+              <dd className="font-medium">{creation?.sitePurpose || creation?.subject || 'Website from your prompt'}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">Business & vertical</dt>
+              <dd className="font-medium">{preview.input.businessName} · {creation?.industryHint ?? creation?.vertical?.packId ?? 'Prompt-led'}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">Visitor actions</dt>
+              <dd className="font-medium">{requestedActions.join(', ') || 'Content and navigation'}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">Requested capabilities</dt>
+              <dd className="font-medium">{creation?.requestedCapabilities.join(', ') || 'No backend capability requested'}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">Art direction</dt>
+              <dd className="font-medium">{preview.input.theme.label} · {artDirection}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">Motion & experience</dt>
+              <dd className="font-medium">{experienceLabel}{creation?.creativeBrief?.motion.length ? ` · ${creation.creativeBrief.motion.join(', ')}` : ''}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">Section treatments</dt>
+              <dd className="font-medium">{sectionPins.join(', ') || 'Automatic, certified variants'}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">UI Foundation</dt>
+              <dd className="font-medium">Certified Unison primitives · {designSelection?.mode ?? 'auto'} resolution</dd>
+            </div>
+          </dl>
+          <div className="border-t border-border pt-3">
+            <h4 className="text-xs font-medium text-muted-foreground">Requested pages</h4>
+            <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
+              {planPages.map((page) => (
+                <li key={page.route} className="border-l-2 border-primary/40 pl-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+                    <span className="font-medium">{page.title}</span>
+                    <code className="text-[11px] text-muted-foreground">{page.route}</code>
+                  </div>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{page.purpose}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
       ) : (
         <p role="alert" className="text-sm text-destructive">Describe the site you want to create in the chat first.</p>
       )}

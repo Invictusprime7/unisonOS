@@ -16,6 +16,7 @@ import { analyzeImportedProject, type ImportCompatibilityProfile } from './impor
 import { buildImportedSourceVfs } from './importedSourceAcceptance';
 import { storeImportedAssets } from './importAssetStorage';
 import { IMPORTED_SOURCE_ACCEPTANCE_PROFILE, type ImportProvenanceRecord } from './importedSourceRecords';
+import { repairImportedSourceImports } from './repairImportedSourceImports';
 
 export type ExternalImportInput =
   | { kind: 'zip'; file: File }
@@ -33,9 +34,10 @@ export interface ExternalImportResult {
   fileCount: number;
   assetCount: number;
   excludedCount: number;
+  repair?: { repairedFiles: string[]; resolvedImports: number; unresolvedImports: number; error?: string };
 }
 
-export type ExternalImportStage = 'reading' | 'checking' | 'saving-assets' | 'saving-version';
+export type ExternalImportStage = 'reading' | 'checking' | 'saving-assets' | 'saving-version' | 'resolving-imports';
 
 function projectNameFrom(intake: IntakeResult, profile: ImportCompatibilityProfile): string {
   const fromBrief = profile.unisonBrief?.projectName;
@@ -142,17 +144,35 @@ export async function importExternalProject(
   });
   if (!commit.persistedRevisionId) throw new Error('The imported project could not be saved as a version.');
 
+  stage('resolving-imports');
+  const repair = await repairImportedSourceImports({
+    userId: user.id,
+    businessId,
+    projectId: draft.project_id,
+    draftId: draft.id,
+    revisionId: commit.persistedRevisionId,
+    projectName,
+    profile,
+    files: commit.vfsFiles,
+  });
+
   return {
     projectId: draft.project_id,
     draftId: draft.id,
     businessId,
-    revisionId: commit.persistedRevisionId,
+    revisionId: repair.revisionId,
     projectName,
-    vfsFiles: commit.vfsFiles,
+    vfsFiles: repair.files,
     profile,
     provenance,
     fileCount: intake.manifest.files.length,
     assetCount: assets.assets.length,
     excludedCount: intake.manifest.excluded.length,
+    repair: {
+      repairedFiles: repair.repairedFiles,
+      resolvedImports: repair.resolvedImports,
+      unresolvedImports: repair.unresolvedImports,
+      ...(repair.error ? { error: repair.error } : {}),
+    },
   };
 }

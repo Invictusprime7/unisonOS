@@ -126,6 +126,63 @@ function makeInput(): BuildAppBuildContractInput {
 }
 
 describe('AppBuildContract', () => {
+  it('carries finalized launch selections inside UniversalCreation for App Builder', () => {
+    const input = makeInput();
+    input.universalCreation = {
+      mode: 'guided',
+      originalPrompt: 'Create a salon site that helps visitors book.',
+      sitePurpose: 'Introduce the studio and book appointments',
+      subject: 'Northstar Studio',
+      pages: [{ route: '/', title: 'Home', purpose: 'Introduce the studio.', suggestedRole: 'home' }],
+      visualRequirements: ['warm editorial photography'],
+      requestedCapabilities: ['booking'],
+    };
+
+    const contract = buildAppBuildContract(input);
+    const finalized = contract.business.universalCreation?.finalizedSelections;
+    expect(finalized).toMatchObject({
+      version: 1,
+      industry: 'salon',
+      businessName: 'Northstar Studio',
+      systemId: 'appointments',
+      goals: ['book_appointments', 'build_trust'],
+      visitorActions: ['booking.create', 'nav.goto'],
+      requestedCapabilities: ['booking'],
+      authorizedCapabilities: ['booking'],
+      pages: expect.arrayContaining([
+        expect.objectContaining({ route: '/', title: 'Home', suggestedRole: 'home' }),
+        expect.objectContaining({ route: '/contact', title: 'Contact', suggestedRole: 'contact' }),
+      ]),
+      design: expect.objectContaining({
+        themePresetId: 'editorial',
+        artDirectionPackId: input.artDirection.storagePackId,
+      }),
+      uiFoundation: expect.objectContaining({
+        manifestPath: '/.unison/ui-manifest.json',
+        importRoot: '@/unison/ui',
+        runtimeProfile: 'react-18',
+        approvedExperienceCapabilities: ['motion.core'],
+      }),
+    });
+    const generation = buildAppBuilderGenerationContext(contract);
+    expect(generation.runtimeContext).toContain('FINALIZED LAUNCH PLAN');
+    expect(generation.runtimeContextForPage('page-home')).toContain('PAGE-SPECIFIC OWNER INTENT (required): Home; route /; role home.');
+    expect(generation.runtimeContextForPage('page-home')).toContain('Page purpose: Introduce the studio.');
+
+    const tampered = {
+      ...contract,
+      business: {
+        ...contract.business,
+        universalCreation: {
+          ...contract.business.universalCreation!,
+          finalizedSelections: { ...finalized!, businessName: 'Another Studio' },
+        },
+      },
+    };
+    expect(() => parseAppBuildContract(JSON.stringify(tampered)))
+      .toThrow('UniversalCreation finalized selections drift from the canonical AppBuildContract');
+  });
+
   it('verifies every approved canonical component against its runtime registry contract', () => {
     const issues = validateCanonicalComponentRegistry();
     expect(issues).toEqual([]);
@@ -175,6 +232,26 @@ describe('AppBuildContract', () => {
     }];
 
     expect(() => buildAppBuildContract(input)).toThrow('component future-widget is not registered');
+  });
+
+  it('rejects duplicate canonical page routes before App Builder generation', () => {
+    const contract = buildAppBuildContract(makeInput());
+    const tampered = {
+      ...contract,
+      topology: {
+        ...contract.topology,
+        sitePlan: {
+          ...contract.topology.sitePlan,
+          pages: [...contract.topology.sitePlan.pages, {
+            ...contract.topology.sitePlan.pages[1],
+            id: 'page-contact-duplicate',
+            filePath: '/src/pages/ContactDuplicate.tsx',
+          }],
+        },
+      },
+    };
+    expect(() => parseAppBuildContract(JSON.stringify(tampered)))
+      .toThrow('AppBuildContract topology contains duplicate page ids, routes, or source files');
   });
 
   it('keeps canonical binding and component IDs together in page-scoped context', () => {

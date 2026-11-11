@@ -82,6 +82,8 @@ export const STATIC_HTML_ADAPTER_INFO: ImportCompatibilityProfile['previewAdapte
   requires: [],
 };
 
+export const ISOLATED_SOURCE_PREVIEW_ADAPTER = 'isolated-source-worker-v1';
+
 /**
  * Live adapter decision for an imported revision. Imports saved before an
  * adapter existed keep their frozen profile record, so the decision is made
@@ -89,6 +91,14 @@ export const STATIC_HTML_ADAPTER_INFO: ImportCompatibilityProfile['previewAdapte
  */
 export function resolveImportPreviewAdapter(profile: ImportCompatibilityProfile, files: Record<string, string>): ImportCompatibilityProfile['previewAdapter'] {
   if (profile.framework === 'static-html' && Object.keys(files).some((p) => /\.html?$/i.test(p) && !p.startsWith('/.unison-import/'))) return STATIC_HTML_ADAPTER_INFO;
+  if (profile.scripts.dev || profile.scripts.start) {
+    return {
+      status: 'unavailable',
+      adapter: ISOLATED_SOURCE_PREVIEW_ADAPTER,
+      reason: `This ${profile.framework} project can preview only in an isolated source runtime. The preview worker is not configured in this environment, so Unison will not substitute or rewrite the imported design.`,
+      requires: [...new Set([...profile.previewAdapter.requires, 'isolated preview worker'])],
+    };
+  }
   return profile.previewAdapter;
 }
 

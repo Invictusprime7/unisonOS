@@ -39,6 +39,7 @@ import { getGlobalAITerminalBridge } from '@/services/aiTerminalBridge';
 import { buildPreviewArtifactsAsync } from '@/utils/previewArtifacts';
 import { isImportedSourceVfs, readImportedSourceRecords } from '@/services/import/importedSourceRecords';
 import { ImportedSourcePreview } from '@/components/import/ImportedSourcePreview';
+import type { ImportedPreviewSession } from '@/services/import/importedPreviewSession';
 import { PreviewPipelineError, isPreviewPipelineError } from '@/services/previewPipelineError';
 import { createVfsHandoffSignature } from '@/services/vfsHandoffSignature';
 import { PreviewRuntimeError } from '@/components/PreviewRuntimeError';
@@ -452,6 +453,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
   const externalPreviewChannelRef = useRef<BroadcastChannel | null>(null);
   const externalPreviewFilesRef = useRef(files);
+  const importedPreviewSessionRef = useRef<ImportedPreviewSession | null>(null);
   externalPreviewFilesRef.current = files;
 
   useEffect(() => {
@@ -1371,6 +1373,10 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   }, []);
   
   const handleOpenInNewTab = useCallback(() => {
+    if (importedSourceRecords && importedPreviewSessionRef.current) {
+      window.open(importedPreviewSessionRef.current.iframeUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
     if (backend === 'docker' && dockerService.session?.iframeUrl) {
       window.open(dockerService.session.iframeUrl, '_blank', 'noopener,noreferrer');
       return;
@@ -1393,7 +1399,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       console.error('[VFSPreview] openInNewTab failed:', err);
       onError?.(err instanceof Error ? err.message : 'Failed to open preview in new tab.');
     }
-  }, [backend, dockerService.session, files, onError]);
+  }, [backend, dockerService.session, files, importedSourceRecords, onError]);
 
   // Navigate preview to a hash route via postMessage.
   //
@@ -1478,7 +1484,15 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   // isolated frame; without one the preview reports its real state instead of
   // rendering a transformed design.
   if (importedSourceRecords) {
-    return <ImportedSourcePreview records={importedSourceRecords} files={files} className={className} />;
+    return (
+      <ImportedSourcePreview
+        records={importedSourceRecords}
+        files={files}
+        projectId={builderSession.runtimeContext?.projectId || builderSession.projectId || undefined}
+        onSessionChange={(session) => { importedPreviewSessionRef.current = session; }}
+        className={className}
+      />
+    );
   }
 
   if (pipelineError) {

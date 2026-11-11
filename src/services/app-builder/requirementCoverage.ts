@@ -5,10 +5,12 @@
  * source: pages requested vs routed and visible in navigation, original
  * experiences requested vs implemented in site-local source, motion and
  * imagery evidence, section provenance and sample-data labelling. Read-only
- * evidence: it never edits source and never blocks a save, but a build with
- * missing requirements is never reported as fully satisfied.
+ * evidence: it never edits source. The App Builder closure gate blocks and
+ * repairs unmet explicit/confirmed requirements while inferred suggestions
+ * remain advisory.
  */
 import type { CreationRequirement } from '@/platform/core/universalCreation';
+import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 
 export type CoverageStatus = 'met' | 'partial' | 'missing' | 'unverified';
 
@@ -16,6 +18,7 @@ export interface RequirementCoverageItem {
   id: string;
   kind: CreationRequirement['kind'] | 'data';
   text: string;
+  origin: CreationRequirement['origin'] | 'derived';
   status: CoverageStatus;
   evidence: string[];
 }
@@ -23,7 +26,7 @@ export interface RequirementCoverageItem {
 export interface RequirementCoverageReport {
   items: RequirementCoverageItem[];
   counts: Record<CoverageStatus, number>;
-  /** True only when every verifiable requirement is fully met. */
+  /** True when every verifiable owner-requested requirement is fully met. */
   complete: boolean;
   pages: { requested: string[]; generated: string[]; routed: string[]; inNavigation: string[]; missing: string[] };
   provenance: { certifiedSections: number; customSections: number; authoredModules: string[]; adaptedModules: string[] };
@@ -45,6 +48,7 @@ export interface CoveragePage {
 }
 
 const AUTHORED = /^\/src\/(?:project-components|components\/generated)\//;
+const DESIGN_SOURCE = /^\/src\/unison\/design-sources\//;
 const CHROME = /^\/src\/project-components\/site\/|\/Site(?:Nav|Navbar|Footer)\.[jt]sx?$/;
 const DERIVED = /@unison-derived-from\b|@unison-adapted\b/;
 const LIVE_DATA = /\b(?:live|score|scores|stat|stats|statistics|ticker|standings|league|leaderboard|scoreboard|fixtures?|results?)\b/i;
@@ -126,7 +130,7 @@ function experienceCoverage(
 ): RequirementCoverageItem {
   const design = requirement.design;
   const label = requirement.evidenceTerms?.[0] ? `${design?.family ?? 'design'}: "${requirement.evidenceTerms[0]}"` : requirement.text.split(' — ')[0];
-  const base = { id: requirement.id, kind: requirement.kind, text: label };
+  const base = { id: requirement.id, kind: requirement.kind, text: label, origin: requirement.origin };
   if (!design) return { ...base, status: 'unverified', evidence: ['no design target recorded'] };
   if (design.kind === 'art-direction') {
     const sealed = sealedPackId(context.files);
@@ -158,7 +162,8 @@ function experienceCoverage(
     || (attribute(tag, 'data-ut-variant') ?? '').startsWith(`${family}:`));
   const exact = familyTags.find(({ tag }) => ids.includes(attribute(tag, 'data-ut-variant') ?? ''));
   const derived = context.adaptedModules.find((path) => ids.some((id) => (context.files[path] ?? '').includes(`@unison-derived-from ${id}`)));
-  const original = context.moduleWords.filter((entry) => matches(entry.words) && !context.adaptedModules.includes(entry.path)).map((entry) => entry.path);
+  const original = context.moduleWords.filter((entry) => AUTHORED.test(entry.path)
+    && matches(entry.words) && !context.adaptedModules.includes(entry.path)).map((entry) => entry.path);
   const custom = tags.find(({ tag }) => (attribute(tag, 'data-ut-variant') ?? '').startsWith('custom:')
     && (matches(wordsOf(tag)) || attribute(tag, 'data-ut-section-type') === family));
   if (design.kind === 'original') {
@@ -188,13 +193,22 @@ export function buildRequirementCoverage(input: {
   const { files, pages } = input;
   const router = files['/src/App.tsx'] ?? '';
   const authoredModules = Object.keys(files).filter((path) => AUTHORED.test(path) && !CHROME.test(path) && /\.[jt]sx?$/.test(path)).sort();
-  const adaptedModules = authoredModules.filter((path) => DERIVED.test(files[path] ?? ''));
+  const reachableModules = [...new Set(
+    pages.flatMap((page) => collectLocalImportClosure(
+      files,
+      page.filePath,
+      (path) => AUTHORED.test(path) || DESIGN_SOURCE.test(path),
+    ).filter((path) => path !== page.filePath && (AUTHORED.test(path) || DESIGN_SOURCE.test(path))),
+    ),
+  )].sort();
+  const siteLocalModules = reachableModules.filter((path) => AUTHORED.test(path) && !CHROME.test(path));
+  const adaptedModules = siteLocalModules.filter((path) => DERIVED.test(files[path] ?? ''));
   const chromeSources = Object.entries(files).filter(([path]) => CHROME.test(path) || /\/(?:Nav|Navbar|Header|Footer)\.[jt]sx?$/.test(path)).map(([, source]) => source);
   const pageSources = pages.map((page) => files[page.filePath] ?? '');
   const navSources = [...chromeSources, ...pageSources];
-  const moduleWords = authoredModules.map((path) => ({ path, words: wordsOf(`${path} ${files[path]}`) }));
+  const moduleWords = reachableModules.map((path) => ({ path, words: wordsOf(`${path} ${files[path]}`) }));
   const pageWords = pages.map((page) => ({ path: page.filePath, words: wordsOf(files[page.filePath] ?? '') }));
-  const allSource = [...pageSources, ...authoredModules.map((path) => files[path] ?? '')].join('\n');
+  const allSource = [...pageSources, ...reachableModules.map((path) => files[path] ?? '')].join('\n');
 
   let certifiedSections = 0;
   let customSections = 0;
@@ -213,7 +227,7 @@ export function buildRequirementCoverage(input: {
   const promotionCandidates: RequirementCoverageReport['promotionCandidates'] = [];
   const requestedPages: string[] = [];
   for (const requirement of input.requirements) {
-    const base = { id: requirement.id, kind: requirement.kind, text: requirement.text };
+    const base = { id: requirement.id, kind: requirement.kind, text: requirement.text, origin: requirement.origin };
     switch (requirement.kind) {
       case 'page': {
         const route = requirement.pageRoute ?? '';
@@ -222,9 +236,10 @@ export function buildRequirementCoverage(input: {
         const exists = Boolean(page && generated.includes(page.route));
         const isRouted = Boolean(page && routed.includes(page.route));
         const visible = Boolean(page && inNavigation.includes(page.route));
+        const navigationRequired = page?.visibleInNav !== false;
         items.push({ ...base,
-          status: exists && isRouted && visible ? 'met' : exists ? 'partial' : 'missing',
-          evidence: [exists ? `${page!.filePath} authored` : `no page for ${route}`, ...(exists ? [isRouted ? 'routed' : 'not routed', visible ? 'in navigation' : 'not linked from navigation'] : [])] });
+          status: exists && isRouted && (!navigationRequired || visible) ? 'met' : exists ? 'partial' : 'missing',
+          evidence: [exists ? `${page!.filePath} authored` : `no page for ${route}`, ...(exists ? [isRouted ? 'routed' : 'not routed', !navigationRequired ? 'intentionally hidden from navigation' : visible ? 'in navigation' : 'not linked from navigation'] : [])] });
         break;
       }
       case 'navigation': {
@@ -241,7 +256,9 @@ export function buildRequirementCoverage(input: {
         const inPage = pageWords.filter((entry) => matches(entry.words)).map((entry) => entry.path);
         const customOnPage = pageSources.some((source) => [...source.matchAll(SECTION_VARIANT)]
           .some((match) => match[1].startsWith('custom:') && matches(wordsOf(match[0] + match[1]))));
-        for (const path of inModule) if (!adaptedModules.includes(path)) promotionCandidates.push({ requirementId: requirement.id, modulePath: path });
+        for (const path of inModule) {
+          if (siteLocalModules.includes(path) && !adaptedModules.includes(path)) promotionCandidates.push({ requirementId: requirement.id, modulePath: path });
+        }
         items.push({ ...base,
           status: inModule.length || customOnPage ? 'met' : inPage.length ? 'partial' : 'missing',
           evidence: inModule.length ? inModule.map((path) => `implemented in ${path}`)
@@ -282,21 +299,27 @@ export function buildRequirementCoverage(input: {
       .flatMap((item) => item.evidence.map((line) => line.replace(/^implemented in /, '')))
       .filter((path) => path in files);
     const labelled = implementing.length > 0 && implementing.every((path) => SAMPLE_LABEL.test(files[path] ?? ''));
-    items.push({ id: 'req:data:labelled-sample', kind: 'data', text: 'live data is real or clearly labelled as sample data',
+    items.push({ id: 'req:data:labelled-sample', kind: 'data', text: 'live data is real or clearly labelled as sample data', origin: 'derived',
       status: implementing.length === 0 ? 'unverified' : labelled ? 'met' : 'missing',
       evidence: [implementing.length === 0 ? 'no live-data component yet' : labelled ? 'sample data is labelled' : 'live-looking data without a sample label'] });
   }
 
   const counts: Record<CoverageStatus, number> = { met: 0, partial: 0, missing: 0, unverified: 0 };
   for (const item of items) counts[item.status] += 1;
-  const verifiable = items.filter((item) => item.status !== 'unverified');
+  const ownerRequests = items.filter((item) => item.origin === 'explicit' || item.origin === 'confirmed');
+  const verifiable = ownerRequests.filter((item) => item.status !== 'unverified');
   const complete = verifiable.every((item) => item.status === 'met');
   const open = items.filter((item) => item.status === 'missing' || item.status === 'partial');
+  const ownerOpen = open.filter((item) => item.origin === 'explicit' || item.origin === 'confirmed');
+  const inferredOpen = open.filter((item) => item.origin === 'inferred');
+  const unverifiedOwnerRequests = ownerRequests.filter((item) => item.status === 'unverified').length;
   const summary = !items.length
     ? 'No explicit requirements to check.'
+    : !verifiable.length
+      ? `No owner-requested checkable requirements${inferredOpen.length ? `; ${inferredOpen.length} inferred suggestion(s) remain open` : ''}.`
     : complete
-      ? `All ${verifiable.length} checkable requests are built${counts.unverified ? `; ${counts.unverified} need a visual check in Preview` : ''}.`
-      : `${counts.met} of ${verifiable.length} checkable requests are fully built; still open: ${open.slice(0, 4).map((item) => item.text.replace(/^[a-z]+:\s*/, '')).join('; ')}${open.length > 4 ? '…' : ''}.`;
+      ? `All ${verifiable.length} owner-requested checkable requests are built${unverifiedOwnerRequests ? `; ${unverifiedOwnerRequests} need a visual check in Preview` : ''}${inferredOpen.length ? `; ${inferredOpen.length} inferred suggestion(s) remain open` : ''}.`
+      : `${verifiable.filter((item) => item.status === 'met').length} of ${verifiable.length} owner-requested checkable requests are fully built; still open: ${ownerOpen.slice(0, 4).map((item) => item.text.replace(/^[a-z]+:\s*/, '')).join('; ')}${ownerOpen.length > 4 ? '…' : ''}${inferredOpen.length ? `; ${inferredOpen.length} inferred suggestion(s) also remain open` : ''}.`;
 
   return {
     items,

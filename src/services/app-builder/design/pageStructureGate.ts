@@ -16,6 +16,7 @@ export interface PageStructureRequirement {
   imageLed: boolean;
   /** Verified photo URLs the author may use (named in the repair message). */
   photoUrls?: readonly string[];
+  requiredImageUrl?: string;
 }
 
 const IMAGE_LED_ROLES = new Set(['home', 'gallery', 'work', 'portfolio', 'about', 'shop', 'products', 'collection', 'menu']);
@@ -61,13 +62,14 @@ export function verifiedPhotosFor(industry: string | undefined, count = 6, verti
   return [...new Set(merged)].slice(0, count).map((url) => url.replace(/\?.*$/, '?w=1600&q=80'));
 }
 
-export function pageStructureRequirement(role: string, contractMinSections?: number, photoUrls?: readonly string[]): PageStructureRequirement {
+export function pageStructureRequirement(role: string, contractMinSections?: number, photoUrls?: readonly string[], requiredImageUrl?: string): PageStructureRequirement {
   const floor = role === 'home' ? 3 : 2;
   return {
     role,
     minSections: Math.max(floor, Math.min(contractMinSections ?? floor, 4)),
     imageLed: IMAGE_LED_ROLES.has(role),
     photoUrls,
+    requiredImageUrl,
   };
 }
 
@@ -218,6 +220,10 @@ export function findPageStructureIssues(
         : '';
       issues.push(`${path} shows no photography. The ${requirement.role} page is image-led: use real business-appropriate photos (an image-led hero, gallery or media split), never a text-only page.${examples}`);
     }
+  }
+  const requiredImageUrl = requirement.requiredImageUrl;
+  if (requiredImageUrl && ![source, ...usedSources].some((componentSource) => componentSource.includes(requiredImageUrl))) {
+    issues.push(`${path} must render the generated homepage hero image using this exact URL: ${requiredImageUrl}`);
   }
   return issues;
 }

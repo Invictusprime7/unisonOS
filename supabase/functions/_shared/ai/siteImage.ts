@@ -37,7 +37,7 @@ export async function storeGeneratedImage(userId: string, dataUrl: string): Prom
     // Native decoder: a per-character loop on a multi-MB image exceeded the CPU limit.
     const bytes = decodeBase64(dataUrl.slice(dataUrl.indexOf(",") + 1));
     const admin = createClient(url, key);
-    const path = `generated/${userId}/${crypto.randomUUID()}.png`;
+    const path = `${userId}/generated/${crypto.randomUUID()}.png`;
     const up = await admin.storage.from("user-files").upload(path, bytes, { contentType: "image/png" });
     if (up.error) { console.warn("[site-image] store failed:", up.error.message); return null; }
     const signed = await admin.storage.from("user-files").createSignedUrl(path, 60 * 60 * 24 * 365 * 10);

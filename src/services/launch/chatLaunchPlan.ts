@@ -266,6 +266,8 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   const family = creative.designDirection.origin === 'provisional' ? null : creative.designDirection.familyId;
   const defaults = confident ? analysis!.selectedPages : [];
   const focusedGoal = FOCUSED_GOALS.find(({ pattern }) => pattern.test(semanticText))?.goal;
+  const statedPurpose = /\b(?:site purpose|purpose of (?:the|this) site)\s*(?:is|:)?\s*([^.!?\n]+)/i.exec(semanticText)?.[1]?.trim();
+  const statedBusinessName = /\b(?:business|brand|company|site) name\s*(?:is|:)?\s*["“']?([^.!?\n"”']{2,64})/i.exec(semanticText)?.[1]?.trim();
   const focusedNeed = focusedGoal ? GOAL_CUSTOMER_NEED[focusedGoal] : undefined;
   const resolvedIndustry = !promptFirst && confident ? analysis!.industry : null;
   const profileRoutes = resolvedIndustry ? getIndustryProfile(resolvedIndustry)?.defaultPages.map((page) => page.path) ?? [] : [];
@@ -347,15 +349,15 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
   const creationInput: UniversalCreationInput = {
     mode: promptFirst || !confident ? 'open-ended' : 'guided',
     originalPrompt: semanticText,
-    sitePurpose: /\b(portfolio|showcase|gallery)\b/i.test(semanticText)
+    sitePurpose: statedPurpose || (/\b(portfolio|showcase|gallery)\b/i.test(semanticText)
       ? 'Creative portfolio and work showcase'
       : /\b(news|editorial|publication|journal|articles|blog)\b/i.test(semanticText)
         ? 'Editorial publication and content reading'
         : /\b(interactive|educational|learning|course)\b/i.test(semanticText)
           ? 'Interactive educational experience'
-          : 'Website purpose described by the visitor',
+          : 'Website purpose described by the visitor'),
     subject: semanticText.trim().split(/[\n.!?]/, 1)[0].slice(0, 240),
-    ...(!promptFirst && confident ? { industryHint: analysis!.industry } : {}),
+    ...(confident ? { industryHint: analysis!.industry } : {}),
     pages: [{ route: '/', title: 'Home', purpose: 'Introduce the subject and purpose stated in the original prompt.', suggestedRole: 'home' }, ...creationPages],
     visualRequirements,
     requestedCapabilities,
@@ -385,7 +387,7 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
     creationInput,
     industry: !promptFirst && confident ? analysis!.industry : null,
     systemId: !promptFirst && confident ? analysis!.systemId : null,
-    businessName: analysis?.businessName ?? null,
+    businessName: (statedBusinessName || analysis?.businessName) ?? null,
     primaryGoal: !promptFirst && confident ? focusedGoal ?? analysis!.primaryGoal : null,
     customerNeeds: !promptFirst && confident ? focusedNeed ? [focusedNeed] : analysis!.customerNeeds : [],
     // Pages the chat named win; industry defaults only fill in when none were named.

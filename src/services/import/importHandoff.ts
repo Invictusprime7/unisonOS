@@ -11,6 +11,7 @@ export const IMPORT_STAGE_LABEL: Record<ExternalImportStage, string> = {
   checking: 'Checking files…',
   'saving-assets': 'Saving images and fonts…',
   'saving-version': 'Saving the first version…',
+  'resolving-imports': 'Affinity is resolving imports…',
 };
 
 function pickEntryPoint(files: Record<string, string>, entrypoints: string[]): string {
@@ -52,6 +53,7 @@ export function prepareImportedProjectHandoff(result: ExternalImportResult) {
     revisionId: result.revisionId,
     vfsFiles: result.vfsFiles,
     entryPoint,
+    importToolchainConfigFiles: result.profile.toolchain.configFiles,
     launchReliabilityMode: 'imported-source',
   };
   persistLauncherHandoff({ routeState, launchState });
@@ -59,6 +61,17 @@ export function prepareImportedProjectHandoff(result: ExternalImportResult) {
 }
 
 export function importedToastDescription(result: ExternalImportResult): string {
+  if (result.repair?.error) {
+    return `Saved unchanged. Affinity could not finish import repair: ${result.repair.error}`;
+  }
+  if (result.repair?.resolvedImports) {
+    return result.repair.unresolvedImports > 0
+      ? `Affinity resolved ${result.repair.resolvedImports} local imports in a new version. ${result.repair.unresolvedImports} still need attention.`
+      : `Affinity resolved ${result.repair.resolvedImports} local imports in a new version.`;
+  }
+  if (result.repair?.unresolvedImports) {
+    return `Saved unchanged. Affinity could not resolve ${result.repair.unresolvedImports} local imports, so the source remains available to edit.`;
+  }
   return result.provenance.readiness.runtimeCompatibility === 'blocked'
     ? 'Saved as your first version. Preview is off for this project type, so a different design is never shown.'
     : 'Saved as your first version. The preview shows your original files.';

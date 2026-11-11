@@ -831,6 +831,7 @@ export function inspectAppBuilderPageSections(
   const sections: AppBuilderSectionRecord[] = [];
   const issues: string[] = [];
   const ids = new Set<string>();
+  const sectionContent = new Map<string, string>();
   const isNestedRoot = (node: ts.Node): boolean => {
     let parent = node.parent;
     if (ts.isJsxElement(parent) && parent.openingElement === node) parent = parent.parent;
@@ -874,6 +875,13 @@ export function inspectAppBuilderPageSections(
               ? `${pagePath}: section "${sectionId}" must render exactly one site-local default-exported component from /src/project-components/ or /src/components/generated/ for its custom variant.`
               : `${pagePath}: section "${sectionId}" must use its registered family dispatcher and literal serializable props.`);
           } else {
+            const signature = JSON.stringify([sectionType, variantId, renderer.props]);
+            const duplicateOf = sectionContent.get(signature);
+            if (duplicateOf) {
+              issues.push(`${pagePath}: duplicate section content for ${sectionType}:${variantId} in "${duplicateOf}" and "${sectionId}".`);
+            } else {
+              sectionContent.set(signature, sectionId);
+            }
             sections.push({
               sectionId,
               semanticType: sectionType,

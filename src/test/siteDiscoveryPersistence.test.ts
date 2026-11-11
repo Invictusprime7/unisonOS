@@ -39,6 +39,19 @@ describe("site discovery persistence", () => {
     expect(readSiteDiscoveryMessages(key, storage)?.[0].timestamp).toBeInstanceOf(Date);
   });
 
+  it("deletes the saved transcript when the conversation is cleared", () => {
+    const storage = memoryStorage();
+    const key = siteDiscoveryMessagesKey("user-123");
+    writeSiteDiscoveryMessages(key, [
+      { role: "user", content: "Build a portfolio", timestamp: new Date() },
+    ], storage);
+
+    writeSiteDiscoveryMessages(key, [], storage);
+
+    expect(storage.getItem(key)).toBeNull();
+    expect(readSiteDiscoveryMessages(key, storage)).toBeNull();
+  });
+
   it("ignores malformed transcript data and reports the invalid payload", () => {
     const storage = memoryStorage();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

@@ -340,6 +340,17 @@ export default function App(){ return <HashRouter><Routes><Route path="/" elemen
 
   it("wires launcher output into canonical VFS metadata and package dependencies", () => {
     const snapshot = createSnapshot();
+    const universalCreation = {
+      version: 1 as const,
+      mode: 'guided' as const,
+      originalPrompt: 'Create a quiet salon site with a detailed services page.',
+      sitePurpose: 'Introduce the studio and book appointments',
+      subject: 'Northstar Studio',
+      pages: [{ route: '/services', title: 'Services', purpose: 'Explain treatments and durations.', suggestedRole: 'services' }],
+      visualRequirements: ['warm editorial photography'],
+      requestedCapabilities: ['booking'],
+    };
+    snapshot.meta.universalCreation = universalCreation;
     const input = {
       generatedFiles: {
         "/src/App.tsx": "import { motion } from 'framer-motion';\nexport default function App(){ return <motion.div>Hello</motion.div>; }",
@@ -383,6 +394,7 @@ export default function App(){ return <HashRouter><Routes><Route path="/" elemen
     expect(artifacts.files[CANONICAL_METADATA_FILE_PATHS.runtimeManifest]).toContain("\"sessionKey\"");
     expect(artifacts.files[CANONICAL_METADATA_FILE_PATHS.wizardRuntime]).toContain('token-glass');
     expect(artifacts.files[CANONICAL_METADATA_FILE_PATHS.siteBundleSnapshot]).toContain("\"vfsFilePaths\"");
+    expect(JSON.parse(artifacts.files[CANONICAL_METADATA_FILE_PATHS.siteBundleSnapshot]).meta.universalCreation).toEqual(universalCreation);
     expect(artifacts.files['/src/components/businessProfile.ts']).toContain('useBusinessProfile');
     expect(() => buildCanonicalLaunchArtifacts({
       ...input,

@@ -277,6 +277,30 @@ describe("launcher handoff persistence", () => {
     expect(readLauncherHandoff()?.routeState).toEqual(navigationState);
   });
 
+  it('ignores unresolved imports in imported toolchain config while preserving the original file', () => {
+    const navigationState = buildLauncherNavigationState({
+      fromImportedSource: true,
+      importToolchainConfigFiles: ['vite.config.ts'],
+      vfsFiles: {
+        '/src/main.tsx': 'export default function App() { return <main>Imported</main>; }',
+        '/vite.config.ts': "import mockupPreviewPlugin from './mockupPreviewPlugin'; export default { plugins: [mockupPreviewPlugin()] };",
+      },
+    });
+
+    expect((navigationState.vfsFiles as Record<string, string>)['/vite.config.ts']).toContain('./mockupPreviewPlugin');
+  });
+
+  it('still rejects unresolved imports in imported application source', () => {
+    expect(() => buildLauncherNavigationState({
+      fromImportedSource: true,
+      importToolchainConfigFiles: ['vite.config.ts'],
+      vfsFiles: {
+        '/src/main.tsx': "import App from './MissingApp'; export default App;",
+        '/vite.config.ts': "import mockupPreviewPlugin from './mockupPreviewPlugin'; export default { plugins: [mockupPreviewPlugin()] };",
+      },
+    })).toThrow(/canonical handoff has unresolved local imports: \/src\/main\.tsx/);
+  });
+
   it('uses revision-only recovery when canonical path compaction fails after commit', () => {
     const navigationState = persistAndBuildLauncherHandoff({
       routeState: {

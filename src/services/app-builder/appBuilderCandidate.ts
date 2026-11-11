@@ -543,6 +543,35 @@ export async function validateAppBuildCandidate(input: {
     if (componentSources.length === 0) continue;
     const escapedSlug = component.runtime.componentSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const escapedId = component.runtime.instanceId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const duplicateHost = componentSources.find(({ source }) => {
+      const slugCount = [...source.matchAll(new RegExp(`data-ut-component-slug\\s*=\\s*["']${escapedSlug}["']`, 'g'))].length;
+      const instanceCount = [...source.matchAll(new RegExp(`data-ut-component-instance-id\\s*=\\s*["']${escapedId}["']`, 'g'))].length;
+      return slugCount > 1 || instanceCount > 1;
+    });
+    if (duplicateHost) {
+      issues.push({
+        severity: 'blocker',
+        code: 'registered-component-duplicate-instance',
+        path: duplicateHost.page.filePath,
+        message: `Registered component ${component.runtime.componentSlug} instance ${component.runtime.instanceId} is rendered more than once on ${duplicateHost.page.route}. Render one instance per page.`,
+      });
+      continue;
+    }
+    if (component.targetType === 'form' || component.targetType === 'calendar') {
+      const duplicateForm = componentSources.find(({ source }) =>
+        nativeFormSources(source, writeIntent).length
+          + contactDesignForms(source).filter((form) => form.submitIntent === writeIntent).length > 1,
+      );
+      if (duplicateForm) {
+        issues.push({
+          severity: 'blocker',
+          code: 'registered-component-duplicate-form',
+          path: duplicateForm.page.filePath,
+          message: `More than one ${writeIntent} form is rendered on ${duplicateForm.page.route}. Reuse the registered form or Contact design host once.`,
+        });
+        continue;
+      }
+    }
     const hasRegisteredHost = componentSources.some(({ source }) => new RegExp(
       `(?:data-ut-component-slug\\s*=\\s*["']${escapedSlug}["']|data-ut-component-instance-id\\s*=\\s*["']${escapedId}["'])`,
     ).test(source));

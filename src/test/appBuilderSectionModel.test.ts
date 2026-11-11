@@ -121,6 +121,18 @@ export default function Home() {
     expect(result.issues.some((issue) => issue.includes('duplicate section id "same"'))).toBe(true);
   });
 
+  it('rejects an identical section copied under a different id on the same page', () => {
+    const source = `import Services from "@/unison/design-sources/Services";
+export default function Home(){return <main>
+  <section data-ut-section-id="home:services:0" data-ut-section-type="services" data-ut-variant="services:editorial-rows"><Services sectionId="home:services:0" variantId="services:editorial-rows" props={{headline:"Treatments",items:[{title:"Cut",description:"Tailored"}]}} /></section>
+  <section data-ut-section-id="home:services:1" data-ut-section-type="services" data-ut-variant="services:editorial-rows"><Services sectionId="home:services:1" variantId="services:editorial-rows" props={{headline:"Treatments",items:[{title:"Cut",description:"Tailored"}]}} /></section>
+</main>}`;
+
+    const result = inspectAppBuilderPageSections('/src/pages/Home.tsx', source, implementations, { requireChromeRoots: false });
+
+    expect(result.issues).toContainEqual(expect.stringContaining('duplicate section content for services:services:editorial-rows'));
+  });
+
   it('returns normalized source and actionable diagnostics when no eligible section model can be emitted', () => {
     const source = 'export default function Home(){return <main><section><p>Unclassified content</p></section></main>}';
     const result = materializeAppBuilderSectionModelsWithDiagnostics(

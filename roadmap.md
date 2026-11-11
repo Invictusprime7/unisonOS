@@ -14,6 +14,16 @@
 - [ ] D/E for React/Vite, TanStack Start, Next and other build-based projects (blocked: needs a hosted build worker; the existing container preview gateway is not configured)
 - [x] Drag and drop files, folders or ZIPs onto the Affinity chat (Home + setup) to import them unchanged
 
+## Active: App Builder + Affinity LaunchPlan convergence (docs/milestones/APP_BUILDER_AFFINITY_LAUNCHPLAN_CONVERGENCE_2026-11-10.md)
+- [ ] M0: Trace Wizard/chat fields, `UniversalCreation`, persistence owner and App Builder handoffs; add guided/open-ended golden fixtures
+- [ ] M1: Make `UniversalCreation` the versioned durable Launch Plan; persist draft and confirmed answers, support reload/backward compatibility, validate canonical projections
+- [ ] M2: Add inline Affinity follow-up selections under chat questions; synchronize every answer into persisted `UniversalCreation` and the Wizard recap
+- [ ] M3: Carry every requested page and selected legal registry/UI Foundation choice through topology and page composition
+- [ ] M4: Propagate the finalized plan into App Builder prompts/runtime; reject missing pages, actions, selected experiences or meaningful content
+- [ ] M5: Wire prompt-driven page and action affinity while respecting explicit selections and canonical eligibility
+- [ ] M6: Enforce content-rich candidate closure; reject empty/generic degradation and expose repair diagnostics
+- [ ] M7: Verify persistence through accepted revision metadata and save/preview/reopen; accepted source remains authoritative and never regenerates
+
 ## Active: Sparse, generic generated pages (2026-11-10)
 - [x] Page rules (design text contracts, form placement, blueprints, business facts) were cut from every page request; now carried in full
 - [x] Wedding/events/music/sports/travel/hotel/photography photo libraries replace office/laptop fallbacks

@@ -28,6 +28,15 @@ describe('prompt-first creation entry points', () => {
     expect(panel).not.toMatch(/commitMutation|vfsCommitService/);
   });
 
+  it('shows the UniversalCreation launch plan in Affinity before generation', () => {
+    const panel = read('src/components/launch/PromptLaunchPanel.tsx');
+    expect(panel).toContain('data-testid="prompt-launch-plan"');
+    expect(panel).toContain('Motion & experience');
+    expect(panel).toContain('Section treatments');
+    expect(panel).toContain('UI Foundation');
+    expect(panel).toContain('Requested pages');
+  });
+
   it('offers the starter fallback only when the AI provider is unavailable', () => {
     const panel = read('src/components/launch/PromptLaunchPanel.tsx');
     expect(panel).toContain("failure.stage === 'app-build' && mode === 'ai' && AI_UNAVAILABLE_PATTERN.test(failure.message)");

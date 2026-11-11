@@ -29,6 +29,26 @@ const selections: WizardSelections = {
 };
 
 describe('canonical launch plan', () => {
+  it('persists UniversalCreation with the accepted candidate snapshot', () => {
+    const universalCreation = {
+      mode: 'guided' as const,
+      originalPrompt: 'Create a quiet salon site with a detailed services page.',
+      sitePurpose: 'Introduce the studio and book appointments',
+      subject: 'Northstar Studio',
+      pages: [{ route: '/rooms', title: 'Rooms & Suites', purpose: 'Show available room types and their amenities.', suggestedRole: 'rooms' }],
+      visualRequirements: ['warm editorial photography'],
+      requestedCapabilities: ['booking'],
+    };
+    const launchSelections = { ...selections, universalCreation };
+    const plan = buildCanonicalLaunchPlan(launchSelections);
+    const snapshot = projectCanonicalLaunchCandidateSnapshot(plan, launchSelections, plan.infrastructureFiles);
+
+    expect(plan.sitePlan.pages).toContainEqual(expect.objectContaining({
+      route: '/rooms', title: 'Rooms & Suites', role: 'services',
+    }));
+    expect(snapshot.meta.universalCreation).toEqual({ version: 1, ...universalCreation });
+  });
+
   it('projects serialized App Builder section variants into the sealed design authority', () => {
     const plan = buildCanonicalLaunchPlan(selections);
     const home = plan.sitePlan.pages.find((page) => page.isHome)!;
@@ -78,9 +98,19 @@ describe('canonical launch plan', () => {
 
   it('shares contract resolution with the compatibility full compiler', () => {
     const plan = buildCanonicalLaunchPlan(selections);
-    const compiled = commitToPipeline({ selections }, 'wizard-launch');
+    const universalCreation = {
+      mode: 'guided' as const,
+      originalPrompt: 'Build a studio site with a detailed contact page.',
+      sitePurpose: 'Introduce the studio and book appointments',
+      subject: 'Northstar Studio',
+      pages: [{ route: '/contact', title: 'Contact', purpose: 'Let visitors reach the studio.', suggestedRole: 'contact' }],
+      visualRequirements: ['warm editorial photography'],
+      requestedCapabilities: ['booking'],
+    };
+    const compiled = commitToPipeline({ selections: { ...selections, universalCreation } }, 'wizard-launch');
 
     expect(compiled.sitePlan?.pages.map((page) => page.role)).toEqual(plan.sitePlan.pages.map((page) => page.role));
+    expect(compiled.siteBundleSnapshot.meta.universalCreation).toEqual({ version: 1, ...universalCreation });
     expect(compiled.siteBundleSnapshot.meta.artDirection?.storagePackId).toBe(plan.artDirection.storagePackId);
     expect(compiled.siteBundleSnapshot.meta.registryContext?.designRegistrySignature).toBe(plan.registryContext.designRegistrySignature);
     expect(compiled.siteBundleSnapshot.vfsFiles['/.unison/wizard-registry-context.json']).toBeTruthy();

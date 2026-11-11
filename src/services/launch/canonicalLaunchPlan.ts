@@ -14,6 +14,7 @@ import type {
   WizardSelections,
 } from '@/types/playground';
 import type { GeneratedSitePlan } from '@/platform/core/siteTopologyPlanner';
+import { normalizeUniversalCreation, type UniversalCreationInput } from '@/platform/core/universalCreation';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import type { NavItem, RouteDef, SiteManifest } from '@/types/siteBundle';
 import { resolveCapabilities } from '@/services/wizardCapabilityResolver';
@@ -297,6 +298,7 @@ export function projectCanonicalLaunchCandidateSnapshot(
   plan: CanonicalLaunchPlan,
   selections: WizardSelections,
   candidateFiles: Record<string, string>,
+  universalCreation: UniversalCreationInput | undefined = selections.universalCreation,
 ): SiteBundleSnapshot {
   const registry = plan.playground.pageRegistry;
   const pages = Object.values(registry.pages);
@@ -416,6 +418,7 @@ export function projectCanonicalLaunchCandidateSnapshot(
         registrySignature: designRegistrySignature(),
       } : undefined,
       generationBrief,
+      universalCreation: universalCreation ? normalizeUniversalCreation(universalCreation) : undefined,
       designIntervention,
       registryContext: plan.registryContext,
     },

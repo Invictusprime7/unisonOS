@@ -1,4 +1,5 @@
 import { resolveLocalImport } from './aiCandidateGates';
+import { readImportedSourceRecords } from '@/services/import/importedSourceRecords';
 
 /** Recipe bundles are implementation detail; showing them teaches the model to import them. */
 const DESIGN_SOURCE_INTERNALS = /^\/src\/unison\/design-sources\/recipes\//;
@@ -72,6 +73,7 @@ export function selectSourceKnowledgeWithReport(
     : [...targets, '/src/index.css', '/package.json',
       ...Object.keys(files).filter((path) => path.startsWith('/src/project-components/site/')).sort()];
   const targetSet = new Set(targets);
+  const importAliases = readImportedSourceRecords(files)?.profile.aliases;
   const encoder = new TextEncoder();
   for (let index = 0; index < queue.length; index++) {
     const path = queue[index];
@@ -96,7 +98,7 @@ export function selectSourceKnowledgeWithReport(
     if (scope.scoped && !targetSet.has(path)) continue;
     for (const match of source.matchAll(/(?:import|export)\s[^'"`;]*?from\s*['"]([^'"]+)['"]|import\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g)) {
       const specifier = match[1] ?? match[2] ?? match[3];
-      const resolved = resolveLocalImport(path, specifier, files);
+      const resolved = resolveLocalImport(path, specifier, files, importAliases);
       if (resolved && !visited.has(resolved)) queue.push(resolved);
       if (resolved === undefined && /^(\.|@\/|\/)/.test(specifier)) unresolvedImports.push({ path, specifier });
     }

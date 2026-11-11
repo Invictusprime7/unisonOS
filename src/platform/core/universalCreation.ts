@@ -1,4 +1,5 @@
 export type CreationMode = 'guided' | 'open-ended';
+export const UNIVERSAL_CREATION_VERSION = 1 as const;
 
 export interface UniversalCreationPage {
   route: string;
@@ -143,8 +144,37 @@ export interface DesignDirection {
   note: string;
 }
 
-/** Ephemeral launch intent. The accepted SiteBundleSnapshot remains authoritative. */
+export interface UniversalCreationFinalizedSelections {
+  version: 1;
+  industry: string;
+  businessName: string;
+  systemId: string;
+  goals: string[];
+  visitorActions: string[];
+  requestedCapabilities: string[];
+  authorizedCapabilities: string[];
+  pages: UniversalCreationPage[];
+  design: {
+    themePresetId: string;
+    artDirectionFamilyId: string;
+    artDirectionPackId: string;
+    experience: string;
+    mode: string;
+  };
+  uiFoundation: {
+    manifestPath: string;
+    importRoot: string;
+    runtimeProfile: string;
+    primitiveFamilyIds: string[];
+    experiencePrimitiveIds: string[];
+    approvedExperienceCapabilities: string[];
+  };
+}
+
+/** Durable, versioned user intent. Accepted source and SiteBundleSnapshot remain authoritative. */
 export interface UniversalCreationInput {
+  /** Optional on input for backward compatibility; new transports persist version 1. */
+  version?: typeof UNIVERSAL_CREATION_VERSION;
   mode: CreationMode;
   originalPrompt: string;
   sitePurpose: string;
@@ -167,4 +197,11 @@ export interface UniversalCreationInput {
   experienceDirection?: ExperienceDirection;
   /** Open questions that block a faithful build; empty when none. */
   clarifications?: string[];
+  /** Resolved Wizard and canonical selections sealed into the App Builder launch contract. */
+  finalizedSelections?: UniversalCreationFinalizedSelections;
+}
+
+/** Normalize legacy inputs before transport or persistence without mutating their owner. */
+export function normalizeUniversalCreation(input: UniversalCreationInput): UniversalCreationInput {
+  return { ...structuredClone(input), version: UNIVERSAL_CREATION_VERSION };
 }

@@ -28,6 +28,7 @@ import {
   getIndustryIntentProfile,
   synthesizeIndustryBindings,
 } from '@/platform/core/industryIntentProfiles';
+import { resolveTopologyPageRoleAlias } from '@/platform/core/siteTopologyPlanner';
 
 // ============================================================================
 // Business Model → Required Pages
@@ -493,12 +494,11 @@ export function resolveCapabilities(selections: WizardSelections): CapabilityPac
     const role = (raw as PlaygroundPageRole);
     if (VALID_REQUESTED.includes(role)) pageSet.add(role);
   }
-  if (openEnded) {
-    const validRoles = new Set<string>(VALID_REQUESTED);
-    for (const page of selections.universalCreation?.pages ?? []) {
-      if (page.suggestedRole && validRoles.has(page.suggestedRole)) pageSet.add(page.suggestedRole as PlaygroundPageRole);
-      else if (page.route !== '/') pageSet.add('custom');
-    }
+  const validRoles = new Set<string>(VALID_REQUESTED);
+  for (const page of selections.universalCreation?.pages ?? []) {
+    const role = resolveTopologyPageRoleAlias(page.suggestedRole || page.title);
+    if (role && validRoles.has(role)) pageSet.add(role as PlaygroundPageRole);
+    else if (page.route !== '/') pageSet.add('custom');
   }
 
   // 2. Funnels

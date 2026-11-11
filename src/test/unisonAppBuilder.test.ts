@@ -964,6 +964,31 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
       || message.includes('every section requires literal'))).toEqual([]);
   });
 
+  it('generates a contextual homepage image from the visitor brief and passes it to page authoring', async () => {
+    const visitorBrief = 'A quiet neighborhood spa with botanical details and natural light';
+    const generatedHeroImage = { url: 'https://storage.example/generated/hero.png', prompt: 'A serene botanical spa' };
+    const generateImage = vi.fn(async () => generatedHeroImage);
+    const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
+      files: input.files,
+      revisionId: input.revisionId,
+      outcomes: input.pages.map((page) => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
+    }));
+    const appContract = contract();
+    appContract.business.visionBrief = visitorBrief;
+
+    await createUnisonAppBuilder({ authorSite, generateSiteImage: generateImage }).generate({
+      operationId: 'contextual-image-generation', contract: appContract, initialFiles: baseFiles,
+      entryPoint: '/src/main.tsx', baseRevisionId: null,
+    });
+
+    expect(generateImage).toHaveBeenCalledWith(
+      expect.stringContaining(visitorBrief),
+      expect.objectContaining({ kind: 'background', section: 'Homepage hero', width: 1536, height: 1024 }),
+      expect.objectContaining({ projectId: 'project-1', businessId: 'business-1', industry: 'salon' }),
+    );
+    expect(authorSite.mock.calls[0]?.[0].generatedHeroImage).toEqual(generatedHeroImage);
+  });
+
   it('adapts site authoring behind generate and preserves the candidate result', async () => {
     const authorSite = vi.fn(async (input: Parameters<NonNullable<Parameters<typeof createUnisonAppBuilder>[0]['authorSite']>>[0]) => ({
       files: scaffoldAuthoredPages(contract(), { '/src/pages/Home.tsx': { body: '<p>After</p>' } }, input.files),
@@ -1287,8 +1312,10 @@ export default function Home(){return <><header data-ut-section-id="site:navbar"
       files: scaffoldAuthoredPages(appContract, { '/src/pages/Home.tsx': { body: '<p>Visit our Match Centre soon</p>' } }, input.files),
       revisionId: input.revisionId,
       outcomes: input.pages.map((page) => ({ page, status: 'authored' as const, reason: 'accepted' as const, attempts: 1, errors: [] })),
-    }) }).generate({ operationId: 'registry-only', contract: appContract, initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null });
+    }) }).generate({ operationId: 'registry-only', contract: appContract, initialFiles: baseFiles, entryPoint: '/src/main.tsx', baseRevisionId: null, budgetMs: 50_000 });
     const coverage = result.candidate.requirementCoverage;
+    expect(result.candidate.status).toBe('rejected');
+    expect(result.candidate.diagnostics.join(' ')).toContain('Owner-requested requirement');
     expect(coverage?.complete).toBe(false);
     expect(coverage?.items.find((item) => item.id === 'req:interaction:match-centre')?.status).toBe('partial');
     expect(coverage?.summary).toContain('still open');

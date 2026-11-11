@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { intakeLooseFiles } from '@/services/import/secureIntake';
-import { analyzeImportedProject } from '@/services/import/importCompatibilityProfile';
+import { analyzeImportedProject, ISOLATED_SOURCE_PREVIEW_ADAPTER, resolveImportPreviewAdapter } from '@/services/import/importCompatibilityProfile';
 import { buildImportedSourceVfs, findUnresolvedImports } from '@/services/import/importedSourceAcceptance';
 import { isImportedSourceVfs, readImportedSourceRecords } from '@/services/import/importedSourceRecords';
+import { startImportedPreviewSession } from '@/services/import/importedPreviewSession';
 import { normalizeLauncherFiles } from '@/utils/sandpackFilePrep';
 import { prepareSavedVfsRuntime } from '@/services/savedVfsRuntime';
 
@@ -10,7 +11,7 @@ const enc = (s: string) => new TextEncoder().encode(s);
 
 async function ariaLike() {
   const intake = await intakeLooseFiles([
-    { path: 'aria/package.json', bytes: enc(JSON.stringify({ name: 'aria-studios', dependencies: { '@tanstack/react-start': '^1.120.0', '@tanstack/react-router': '^1.120.0', react: '^19.0.0' }, devDependencies: { '@tailwindcss/vite': '^4.1.0', tailwindcss: '^4.1.0', vite: '^6.0.0' } })) },
+    { path: 'aria/package.json', bytes: enc(JSON.stringify({ name: 'aria-studios', scripts: { dev: 'vite --host 0.0.0.0' }, dependencies: { '@tanstack/react-start': '^1.120.0', '@tanstack/react-router': '^1.120.0', react: '^19.0.0' }, devDependencies: { '@tailwindcss/vite': '^4.1.0', tailwindcss: '^4.1.0', vite: '^6.0.0' } })) },
     { path: 'aria/bun.lock', bytes: enc('{}') },
     { path: 'aria/tsconfig.json', bytes: enc('{ "compilerOptions": { "paths": { "@/*": ["./src/*"] } }, // comment\n}') },
     { path: 'aria/src/styles.css', bytes: enc('@import "tailwindcss";\n@theme { --font-display: "Fraunces", serif; }\n') },
@@ -41,6 +42,7 @@ describe('imported-source compatibility profile', () => {
     expect(profile.unisonBrief).toMatchObject({ projectName: 'ARIA Studios', industry: 'agency', pages: ['home', 'work'] });
     expect(profile.previewAdapter.status).toBe('unavailable');
     expect(profile.previewAdapter.requires.join(' ')).toMatch(/TanStack Start/);
+    expect(resolveImportPreviewAdapter(profile, (await ariaLike()).files).adapter).toBe(ISOLATED_SOURCE_PREVIEW_ADAPTER);
   });
 
   it('reports unresolved local imports and resolves tsconfig aliases', async () => {
@@ -62,5 +64,51 @@ describe('imported projects bypass Unison runtime scaffolding', () => {
   it('still scaffolds ordinary Unison drafts', () => {
     const out = normalizeLauncherFiles({ '/src/App.tsx': 'export default function App(){return <div/>}' }, { entryPoint: '/src/App.tsx', injectCssIfMissing: true });
     expect(out['/src/main.tsx']).toBeTruthy();
+  });
+});
+
+describe('isolated imported preview session', () => {
+  it('sends original source bytes and runtime metadata without private import records', async () => {
+    const { files } = await ariaLike();
+    const records = readImportedSourceRecords(files)!;
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      session: { id: 'preview_session_1', iframeUrl: 'https://preview.example.test/session_1', status: 'running' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const session = await startImportedPreviewSession({ projectId: 'project-1', records, files });
+      const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+        files: Record<string, string>;
+        importedRuntime: Record<string, unknown>;
+      };
+
+      expect(session).toMatchObject({ id: 'preview_session_1', status: 'running' });
+      expect(request.files['/vite.config.ts']).toBe(files['/vite.config.ts']);
+      expect(request.files['/src/routes/index.tsx']).toBe(files['/src/routes/index.tsx']);
+      expect(Object.keys(request.files).some((path) => path.startsWith('/.unison-import/'))).toBe(false);
+      expect(request.importedRuntime).toMatchObject({
+        protocolVersion: 1,
+        framework: 'tanstack-start',
+        packageManager: 'bun',
+        startScript: 'dev',
+      });
+      expect(request.files).not.toHaveProperty('/.env');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reports a missing isolated worker instead of falling back to a rewritten preview', async () => {
+    const { files } = await ariaLike();
+    const records = readImportedSourceRecords(files)!;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false, error: 'Server-side preview is not available in this environment' }), { status: 410 })));
+    try {
+      await expect(startImportedPreviewSession({ projectId: 'project-1', records, files }))
+        .rejects.toThrow('No isolated preview worker is configured in this environment.');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

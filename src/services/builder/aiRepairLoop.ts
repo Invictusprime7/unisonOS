@@ -93,6 +93,7 @@ export interface ComposerLoopInput {
   initialRouteOps?: readonly TopologyChange[];
   /** false keeps /package.json out of the candidate (App Builder owns dependencies via its contract). */
   resolveDependencies?: boolean;
+  importAliases?: Readonly<Record<string, string>>;
   /** Per-page check run inside every attempt so a bad page is repaired in its own loop. */
   pageCheck?: PageCheck;
   /** Continue an interrupted fix round with its accumulated draft. */
@@ -266,6 +267,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       preflight: input.preflight,
       affinity: input.affinity,
       resolveDependencies: input.resolveDependencies,
+      importAliases: input.importAliases,
       pageCheck: input.pageCheck,
     });
     // Data honesty is checked against the base the request edits, so a fix

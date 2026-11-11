@@ -20,10 +20,20 @@ const PROTECTED = [
   /^\/\.unison\//,
   /^\/src\/unison\//,
   /^\/src\/integrations\//,
+  /^\/.unison-import\//,
 ];
 
 export function isProtectedComposerPath(path: string): boolean {
   return PROTECTED.some((re) => re.test(path));
+}
+
+const STANDARD_COMPOSER_PATH = /^\/(?:src|public)\/[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/;
+const IMPORTED_SOURCE_ROOT = /^\/(?:src|public|app|pages|routes|components|lib|utils|hooks|features|server|client|api|styles|scripts|assets)\//;
+
+export function isImportedSourceComposerPath(path: string): boolean {
+  return IMPORTED_SOURCE_ROOT.test(path)
+    && /\.(?:tsx?|jsx?|mjs|cjs|css|scss|html?)$/.test(path)
+    && !path.split('/').some((segment) => segment.startsWith('.') || segment === 'node_modules');
 }
 
 // Design-system write scope (workspace rules: never edit managed Unison source).
@@ -43,10 +53,11 @@ export function composerScopeViolations(
   task: AIComposerTask,
   _pageFilePath: string,
   ops: ReadonlyArray<{ type: string; path: string }>,
+  importedSource = false,
 ): string[] {
   const violations: string[] = [];
   for (const op of ops) {
-    if (isProtectedComposerPath(op.path)) {
+    if (isProtectedComposerPath(op.path) && !(importedSource && isImportedSourceComposerPath(op.path))) {
       violations.push(`${op.path}: canonical runtime file`);
     } else if (
       task !== 'builder_source_edit'
@@ -59,7 +70,19 @@ export function composerScopeViolations(
 }
 /** Proposal scope only; not proof of ownership or revision freshness. */
 export function composerProposalViolations(req: AIComposerRequest, response: AIComposerResponse): string[] {
-  const violations = composerScopeViolations(req.task, req.page.filePath, response.fileOps);
+  const violations = composerScopeViolations(req.task, req.page.filePath, response.fileOps, req.importedSource);
+  if (req.importedSource) {
+    if (req.task !== 'builder_source_edit') violations.push('Imported source repairs must use builder_source_edit');
+    if ((response.routeOps ?? []).length > 0) violations.push('Imported source repairs cannot change routes');
+    const targets = new Set(req.sourceTargets ?? []);
+    for (const op of response.fileOps) {
+      if (!isImportedSourceComposerPath(op.path) || !targets.has(op.path)) {
+        violations.push(`${op.path}: outside the imported source repair targets`);
+      } else if (op.type !== 'replace' || typeof req.files[op.path] !== 'string') {
+        violations.push(`${op.path}: imported source repair may only replace an existing source file`);
+      }
+    }
+  }
   for (const op of response.fileOps) {
     if (op.type === 'delete' || !/\.[jt]sx?$/.test(op.path)) continue;
     try {
@@ -211,7 +234,9 @@ function literalIntentCounts(source: string): Map<string, number> {
   return counts;
 }
 
-const pathSchema = z.string().regex(/^\/(?:src|public)\/[A-Za-z0-9_\-./]+\.(tsx|ts|jsx|js|css|json)$/).refine((p) => !p.includes('..'));
+const pathSchema = z.string()
+  .regex(/^\/[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/)
+  .refine((p) => !p.split('/').some((segment) => segment === '.' || segment === '..'));
 
 export const aiComposerFileOpSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('create'), path: pathSchema, content: z.string().min(1) }).strict(),
@@ -267,10 +292,12 @@ export const aiComposerImageSchema = z.object({
   data: z.string().max(8_000_000).regex(/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/),
 }).strict();
 
-export const AI_COMPOSER_BRIEF_LIMIT = 60_000;
+export const AI_COMPOSER_BRIEF_LIMIT = 100_000;
+export const AI_COMPOSER_RUNTIME_CONTEXT_LIMIT = 20_000;
 
 export const aiComposerRequestSchema = z.object({
   task: z.enum(AI_COMPOSER_TASKS),
+  importedSource: z.boolean().optional(),
   page: z.object({ role: z.string().max(60), title: z.string().max(120), route: z.string().max(200), filePath: pathSchema }),
   brief: z.string().max(AI_COMPOSER_BRIEF_LIMIT),
   instruction: z.string().max(4000).optional(),
@@ -279,12 +306,12 @@ export const aiComposerRequestSchema = z.object({
   sourceTargets: z.array(pathSchema).min(1).max(80).optional(),
   approvedRouteOps: z.array(aiComposerRouteOpSchema).max(12).optional(),
   approvedIntents: z.array(z.string().min(1).max(80)).max(300).optional(),
-  routes: z.array(z.object({ title: z.string().max(120), route: z.string().max(200) })).max(40),
+  routes: z.array(z.object({ title: z.string().max(120), route: z.string().max(200) })).max(100),
   priorPages: z.array(z.object({ role: z.string().max(60), summary: z.string().max(2000) })).max(20).optional(),
   diagnostics: z.array(z.string().max(1000)).max(30).optional(),
   previousResponse: z.string().max(60000).optional(),
   registryContext: z.string().max(60000).optional(),
-  runtimeContext: z.string().max(12000).optional(),
+  runtimeContext: z.string().max(AI_COMPOSER_RUNTIME_CONTEXT_LIMIT).optional(),
   images: z.array(aiComposerImageSchema).min(1).max(10).optional(),
   evidence: z.object({
     protocolVersion: z.literal('1.0'),
@@ -300,5 +327,18 @@ export const aiComposerRequestSchema = z.object({
     knowledgeEntryIds: z.array(z.string().max(160)).max(40),
     availableOperations: z.array(z.string().max(80)).max(30),
   }).optional(),
+}).superRefine((request, ctx) => {
+  const paths = [request.page.filePath, ...(request.sourceTargets ?? [])];
+  const allowed = request.importedSource
+    ? isImportedSourceComposerPath
+    : (path: string) => STANDARD_COMPOSER_PATH.test(path);
+  if (request.importedSource && request.task !== 'builder_source_edit') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['importedSource'], message: 'Imported source repairs require builder_source_edit.' });
+  }
+  for (const path of paths) {
+    if (!allowed(path)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sourceTargets'], message: `${path}: outside this request's source scope.` });
+    }
+  }
 });
 export type AIComposerRequest = z.infer<typeof aiComposerRequestSchema>;

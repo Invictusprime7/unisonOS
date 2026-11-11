@@ -83,6 +83,14 @@ describe('Lane B companion modules', () => {
     expect(unresolved).toEqual([]);
   });
 
+  it('accepts stylesheet asset imports with Vite query suffixes', () => {
+    const unresolved = findUnresolvedLocalImports({
+      '/src/routes/__root.tsx': 'import appCss from "../styles.css?url"; export default appCss;',
+    });
+
+    expect(unresolved).toEqual([]);
+  });
+
   it('rejects incompatible named and default JSX imports without compiling a preview', () => {
     const violations = findLocalJsxImportContractViolations({
       '/src/pages/Home.tsx': [

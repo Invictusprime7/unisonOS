@@ -1,5 +1,6 @@
-import { CheckCircle2, CircleSlash, AlertTriangle, FileCode2 } from 'lucide-react';
+import { CheckCircle2, CircleSlash, AlertTriangle, FileCode2, Loader2, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import type { ImportedSourceRecords, VerificationState } from '@/services/import/importedSourceRecords';
 import type { ImportCompatibilityProfile } from '@/services/import/importCompatibilityProfile';
 
@@ -36,12 +37,16 @@ export function ImportedSourcePreviewStatus({ records, adapter, running, classNa
   adapter?: ImportCompatibilityProfile['previewAdapter'];
   /** True while the original files are running in the isolated preview frame. */
   running?: boolean;
+  starting?: boolean;
+  preparingAssets?: boolean;
+  error?: string | null;
+  onStart?: () => void;
   className?: string;
 }) {
   const { provenance, profile, manifest, assets } = records;
   const r = provenance.readiness;
   const liveAdapter = adapter ?? profile.previewAdapter;
-  const runtimeState = liveAdapter.status === 'available' ? 'supported' : 'blocked';
+  const runtimeState = running || liveAdapter.status === 'available' ? 'supported' : 'blocked';
   const framework = FRAMEWORK_LABEL[profile.framework] ?? profile.framework;
   const storedAssets = assets.assets.filter((a) => a.status === 'stored').length;
   const pageRoutes = profile.routing.routes.filter((route) => route.kind === 'page');
@@ -88,6 +93,16 @@ export function ImportedSourcePreviewStatus({ records, adapter, running, classNa
             </li>
           ))}
         </ul>
+
+        {onStart && !running && (
+          <div className="space-y-2">
+            <Button type="button" size="sm" onClick={onStart} disabled={starting || preparingAssets}>
+              {starting || preparingAssets ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : <Play className="mr-2 h-4 w-4" aria-hidden />}
+              {starting ? 'Starting isolated preview…' : preparingAssets ? 'Preparing media links…' : 'Start isolated preview'}
+            </Button>
+            {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+          </div>
+        )}
 
         <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
           <div>

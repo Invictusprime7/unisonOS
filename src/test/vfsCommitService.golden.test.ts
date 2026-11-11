@@ -60,7 +60,7 @@ type RevisionRow = {
   status: 'committed' | 'rejected' | 'quarantined';
   patch_json: Record<string, unknown>;
   vfs_files: Record<string, unknown>;
-  site_bundle_snapshot: Record<string, unknown>;
+  site_bundle_snapshot: Record<string, unknown> | null;
   runtime_manifest: Record<string, unknown>;
   playground_state: Record<string, unknown>;
   readiness_report: Record<string, unknown>;
@@ -77,6 +77,7 @@ const draftProjectionUpdates: Array<{ id: unknown; userId: unknown; revisionId: 
 let canonicalCommitRpcError: { message: string } | null = null;
 let canonicalCommitRpcWait: Promise<void> | null = null;
 let lastCanonicalCommitPayload: Record<string, unknown> | null = null;
+let lastImportedSourceCommitPayload: Record<string, unknown> | null = null;
 
 vi.mock('@/integrations/supabase/client', () => {
   const insert = (payload: Record<string, unknown>) => ({
@@ -167,10 +168,12 @@ vi.mock('@/integrations/supabase/client', () => {
       },
       functions: { invoke: runtimeReconcileInvoke },
       rpc: async (functionName: string, payload: Record<string, unknown>) => {
-        if (functionName !== 'commit_canonical_site_revision_v2') {
+        const importedSource = functionName === 'commit_imported_source_revision_v1';
+        if (!importedSource && functionName !== 'commit_canonical_site_revision_v2') {
           return { data: null, error: { message: `Unexpected RPC ${functionName}` } };
         }
-        lastCanonicalCommitPayload = payload;
+        if (importedSource) lastImportedSourceCommitPayload = payload;
+        else lastCanonicalCommitPayload = payload;
         if (canonicalCommitRpcWait) await canonicalCommitRpcWait;
         if (canonicalCommitRpcError) return { data: null, error: canonicalCommitRpcError };
         const seq = String(revisionStore.length + 1).padStart(12, '0');
@@ -203,10 +206,10 @@ vi.mock('@/integrations/supabase/client', () => {
           draft_id: String(payload.p_draft_id),
           parent_revision_id: (payload.p_parent_revision_id as string | null) ?? null,
           source: String(payload.p_source),
-          status: payload.p_status as RevisionRow['status'],
+          status: importedSource ? 'committed' : payload.p_status as RevisionRow['status'],
           patch_json: patchJson,
           vfs_files: (payload.p_vfs_files ?? {}) as Record<string, unknown>,
-          site_bundle_snapshot: {
+          site_bundle_snapshot: importedSource ? null : {
             ...((payload.p_site_bundle_snapshot ?? {}) as Record<string, unknown>),
             meta: {
               ...(((payload.p_site_bundle_snapshot as Record<string, unknown> | undefined)?.meta ?? {}) as Record<string, unknown>),
@@ -318,6 +321,7 @@ beforeEach(() => {
   canonicalCommitRpcError = null;
   canonicalCommitRpcWait = null;
   lastCanonicalCommitPayload = null;
+  lastImportedSourceCommitPayload = null;
   __resetPersistCircuitForTests();
   vi.clearAllMocks();
   vi.mocked(buildCanonicalLaunchArtifacts).mockImplementation((input) => ({
@@ -330,6 +334,34 @@ beforeEach(() => {
 });
 
 describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
+  it('persists imported-source revisions without a canonical snapshot RPC', async () => {
+    const importedFiles = {
+      '/.unison-import/provenance.json': JSON.stringify({ origin: 'external-import', acceptanceProfile: 'imported-source' }),
+      '/.unison-import/manifest.json': JSON.stringify({ files: [] }),
+      '/.unison-import/compatibility.json': JSON.stringify({}),
+      '/.unison-import/assets.json': JSON.stringify({ assets: [] }),
+    };
+
+    const result = await commitMutation({
+      source: 'system-restore',
+      identity: IDENTITY,
+      current: { vfsFiles: {} },
+      patch: legacyFilesToPatchPlan(importedFiles, 'initial imported source'),
+      options: { acceptanceProfile: 'imported-source' },
+    });
+
+    expect(result.status).toBe('committed');
+    expect(result.siteBundleSnapshot).toBeNull();
+    expect(lastCanonicalCommitPayload).toBeNull();
+    expect(lastImportedSourceCommitPayload).toMatchObject({
+      p_source: 'system-restore',
+      p_readiness_report: { acceptanceProfile: 'imported-source' },
+    });
+    expect(lastImportedSourceCommitPayload).not.toHaveProperty('p_site_bundle_snapshot');
+      expect(lastImportedSourceCommitPayload).not.toHaveProperty('p_status');
+    expect(revisionStore[0]?.site_bundle_snapshot).toBeNull();
+  });
+
   it('rejects authored replacements of compiler-owned composition records', async () => {
     const path = '/.unison/compositions/home.json';
     await expect(commitMutation({ source: 'ai-builder', identity: IDENTITY,
@@ -1019,9 +1051,11 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
   });
 
   it('persists a reviewed wizard artifact without regenerating it', async () => {
+    const storagePath = `${IDENTITY.userId}/site-uploads/project-1/22222222-2222-4222-8222-222222222222-hero.webp`;
+    const imageUrl = `https://storage.example.test/storage/v1/object/sign/user-files/${storagePath}?token=temporary`;
     const reviewedFiles = {
       '/src/App.tsx': 'export default function Reviewed(){return <main>Reviewed</main>}',
-      '/src/pages/Home.tsx': 'export default function Home(){return <h1>Exact AI output</h1>}',
+      '/src/pages/Home.tsx': `export default function Home(){return <main><h1>Exact AI output</h1><img src="${imageUrl}" alt="Hero" /></main>}`,
       '/src/project-components/Gallery.tsx': 'export const Gallery = () => <div>Original layout</div>;',
       '/src/hooks/useGallery.ts': 'export const useGallery = () => 1;',
       '/src/styles/gallery.css': '.gallery { gap: 3rem; }',
@@ -1066,7 +1100,10 @@ describe('Golden E2E — salon launcher → AI edits → publish gate', () => {
     expect(launch.vfsFiles['/.unison/wizard-seed.json']).toBe('{"version":1}');
     expect(revisionStore[0]?.vfs_files['/.unison/wizard-seed.json']).toBe('{"version":1}');
     expect((revisionStore[0]?.site_bundle_snapshot as { vfsFiles?: Record<string, string> }).vfsFiles)
-      .toEqual(reviewedFiles);
+      .toMatchObject(reviewedFiles);
+    expect(launch.vfsFiles['/public/media/manifest.json']).toContain(storagePath);
+    expect((revisionStore[0]?.site_bundle_snapshot as { vfsFiles?: Record<string, string> }).vfsFiles?.['/public/media/manifest.json'])
+      .toContain(storagePath);
     expect((revisionStore[0]?.site_bundle_snapshot as { vfsFiles?: Record<string, string> }).vfsFiles)
       .not.toHaveProperty('/.unison/wizard-seed.json');
     expect(launch.diagnostics).toContainEqual(expect.objectContaining({
@@ -2220,6 +2257,8 @@ describe('UIMP-01 imported-source acceptance profile', () => {
     expect(edit.vfsFiles['/src/routes/index.tsx']).toBe(edited);
     expect(edit.vfsFiles['/src/styles.css']).toBe(ROOT_CSS);
     expect((edit.readinessReport.importAcceptance as { changedPaths: string[] }).changedPaths).toEqual(['/src/routes/index.tsx']);
+    expect(revisionStore.find((revision) => revision.id === edit.persistedRevisionId)?.readiness_report)
+      .toEqual(edit.readinessReport);
     expect(commitToPipeline).not.toHaveBeenCalled();
 
     const next = { ...IDENTITY, revisionId: edit.persistedRevisionId! };

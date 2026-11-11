@@ -38,6 +38,60 @@ describe('project media sync from saved source', () => {
 });
 
 describe('project media preview URL refresh', () => {
+  it('refreshes newly generated images under the user-rooted path', async () => {
+    const storagePath = 'u1/generated/hero.png';
+    const imageUrl = `https://x/storage/v1/object/sign/user-files/${storagePath}?token=old`;
+    const files = {
+      '/src/pages/Home.tsx': `<img src="${imageUrl}" />`,
+      [PROJECT_MEDIA_MANIFEST]: recordProjectMedia(
+        { '/src/pages/Home.tsx': `<img src="${imageUrl}" />` },
+        [{ ...upload, url: imageUrl, storagePath }],
+      ),
+    };
+    const refreshedUrl = `https://x/storage/v1/object/sign/user-files/${storagePath}?token=fresh`;
+    const createSignedUrl = vi.fn(async () => refreshedUrl);
+
+    const previewFiles = await refreshProjectMediaUrls(files, { userId: 'u1', createSignedUrl });
+
+    expect(createSignedUrl).toHaveBeenCalledWith('user-files', storagePath);
+    expect(previewFiles['/src/pages/Home.tsx']).toContain(refreshedUrl);
+  });
+
+  it('keeps the existing signed URL for legacy generated images', async () => {
+    const storagePath = 'generated/u1/hero.png';
+    const imageUrl = `https://x/storage/v1/object/sign/user-files/${storagePath}?token=old`;
+    const files = {
+      '/src/pages/Home.tsx': `<img src="${imageUrl}" />`,
+      [PROJECT_MEDIA_MANIFEST]: recordProjectMedia(
+        { '/src/pages/Home.tsx': `<img src="${imageUrl}" />` },
+        [{ ...upload, url: imageUrl, storagePath }],
+      ),
+    };
+    const createSignedUrl = vi.fn(async () => 'https://x/fresh');
+
+    const previewFiles = await refreshProjectMediaUrls(files, { userId: 'u1', createSignedUrl });
+
+    expect(createSignedUrl).not.toHaveBeenCalled();
+    expect(previewFiles['/src/pages/Home.tsx']).toContain(imageUrl);
+  });
+
+  it('does not refresh a legacy generated path belonging to another user', async () => {
+    const storagePath = 'generated/u2/hero.png';
+    const imageUrl = `https://x/storage/v1/object/sign/user-files/${storagePath}?token=old`;
+    const files = {
+      '/src/pages/Home.tsx': `<img src="${imageUrl}" />`,
+      [PROJECT_MEDIA_MANIFEST]: recordProjectMedia(
+        { '/src/pages/Home.tsx': `<img src="${imageUrl}" />` },
+        [{ ...upload, url: imageUrl, storagePath }],
+      ),
+    };
+    const createSignedUrl = vi.fn(async () => 'https://x/fresh');
+
+    await expect(refreshProjectMediaUrls(files, { userId: 'u1', createSignedUrl }))
+      .rejects.toThrow(/outside the signed-in user storage scope/i);
+    expect(createSignedUrl).not.toHaveBeenCalled();
+  });
+
   it('reissues signed URLs from stable storage paths without changing accepted files', async () => {
     const files = {
       '/src/pages/Home.tsx': `<img src="${upload.url}" />`,

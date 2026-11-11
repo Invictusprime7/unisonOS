@@ -487,9 +487,13 @@ export function materializePlayground(
 
   const selectedPageRoles = new Set<string>(selections.requestedPages ?? []);
   const additionalPages = openEnded ? [] : resolvePageSpecsForRoles(selections.requestedPages ?? [], industryKey);
-  const explicitPages = openEnded
-    ? selections.universalCreation?.pages
-    : selections.universalCreation?.pages.filter((page) => page.suggestedRole === 'custom');
+  const selectedRoutes = new Set(additionalPages.map((page) => (page.path || '').toLowerCase()));
+  const explicitPages = (selections.universalCreation?.pages ?? [])
+    .filter((page) => page.route !== '/' && !selectedRoutes.has(page.route.toLowerCase()))
+    .map((page) => ({
+      ...page,
+      suggestedRole: resolveTopologyPageRoleAlias(page.suggestedRole || page.title) || 'custom',
+    }));
 
   // 1. Generate site topology plan → PageRegistry
   const sitePlan = planSiteTopology(industryKey, selections.businessName, {

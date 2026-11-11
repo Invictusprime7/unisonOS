@@ -36,6 +36,18 @@ describe('AI composer repair loop', () => {
     expect(result.outcomes.map(outcome => outcome.status)).toEqual(['authored', 'authored', 'authored', 'authored']);
     expect(result.files['/src/pages/Home.tsx']).toContain('Home');
   });
+  it('refuses a maxPages cap that would omit requested site pages', async () => {
+    const invoke = vi.fn(async () => good('/src/pages/Home.tsx', 'Home'));
+    await expect(authorSitePages({
+      pages: [
+        { pageId: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx', role: 'home' },
+        { pageId: 'about', title: 'About', route: '/about', filePath: '/src/pages/About.tsx', role: 'about' },
+      ],
+      homePageId: 'home', designContext: null, businessName: 'No truncation', files: base,
+      maxPages: 1, invoke: invoke as never,
+    })).rejects.toThrow('Refusing to omit requested pages beyond maxPages=1');
+    expect(invoke).not.toHaveBeenCalled();
+  });
   it('gives full-page prompts the minimum viable generation window', async () => {
     const pages = ['Home', 'About', 'Contact', 'Gallery', 'Shop'].map((title, index) => ({ pageId: title.toLowerCase(), title, route: index ? `/${title.toLowerCase()}` : '/', filePath: `/src/pages/${title}.tsx`, role: title.toLowerCase() }));
     const invoke = vi.fn(async (input: { messages: Array<{ content: string }> }, _options: { timeoutMs: number }) => {

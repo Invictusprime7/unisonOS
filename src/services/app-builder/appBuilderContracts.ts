@@ -30,7 +30,7 @@ import {
 import { resolveComponentRuntimeContract, type ComponentRuntimeContract } from '@/services/componentRuntimeContract';
 import { getWizardBindingMarkers } from '@/services/wizardBindingBridge';
 import { getArtifact } from '@/platform/core/artifactRegistry';
-import type { UniversalCreationInput } from '@/platform/core/universalCreation';
+import { normalizeUniversalCreation, type UniversalCreationInput } from '@/platform/core/universalCreation';
 
 export type { CreationMode, UniversalCreationInput } from '@/platform/core/universalCreation';
 
@@ -458,7 +458,7 @@ export interface AppBuildContract {
     branding: AppBuilderLogoContract;
     /** Owner's planning-chat brief carried from WizardSelections.visionPrompt. */
     visionBrief?: string;
-    /** Ephemeral creative intent projection; the accepted snapshot remains authoritative. */
+    /** Launch transport; the accepted snapshot retains this sanitized intent. */
     universalCreation?: UniversalCreationInput;
     /** Business-provided routing/contact parameters used by registered actions. */
     parameters: AppBuildBusinessParameters;
@@ -530,6 +530,7 @@ export interface AppBuildRequest {
   operationId: string;
   gatewayOptions?: Record<string, unknown>;
   contract: AppBuildContract;
+  generatedHeroImage?: { url: string; prompt: string };
   initialFiles: Readonly<Record<string, string>>;
   entryPoint: string;
   baseRevisionId?: string | null;
@@ -619,6 +620,7 @@ export interface AppBuilderPageGenerationResult {
 
 export interface AppEditRequest {
   operationId: string;
+  importedSource?: boolean;
   guestDemoOperationId?: string;
   /** Durable upload links/extracted text; not a substitute for image vision. */
   attachmentContext?: string;
@@ -659,7 +661,7 @@ export interface AppBuildCandidate {
   designReport?: import('./appBuilderGenerationContext').DesignSourceUsageReport;
   /** Derived read-only graph for the exact accepted candidate source. */
   graph?: import('@/services/agent-runtime/systemGraph').SystemGraph;
-  /** The owner's explicit requirements vs this exact source (advisory, never a gate). */
+  /** Read-only coverage evidence; explicit and confirmed misses block candidate acceptance. */
   requirementCoverage?: import('./requirementCoverage').RequirementCoverageReport;
 }
 
@@ -765,8 +767,48 @@ function assertAppBuildContract(value: unknown): asserts value is AppBuildContra
   if (!contract.topology.sitePlan.pages.length || !Object.keys(contract.topology.pageRegistry.pages).length) {
     throw new Error('AppBuildContract topology must include at least one page.');
   }
+  const sitePages = contract.topology.sitePlan.pages;
+  const uniquePageIds = new Set(sitePages.map((page) => page.id));
+  const uniqueRoutes = new Set(sitePages.map((page) => page.route.toLowerCase()));
+  const uniqueFiles = new Set(sitePages.map((page) => page.filePath.toLowerCase()));
+  if (uniquePageIds.size !== sitePages.length || uniqueRoutes.size !== sitePages.length || uniqueFiles.size !== sitePages.length) {
+    throw new Error('AppBuildContract topology contains duplicate page ids, routes, or source files.');
+  }
   if (!contract.design.resolvedSiteDesignContext.contract) {
     throw new Error('AppBuildContract requires the canonical site design context.');
+  }
+  const finalized = contract.business.universalCreation?.finalizedSelections;
+  if (finalized) {
+    const sameList = (left: readonly string[], right: readonly string[]) =>
+      JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
+    const sitePages = contract.topology.sitePlan.pages.map((page) => ({
+      route: page.route,
+      title: page.title,
+      suggestedRole: page.role,
+    }));
+    const finalizedPages = finalized.pages.map(({ route, title, suggestedRole }) => ({ route, title, suggestedRole }));
+    const uiFoundation = contract.design.uiFoundation;
+    const selectionsMatch = finalized.industry === contract.business.industry
+      && finalized.businessName === contract.business.businessName
+      && finalized.systemId === contract.identity.systemType
+      && sameList(finalized.goals, contract.business.goals)
+      && sameList(finalized.visitorActions, contract.business.intents)
+      && sameList(finalized.authorizedCapabilities, contract.business.capabilities)
+      && JSON.stringify(finalizedPages) === JSON.stringify(sitePages)
+      && finalized.design.themePresetId === contract.design.themePresetId
+      && finalized.design.artDirectionFamilyId === contract.design.artDirection.familyId
+      && finalized.design.artDirectionPackId === contract.design.artDirection.storagePackId
+      && finalized.design.experience === contract.design.resolvedSiteDesignContext.contract.experience
+      && finalized.design.mode === contract.design.resolvedSiteDesignContext.contract.mode
+      && finalized.uiFoundation.manifestPath === uiFoundation.manifestPath
+      && finalized.uiFoundation.importRoot === uiFoundation.importRoot
+      && finalized.uiFoundation.runtimeProfile === uiFoundation.runtimeProfile
+      && sameList(finalized.uiFoundation.primitiveFamilyIds, contract.design.sourceSelection.primitiveFamilyIds)
+      && sameList(finalized.uiFoundation.experiencePrimitiveIds, contract.design.sourceSelection.experiencePrimitiveIds)
+      && sameList(finalized.uiFoundation.approvedExperienceCapabilities, contract.runtime.approvedExperienceCapabilities);
+    if (!selectionsMatch) {
+      throw new Error('UniversalCreation finalized selections drift from the canonical AppBuildContract.');
+    }
   }
 }
 
@@ -795,6 +837,52 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
       availableCapabilities: input.capabilities,
     },
   );
+  const sourceSelection = deriveDesignSourceSelection(input.registryContext);
+  const redactedCreation = input.universalCreation
+    ? redactUniversalCreation(input.universalCreation, privateRoutingValues)
+    : undefined;
+  const universalCreation = redactedCreation
+    ? normalizeUniversalCreation({
+        ...redactedCreation,
+        finalizedSelections: {
+          version: 1,
+          industry: input.industry,
+          businessName: input.businessName,
+          systemId: input.identity.systemType,
+          goals: [...input.goals],
+          visitorActions: [...input.intents],
+          requestedCapabilities: [...redactedCreation.requestedCapabilities],
+          authorizedCapabilities: [...input.capabilities],
+          pages: input.sitePlan.pages.map((page) => {
+            const requested = redactedCreation.pages.find((candidate) => candidate.route.toLowerCase() === page.route.toLowerCase());
+            return {
+              route: page.route,
+              title: redactPrivateRoutingValues(page.title, privateRoutingValues) ?? page.title,
+              purpose: redactPrivateRoutingValues(
+                requested?.purpose ?? page.purpose ?? `Serve the ${page.role} page for ${input.businessName}.`,
+                privateRoutingValues,
+              ) ?? `Serve the ${page.role} page for ${input.businessName}.`,
+              suggestedRole: page.role,
+            };
+          }),
+          design: {
+            themePresetId: input.themePresetId,
+            artDirectionFamilyId: input.artDirection.familyId,
+            artDirectionPackId: input.artDirection.storagePackId,
+            experience: input.designContext.contract.experience,
+            mode: input.designContext.contract.mode,
+          },
+          uiFoundation: {
+            manifestPath: input.uiFoundation.manifestPath,
+            importRoot: input.uiFoundation.importRoot,
+            runtimeProfile: input.uiFoundation.runtimeProfile,
+            primitiveFamilyIds: sourceSelection.primitiveFamilyIds,
+            experiencePrimitiveIds: sourceSelection.experiencePrimitiveIds,
+            approvedExperienceCapabilities: [...(input.uiFoundation.approvedExperienceCapabilities ?? input.uiFoundation.experienceCapabilities)],
+          },
+        },
+      })
+    : undefined;
   const contract: AppBuildContract = {
     protocolVersion: APP_BUILDER_PROTOCOL_VERSION,
     identity: { ...input.identity },
@@ -807,7 +895,7 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
       businessName: input.businessName,
       branding: deriveAppBuilderLogoContract(input.businessName),
       visionBrief: redactPrivateRoutingValues(input.visionBrief, privateRoutingValues),
-      universalCreation: redactUniversalCreation(input.universalCreation, privateRoutingValues),
+      universalCreation,
       parameters: Object.fromEntries(
         Object.entries(projectPublicBusinessParameters(input.businessParameters))
           .filter(([, value]) => value !== undefined && value !== '')
@@ -831,7 +919,7 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
       uiFoundation: input.uiFoundation,
       registryContext: input.registryContext,
       compositionPlan,
-      sourceSelection: deriveDesignSourceSelection(input.registryContext),
+      sourceSelection,
     },
     runtime: {
       framework: 'react-vite',

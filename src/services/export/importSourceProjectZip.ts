@@ -115,6 +115,27 @@ function safeParseJson<T = unknown>(raw: string): T | null {
   }
 }
 
+function collectRuntimeDependencies(packageJson: Record<string, unknown>): Record<string, string> {
+  const dependencies: Record<string, string> = {};
+  const fields = ['devDependencies', 'peerDependencies', 'optionalDependencies', 'dependencies'];
+
+  for (const field of fields) {
+    const values = packageJson[field];
+    if (!values || typeof values !== 'object' || Array.isArray(values)) continue;
+    for (const [name, rawVersion] of Object.entries(values as Record<string, unknown>)) {
+      if (
+        !/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/i.test(name)
+        || typeof rawVersion !== 'string'
+        || !rawVersion.trim()
+        || /^(?:file:|link:|workspace:|git\+|git:|github:|https?:|npm:)/i.test(rawVersion.trim())
+      ) continue;
+      dependencies[name] = rawVersion.trim();
+    }
+  }
+
+  return dependencies;
+}
+
 export async function importSourceProjectZip(
   file: File | Blob,
   options?: { fallbackName?: string },
@@ -178,6 +199,22 @@ export async function importSourceProjectZip(
     vfsFiles[k] = v;
   }
 
+  if (packageJsonObj) {
+    const packageName = typeof packageJsonObj.name === 'string' && packageJsonObj.name.trim()
+      ? packageJsonObj.name.trim()
+      : options?.fallbackName || 'imported-project';
+    const packageVersion = typeof packageJsonObj.version === 'string' && packageJsonObj.version.trim()
+      ? packageJsonObj.version.trim()
+      : '0.0.1';
+    vfsFiles['/package.json'] = JSON.stringify({
+      name: packageName,
+      private: true,
+      version: packageVersion,
+      type: 'module',
+      dependencies: collectRuntimeDependencies(packageJsonObj),
+    }, null, 2);
+  }
+
   // Validate — the Builder canonical scaffold requires src/main.tsx,
   // src/App.tsx (or an entry the runtimeManifest points at) and src/index.css.
   const hasMain = !!(vfsFiles['/src/main.tsx'] || vfsFiles['/src/main.jsx']);
@@ -223,7 +260,7 @@ export async function importSourceProjectZip(
     || (hasMain ? '/src/main.tsx' : hasApp ? '/src/App.tsx' : '/src/main.tsx');
 
   const projectName =
-    (packageJsonObj?.name as string | undefined)
+    (typeof packageJsonObj?.name === 'string' ? packageJsonObj.name : undefined)
     || options?.fallbackName
     || commonRoot.replace(/\/+$/, '')
     || 'Imported Project';

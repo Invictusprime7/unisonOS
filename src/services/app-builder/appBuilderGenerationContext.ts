@@ -210,6 +210,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const creationContext = creation ? [
     `VISITOR CREATION SPECIFICATION (${creation.mode}): site purpose: ${creation.sitePurpose}; subject: ${creation.subject}.`,
     `Explicit page plan: ${creation.pages.map((page) => `${page.route} (${page.title}; role ${page.suggestedRole ?? 'custom'}): ${page.purpose}`).join(' | ') || 'Home only.'}`,
+    ...(creation.finalizedSelections ? [`FINALIZED LAUNCH PLAN (canonical user selections; do not omit or replace): ${JSON.stringify(creation.finalizedSelections)}`] : []),
     `Visual requirements: ${creation.visualRequirements.join('; ') || 'Use the visual direction in the original prompt.'}`,
     `Requested operational capabilities: ${creation.requestedCapabilities.join(', ') || 'none; do not add unrequested backend behavior.'}`,
     'Capability authorization: a requested capability is not authorization. Use only registered components and intents in this contract; never simulate backend writes or claim unbound operations are functional.',
@@ -227,6 +228,22 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
       ? ['Editorial pages may render static sample articles. When a published articles content type exists, load it through listPublishedContent from @/components/publishedActionRuntime. If no type or published rows are available, keep a local sample/empty state; do not claim CMS editing or publishing without canonical owner authorization.']
       : []),
   ].join('\n') : '';
+  const pageIntentContext = (pageId?: string) => {
+    if (!creation || !pageId) return '';
+    const target = contract.topology.sitePlan.pages.find((page) => page.id === pageId);
+    if (!target) return '';
+    const finalizedPage = creation.finalizedSelections?.pages.find((page) => page.route.toLowerCase() === target.route.toLowerCase());
+    const relevantRequirements = (creation.requirements ?? []).filter((requirement) =>
+      !requirement.pageRoute || requirement.pageRoute.toLowerCase() === target.route.toLowerCase(),
+    );
+    return [
+      `PAGE-SPECIFIC OWNER INTENT (required): ${target.title}; route ${target.route}; role ${target.role}.`,
+      `Page purpose: ${finalizedPage?.purpose ?? target.purpose ?? `Serve the ${target.role} intent for ${business.businessName}.`}`,
+      `Site purpose: ${creation.sitePurpose}. Visitor actions: ${creation.finalizedSelections?.visitorActions.join(', ') || creation.requestedCapabilities.join(', ') || 'content and navigation'}.`,
+      `Requirements for this page: ${relevantRequirements.map((requirement) => `[${requirement.id}] ${requirement.text}`).join('; ') || 'follow the page purpose above without repeating another page\'s content.'}`,
+      'Render only content and interactions serving this page purpose. Do not copy another page, duplicate a section/form/component, or use a generic page template in place of its requested intent.',
+    ].join('\n');
+  };
   // Template installs (no prompt) still get their trade knowledge, as advisory context.
   const templateVerticalContext = creation ? '' : renderVerticalKnowledge(vertical);
   const industryContext = buildIndustryAuthoringContext(business.industry, business.capabilities);
@@ -315,6 +332,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 1, text: !pageId && business.bindingGuide ? `WIZARD BINDING MARKERS (HARD CANDIDATE ACCEPTANCE REQUIREMENTS):\n${business.bindingGuide}` : '' },
     { priority: 1, text: canonicalIntentBindings(pageId) },
     { priority: 1, text: creationContext },
+    { priority: 1, text: pageIntentContext(pageId) },
     { priority: 1, text: modules },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
     { priority: 1, text: renderEligiblePresentation(designSources, pageId) },

@@ -1,4 +1,4 @@
-import { AI_COMPOSER_BRIEF_LIMIT, aiComposerRouteOpSchema, type AIComposerRequest, type AIComposerTask } from '@/contracts/aiComposerContract';
+import { AI_COMPOSER_BRIEF_LIMIT, AI_COMPOSER_RUNTIME_CONTEXT_LIMIT, aiComposerRouteOpSchema, type AIComposerRequest, type AIComposerTask } from '@/contracts/aiComposerContract';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { designKnowledgeManifest, selectDesignKnowledge } from '@/services/knowledge/designKnowledge';
 import { scopeForInstruction, selectSourceKnowledgeWithReport, type SourceKnowledgeScope } from './sourceKnowledgeContext';
@@ -53,6 +53,7 @@ export interface CanonicalAuthorshipEvidence {
 
 export interface CanonicalAuthoringRequestInput {
   task: AIComposerTask;
+  importedSource?: boolean;
   page: AIComposerRequest['page'];
   brief: string;
   knowledgeQuery: string;
@@ -333,6 +334,7 @@ export async function assembleCanonicalAuthoringRequest(input: CanonicalAuthorin
   return {
     request: {
       task: input.task,
+      importedSource: input.importedSource,
       page: input.page,
       brief,
       instruction: input.instruction,
@@ -365,7 +367,7 @@ export async function assembleCanonicalAuthoringRequest(input: CanonicalAuthorin
         ]
           .filter(Boolean)
           .join('\n')
-          .slice(0, 12000) || undefined,
+          .slice(0, AI_COMPOSER_RUNTIME_CONTEXT_LIMIT) || undefined,
       images: input.images,
       evidence,
     },
