@@ -25,6 +25,7 @@ import {
   recordRepublishEvent,
 } from '@/services/vfsCommitService';
 import { withPoweredByUnisonAttribution } from '@/services/export/unisonAttribution';
+import { isImportedSourceVfs, readImportedSourceRecords } from '@/services/import/importedSourceRecords';
 import { runDeployBackendPreflight } from '@/services/project-backend/deployBackendPreflight';
 import { compileGeneratedSiteRuntimeManifest } from '@/services/generatedSiteRuntimeManifest';
 import type { BusinessSystemType } from '@/lib/infrastructureContext';
@@ -105,6 +106,38 @@ export interface DeploymentStatus {
   result?: DeploymentResponse;
   /** Publish blockers when the gate rejects deployment. */
   blockers?: PublishBlocker[];
+}
+
+/**
+ * Rebuilds the publish files of a checked imported revision and confirms they
+ * hash to what its latest passing, owner-confirmed check recorded.
+ */
+async function prepareImportedPublishFiles(projectId: string, revisionId: string, vfsFiles: Record<string, string>): Promise<{ files: Record<string, string> }> {
+  const records = readImportedSourceRecords(vfsFiles);
+  if (!records) throw new Error('the import records of this version are missing.');
+  const [{ resolveImportPreviewAdapter }, { buildImportedPublishArtifact }, { loadLatestImportedVerification }, { planSourceBuild }] = await Promise.all([
+    import('@/services/import/importCompatibilityProfile'),
+    import('@/services/import/importedPublishArtifact'),
+    import('@/services/import/importedSourceVerification'),
+    import('@/services/import/sourceBuild/sourceBuildPlan'),
+  ]);
+  const verification = await loadLatestImportedVerification(projectId, revisionId);
+  if (!verification || verification.status !== 'passed' || !verification.owner_confirmed) {
+    throw new Error('check every page of this version in the preview and confirm it matches your original first.');
+  }
+  const adapter = resolveImportPreviewAdapter(records.profile, vfsFiles);
+  if (adapter.status !== 'available' || !adapter.adapter) throw new Error(adapter.reason);
+  const plan = planSourceBuild(records.profile, vfsFiles);
+  const artifact = await buildImportedPublishArtifact({
+    adapter: adapter.adapter,
+    records,
+    files: vfsFiles,
+    build: async ({ files, assetUrls }) => (await import('@/services/import/sourceBuild/browserSourceBuild')).buildImportedSourceInBrowser({ plan, files, assetUrls }),
+  });
+  if (artifact.hash !== verification.artifact_hash) {
+    throw new Error('the files to publish no longer match the ones that were checked. Check the pages again, then publish.');
+  }
+  return { files: artifact.files };
 }
 
 /**
@@ -240,6 +273,7 @@ export async function deployToProvider(
     // supplied we use the ledger as the source of truth for files and
     // snapshot, eliminating any chance of shipping un-committed live state.
     let publishedRevision: Awaited<ReturnType<typeof loadLatestPublishReadyRevisionForProject>> | null = null;
+    let importedArtifactFiles: Record<string, string> | null = null;
     let backendPreflight: Awaited<ReturnType<typeof runDeployBackendPreflight>> | null = null;
     if (request.projectId) {
       publishedRevision = await loadLatestPublishReadyRevisionForProject(request.projectId);
@@ -274,6 +308,24 @@ export async function deployToProvider(
           error: 'Publish blocked: the saved revision has no canonical source hash. Save a new revision before publishing.',
         };
       }
+      // UIMP-01: an imported revision publishes the files its saved,
+      // owner-confirmed page check covered — never a Unison rebuild.
+      if (isImportedSourceVfs(publishedRevision.vfsFiles)) {
+        updateProgress(10, 'Preparing your imported project...');
+        let artifactFiles: Record<string, string>;
+        try {
+          artifactFiles = (await prepareImportedPublishFiles(publishedRevision.projectId, publishedRevision.id, publishedRevision.vfsFiles)).files;
+        } catch (error) {
+          const errorResponse: DeploymentResponse = {
+            status: 'error',
+            provider: request.provider,
+            error: `Publish blocked: ${error instanceof Error ? error.message : 'the imported project could not be prepared.'}`,
+          };
+          onProgress?.({ isDeploying: false, progress: 0, message: 'Publish blocked — imported project is not verified.', result: errorResponse });
+          return errorResponse;
+        }
+        importedArtifactFiles = artifactFiles;
+      }
       // Use the durable ledger payload, not whatever the caller passed in.
       request = {
         ...request,
@@ -284,10 +336,10 @@ export async function deployToProvider(
       // Backend-free projects still require a persisted identity and revision.
       // Only an accepted runtime that requires a backend needs a binding.
       const runtimeManifest = publishedRevision.runtimeManifest;
-      const backendFree = typeof runtimeManifest === 'object'
+      const backendFree = Boolean(importedArtifactFiles) || (typeof runtimeManifest === 'object'
         && runtimeManifest !== null
         && 'backendRequired' in runtimeManifest
-        && runtimeManifest.backendRequired === false;
+        && runtimeManifest.backendRequired === false);
       if (!backendFree) {
         // Requirements come from the accepted source and component contracts,
         // never the currently mounted Records registry or unsaved caller files.
@@ -353,11 +405,15 @@ export async function deployToProvider(
       normalizedFiles[normalizedPath] = content;
     }
 
+    if (importedArtifactFiles) {
+      // The server adds attribution after checking these exact bytes.
+      normalizedFiles = { ...importedArtifactFiles };
+    }
     // Ensure index.html exists
     if (!normalizedFiles['index.html']) {
       throw new Error('Missing index.html - required for deployment');
     }
-    normalizedFiles = withPoweredByUnisonAttribution(normalizedFiles);
+    if (!importedArtifactFiles) normalizedFiles = withPoweredByUnisonAttribution(normalizedFiles);
     if (backendPreflight?.manifestJson) {
       normalizedFiles['unison.runtime.json'] = backendPreflight.manifestJson;
     }
