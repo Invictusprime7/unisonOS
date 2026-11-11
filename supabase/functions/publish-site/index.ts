@@ -115,7 +115,7 @@ function sanitizeSiteName(name: string) {
 }
 
 async function generateSha1Hash(input: string | Uint8Array) {
-  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
+  const bytes: Uint8Array<ArrayBuffer> = typeof input === "string" ? new TextEncoder().encode(input) : new Uint8Array(input);
   const hash = await crypto.subtle.digest("SHA-1", bytes);
   const view = new Uint8Array(hash);
   return Array.from(view).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -562,8 +562,8 @@ Deno.serve(async (req) => {
 
       for (const requiredPath of required) {
         const normalizedPath = requiredPath.replace(/^\/+/, "");
-        const content = files[normalizedPath] ?? binaryFiles[normalizedPath];
-        if (typeof content !== "string" && !(content instanceof Uint8Array)) {
+        const content: string | Uint8Array | undefined = files[normalizedPath] ?? binaryFiles[normalizedPath];
+        if (content === undefined) {
           continue;
         }
         const uploadRes = await fetch(`https://api.netlify.com/api/v1/deploys/${deployId}/files/${encodeURIComponent(normalizedPath)}`, {
@@ -572,7 +572,7 @@ Deno.serve(async (req) => {
             Authorization: `Bearer ${NETLIFY_AUTH_TOKEN}`,
             "Content-Type": "application/octet-stream",
           },
-          body: typeof content === "string" ? encoder.encode(content) : content,
+          body: typeof content === "string" ? encoder.encode(content) : new Uint8Array(content),
         });
         if (!uploadRes.ok) {
           const text = await uploadRes.text().catch(() => "");
