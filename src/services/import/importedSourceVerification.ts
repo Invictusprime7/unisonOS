@@ -124,3 +124,35 @@ export async function recordImportedSourceVerification(input: {
   const result = (data ?? {}) as { verification_id?: string; publish_ready?: boolean };
   return { verificationId: String(result.verification_id ?? ''), publishReady: result.publish_ready === true };
 }
+
+/**
+ * Saves a check for the saved revision matching `files`, recording the hash of
+ * the files publishing would ship. The server marks that same revision ready
+ * only for a passing, owner-confirmed check.
+ */
+export async function saveImportedVerification(input: {
+  projectId: string;
+  files: Record<string, string>;
+  records: import('@/services/import/importedSourceRecords').ImportedSourceRecords;
+  adapter: string;
+  summary: VerificationSummary;
+  ownerConfirmed: boolean;
+  adaptations: string[];
+  build?: Parameters<typeof import('@/services/import/importedPublishArtifact').buildImportedPublishArtifact>[0]['build'];
+}): Promise<{ publishReady: boolean }> {
+  const revision = await findSavedImportedRevision(input.projectId, input.files);
+  if (!revision) throw new Error('Save your latest changes first; only a saved version can be checked for publishing.');
+  const { buildImportedPublishArtifact } = await import('@/services/import/importedPublishArtifact');
+  const artifact = await buildImportedPublishArtifact({ adapter: input.adapter, records: input.records, files: input.files, build: input.build });
+  const result = await recordImportedSourceVerification({
+    projectId: input.projectId,
+    revisionId: revision.id,
+    vfsHash: revision.vfsHash,
+    adapter: input.adapter,
+    artifactHash: artifact.hash,
+    summary: input.summary,
+    ownerConfirmed: input.ownerConfirmed,
+    adaptations: input.adaptations,
+  });
+  return { publishReady: result.publishReady };
+}

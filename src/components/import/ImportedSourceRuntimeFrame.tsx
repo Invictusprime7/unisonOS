@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ClipboardCheck, Info, Loader2, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import type { ImportedSourceRecords } from '@/services/import/importedSourceRecords';
@@ -9,16 +8,16 @@ import type { ImportCompatibilityProfile } from '@/services/import/importCompati
 import { planSourceBuild, SOURCE_BUILD_ADAPTER } from '@/services/import/sourceBuild/sourceBuildPlan';
 import type { SourceBuildResult } from '@/services/import/sourceBuild/sourceBundler';
 import { buildImportedSourceInBrowser } from '@/services/import/sourceBuild/browserSourceBuild';
-import { buildImportedPublishArtifact } from '@/services/import/importedPublishArtifact';
 import {
   findSavedImportedRevision,
   loadLatestImportedVerification,
-  recordImportedSourceVerification,
+  saveImportedVerification,
   summarizeVerification,
   type RouteProbe,
   type VerificationSummary,
 } from '@/services/import/importedSourceVerification';
 import { ImportedSourcePreviewStatus } from './ImportedSourcePreviewStatus';
+import { ImportedVerificationPanel } from './ImportedVerificationPanel';
 
 const RUNTIME_URL = '/import-runtime.html';
 const PROBE_SETTLE_MS = 1500;
@@ -147,23 +146,15 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
     setSaving(true);
     setSaveMessage(null);
     try {
-      const revision = await findSavedImportedRevision(projectId, files);
-      if (!revision) throw new Error('Save your latest changes first; only a saved version can be checked for publishing.');
-      const artifact = await buildImportedPublishArtifact({
-        adapter: SOURCE_BUILD_ADAPTER,
-        records,
-        files,
-        build: ({ files: f, assetUrls: urls }) => buildImportedSourceInBrowser({ plan, files: f, assetUrls: urls }),
-      });
-      const result = await recordImportedSourceVerification({
+      const result = await saveImportedVerification({
         projectId,
-        revisionId: revision.id,
-        vfsHash: revision.vfsHash,
+        files,
+        records,
         adapter: SOURCE_BUILD_ADAPTER,
-        artifactHash: artifact.hash,
         summary,
         ownerConfirmed: confirmed,
         adaptations: build?.adaptations ?? [],
+        build: ({ files: f, assetUrls: urls }) => buildImportedSourceInBrowser({ plan, files: f, assetUrls: urls }),
       });
       setPublishReady(result.publishReady);
       setSaveMessage(result.publishReady ? 'Saved. This version can now be published.' : 'Saved. Publishing stays off until every page passes and you confirm it matches.');
@@ -242,32 +233,16 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
           </div>
         )}
         {summary && !showDetails && (
-          <div className="absolute inset-x-0 bottom-0 max-h-[60%] overflow-auto border-t border-border bg-background p-4" role="region" aria-label="Page check results">
-            <div className="mx-auto w-full max-w-xl space-y-3">
-              <p className="text-xs font-medium text-foreground">
-                {summary.status === 'passed' ? `All ${summary.routes.length} page${summary.routes.length === 1 ? '' : 's'} rendered without errors.` : 'Some pages need attention before publishing.'}
-              </p>
-              <ul className="space-y-1 text-xs text-muted-foreground">
-                {summary.routes.map((r) => (
-                  <li key={r.path}>{r.ok ? '✓' : '✗'} {r.path}{r.problems.length ? ` — ${r.problems.join(' ')}` : ''}</li>
-                ))}
-              </ul>
-              {summary.status === 'passed' && (
-                <label className="flex items-start gap-2 text-xs text-foreground">
-                  <Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(v === true)} aria-label="Confirm the preview matches the original" />
-                  <span>I looked through these pages and they match my original design.</span>
-                </label>
-              )}
-              <div className="flex items-center gap-2">
-                <Button type="button" size="sm" onClick={saveCheck} disabled={saving || !projectId || (summary.status === 'passed' && !confirmed)}>
-                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
-                  {summary.status === 'passed' ? 'Save check and allow publishing' : 'Save check result'}
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setSummary(null)}>Close</Button>
-              </div>
-              {saveMessage && <p role="status" className="text-xs text-muted-foreground">{saveMessage}</p>}
-            </div>
-          </div>
+          <ImportedVerificationPanel
+            summary={summary}
+            confirmed={confirmed}
+            onConfirmedChange={setConfirmed}
+            onSave={saveCheck}
+            onClose={() => setSummary(null)}
+            saving={saving}
+            canSave={Boolean(projectId)}
+            message={saveMessage}
+          />
         )}
         {showDetails && (
           <div className="absolute inset-0 overflow-auto bg-background">
