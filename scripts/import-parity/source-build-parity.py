@@ -28,8 +28,9 @@ SCROLLS = [0, 1200]
 NOISE = 8
 DETERMINISM = "(() => { let s = 0x2545f491; Math.random = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 1e9) / 1e9; }; })();"
 SETTLE_MS = 2500
-# Infinite CSS/Web animations are pinned to t=0 on both sides before every capture (disclosed).
-FREEZE = "() => { for (const a of document.getAnimations()) { a.pause(); a.currentTime = 0; } }"
+# Before every capture, on both sides (disclosed): infinite animations are pinned
+# to t=0 and finite ones (transitions, entrances) jump to their end state.
+FREEZE = "() => { for (const a of document.getAnimations()) { const t = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : null; if (!t || t.iterations === Infinity || t.endTime === Infinity) { a.pause(); a.currentTime = 0; } else { try { a.finish(); } catch (_) { a.pause(); } } } }"
 root = Path(__file__).resolve().parents[2]
 doc_path = OUT / "runtime-document.json"
 args = ["bun", str(root / "scripts/import-parity/render-source-preview.ts"), str(PROJECT), REF, str(doc_path)] + ([POINTER] if POINTER else [])
@@ -83,7 +84,7 @@ async def route_pointer(ctx):
 
 async def main():
     report = {"project": str(PROJECT), "reference": REF, "framework": DOC.get("framework"), "build": {"ok": DOC["ok"], "diagnostics": DOC["diagnostics"], "adaptations": DOC["adaptations"]},
-              "noiseThreshold": NOISE, "masks": [], "determinism": ["seeded Math.random on both sides", "prefers-reduced-motion on both sides", "running animations paused at t=0 on both sides", f"{SETTLE_MS} ms settle"],
+              "noiseThreshold": NOISE, "masks": [], "determinism": ["seeded Math.random on both sides", "prefers-reduced-motion on both sides", "infinite animations paused at t=0 and finite transitions finished on both sides", f"{SETTLE_MS} ms settle"],
               "pointerOrigin": POINTER or None, "cases": []}
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
