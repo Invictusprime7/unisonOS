@@ -10,6 +10,7 @@ import { getServiceRoleClient, verifyAuth, authError } from "../_shared/auth.ts"
 import { safeParseBody, sanitizeString, isNonEmptyString } from "../_shared/validate.ts";
 import { verifyPublishAttestation } from "../_shared/publishAttestation.ts";
 import {
+  computeCanonicalVfsHash,
   verifyCanonicalPublishSource,
   type CanonicalPublishRevisionIdentity,
   type CanonicalPublishRevisionRow,
@@ -276,6 +277,14 @@ Deno.serve(async (req) => {
       if (isImportedSourceRevision(revisionRow.readiness_report)) {
         // UIMP-01: imported projects publish exactly the files their saved,
         // owner-confirmed check covered (never a Unison rebuild of them).
+        if (canonicalRevisionRow.status !== "committed" || canonicalRevisionRow.publish_ready !== true
+          || !canonicalRevisionRow.vfs_hash || canonicalRevisionRow.vfs_hash !== identity.vfsHash
+          || await computeCanonicalVfsHash(canonicalRevisionRow.vfs_files) !== canonicalRevisionRow.vfs_hash) {
+          return errorResponse("The requested publish revision is no longer the accepted publish-ready revision.", 412, corsHeaders, {
+            status: "error", provider: body.provider ?? "unknown",
+            attestation: { enforced: true, code: "canonical-revision-mismatch" },
+          });
+        }
         const { data: verification } = await admin
           .from("imported_source_verifications")
           .select("revision_id, vfs_hash, artifact_hash, status, owner_confirmed")
