@@ -292,7 +292,9 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
         }
         if (/\.asset\.json$/.test(path) && text !== undefined) {
           const url = pointerUrl(path);
-          return { contents: `const pointer = ${text}; export default ${JSON.stringify(url)}; export const url = ${JSON.stringify(url)}; export const meta = pointer;`, loader: 'js' };
+          // JSON semantics are kept: the default export is the pointer object;
+          // only its url is made absolute so the image loads in the preview.
+          return { contents: `export default { ...${text.trim() || '{}'}, url: ${JSON.stringify(url)} };`, loader: 'js' };
         }
         if (ASSET_EXT.test(path) || (text === undefined && assetUrls[path])) {
           const url = urlForLocalFile(path);
