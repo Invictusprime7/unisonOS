@@ -104,7 +104,8 @@ async def main():
                 await settle(ref.main_frame); await settle(frame); await ref.wait_for_timeout(SETTLE_MS)
                 await ref.evaluate(FREEZE); await frame.evaluate(FREEZE); await ref.wait_for_timeout(400)
                 geo_ref, geo_pre = await ref.evaluate(GEOMETRY), await frame.evaluate(GEOMETRY)
-                geo_mismatch = sum(1 for x, y in zip(geo_ref, geo_pre) if x != y) + abs(len(geo_ref) - len(geo_pre))
+                geo_pairs = [[x, y] for x, y in zip(geo_ref, geo_pre) if x != y]
+                geo_mismatch = len(geo_pairs) + abs(len(geo_ref) - len(geo_pre))
                 for y in SCROLLS:
                     await ref.evaluate(f"window.scrollTo(0,{y})"); await frame.evaluate(f"window.scrollTo(0,{y})")
                     await ref.wait_for_timeout(300)
@@ -113,7 +114,7 @@ async def main():
                     name = f"{slug}_{w}x{h}_y{y}"
                     a, b = OUT / f"original_{name}.png", OUT / f"preview_{name}.png"
                     await ref.screenshot(path=str(a)); await pre.screenshot(path=str(b))
-                    report["cases"].append({"route": route, "viewport": [w, h], "scrollY": y, "elements": [len(geo_ref), len(geo_pre)], "geometryMismatches": geo_mismatch, "runtimeErrors": errors[:5], **compare(a, b, name)})
+                    report["cases"].append({"route": route, "viewport": [w, h], "scrollY": y, "elements": [len(geo_ref), len(geo_pre)], "geometryMismatches": geo_mismatch, "geometryDiffs": geo_pairs[:5], "runtimeErrors": errors[:5], **compare(a, b, name)})
                 await ctx.close()
         await browser.close()
     report["visualParity"] = "verified" if all(c["materialDiffering"] == 0 and c["geometryMismatches"] == 0 for c in report["cases"]) else "failed"
