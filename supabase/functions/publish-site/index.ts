@@ -367,7 +367,7 @@ Deno.serve(async (req) => {
         verdict.attestation.filesFingerprint,
         verdict.attestation.evaluatedAt,
       );
-    } else if (REQUIRE_ATTESTATION) {
+    } else if (REQUIRE_ATTESTATION && !importedPublish) {
       return errorResponse(
         "Publish attestation is required but was not supplied.",
         412,
