@@ -139,7 +139,7 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
   // ── styles ────────────────────────────────────────────────────────────────
   const packageCss = async (specifier: string): Promise<{ path: string; content: string }> => {
     const name = packageNameOf(specifier);
-    const version = pkgVersion(name) ?? (name === 'tailwindcss' ? plan.packages.tailwindcss ?? null : null);
+    const version = pkgVersion(name) ?? plan.versions[name] ?? null;
     const pinned = version ?? 'latest';
     let sub = specifier.slice(name.length).replace(/^\//, '');
     if (!sub) {
@@ -382,7 +382,7 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
     ...tailwind3Sheets.map((css) => `<style type="text/tailwindcss">${css.replace(/<\/style/gi, '<\\/style')}</style>`),
   ];
   if (tailwind3Sheets.length) {
-    const twVersion = plan.packages.tailwindcss ?? '3';
+    const twVersion = plan.versions.tailwindcss ?? '3';
     head.push(`<script src="https://cdn.tailwindcss.com/${twVersion}"></script>`);
     diagnostics.push({ level: 'info', code: 'tailwind3-runtime', message: 'Tailwind 3 styles are generated in the preview frame; plugins and JavaScript config options from tailwind.config are not applied.' });
   }

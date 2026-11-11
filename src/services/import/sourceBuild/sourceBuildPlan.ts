@@ -27,6 +27,8 @@ export interface SourceBuildPlan {
   packages: Record<string, string>;
   /** Packages whose version came from the declared range, not a lockfile. */
   unpinned: string[];
+  /** Every declared package (build tooling included) -> exact or declared version, for stylesheet lookups. */
+  versions: Record<string, string>;
   tailwind: '3' | '4' | null;
   /** Import alias prefix ('@/') -> VFS directory ('/src/'). */
   aliases: Array<{ find: string; replacement: string }>;
@@ -81,7 +83,7 @@ export function readLockedVersions(files: Record<string, string>, names: string[
 
 const unsupported = (reason: string): SourceBuildPlan => ({
   status: 'unsupported', reason, kind: null, htmlTemplate: null, entry: null, routerExport: null,
-  packages: {}, unpinned: [], tailwind: null, aliases: [], jsxImportSource: 'react', tsconfigRaw: {}, routesDir: null,
+  packages: {}, unpinned: [], versions: {}, tailwind: null, aliases: [], jsxImportSource: 'react', tsconfigRaw: {}, routesDir: null,
 });
 
 export function planSourceBuild(profile: ImportCompatibilityProfile, files: Record<string, string>): SourceBuildPlan {
@@ -107,7 +109,8 @@ export function planSourceBuild(profile: ImportCompatibilityProfile, files: Reco
   aliases.sort((a, b) => b.find.length - a.find.length);
 
   const runtimeNames = Object.keys(declared).filter((name) => !TOOLING.test(name));
-  const locked = readLockedVersions(sourceFiles, runtimeNames);
+  const locked = readLockedVersions(sourceFiles, Object.keys(declared));
+  const versions = Object.fromEntries(Object.keys(declared).map((name) => [name, locked[name] ?? declared[name].replace(/^[~^]/, '')]));
   const packages: Record<string, string> = {};
   const unpinned: string[] = [];
   for (const name of runtimeNames) {
@@ -119,7 +122,7 @@ export function planSourceBuild(profile: ImportCompatibilityProfile, files: Reco
   if (!packages.react && !packages['react-dom']) return unsupported('Only React projects can run in the source build.');
 
   const base = {
-    packages, unpinned, tailwind: profile.toolchain.tailwind, aliases, jsxImportSource,
+    packages, unpinned, versions, tailwind: profile.toolchain.tailwind, aliases, jsxImportSource,
     tsconfigRaw: { compilerOptions: { ...compilerOptions, jsx: 'react-jsx', jsxImportSource } },
   };
 
