@@ -31,7 +31,7 @@ type RuntimeMessage = { source?: string; nonce?: string; type?: string; path?: s
  * every page and confirm the preview matches their original before the same
  * saved version can be published.
  */
-export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectId, adapter, className, editable = false, onFrameChange }: {
+export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectId, adapter, className, editable = false, onFrameChange, revisionId }: {
   records: ImportedSourceRecords;
   files: Record<string, string>;
   assetUrls: Record<string, string>;
@@ -42,11 +42,13 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
   editable?: boolean;
   /** Reports the live preview frame so the builder can talk to its selection bridge. */
   onFrameChange?: (frame: HTMLIFrameElement | null) => void;
+  /** Accepted revision the preview shows; stamped on locators so edits target exactly it. */
+  revisionId?: string | null;
 }) {
   const plan = useMemo(() => planSourceBuild(records.profile, files), [records.profile, files]);
   // Locators only for JSX projects compiled by esbuild (not Vue/Svelte/Solid compilers).
   const selectable = editable && !plan.compilers?.vue && !plan.compilers?.svelte && !plan.compilers?.solid;
-  const previewFiles = useMemo(() => (selectable ? instrumentSourceForSelection(files) : files), [selectable, files]);
+  const previewFiles = useMemo(() => (selectable ? instrumentSourceForSelection(files, revisionId) : files), [selectable, files, revisionId]);
   const [editBridge, setEditBridge] = useState<string | null>(null);
   useEffect(() => {
     if (!selectable) { setEditBridge(null); return; }

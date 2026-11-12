@@ -1495,6 +1495,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         onSessionChange={(session) => { importedPreviewSessionRef.current = session; }}
         className={className}
         editable={Boolean(onElementSelect)}
+        revisionId={revisionId ?? null}
         onFrameChange={(frame) => { importedFrameRef.current = frame; bridgeReadyRef.current = false; }}
       />
     );

@@ -9,11 +9,11 @@ import { injectPreviewSourceLocators, PREVIEW_SELECTION_BRIDGE } from '@/utils/s
 const JSX_SOURCE = /\.(jsx|tsx)$/;
 
 /** Copies `files` with locator attributes on every intrinsic JSX element; React/Preact projects only. */
-export function instrumentSourceForSelection(files: Record<string, string>): Record<string, string> {
+export function instrumentSourceForSelection(files: Record<string, string>, revisionId?: string | null): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [path, text] of Object.entries(files)) {
     out[path] = JSX_SOURCE.test(path) && !path.includes('/node_modules/') && typeof text === 'string'
-      ? injectPreviewSourceLocators(text, path)
+      ? injectPreviewSourceLocators(text, path, revisionId ?? null)
       : text;
   }
   return out;
