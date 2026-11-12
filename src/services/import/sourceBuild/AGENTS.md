@@ -1,0 +1,2 @@
+# Directory rules
+- Tailwind 3 imports run the project's own tailwind.config (bundled by `tailwind3Config.ts`, plugins from the package CDN, first-party plugins via the runtime's `?plugins=`) before their stylesheets reach the browser runtime, and the runtime version is clamped to a published release (`tailwind3RuntimeVersion`). Why: without the config every themed class was missing and one `@apply border-border` failed the whole sheet; unpublished lockfile versions (3.4.18+) loaded no Tailwind at all.
