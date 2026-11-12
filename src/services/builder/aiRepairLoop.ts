@@ -11,8 +11,12 @@ import { activeAuthorshipTrace } from '@/services/launch/authorshipTrace';
 import { runBuilderTurn } from '@/services/builderBrainClient';
 import {
   AI_COMPOSER_MODES,
+  aiComposerRequestSchema,
   aiComposerResponseSchema,
   composerProposalViolations,
+  conformComposerRequest,
+  describeComposerRequestIssues,
+  isProtectedComposerPath,
   type AIComposerRequest,
   type AIComposerResponse,
 } from '@/contracts/aiComposerContract';
@@ -136,6 +140,35 @@ export function decodeComposerResponse(data: unknown): AIComposerResponse | null
   }
 }
 
+/** The edge rejected the request shape itself (schema), not the AI's answer. */
+export function isComposerRequestRejection(error: unknown): boolean {
+  const context = (error as { context?: { status?: number; body?: unknown } } | null)?.context;
+  return context?.status === 400 && typeof context.body === 'string' && /"errorType"\s*:\s*"composer_request"/.test(context.body);
+}
+
+// The edit contract the edge accepted before source-project edits shipped:
+// /src or /public files only, plain path characters, 60k-character files.
+const LEGACY_EDGE_PATH = /^\/(?:src|public)\/[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/;
+const LEGACY_EDGE_FILE_LIMIT = 60_000;
+
+/**
+ * Same source-project edit in the shape an edge still running the previous
+ * contract accepts: the page and its /src parts stay writable, root build
+ * files ride along read-only. Null when the page itself is outside that shape.
+ * The client re-checks the result with the source project's own save rules.
+ */
+export function legacyEdgeComposerRequest(request: AIComposerRequest): AIComposerRequest | null {
+  if (!request.sourceProject || request.task !== 'builder_source_edit') return null;
+  const pagePath = request.page.filePath;
+  const writable = (path: string) => LEGACY_EDGE_PATH.test(path) && !isProtectedComposerPath(path);
+  if (!writable(pagePath)) return null;
+  const targets = [...new Set([pagePath, ...(request.sourceTargets ?? []).filter(writable)])];
+  if (targets.some((path) => (request.files[path]?.length ?? 0) > LEGACY_EDGE_FILE_LIMIT)) return null;
+  const files = Object.fromEntries(Object.entries(request.files).filter(([, content]) => content.length <= LEGACY_EDGE_FILE_LIMIT));
+  const { sourceProject: _sourceProject, ...rest } = request;
+  return { ...rest, sourceTargets: targets, files };
+}
+
 /** Minimum time for one repair turn; below this the attempt is skipped. */
 export const MIN_REPAIR_WINDOW_MS = 60_000;
 
@@ -176,9 +209,19 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       return { ok: false, reason: 'gates_exhausted', attempts: attempt - 1, errors: lastErrors.length ? lastErrors : ['Not enough time left to repair this page.'], response: lastResponse, prepared: lastPrepared, resume: resumeState(attempt - 1) };
     }
     narrate('understanding', attempt === 1 ? 'Thinking through the change' : `Adjusting (round ${attempt} of ${maxAttempts})`, 'running');
-    const { data, error } = await invoke({
-      mode: AI_COMPOSER_MODES[request.task],
-      messages: [{ role: 'user', content: JSON.stringify(request) }],
+    // Fit the request to the contract here so a long brief, an odd file name
+    // or an oversized supporting file never turns into a refused edit.
+    const conformed = conformComposerRequest(request);
+    const checked = aiComposerRequestSchema.safeParse(conformed.request);
+    if (!checked.success) {
+      const detail = describeComposerRequestIssues(checked.error);
+      console.warn('[aiRepairLoop] request outside the composer contract', detail);
+      return { ok: false, reason: 'invalid_response', attempts: attempt - 1, errors: [`The edit could not be prepared: ${detail}`], response: lastResponse, prepared: lastPrepared };
+    }
+    if (conformed.notes.length) console.info('[aiRepairLoop] request bounded', conformed.notes.slice(0, 10));
+    const sendTurn = (payload: AIComposerRequest, windowMs: number) => invoke({
+      mode: AI_COMPOSER_MODES[payload.task],
+      messages: [{ role: 'user', content: JSON.stringify(payload) }],
       ...(input.guestDemoOperationId
         ? { runContext: { operationId: input.guestDemoOperationId } }
         : {}),
@@ -186,10 +229,21 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
         ...input.gatewayOptions,
         timeoutMs: Math.min(
           typeof input.gatewayOptions?.timeoutMs === 'number' ? input.gatewayOptions.timeoutMs : 145_000,
-          remainingMs - 5_000,
+          windowMs - 5_000,
         ),
       },
-    }, { timeoutMs: remainingMs, signal: input.signal });
+    }, { timeoutMs: windowMs, signal: input.signal });
+    let { data, error } = await sendTurn(checked.data, remainingMs);
+    // An edge still on the previous contract refuses source-project fields;
+    // resend the same edit in the shape it accepts instead of failing the owner.
+    if (error && isComposerRequestRejection(error) && !input.signal?.aborted) {
+      const legacy = legacyEdgeComposerRequest(checked.data);
+      if (legacy) {
+        console.warn('[aiRepairLoop] edge refused the request shape; retrying in its previous contract', String((error as { message?: string }).message ?? '').slice(0, 300));
+        request = legacy;
+        ({ data, error } = await sendTurn(legacy, Math.max(5_000, deadline - Date.now())));
+      }
+    }
 
     if (error || !data) {
       const errName = (error as { name?: string } | null)?.name;

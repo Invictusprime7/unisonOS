@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const sent: Array<{ sourceProject?: boolean; files: Record<string, string>; sourceTargets?: string[] }> = [];
+// Simulates an edge still running the contract from before source-project edits.
+let edgeRefusesSourceProject = false;
 vi.mock('@/services/builderBrainClient', async (orig) => ({
   ...(await orig() as object),
   runBuilderTurn: vi.fn(async (body: { messages: Array<{ content: string }> }) => {
     const request = JSON.parse(body.messages[0].content);
     sent.push(request);
+    if (edgeRefusesSourceProject && request.sourceProject) {
+      const error = Object.assign(new Error('Invalid composer request'), { context: { status: 400, body: JSON.stringify({ error: 'Invalid composer request', errorType: 'composer_request' }) } });
+      return { data: null, error };
+    }
     const page = request.files['/src/routes/index.tsx'] as string;
     return { data: { content: JSON.stringify({ summary: 'Renamed the heading.', fileOps: [{ type: 'replace', path: '/src/routes/index.tsx', content: page.replace('>ARIA</h1>', '>ARIANN</h1>') }] }) }, error: null };
   }),
@@ -21,6 +27,7 @@ import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { resolveCanonicalAuthoringPage } from '@/services/builder/canonicalAuthoringRequest';
 import { sourceProjectApplySettings } from '@/services/source-authoring/sourceProjectApply';
 import { checkEditAgainstIntent, editIntentForRequest } from '@/services/editor/editIntentContract';
+import { aiComposerRequestSchema, conformComposerRequest, isSourceProjectComposerPath } from '@/contracts/aiComposerContract';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 const PAGE = '/src/routes/index.tsx';
@@ -95,5 +102,51 @@ describe('editing imported source projects', () => {
 
   it('is not used for ordinary Unison projects', () => {
     expect(sourceProjectApplySettings({ '/src/App.tsx': 'x' }, '/src/App.tsx')).toBeNull();
+  });
+
+  it('still saves the edit when the live AI service refuses the source-project request shape', async () => {
+    const files = await importedProject();
+    sent.length = 0;
+    edgeRefusesSourceProject = true;
+    try {
+      const page = resolveCanonicalAuthoringPage(files, PAGE, PAGE)!;
+      const result = await unisonAppBuilder.edit({
+        operationId: 'builder:test-legacy', page, brief: 'Edit the project.', instruction: 'Change the ARIA heading to ARIANN',
+        currentFiles: files, baseRevisionId: 'rev-1', connectorContext: { revisionId: 'rev-1' },
+        sourceTargets: [PAGE], routes: [], runtimeContext: '',
+      } as unknown as Parameters<typeof unisonAppBuilder.edit>[0]);
+      expect(sent).toHaveLength(2);
+      expect(sent[1].sourceProject).toBeUndefined();
+      expect(sent[1].sourceTargets).toContain(PAGE);
+      expect(sent[1].sourceTargets).not.toContain('/package.json');
+      expect(result.candidate.status).toBe('ready-for-commit');
+      expect(result.changeSet?.fileOps.map((op) => op.path)).toEqual([PAGE]);
+    } finally {
+      edgeRefusesSourceProject = false;
+    }
+  });
+
+  it('lets AI edit framework route files, root settings files and asset pointers of a source project', () => {
+    for (const path of ['/src/routes/process.$slug.tsx', '/src/routes/[__mockup].preview.$.tsx', '/mockupPreviewPlugin.ts', '/tailwind.config.ts', '/src/assets/hero.jpg.asset.json']) {
+      expect(isSourceProjectComposerPath(path), path).toBe(true);
+    }
+    for (const path of ['/package-lock.json', '/.env.json', '/node_modules/x/index.js']) {
+      expect(isSourceProjectComposerPath(path), path).toBe(false);
+    }
+    const request = {
+      task: 'builder_source_edit', sourceProject: true,
+      page: { role: 'page', title: 'process', route: '/process/$slug', filePath: '/src/routes/process.$slug.tsx' },
+      brief: 'x'.repeat(150_000), instruction: 'Make the hero red', routes: [], images: [],
+      files: { '/src/routes/process.$slug.tsx': 'export const a = 1;', '/src/huge.ts': 'y'.repeat(250_000) },
+      sourceTargets: ['/src/routes/process.$slug.tsx', '/.unison-import/manifest.json', '/mockupPreviewPlugin.ts'],
+    };
+    const conformed = conformComposerRequest(request);
+    const parsed = aiComposerRequestSchema.safeParse(conformed.request);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.sourceTargets).toEqual(['/src/routes/process.$slug.tsx', '/mockupPreviewPlugin.ts']);
+    expect(parsed.data.brief.length).toBe(100_000);
+    expect(parsed.data.files['/src/huge.ts']).toBeUndefined();
+    expect(parsed.data.images).toBeUndefined();
   });
 });

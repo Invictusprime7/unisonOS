@@ -10,7 +10,7 @@
  * projects, and edited in place by AI Builder. Industry knowledge and photos
  * are advice in the brief; nothing here gates or rewrites a design.
  */
-import { AI_COMPOSER_MODES, type AIComposerRequest, type AIComposerResponse } from '@/contracts/aiComposerContract';
+import { AI_COMPOSER_MODES, conformComposerRequest, type AIComposerRequest, type AIComposerResponse } from '@/contracts/aiComposerContract';
 import { decodeComposerResponse, type ComposerInvoke } from '@/services/builder/aiRepairLoop';
 import { runBuilderTurn } from '@/services/builderBrainClient';
 import { findUnresolvedImports } from '@/services/import/importedSourceAcceptance';
@@ -162,7 +162,7 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
       turns++;
       const { data, error } = await invoke({
         mode: AI_COMPOSER_MODES[request.task],
-        messages: [{ role: 'user', content: JSON.stringify(request) }],
+        messages: [{ role: 'user', content: JSON.stringify(conformComposerRequest(request).request) }],
         gatewayOptions: { timeoutMs: SOURCE_TURN_TIMEOUT_MS - 10_000, reasoningEffort: 'low' },
       }, { timeoutMs: SOURCE_TURN_TIMEOUT_MS, signal: input.signal, functionName: 'ai-code-assistant' });
       const response = error ? null : decodeComposerResponse(data);

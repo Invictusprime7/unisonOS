@@ -3,6 +3,8 @@
 // Validation, staging, repair orchestration and the commit stay client-owned.
 import {
   aiComposerRequestSchema,
+  conformComposerRequest,
+  describeComposerRequestIssues,
   aiComposerResponseSchema,
   composerProposalViolations,
   type AIComposerRequest,
@@ -282,10 +284,14 @@ export async function runComposerLane(context: string, headers: Record<string, s
     status, headers: { ...headers, 'Content-Type': 'application/json' },
   });
   let parsed;
-  try { parsed = aiComposerRequestSchema.safeParse(JSON.parse(context)); } catch {
+  try { parsed = aiComposerRequestSchema.safeParse(conformComposerRequest(JSON.parse(context)).request); } catch {
     return respond({ error: 'Invalid composer request JSON', errorType: 'composer_request' }, 400);
   }
-  if (!parsed.success) return respond({ error: 'Invalid composer request', errorType: 'composer_request' }, 400);
+  if (!parsed.success) {
+    const details = describeComposerRequestIssues(parsed.error);
+    console.warn('[composerLane] request rejected', details);
+    return respond({ error: 'Invalid composer request', errorType: 'composer_request', details }, 400);
+  }
   const req = parsed.data;
   if (req.task === 'builder_source_edit' && !req.sourceTargets?.length) {
     return respond({ error: 'Builder source edits require explicit source targets', errorType: 'composer_request' }, 400);
