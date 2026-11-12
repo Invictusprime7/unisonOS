@@ -16,6 +16,7 @@
  */
 import { isImportRecordPath } from '@/services/import/importedSourceRecords';
 import type { SourceBuildPlan } from './sourceBuildPlan';
+import { buildTailwind3Config } from './tailwind3Config';
 import { NEXT_JSX_SOURCE, NEXT_RUNTIME_ID, nextEntrySource, nextGoogleFontSource, nextLocalFontSource, nextShimSource } from './nextClientRuntime';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -851,6 +852,7 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
       if (!config) diagnostics.push({ level: 'info', code: 'tailwind3-runtime', message: 'Tailwind 3 styles are generated in the preview frame with Tailwind\'s default theme; the project has no tailwind.config.' });
     }
   }
+  head[0] = `<script type="importmap">${escapeScript(JSON.stringify({ imports }))}</script>`;
   const document = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => `${m}\n${head.join('\n')}`) : `${head.join('\n')}${html}`;
 
   return {
