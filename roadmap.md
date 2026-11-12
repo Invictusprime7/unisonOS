@@ -14,6 +14,7 @@
 - [x] Old launch remnants checked: launch coordinator and stage-4b worker still have callers (template installs, legacy preview), so they stay with the older compiler
 - [x] Point-and-click toolbar edits mapped to source lines for source projects (verified in the builder preview on a converted site; signed-in save not run)
 - [x] Unison design library available to Affinity (vendored into the project only when used)
+- [x] Site writing no longer times out on big turns: foundation writes only build files, tokens and router; shared chrome and each page get their own turn; a timed-out turn retries as smaller section files; Try again continues from finished work
 - [x] AI Builder "add page" on source projects stays in the source edit path (root router/styles of converted sites are editable)
 
 ## Active: UIMP-01 Zero-drift external project import (2026-11-10)
