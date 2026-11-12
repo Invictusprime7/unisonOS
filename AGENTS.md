@@ -4,9 +4,9 @@
 - Load Unison tokens last; hero effects opt in via theme bridge. Why: protect vendor skins.
 - Demo counts settle with canonical revisions. Why: count only saved generations.
 
-- New projects start only in the Affinity chat: `PromptLaunchPanel` runs `runLaunchPipeline` with `buildPromptLaunchInput` and never authors or mutates VFS; the guided Wizard, its saved interview drafts and step markers are deleted, and project import lives in the panel. Why: one creation surface and one launch path.
-- `UnisonAppBuilder` is the sole fresh-launch application author; `generate-page` reuses Composer and saved Home design. Why: no parallel writer.
-- The canonical platform owns topology/routes, capabilities/intents/bindings, Theme/Stage 4b tokens, Art Direction, UI foundation, protected infrastructure and validation; never generate competing pages after App Builder authorship.
+- New sites start only in the Affinity chat: `PromptLaunchPanel` calls `createAffinitySourceProject` (`src/services/source-authoring/`), which authors a standalone React+Vite source project (foundation turn, one turn per page, build check, targeted repair) and saves it as a source project (`affinity-authored` origin, `imported-source` profile). Why: one creation path, same as imports.
+- Source projects (imported or Affinity-written) share acceptance, preview builder, AI Builder edits (`sourceProject` composer flag, free in-place edits) and publish verification; industry knowledge and photos are brief advice, never gates. Why: Unison passes must not override authored source.
+- Legacy Unison-composed sites still use `UnisonAppBuilder`/canonical compiler until converted; new launches never use them. Why: old sites keep working while conversion is pending.
 - `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
 - Saved revisions hydrate read-only; role recovery uses explicit role/type before shared route aliases (Visit → contact), preserving source. Candidates stay unsanitized/unsplit; uploads/images survive repairs. Why: preserve saved work and valid page types.
 - Composer contracts mirror `supabase/functions/_shared/aiComposerContract.ts` and `src/contracts/aiComposerContract.ts`; enforce targets/routes/import reads/intents; prefer hunks, accept replaces. Why: vocabulary is not readiness.
