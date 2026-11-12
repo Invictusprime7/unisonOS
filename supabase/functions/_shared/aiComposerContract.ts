@@ -28,7 +28,7 @@ export function isProtectedComposerPath(path: string): boolean {
   return PROTECTED.some((re) => re.test(path));
 }
 
-const STANDARD_COMPOSER_PATH = /^\/(?:src|public)\/[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/;
+const STANDARD_COMPOSER_PATH = /^\/(?:src|public)\/[A-Za-z0-9_./$@+()[\]~-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/;
 const IMPORTED_SOURCE_ROOT = /^\/(?:src|public|app|pages|routes|components|lib|utils|hooks|features|server|client|api|styles|scripts|assets)\//;
 
 export function isImportedSourceComposerPath(path: string): boolean {
@@ -39,11 +39,18 @@ export function isImportedSourceComposerPath(path: string): boolean {
 
 // Source projects (Affinity-written or imported) also own their root build files.
 // Root-level entry/app/style modules cover projects without a src/ folder (e.g. converted older sites).
-const SOURCE_PROJECT_ROOT_FILE = /^\/(?:package\.json|index\.html|vite\.config\.(?:ts|js|mjs)|tsconfig(?:\.[a-z]+)?\.json|postcss\.config\.(?:js|mjs|cjs)|(?:App|main|index|router)\.(?:tsx|jsx|ts|js)|(?:index|App|styles|globals)\.css)$/;
+// Any root-level code/config file the project owns (vite/tailwind/eslint configs,
+// plugins, entry modules); never lockfiles or dotfiles.
+const SOURCE_PROJECT_ROOT_FILE = /^\/(?!\.)(?!(?:package-lock|npm-shrinkwrap)\.json$)[A-Za-z0-9_.$@+-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/;
+// Source folders also hold data and asset pointer files (e.g. `*.asset.json`).
+const SOURCE_PROJECT_FOLDER_DATA = /\.json$/;
 
-/** Writable path inside a source project: its own source folders and root build files, never records or dot-folders. */
+/** Writable path inside a source project: its own source folders, data/asset pointers and root build files, never records or dot-folders. */
 export function isSourceProjectComposerPath(path: string): boolean {
-  return isImportedSourceComposerPath(path) || SOURCE_PROJECT_ROOT_FILE.test(path);
+  if (isImportedSourceComposerPath(path) || SOURCE_PROJECT_ROOT_FILE.test(path)) return true;
+  return IMPORTED_SOURCE_ROOT.test(path)
+    && SOURCE_PROJECT_FOLDER_DATA.test(path)
+    && !path.split('/').some((segment) => segment.startsWith('.') || segment === 'node_modules');
 }
 
 // Design-system write scope (workspace rules: never edit managed Unison source).
@@ -272,8 +279,10 @@ function literalIntentCounts(source: string): Map<string, number> {
   return counts;
 }
 
+// Framework route conventions use `$param`, `[slug]`, `(group)`, `@slot` and `+page` names.
+const COMPOSER_PATH = /^\/[A-Za-z0-9_./$@+()[\]~-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/;
 const pathSchema = z.string()
-  .regex(/^\/[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/)
+  .regex(COMPOSER_PATH)
   .refine((p) => !p.split('/').some((segment) => segment === '.' || segment === '..'));
 
 export const aiComposerFileOpSchema = z.discriminatedUnion('type', [
