@@ -10,7 +10,7 @@ describe('Unison library as an optional building block', () => {
   });
 
   it('copies an imported section, its dependencies and an adapter into src/unison-ui', async () => {
-    const files = { '/package.json': PKG, '/src/pages/Home.tsx': "import { HeroSplitImage, FAQAccordion, StatsMetricCards } from '../unison-ui';\nexport default () => <HeroSplitImage headline=\"Hi\" />;" };
+    const files = { '/package.json': PKG, '/src/pages/Home.tsx': "import { HeroSplitImage, FAQAccordion, NavbarStandard } from '../unison-ui';\nexport default () => <HeroSplitImage headline=\"Hi\" />;" };
     const result = await vendorLibrarySections(files);
     expect(Object.keys(result.writes)).toEqual(expect.arrayContaining([
       '/src/unison-ui/components/hero/HeroSplitImage.tsx',
