@@ -1689,6 +1689,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
       let lastError = null;
       let canonicalRouteOps: TopologyChange[] = [];
       let canonicalCandidate: AICandidateChangeSet | undefined;
+      let canonicalPagePath: string | undefined;
       let dedicatedPageGeneration = false;
       
       // Global timeout for the whole turn. A source edit runs the Composer
@@ -2018,6 +2019,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
             // same edit, so their candidate is complete and file-only.
             const sourceProjectEdit = isImportedSourceVfs(vfsFiles as Record<string, string>);
             canonicalCandidate = sourceProjectEdit ? { ...candidate, routeOps: [] } : candidate;
+            canonicalPagePath = page.filePath;
             canonicalRouteOps = sourceProjectEdit ? [] : candidate.routeOps;
             const pageOps = sourceProjectEdit ? [] : candidate.routeOps.filter((operation) => operation.type === 'add_page');
             if (pageOps.length > 0) {
@@ -2432,6 +2434,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 deletions: task.deletions,
                 routeOps: taskIndex === sequentialTasks.length - 1 ? canonicalRouteOps : [],
                 candidate: canonicalCandidate,
+                pagePath: canonicalPagePath,
                 interpretation: structuredEditInterpretation,
                 requiresApproval: responseMeta?.requiresApproval,
                 warnings: responseMeta?.warnings,
