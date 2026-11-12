@@ -934,7 +934,11 @@ serve(async (req) => {
       return errorResponse("Invalid businessId format", 400, publicCorsHeaders);
     }
 
-    if (!(await publicBusinessWriteAllowed(getSupabaseAdmin(), req, payload.businessId))) {
+    if (payload.projectId && !isValidUUID(payload.projectId)) {
+      return errorResponse("Invalid projectId format", 400, publicCorsHeaders);
+    }
+
+    if (!(await publicBusinessWriteAllowed(getSupabaseAdmin(), req, payload.businessId, payload.projectId))) {
       return errorResponse("This business is not accepting submissions", 403, publicCorsHeaders);
     }
 

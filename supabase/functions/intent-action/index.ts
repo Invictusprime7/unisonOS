@@ -145,8 +145,12 @@ serve(async (req) => {
       return errorResponse("data must be an object", 400, corsHeaders);
     }
 
+    if (projectId && !isValidUUID(projectId)) {
+      return errorResponse("Invalid projectId format", 400, corsHeaders);
+    }
+
     const supabase = getSupabaseAdmin();
-    if (!(await publicBusinessWriteAllowed(supabase, req, businessId))) {
+    if (!(await publicBusinessWriteAllowed(supabase, req, businessId, projectId))) {
       return errorResponse("This business is not accepting submissions", 403, corsHeaders);
     }
     const bizSettings = await loadBusinessSettings(supabase, businessId);
