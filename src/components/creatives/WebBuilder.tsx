@@ -891,7 +891,23 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const selectedOwner = sameSelection ? selected?.descriptor?.sourceLocator?.split(':')[0] : null;
     const ownerPath = extraHints?.ownerPath ?? selectedOwner;
     const activeOwner = snapshotCtxRef.current.activePagePath;
-    const next = !ownerPath || ownerPath === activeOwner ? mutate(previewCode) : null;
+    // 1. Known owner (source locator or explicit hint): edit that file's current
+    // saved bytes. The editor buffer can belong to another file or lag the VFS,
+    // and the locator's identity hash only matches the bytes the preview built.
+    const liveFiles = virtualFS.getSandpackFiles();
+    if (ownerPath && typeof liveFiles[ownerPath] === 'string') {
+      const before = liveFiles[ownerPath];
+      const after = mutate(before);
+      if (!after) return { ok: false, reason: 'no-match' };
+      if (after === before) return { ok: false, reason: 'no-change' };
+      toolbarPreEditRef.current = liveFiles;
+      // canonical-vfs-exempt: optimistic HMR projection; the same mutation is chained through commitMutation below
+      virtualFS.importFiles({ [ownerPath]: after });
+      if (ownerPath === activeOwner) onActivePageSuccess(after);
+      else commitToolbarMutationRef.current?.(after, snapshotLabel.replace(/^Manual · /, ''), ownerPath);
+      return { ok: true };
+    }
+    const next = !ownerPath ? mutate(previewCode) : null;
     if (next && next !== previewCode) {
       toolbarPreEditRef.current = virtualFS.getSandpackFiles();
       // Write directly to VFS so the Sandpack preview HMRs in real time
@@ -4041,7 +4057,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     // Direct toolbar edits share the terminal/AI save path: queued behind other
     // saves, committed by commitBuilderFiles, then preview-verified.
     commitToolbarMutationRef.current = (nextCode, summary, path) => {
-      const targetPath = path ?? (activePagePath?.endsWith('.tsx') ? activePagePath : launchEntryPoint);
+      const targetPath = path ?? (activePagePath && /\.(tsx|jsx)$/.test(activePagePath) ? activePagePath : launchEntryPoint);
       if (!targetPath || !nextCode) return;
       const isTextEdit = summary.startsWith('text ');
       if (isTextEdit && (!currentUserId || !businessId || !currentDraftId)) {
