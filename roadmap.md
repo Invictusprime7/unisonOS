@@ -14,12 +14,14 @@
 - [x] D/E for React/Vite and TanStack Start via in-browser build; [ ] Next/Remix/Astro/server routes (blocked: need a hosted server runtime)
 - [x] Drag and drop files, folders or ZIPs onto the Affinity chat (Home + setup) to import them unchanged
 
-## Active: Universal import acceptance (2026-11-12)
-- [ ] Any project shape builds: index.html entries of any framework, CRA/webpack entry files, no package.json, nested app roots, workspace packages
-- [ ] Vue and Svelte single-file components compiled at the project's own version in a sealed frame
-- [ ] Next.js app/pages router pages run client-side with disclosed shims
-- [ ] Projects with HTML but no buildable entry fall back to the plain-HTML preview
-- [ ] Fixture corpus of real project templates run through import, build and page check
+## Done: Universal import acceptance (2026-11-12)
+- [x] Any project shape builds: index.html entries of any framework, CRA/webpack entry files, no package.json, nested app roots, workspace packages
+- [x] Vue, Svelte and Solid components compiled at the project's own version in a sealed frame; Sass/Less/CSS Modules
+- [x] Next.js app/pages router pages run client-side with disclosed shims
+- [x] Projects with HTML but no buildable entry fall back to the plain-HTML preview
+- [x] Fixture corpus of real project templates run through import, build and page check; pixel comparisons for React, Svelte, Vue, Next app and pages
+- [x] ZIPs that include node_modules are accepted (dependency folders never unpacked or counted)
+- [ ] Blocked (needs a hosted build server): Astro, SvelteKit, Nuxt, Remix/React Router framework, Angular, Gatsby, Qwik, SolidStart server rendering
 
 ## Active: App Builder + Affinity LaunchPlan convergence (docs/milestones/APP_BUILDER_AFFINITY_LAUNCHPLAN_CONVERGENCE_2026-11-10.md)
 - [ ] M0: Trace Wizard/chat fields, `UniversalCreation`, persistence owner and App Builder handoffs; add guided/open-ended golden fixtures
