@@ -28,7 +28,7 @@ export function isProtectedComposerPath(path: string): boolean {
   return PROTECTED.some((re) => re.test(path));
 }
 
-const STANDARD_COMPOSER_PATH = /^\/(?:src|public)\/[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/;
+const STANDARD_COMPOSER_PATH = /^\/(?:src|public)\/[A-Za-z0-9_./$@+()[\]~-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/;
 const IMPORTED_SOURCE_ROOT = /^\/(?:src|public|app|pages|routes|components|lib|utils|hooks|features|server|client|api|styles|scripts|assets)\//;
 
 export function isImportedSourceComposerPath(path: string): boolean {
@@ -39,11 +39,18 @@ export function isImportedSourceComposerPath(path: string): boolean {
 
 // Source projects (Affinity-written or imported) also own their root build files.
 // Root-level entry/app/style modules cover projects without a src/ folder (e.g. converted older sites).
-const SOURCE_PROJECT_ROOT_FILE = /^\/(?:package\.json|index\.html|vite\.config\.(?:ts|js|mjs)|tsconfig(?:\.[a-z]+)?\.json|postcss\.config\.(?:js|mjs|cjs)|(?:App|main|index|router)\.(?:tsx|jsx|ts|js)|(?:index|App|styles|globals)\.css)$/;
+// Any root-level code/config file the project owns (vite/tailwind/eslint configs,
+// plugins, entry modules); never lockfiles or dotfiles.
+const SOURCE_PROJECT_ROOT_FILE = /^\/(?!\.)(?!(?:package-lock|npm-shrinkwrap)\.json$)[A-Za-z0-9_.$@+-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/;
+// Source folders also hold data and asset pointer files (e.g. `*.asset.json`).
+const SOURCE_PROJECT_FOLDER_DATA = /\.json$/;
 
-/** Writable path inside a source project: its own source folders and root build files, never records or dot-folders. */
+/** Writable path inside a source project: its own source folders, data/asset pointers and root build files, never records or dot-folders. */
 export function isSourceProjectComposerPath(path: string): boolean {
-  return isImportedSourceComposerPath(path) || SOURCE_PROJECT_ROOT_FILE.test(path);
+  if (isImportedSourceComposerPath(path) || SOURCE_PROJECT_ROOT_FILE.test(path)) return true;
+  return IMPORTED_SOURCE_ROOT.test(path)
+    && SOURCE_PROJECT_FOLDER_DATA.test(path)
+    && !path.split('/').some((segment) => segment.startsWith('.') || segment === 'node_modules');
 }
 
 // Design-system write scope (workspace rules: never edit managed Unison source).
@@ -272,8 +279,10 @@ function literalIntentCounts(source: string): Map<string, number> {
   return counts;
 }
 
+// Framework route conventions use `$param`, `[slug]`, `(group)`, `@slot` and `+page` names.
+const COMPOSER_PATH = /^\/[A-Za-z0-9_./$@+()[\]~-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/;
 const pathSchema = z.string()
-  .regex(/^\/[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|css|scss|json|html?)$/)
+  .regex(COMPOSER_PATH)
   .refine((p) => !p.split('/').some((segment) => segment === '.' || segment === '..'));
 
 export const aiComposerFileOpSchema = z.discriminatedUnion('type', [
@@ -332,6 +341,8 @@ export const aiComposerImageSchema = z.object({
 
 export const AI_COMPOSER_BRIEF_LIMIT = 100_000;
 export const AI_COMPOSER_RUNTIME_CONTEXT_LIMIT = 20_000;
+/** Largest single source file a request may carry (whole-page modules of big imported sites). */
+export const AI_COMPOSER_FILE_LIMIT = 200_000;
 
 export const aiComposerRequestSchema = z.object({
   task: z.enum(AI_COMPOSER_TASKS),
@@ -341,7 +352,7 @@ export const aiComposerRequestSchema = z.object({
   page: z.object({ role: z.string().max(60), title: z.string().max(120), route: z.string().max(200), filePath: pathSchema }),
   brief: z.string().max(AI_COMPOSER_BRIEF_LIMIT),
   instruction: z.string().max(4000).optional(),
-  files: z.record(z.string(), z.string().max(60000)),
+  files: z.record(z.string(), z.string().max(AI_COMPOSER_FILE_LIMIT)),
   availableRuntimeDependencies: z.array(z.string().min(1).max(214)).max(300).optional(),
   sourceTargets: z.array(pathSchema).min(1).max(80).optional(),
   approvedRouteOps: z.array(aiComposerRouteOpSchema).max(12).optional(),
@@ -387,3 +398,102 @@ export const aiComposerRequestSchema = z.object({
   }
 });
 export type AIComposerRequest = z.infer<typeof aiComposerRequestSchema>;
+
+function composerTargetAllowed(request: { task?: unknown; sourceProject?: unknown; importedSource?: unknown }): (path: string) => boolean {
+  if (request.sourceProject === true || request.task === 'source_project_author') return isSourceProjectComposerPath;
+  if (request.importedSource === true) return isImportedSourceComposerPath;
+  return (path: string) => STANDARD_COMPOSER_PATH.test(path);
+}
+
+const clip = (value: unknown, max: number) => (typeof value === 'string' ? value.slice(0, max) : value);
+const clipList = (value: unknown, count: number, keep: (item: unknown) => boolean = () => true) =>
+  (Array.isArray(value) ? value.filter(keep).slice(0, count) : value);
+
+/**
+ * Bounds a composer request to this contract before it is sent (client) or
+ * parsed (edge): over-long text is clipped, unwritable or malformed optional
+ * targets and oversized supporting files are dropped with a note. The page and
+ * the files being edited are never dropped, so a real scope problem still fails
+ * validation. Edit policy: optional context never refuses an edit.
+ */
+export function conformComposerRequest(raw: unknown): { request: unknown; notes: string[] } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { request: raw, notes: [] };
+  const notes: string[] = [];
+  const req: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
+  const page = req.page && typeof req.page === 'object' ? { ...(req.page as Record<string, unknown>) } : null;
+  if (page) {
+    page.role = clip(page.role, 60);
+    page.title = clip(page.title, 120);
+    page.route = clip(page.route, 200);
+    req.page = page;
+  }
+  const pagePath = typeof page?.filePath === 'string' ? page.filePath : null;
+  const allowed = composerTargetAllowed(req);
+  if (Array.isArray(req.sourceTargets)) {
+    const kept: string[] = [];
+    for (const target of req.sourceTargets) {
+      if (typeof target !== 'string' || kept.includes(target)) continue;
+      if (target !== pagePath && !(pathSchema.safeParse(target).success && allowed(target))) {
+        notes.push(`${target}: not writable in this request; kept as read-only context`);
+        continue;
+      }
+      kept.push(target);
+    }
+    req.sourceTargets = kept.length ? kept.slice(0, 80) : pagePath ? [pagePath] : kept;
+  }
+  const targets = new Set<string>([...(pagePath ? [pagePath] : []), ...((req.sourceTargets as string[] | undefined) ?? [])]);
+  if (req.files && typeof req.files === 'object' && !Array.isArray(req.files)) {
+    const files: Record<string, string> = {};
+    for (const [path, content] of Object.entries(req.files as Record<string, unknown>)) {
+      if (typeof content !== 'string') continue;
+      if (content.length > AI_COMPOSER_FILE_LIMIT && !targets.has(path)) {
+        notes.push(`${path}: too large to include; treated as read-only`);
+        continue;
+      }
+      files[path] = content;
+    }
+    req.files = files;
+  }
+  req.brief = clip(req.brief, AI_COMPOSER_BRIEF_LIMIT);
+  req.instruction = clip(req.instruction, 4000);
+  req.previousResponse = clip(req.previousResponse, 60000);
+  req.registryContext = clip(req.registryContext, 60000);
+  req.runtimeContext = clip(req.runtimeContext, AI_COMPOSER_RUNTIME_CONTEXT_LIMIT);
+  if (Array.isArray(req.diagnostics)) req.diagnostics = req.diagnostics.filter((d) => typeof d === 'string').map((d) => (d as string).slice(0, 1000)).slice(0, 30);
+  req.availableRuntimeDependencies = clipList(req.availableRuntimeDependencies, 300, (d) => typeof d === 'string' && d.length > 0 && d.length <= 214);
+  req.approvedIntents = clipList(req.approvedIntents, 300, (d) => typeof d === 'string' && d.length > 0 && d.length <= 80);
+  if (Array.isArray(req.routes)) {
+    req.routes = req.routes
+      .filter((r) => r && typeof r === 'object' && typeof (r as { title?: unknown }).title === 'string' && typeof (r as { route?: unknown }).route === 'string')
+      .map((r) => ({ title: (r as { title: string }).title.slice(0, 120), route: (r as { route: string }).route.slice(0, 200) }))
+      .slice(0, 100);
+  }
+  if (Array.isArray(req.priorPages)) {
+    req.priorPages = req.priorPages
+      .filter((p) => p && typeof p === 'object')
+      .map((p) => ({ role: String((p as { role?: unknown }).role ?? '').slice(0, 60), summary: String((p as { summary?: unknown }).summary ?? '').slice(0, 2000) }))
+      .slice(0, 20);
+  }
+  if (Array.isArray(req.images)) {
+    const images = req.images.filter((image) => aiComposerImageSchema.safeParse(image).success).slice(0, 10);
+    if (images.length < req.images.length) notes.push(`${req.images.length - images.length} attached image(s) could not be sent`);
+    req.images = images.length ? images : undefined;
+  }
+  if (req.evidence && typeof req.evidence === 'object') {
+    const evidence = { ...(req.evidence as Record<string, unknown>) };
+    evidence.sourcePaths = clipList(evidence.sourcePaths, 80, (p) => typeof p === 'string' && p.startsWith('/') && p.length <= 240);
+    evidence.omittedSourcePaths = clipList(evidence.omittedSourcePaths, 80, (p) => typeof p === 'string' && p.length <= 240);
+    evidence.unresolvedImports = Array.isArray(evidence.unresolvedImports)
+      ? evidence.unresolvedImports.filter((p) => typeof p === 'string').map((p) => (p as string).slice(0, 500)).slice(0, 80)
+      : evidence.unresolvedImports;
+    evidence.knowledgeEntryIds = clipList(evidence.knowledgeEntryIds, 40, (p) => typeof p === 'string' && p.length <= 160);
+    evidence.availableOperations = clipList(evidence.availableOperations, 30, (p) => typeof p === 'string' && p.length <= 80);
+    req.evidence = evidence;
+  }
+  return { request: req, notes };
+}
+
+/** Human-readable schema failure (field path + reason) for the owner and logs. */
+export function describeComposerRequestIssues(error: z.ZodError): string {
+  return error.issues.slice(0, 6).map((issue) => `${issue.path.join('.') || 'request'}: ${issue.message}`).join('; ');
+}
