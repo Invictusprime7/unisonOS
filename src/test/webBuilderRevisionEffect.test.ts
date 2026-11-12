@@ -4,6 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import { resolveHydratedBusinessId, resolvePersistedEditorIdentity, resolveProjectActivePagePath } from '@/services/projectRuntimeEnvelope';
+import { isImportedSourceVfs, resolveImportedActivePagePath } from '@/services/import/importedSourceRecords';
 import type { ProjectRuntimeProjection } from '@/services/projectRuntimeEnvelope';
 
 const source = ts.createSourceFile(
@@ -71,7 +72,7 @@ function revision(suffix: string, revisionId = `revision-${suffix}`) {
 
 function createDependencies() {
   return {
-    useEffect, resolvePersistedEditorIdentity, resolveProjectActivePagePath,
+    useEffect, resolvePersistedEditorIdentity, resolveProjectActivePagePath, isImportedSourceVfs, resolveImportedActivePagePath,
     currentDraftIdRef: { current: null as string | null },
     templateFiles: { setCurrentDraftId: vi.fn(), setCurrentProjectId: vi.fn() },
     setCurrentDraftId: vi.fn(), hydrateCanonicalPlayground: vi.fn(),
