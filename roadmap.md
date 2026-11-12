@@ -435,4 +435,5 @@ Fallback production configuration remains unverified; no relay, credential chang
 
 - [x] Imported/source projects: toolbar, inline text and AI Builder edits save to the real source files
 - [x] AI edits (toolbar AI box + AI Builder) reach the AI service on imported/source projects; retry in the live service's older shape until it redeploys
-- [ ] Redeploy the AI service (automatic backend update) so `$`/`[slug]` route files and root settings files are editable by AI (needs the GitHub backend workflow to run)
+- [x] AI service accepts source-project edits/authoring, special route names, root settings files, larger requests; deploy workflow catches up after failed runs
+- [ ] Live AI service redeploy (runs from GitHub when these changes reach main; confirm the 'Supabase Deploy (UNISON)' run succeeds)
