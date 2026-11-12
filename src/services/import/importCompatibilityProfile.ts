@@ -22,6 +22,11 @@ export type ImportFramework =
   | 'sveltekit'
   | 'nuxt'
   | 'vue-vite'
+  | 'svelte-vite'
+  | 'solid-vite'
+  | 'preact-vite'
+  | 'vite-app'
+  | 'angular'
   | 'vite-react'
   | 'create-react-app'
   | 'static-html'
@@ -91,7 +96,8 @@ export const ISOLATED_SOURCE_PREVIEW_ADAPTER = 'isolated-source-worker-v1';
  * from the detected framework and the files actually present.
  */
 export function resolveImportPreviewAdapter(profile: ImportCompatibilityProfile, files: Record<string, string>): ImportCompatibilityProfile['previewAdapter'] {
-  if (profile.framework === 'static-html' && Object.keys(files).some((p) => /\.html?$/i.test(p) && !p.startsWith('/.unison-import/'))) return STATIC_HTML_ADAPTER_INFO;
+  const htmlPages = Object.keys(files).filter((p) => /\.html?$/i.test(p) && !p.startsWith('/.unison-import/'));
+  if (profile.framework === 'static-html' && htmlPages.length) return STATIC_HTML_ADAPTER_INFO;
   const sourceBuild = planSourceBuild(profile, files);
   if (sourceBuild.status === 'supported') {
     return {
@@ -100,6 +106,11 @@ export function resolveImportPreviewAdapter(profile: ImportCompatibilityProfile,
       reason: `${sourceBuild.reason} The project runs in a sealed frame with no access to your Unison account.`,
       requires: [],
     };
+  }
+  // HTML pages that start no local source module run as they are.
+  const startsSource = htmlPages.some((p) => /<script\b[^>]*type=["']module["'][^>]*src=["'](?!https?:|\/\/)[^"']+\.(m?[jt]sx?|vue|svelte)["']/i.test(files[p] ?? ''));
+  if (htmlPages.length && !startsSource && sourceBuild.reason.startsWith('No app entry')) {
+    return { ...STATIC_HTML_ADAPTER_INFO, reason: `${STATIC_HTML_ADAPTER_INFO.reason} No build step was found, so the pages run as plain HTML.` };
   }
   if (profile.scripts.dev || profile.scripts.start) {
     return {
@@ -215,18 +226,33 @@ export function analyzeImportedProject(input: {
   } else if (has(all, 'nuxt')) {
     framework = 'nuxt';
     evidence.push('package.json depends on nuxt');
-  } else if (has(all, 'vue') && has(all, 'vite')) {
+  } else if (has(all, '@angular/core')) {
+    framework = 'angular';
+    evidence.push('package.json depends on @angular/core');
+  } else if (has(all, 'vue')) {
     framework = 'vue-vite';
-    evidence.push('package.json depends on vue + vite');
+    evidence.push(`package.json depends on vue${has(all, 'vite') ? ' + vite' : ''}`);
+  } else if (has(all, 'svelte')) {
+    framework = 'svelte-vite';
+    evidence.push('package.json depends on svelte');
+  } else if (has(all, 'solid-js')) {
+    framework = 'solid-vite';
+    evidence.push('package.json depends on solid-js');
+  } else if (has(all, 'preact') && !has(all, 'react')) {
+    framework = 'preact-vite';
+    evidence.push('package.json depends on preact');
   } else if (has(all, 'react-scripts')) {
     framework = 'create-react-app';
     evidence.push('package.json depends on react-scripts');
   } else if (has(all, 'react') && (has(all, 'vite') || paths.some((p) => /^vite\.config\./.test(p)))) {
     framework = 'vite-react';
     evidence.push('package.json depends on react + vite');
-  } else if (!textFiles['package.json'] && paths.some((p) => /\.html?$/.test(p)) && !paths.some((p) => SOURCE_FILE.test(p) && !p.endsWith('.js'))) {
+  } else if (has(all, 'vite') || paths.some((p) => /^vite\.config\./.test(p))) {
+    framework = 'vite-app';
+    evidence.push('package.json depends on vite');
+  } else if (paths.some((p) => /\.html?$/.test(p)) && !paths.some((p) => SOURCE_FILE.test(p) && !p.endsWith('.js') && !p.endsWith('.mjs'))) {
     framework = 'static-html';
-    evidence.push('HTML pages without a package manifest');
+    evidence.push(textFiles['package.json'] ? 'HTML pages with plain scripts' : 'HTML pages without a package manifest');
   } else if (paths.some((p) => /\.(tsx|jsx)$/.test(p))) {
     framework = 'react-source-only';
     evidence.push('React source files without a package manifest');
@@ -403,7 +429,7 @@ export function analyzeImportedProject(input: {
   if (framework === 'tanstack-start') requires.push('TanStack Start dev/build server (Vite + server functions)');
   else if (framework === 'next') requires.push('Next.js build server');
   else if (framework === 'remix' || framework === 'react-router-framework') requires.push('Remix / React Router framework server');
-  else if (framework === 'astro' || framework === 'sveltekit' || framework === 'nuxt' || framework === 'vue-vite') requires.push(`${framework} build toolchain`);
+  else if (framework === 'astro' || framework === 'sveltekit' || framework === 'nuxt' || framework === 'angular') requires.push(`${framework} build toolchain`);
   else if (framework === 'vite-react' || framework === 'create-react-app') requires.push('the project\'s own Vite/webpack build with its pinned dependencies');
   else requires.push('a build toolchain matching the source');
   if (tailwind === '4') requires.push('Tailwind CSS 4 compiler');
@@ -416,7 +442,7 @@ export function analyzeImportedProject(input: {
     requires,
   };
 
-  return {
+  const profile: ImportCompatibilityProfile = {
     version: 1,
     framework,
     frameworkEvidence: evidence,
@@ -456,4 +482,8 @@ export function analyzeImportedProject(input: {
     },
     previewAdapter,
   };
+  // The recorded adapter is the same live decision the preview makes.
+  const vfs = Object.fromEntries(Object.entries(textFiles).map(([p, t]) => [`/${p}`, t]));
+  profile.previewAdapter = resolveImportPreviewAdapter(profile, vfs);
+  return profile;
 }
