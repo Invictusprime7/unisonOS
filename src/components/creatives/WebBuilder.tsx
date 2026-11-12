@@ -3304,7 +3304,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
 
     const beforeFiles = virtualFSRef.current.getSandpackFiles();
 
-    const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0]);
     const snapshot = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot
       ?? effectiveRouteState?.siteBundleSnapshot
       ?? null;
@@ -3397,7 +3396,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   ): Promise<boolean> => {
     if (!businessId || !currentDraftId || bindingOps.length === 0) return false;
     const beforeFiles = virtualFSRef.current.getSandpackFiles();
-    const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0]);
     const snapshot = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot
       ?? effectiveRouteState?.siteBundleSnapshot
       ?? null;
@@ -3459,7 +3457,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
 
     const beforeFiles = virtualFSRef.current.getSandpackFiles();
 
-    const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0]);
     const source = options.source ?? 'ai-builder';
     if (shouldSkipNoopFilePatch(source, files ?? {}, beforeFiles)) {
       return beforeFiles;
@@ -3668,7 +3665,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const timer = window.setTimeout(async () => {
       try {
         const beforeFiles = virtualFSRef.current.getSandpackFiles();
-        const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0]);
         const snapshot = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot ?? effectiveRouteState?.siteBundleSnapshot;
         if (!snapshot || !businessId || !currentDraftId) throw new Error('Open a saved project to customize it.');
         const { data: { user } } = await supabaseClient.auth.getUser();
@@ -3704,7 +3700,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     setCustomizerSaving(true); setCustomizerError(null);
     try {
       const beforeFiles = virtualFSRef.current.getSandpackFiles();
-      const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0]);
       const snapshot = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot ?? effectiveRouteState?.siteBundleSnapshot;
       if (!snapshot) throw new Error('The current project is unavailable.');
       const commit = await commitMutation({ source: 'playground-edit', identity: { ...customizerDraft.candidate.identity, revisionId: currentRevisionIdRef.current ?? '' },
@@ -3734,7 +3729,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   ): Promise<boolean> => {
     if (!businessId || !currentDraftId || (ops.length === 0 && !themeEdit)) return false;
     const beforeFiles = virtualFSRef.current.getSandpackFiles();
-    const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0]);
     const snapshot = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot
       ?? effectiveRouteState?.siteBundleSnapshot
       ?? null;
