@@ -16,6 +16,7 @@
  */
 import { isImportRecordPath } from '@/services/import/importedSourceRecords';
 import type { SourceBuildPlan } from './sourceBuildPlan';
+import { buildTailwind3Config } from './tailwind3Config';
 import { NEXT_JSX_SOURCE, NEXT_RUNTIME_ID, nextEntrySource, nextGoogleFontSource, nextLocalFontSource, nextShimSource } from './nextClientRuntime';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -110,6 +111,20 @@ function joinPath(base: string, rel: string): string {
 function textDataUrl(path: string, text: string): string {
   const ext = path.split('.').pop()?.toLowerCase() ?? '';
   return `data:${MIME[ext] ?? 'text/plain'};charset=utf-8,${encodeURIComponent(text)}`;
+}
+/**
+ * The Tailwind 3 browser runtime serves only the releases it published
+ * (3.0.0–3.4.17, without 3.2.5); any other version fails to load it at all,
+ * leaving the page without a single utility. Newer 3.4 patches map to 3.4.17.
+ */
+export function tailwind3RuntimeVersion(declared: string): string {
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(declared.trim());
+  if (!m || m[1] !== '3') return '3.4.17';
+  const [minor, patch] = [Number(m[2]), Number(m[3])];
+  const latestPatch: Record<number, number> = { 0: 24, 1: 8, 2: 7, 3: 7, 4: 17 };
+  if (!(minor in latestPatch)) return '3.4.17';
+  if (minor === 2 && patch === 5) return '3.2.6';
+  return patch > latestPatch[minor] ? (minor === 4 ? '3.4.17' : `3.${minor}.${latestPatch[minor]}`) : `3.${minor}.${patch}`;
 }
 function escapeScript(code: string): string { return code.replace(/<\/script/gi, '<\\/script').replace(/<!--/g, '<\\!--'); }
 function shortHash(text: string): string {
@@ -390,7 +405,7 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
     return remote.length ? `${remote.join('\n')}\n${joined.replace(remoteRe, '')}` : joined;
   };
   let candidates: string[] | null = null;
-  const tailwind3Sheets: string[] = [];
+  const tailwind3Sheets: Array<{ path: string; css: string }> = [];
   const compileStylesheet = async (path: string): Promise<{ css: string; tailwind3: boolean }> => {
     let source = files[path];
     if (/\.(s[ac]ss)$/.test(path) || /\.less$/.test(path)) {
@@ -426,12 +441,11 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
       return { css: rewriteCssUrls(compiler.build(candidates), path), tailwind3: false };
     }
     const css = await inlinePlainImports(rewriteCssUrls(source, path), path, new Set([path]));
-    if (isTw3) adaptations.add(`Tailwind 3 styles in ${path.slice(1)} are generated in the preview frame from the project's tailwind.config.`);
     return { css, tailwind3: isTw3 };
   };
   const styleModule = async (path: string, query: string): Promise<string> => {
     const { css, tailwind3 } = await compileStylesheet(path);
-    if (tailwind3) { tailwind3Sheets.push(css); return ''; }
+    if (tailwind3) { tailwind3Sheets.push({ path, css }); return ''; }
     if (/(^|&)url($|&)/.test(query)) return `export default URL.createObjectURL(new Blob([${JSON.stringify(css)}], { type: 'text/css' }));`;
     if (/(^|&)inline($|&)/.test(query)) return `export default ${JSON.stringify(css)};`;
     if (/\.module\.\w+$/.test(path)) {
@@ -807,7 +821,7 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
       const target = clean.startsWith('/') ? (has(`${root}${clean}`) ? `${root}${clean}` : `${publicDir}${clean}`) : joinPath(dirname(templatePath), clean);
       if (files[target] === undefined) continue;
       const { css, tailwind3 } = await compileStylesheet(target);
-      if (tailwind3) { tailwind3Sheets.push(css); html = html.replace(tag, ''); continue; }
+      if (tailwind3) { tailwind3Sheets.push({ path: target, css }); html = html.replace(tag, ''); continue; }
       html = html.replace(tag, `<style data-unison-source="${target}">${css.replace(/<\/style/gi, '<\\/style')}</style>`);
     }
     html = mapHtmlRefs(html, templatePath);
@@ -824,12 +838,34 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
   if (tailwind3Sheets.length) {
     // The Tailwind CDN only serves exact versions ("3" is rejected).
     const declaredTw = plan.versions.tailwindcss ?? '';
-    const twVersion = /^3\.\d+\.\d+$/.test(declaredTw) ? declaredTw : '3.4.17';
-    head.push(...tailwind3Sheets.map((css) => `<style type="text/tailwindcss">${css.replace(/<\/style/gi, '<\\/style')}</style>`));
+    const twVersion = tailwind3RuntimeVersion(declaredTw);
+    // Remote @import rules (web fonts) stay plain CSS so the browser loads them first.
+    const remoteRe = /@import\s+url\([^)]*\)[^;]*;|@import\s+["'](?:https?:)?\/\/[^"']+["'][^;]*;/g;
+    const remote = tailwind3Sheets.flatMap((s) => s.css.match(remoteRe) ?? []);
+    const sheets = tailwind3Sheets.map((s) => s.css.replace(remoteRe, '').replace(/@config\s+["'][^"']+["']\s*;?/g, ''));
+    if (remote.length) head.push(`<style data-unison-source="tailwind-imports">${[...new Set(remote)].join('\n').replace(/<\/style/gi, '<\\/style')}</style>`);
+    const config = await buildTailwind3Config({
+      esbuild, files, root, resolveLocal, cdn,
+      stylesheets: tailwind3Sheets.map((s) => ({ path: s.path, source: files[s.path] ?? s.css })),
+      versionOf: (name) => plan.versions[name] ?? pkgVersion(name),
+    });
+    const pluginQuery = config?.firstPartyPlugins.length ? `?plugins=${config.firstPartyPlugins.join(',')}` : '';
     // A page that already loads the Tailwind CDN (with its own config) keeps that one script.
-    if (!/<script\b[^>]*src=["']https:\/\/cdn\.tailwindcss\.com/i.test(html)) head.push(`<script src="https://cdn.tailwindcss.com/${twVersion}"></script>`);
-    diagnostics.push({ level: 'info', code: 'tailwind3-runtime', message: 'Tailwind 3 styles are generated in the preview frame; plugins and JavaScript config options from tailwind.config are not applied.' });
+    const pageLoadsCdn = /<script\b[^>]*src=["']https:\/\/cdn\.tailwindcss\.com/i.test(html);
+    if (!pageLoadsCdn) head.push(`<script src="https://cdn.tailwindcss.com/${twVersion}${pluginQuery}"></script>`);
+    if (config && !pageLoadsCdn) {
+      diagnostics.push(...config.diagnostics);
+      Object.assign(imports, config.importMap);
+      // The config runs before the stylesheets reach the runtime, so `@apply` of a
+      // themed class (`border-border`) never meets Tailwind's default theme.
+      head.push(`<script type="module" data-unison-source="${config.configPath}">${escapeScript(config.moduleSource(sheets))}</script>`);
+      adaptations.add(`Tailwind 3 styles are generated in the preview frame with the project's own ${config.configPath.slice(1)} (theme, plugins and dark mode).`);
+    } else {
+      head.push(...sheets.map((css) => `<style type="text/tailwindcss">${css.replace(/<\/style/gi, '<\\/style')}</style>`));
+      if (!config) diagnostics.push({ level: 'info', code: 'tailwind3-runtime', message: 'Tailwind 3 styles are generated in the preview frame with Tailwind\'s default theme; the project has no tailwind.config.' });
+    }
   }
+  head[0] = `<script type="importmap">${escapeScript(JSON.stringify({ imports }))}</script>`;
   const document = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => `${m}\n${head.join('\n')}`) : `${head.join('\n')}${html}`;
 
   return {
