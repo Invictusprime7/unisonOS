@@ -127,7 +127,7 @@ describe('secure import intake', () => {
     expect(Object.keys(result.textFiles).sort()).toEqual(['index.html', 'package.json', 'src/main.tsx']);
     const deps = result.manifest.excluded.filter((e) => e.reason === 'dependency-folder');
     expect(deps).toHaveLength(101);
-    expect(deps[100]).toEqual({ path: 'site/node_modules/', reason: 'dependency-folder', detail: '160 more files in this folder not imported.' });
+    expect(deps.filter((e) => e.detail)).toEqual([{ path: 'site/node_modules/', reason: 'dependency-folder', detail: '160 more files in this folder not imported.' }]);
     const tooMany = await rejection(intakeZipArchive(await zipOf(entries), { limits: { maxFiles: 2 } }));
     expect(tooMany.code).toBe('too-many-files');
     const listed = await rejection(intakeZipArchive(await zipOf(entries), { limits: { maxArchiveEntries: 100 } }));
