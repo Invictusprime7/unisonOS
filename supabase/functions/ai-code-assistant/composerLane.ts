@@ -3,6 +3,8 @@
 // Validation, staging, repair orchestration and the commit stay client-owned.
 import {
   aiComposerRequestSchema,
+  conformComposerRequest,
+  describeComposerRequestIssues,
   aiComposerResponseSchema,
   composerProposalViolations,
   type AIComposerRequest,
