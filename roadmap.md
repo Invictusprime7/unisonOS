@@ -1,5 +1,15 @@
 # Roadmap
 
+## Active: One unified source creation path (2026-11-12)
+- [x] Affinity writes every new site as a standalone React + Vite project (foundation turn, one turn per page, build check, targeted repair) — no Unison compiler, router, theme or section passes
+- [x] Saved byte-for-byte as a source project (same records, save rules, preview builder and publish check as imports); free demo settles on that save
+- [x] AI Builder edits on source projects may change any of the project's own files and add pages/components
+- [x] Industry knowledge and verified photos are advice only
+- [x] Removed 80 unused duplicate files (incl. 2 duplicate migrations) and the retired guided-setup files that had reappeared
+- [ ] Live end-to-end creation (blocked: backend update — new writing mode + migration — must deploy through the backend workflow)
+- [ ] Convert existing Unison-composed sites to source projects on open; then delete the old App Builder/compiler path (next milestone)
+- [ ] Point-and-click toolbar edits mapped to source lines for source projects (not checked this turn)
+
 ## Active: UIMP-01 Zero-drift external project import (2026-11-10)
 - [x] A — Audit: old ZIP import dropped assets/toolchain, rewrote CSS and never saved a version
 - [x] B — Secure intake (ZIP, folder, files): traversal/symlink/bomb/duplicate/case/quota refusal, secret blocking, .env names only, hashes + frozen manifest; assets stored unchanged in the owner's storage
