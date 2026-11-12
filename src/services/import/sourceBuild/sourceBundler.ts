@@ -112,6 +112,20 @@ function textDataUrl(path: string, text: string): string {
   const ext = path.split('.').pop()?.toLowerCase() ?? '';
   return `data:${MIME[ext] ?? 'text/plain'};charset=utf-8,${encodeURIComponent(text)}`;
 }
+/**
+ * The Tailwind 3 browser runtime serves only the releases it published
+ * (3.0.0–3.4.17, without 3.2.5); any other version fails to load it at all,
+ * leaving the page without a single utility. Newer 3.4 patches map to 3.4.17.
+ */
+export function tailwind3RuntimeVersion(declared: string): string {
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(declared.trim());
+  if (!m || m[1] !== '3') return '3.4.17';
+  const [minor, patch] = [Number(m[2]), Number(m[3])];
+  const latestPatch: Record<number, number> = { 0: 24, 1: 8, 2: 7, 3: 7, 4: 17 };
+  if (!(minor in latestPatch)) return '3.4.17';
+  if (minor === 2 && patch === 5) return '3.2.6';
+  return patch > latestPatch[minor] ? (minor === 4 ? '3.4.17' : `3.${minor}.${latestPatch[minor]}`) : `3.${minor}.${patch}`;
+}
 function escapeScript(code: string): string { return code.replace(/<\/script/gi, '<\\/script').replace(/<!--/g, '<\\!--'); }
 function shortHash(text: string): string {
   let h = 2166136261;
@@ -824,7 +838,7 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
   if (tailwind3Sheets.length) {
     // The Tailwind CDN only serves exact versions ("3" is rejected).
     const declaredTw = plan.versions.tailwindcss ?? '';
-    const twVersion = /^3\.\d+\.\d+$/.test(declaredTw) ? declaredTw : '3.4.17';
+    const twVersion = tailwind3RuntimeVersion(declaredTw);
     // Remote @import rules (web fonts) stay plain CSS so the browser loads them first.
     const remoteRe = /@import\s+url\([^)]*\)[^;]*;|@import\s+["'](?:https?:)?\/\/[^"']+["'][^;]*;/g;
     const remote = tailwind3Sheets.flatMap((s) => s.css.match(remoteRe) ?? []);
