@@ -427,7 +427,6 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
       return { css: rewriteCssUrls(compiler.build(candidates), path), tailwind3: false };
     }
     const css = await inlinePlainImports(rewriteCssUrls(source, path), path, new Set([path]));
-    if (isTw3) adaptations.add(`Tailwind 3 styles in ${path.slice(1)} are generated in the preview frame from the project's tailwind.config.`);
     return { css, tailwind3: isTw3 };
   };
   const styleModule = async (path: string, query: string): Promise<string> => {
