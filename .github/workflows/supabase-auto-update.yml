@@ -109,6 +109,24 @@ jobs:
             echo "::error::SUPABASE_DB_PASSWORD secret is required to apply migrations."; exit 1
           fi
           supabase link --project-ref "${SUPABASE_PROJECT_ID}" --password "${SUPABASE_DB_PASSWORD}" --yes
+          # The CLI refuses to push while the remote history lists versions whose
+          # files were removed locally. Those versions are already applied, so on
+          # that specific refusal we drop only the dangling history rows (schema
+          # untouched) and push once more. Any other failure still fails the job.
+          push_log="$(mktemp)"
+          if supabase db push --linked --password "${SUPABASE_DB_PASSWORD}" --yes 2>&1 | tee "${push_log}"; then
+            exit 0
+          fi
+          if ! grep -q "Remote migration versions not found in local migrations directory" "${push_log}"; then
+            exit 1
+          fi
+          dangling="$(grep -Eo 'migration repair --status reverted( [0-9]+)+' "${push_log}" | head -n1 | grep -Eo '[0-9]{8,}' | tr '\n' ' ' || true)"
+          if [ -z "${dangling// /}" ]; then
+            echo "::error::Remote history is out of sync but no versions could be read from the CLI output."; exit 1
+          fi
+          echo "::warning::Remote migration versions missing locally: ${dangling}. Restore their files to keep history complete; marking them reverted for this push."
+          # shellcheck disable=SC2086
+          supabase migration repair --linked --password "${SUPABASE_DB_PASSWORD}" --status reverted ${dangling}
           supabase db push --linked --password "${SUPABASE_DB_PASSWORD}" --yes
 
       # Functions deploy even when a migration fails (the job still fails), and one
