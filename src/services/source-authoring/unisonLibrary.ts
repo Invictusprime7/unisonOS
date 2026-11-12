@@ -216,8 +216,11 @@ export async function vendorLibrarySections(files: Record<string, string>): Prom
     if (text === null) continue;
     writes[`${VENDOR_ROOT}${libraryPath}`] = text;
     const dir = libraryPath.slice(0, libraryPath.lastIndexOf('/'));
-    for (const match of text.matchAll(IMPORT_FROM)) {
-      const specifier = match[3];
+    const specifiers = [
+      ...[...text.matchAll(IMPORT_FROM)].map((m) => m[3]),
+      ...[...text.matchAll(/import\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+    ];
+    for (const specifier of specifiers) {
       if (specifier.startsWith('.')) {
         const base = resolveRelative(dir, specifier);
         const hit = extensions.map((ext) => `${base}${ext}`).find((p) => `${LIBRARY_ROOT}${p}` in LIBRARY_SOURCES);
