@@ -891,16 +891,32 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const selectedOwner = sameSelection ? selected?.descriptor?.sourceLocator?.split(':')[0] : null;
     const ownerPath = extraHints?.ownerPath ?? selectedOwner;
     const activeOwner = snapshotCtxRef.current.activePagePath;
-    const next = !ownerPath || ownerPath === activeOwner ? mutate(previewCode) : null;
+    // 1. Known owner (source locator or explicit hint): edit that file's current
+    // saved bytes. The editor buffer can belong to another file or lag the VFS,
+    // and the locator's identity hash only matches the bytes the preview built.
+    const liveFiles = virtualFSRef.current.getSandpackFiles();
+    if (ownerPath && typeof liveFiles[ownerPath] === 'string') {
+      const before = liveFiles[ownerPath];
+      const after = mutate(before);
+      if (!after) return { ok: false, reason: 'no-match' };
+      if (after === before) return { ok: false, reason: 'no-change' };
+      toolbarPreEditRef.current = liveFiles;
+      // canonical-vfs-exempt: optimistic HMR projection; the same mutation is chained through commitMutation below
+      virtualFSRef.current.importFiles({ [ownerPath]: after });
+      if (ownerPath === activeOwner) onActivePageSuccess(after);
+      else commitToolbarMutationRef.current?.(after, snapshotLabel.replace(/^Manual · /, ''), ownerPath);
+      return { ok: true };
+    }
+    const next = !ownerPath ? mutate(previewCode) : null;
     if (next && next !== previewCode) {
-      toolbarPreEditRef.current = virtualFS.getSandpackFiles();
+      toolbarPreEditRef.current = virtualFSRef.current.getSandpackFiles();
       // Write directly to VFS so the Sandpack preview HMRs in real time
       // instead of waiting for Effect A (previewCode → VFS) to flush.
       try {
         const activePath = snapshotCtxRef.current.activePagePath;
         if (activePath && (activePath.endsWith('.tsx') || activePath.endsWith('.jsx'))) {
           // canonical-vfs-exempt: optimistic HMR projection; the same mutation is chained through commitMutation below
-          virtualFS.importFiles({ [activePath]: next });
+          virtualFSRef.current.importFiles({ [activePath]: next });
         }
       } catch (err) {
         console.warn('[applyMutatorAcrossVFS] direct VFS write failed:', err);
@@ -912,7 +928,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const ctx = snapshotCtxRef.current;
     const activePath = ctx.activePagePath;
     try {
-      const allFiles = virtualFS.getSandpackFiles();
+      const allFiles = virtualFSRef.current.getSandpackFiles();
       // Identity evidence from the clicked element: its current image link, alt,
       // text and owner file, plus the page that rendered it. Narrows a loose
       // selector match to the one file that really shows this element.
@@ -944,7 +960,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       if (match.kind === 'match') {
         toolbarPreEditRef.current = allFiles;
         // canonical-vfs-exempt: optimistic HMR projection; the same mutation is chained through commitMutation below
-        virtualFS.importFiles({ [match.path]: match.after });
+        virtualFSRef.current.importFiles({ [match.path]: match.after });
         commitToolbarMutationRef.current?.(match.after, snapshotLabel.replace(/^Manual · /, ''), match.path);
         return { ok: true };
       }
@@ -971,7 +987,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const tryReplaceImageLiteral = useCallback((currentSrc: string | undefined, src: string, label: string): boolean => {
     if (!currentSrc) return false;
     const literal = currentSrc.trim();
-    if (countImageLiteral(virtualFS.getSandpackFiles(), literal) !== 1) return false;
+    if (countImageLiteral(virtualFSRef.current.getSandpackFiles(), literal) !== 1) return false;
     const res = applyMutatorAcrossVFS(
       literal.slice(0, 80),
       (code) => replaceImageLiteral(code, literal, src),
@@ -4041,7 +4057,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     // Direct toolbar edits share the terminal/AI save path: queued behind other
     // saves, committed by commitBuilderFiles, then preview-verified.
     commitToolbarMutationRef.current = (nextCode, summary, path) => {
-      const targetPath = path ?? (activePagePath?.endsWith('.tsx') ? activePagePath : launchEntryPoint);
+      const targetPath = path ?? (activePagePath && /\.(tsx|jsx)$/.test(activePagePath) ? activePagePath : launchEntryPoint);
       if (!targetPath || !nextCode) return;
       const isTextEdit = summary.startsWith('text ');
       if (isTextEdit && (!currentUserId || !businessId || !currentDraftId)) {
