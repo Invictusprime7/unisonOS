@@ -215,7 +215,7 @@ export async function vendorLibrarySections(files: Record<string, string>): Prom
     const text = await read(libraryPath);
     if (text === null) continue;
     writes[`${VENDOR_ROOT}${libraryPath}`] = text;
-    const dir = libraryPath.slice(0, libraryPath.lastIndexOf('/'));
+    const dir = libraryPath.includes('/') ? libraryPath.slice(0, libraryPath.lastIndexOf('/')) : '';
     const specifiers = [
       ...[...text.matchAll(IMPORT_FROM)].map((m) => m[3]),
       ...[...text.matchAll(/import\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
