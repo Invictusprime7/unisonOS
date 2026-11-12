@@ -122,3 +122,27 @@ export function toVfsPath(path: string): string {
 export function stableJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
+
+const IMPORTED_ENTRY_CANDIDATES = [
+  '/index.html',
+  '/src/routes/index.tsx', '/src/routes/index.jsx', '/app/routes/index.tsx', '/app/routes/_index.tsx',
+  '/src/App.tsx', '/src/App.jsx', '/src/main.tsx', '/src/main.jsx',
+  '/app/page.tsx', '/src/app/page.tsx', '/pages/index.tsx', '/src/pages/index.tsx', '/src/pages/Index.tsx',
+];
+
+/**
+ * The file the builder opens first for an imported project. Imported versions
+ * carry no Unison page registry, so the saved choice is used when it still
+ * exists, otherwise the project's own entry, otherwise its first source file.
+ */
+export function resolveImportedActivePagePath(
+  files: Record<string, string>,
+  requested?: string | null,
+): string | null {
+  const has = (path: string) => Object.prototype.hasOwnProperty.call(files, path) && !isImportRecordPath(path);
+  if (requested?.trim() && has(requested)) return requested;
+  const known = IMPORTED_ENTRY_CANDIDATES.find(has);
+  if (known) return known;
+  const source = Object.keys(files).filter((path) => has(path) && /\.(html?|[jt]sx?)$/i.test(path)).sort();
+  return source[0] ?? Object.keys(files).filter(has).sort()[0] ?? null;
+}
