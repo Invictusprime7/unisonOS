@@ -41,6 +41,19 @@ import { listContentTypes } from '@/services/cmsRecordService';
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
 import { isImportedSourceVfs, readImportedSourceRecords } from '@/services/import/importedSourceRecords';
 import { sourceProjectEditTargets } from '@/services/source-authoring/sourceProjectEditTargets';
+import { applyVendorResult, libraryBriefBlock, VENDOR_ROOT, vendorLibrarySections } from '@/services/source-authoring/unisonLibrary';
+
+/** Library advice rides along only when the project already uses it or the owner mentions it. */
+function wantsLibrary(files: Record<string, string>, instruction: string): boolean {
+  return `${VENDOR_ROOT}index.tsx` in files || /\b(unison|library|design system)\b/i.test(instruction);
+}
+
+/** Copies in any Unison library sections an edited source project now imports. */
+async function libraryAugment(files: Record<string, string>): Promise<Record<string, string>> {
+  const result = await vendorLibrarySections(files);
+  const next = applyVendorResult(files, result);
+  return Object.fromEntries(Object.entries(next).filter(([path, content]) => files[path] !== content));
+}
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
