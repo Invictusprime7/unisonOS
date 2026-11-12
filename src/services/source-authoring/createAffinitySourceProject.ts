@@ -12,7 +12,7 @@ import { withAccountDemoGeneration } from '@/services/accountDemoGeneration';
 import { intakeLooseFiles, verifyIntakeHashParity } from '@/services/import/secureIntake';
 import { analyzeImportedProject } from '@/services/import/importCompatibilityProfile';
 import { buildImportedSourceVfs } from '@/services/import/importedSourceAcceptance';
-import { IMPORTED_SOURCE_ACCEPTANCE_PROFILE, resolveImportedActivePagePath } from '@/services/import/importedSourceRecords';
+import { IMPORTED_SOURCE_ACCEPTANCE_PROFILE } from '@/services/import/importedSourceRecords';
 import { resolveImportBusinessId, type ExternalImportResult } from '@/services/import/externalProjectImport';
 import { planSourceBuild } from '@/services/import/sourceBuild/sourceBuildPlan';
 import { getVerticalPack, resolveIndustryVertical } from '@/services/composition/verticals';
@@ -142,13 +142,6 @@ async function createAndSave(input: CreateAffinitySourceProjectInput, userId: st
     options: { acceptanceProfile: IMPORTED_SOURCE_ACCEPTANCE_PROFILE, businessName: input.projectName },
   });
   if (!commit.persistedRevisionId) throw new Error('The new site could not be saved as a version.');
-  const activePagePath = resolveImportedActivePagePath(commit.vfsFiles);
-  if (activePagePath) {
-    await supabase.from('builder_drafts').update({
-      metadata: { ...(await currentMetadata(draft.id)), activePagePath } as unknown as Json,
-    }).eq('id', draft.id);
-  }
-
   return {
     projectId: draft.project_id,
     draftId: draft.id,
@@ -163,9 +156,4 @@ async function createAndSave(input: CreateAffinitySourceProjectInput, userId: st
     excludedCount: intake.manifest.excluded.length,
     authored,
   };
-}
-
-async function currentMetadata(draftId: string): Promise<Record<string, unknown>> {
-  const { data } = await supabase.from('builder_drafts').select('metadata').eq('id', draftId).single();
-  return (data?.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata) ? data.metadata : {}) as Record<string, unknown>;
 }
