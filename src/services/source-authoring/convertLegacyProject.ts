@@ -7,7 +7,7 @@
  * goes through `commitMutation` with `sourceConversion`, parented on the
  * site's last Unison revision so history stays intact.
  */
-import { commitMutation, type CommitMutationResult, type CommitIdentity } from '@/services/vfsCommitService';
+import { commitMutation, type CommitMutationResult } from '@/services/vfsCommitService';
 import { intakeLooseFiles, verifyIntakeHashParity } from '@/services/import/secureIntake';
 import { analyzeImportedProject } from '@/services/import/importCompatibilityProfile';
 import { buildImportedSourceVfs } from '@/services/import/importedSourceAcceptance';
@@ -108,7 +108,7 @@ export function standaloneSourceFromPreview(compiled: CompiledLegacyPreview, pro
 }
 
 export interface ConvertLegacyProjectInput {
-  identity: CommitIdentity;
+  identity: Parameters<typeof commitMutation>[0]['identity'];
   /** The draft's current files (the older site), used as the save base. */
   currentFiles: Record<string, string>;
   compiled: CompiledLegacyPreview;
@@ -149,21 +149,21 @@ export async function convertLegacyProject(input: ConvertLegacyProjectInput): Pr
   const fileOps: FileOp[] = [];
   for (const [path, contents] of Object.entries(files)) {
     fileOps.push(input.currentFiles[path] === undefined
-      ? { kind: 'create', path, contents }
-      : { kind: 'replace', path, contents });
+      ? { type: 'create', path, contents }
+      : { type: 'replace', path, contents });
   }
   for (const path of Object.keys(input.currentFiles)) {
-    if (files[path] === undefined) fileOps.push({ kind: 'delete', path });
+    if (files[path] === undefined) fileOps.push({ type: 'delete', path });
   }
   const patch: PatchPlan = {
     summary: `Converted ${input.projectName} into an editable source project`,
     fileOps,
-    routeOps: [],
+    playgroundOps: [],
+    bindingOps: [],
     dataOps: [],
     backendOps: [],
     presentationOps: [],
-    themeOps: [],
-  } as unknown as PatchPlan;
+  };
 
   return commitMutation({
     source: 'system-restore',
