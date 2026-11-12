@@ -223,7 +223,8 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
       throw new SourceAuthoringError('Affinity could not finish a site that builds cleanly.', problems.slice(0, 12).map((p) => `${p.path}: ${p.message}`));
     }
     const missing = missingModules(files).map((entry) => entry.path);
-    const targets = [...new Set([...problems.map((p) => p.path), ...missing])]
+    const needsManifest = problems.some((p) => /package\.json/.test(p.message) || p.path === '/package.json');
+    const targets = [...new Set([...problems.map((p) => p.path), ...missing, ...(needsManifest ? ['/package.json'] : [])])]
       .filter((path) => path.startsWith('/'))
       .slice(0, 12);
     repairs++;
