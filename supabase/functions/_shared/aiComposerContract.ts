@@ -3,13 +3,14 @@
 import { z } from 'zod';
 import { parse } from '@babel/parser';
 
-export const AI_COMPOSER_TASKS = ['site_page_author', 'site_page_repair', 'builder_source_edit'] as const;
+export const AI_COMPOSER_TASKS = ['site_page_author', 'site_page_repair', 'builder_source_edit', 'source_project_author'] as const;
 export type AIComposerTask = (typeof AI_COMPOSER_TASKS)[number];
 
 export const AI_COMPOSER_MODES: Record<AIComposerTask, string> = {
   site_page_author: 'site-page-author',
   site_page_repair: 'site-page-repair',
   builder_source_edit: 'builder-source-edit',
+  source_project_author: 'source-project-author',
 };
 
 const PROTECTED = [
@@ -36,6 +37,14 @@ export function isImportedSourceComposerPath(path: string): boolean {
     && !path.split('/').some((segment) => segment.startsWith('.') || segment === 'node_modules');
 }
 
+// Source projects (Affinity-written or imported) also own their root build files.
+const SOURCE_PROJECT_ROOT_FILE = /^\/(?:package\.json|index\.html|vite\.config\.(?:ts|js|mjs)|tsconfig(?:\.[a-z]+)?\.json|postcss\.config\.(?:js|mjs|cjs))$/;
+
+/** Writable path inside a source project: its own source folders and root build files, never records or dot-folders. */
+export function isSourceProjectComposerPath(path: string): boolean {
+  return isImportedSourceComposerPath(path) || SOURCE_PROJECT_ROOT_FILE.test(path);
+}
+
 // Design-system write scope (workspace rules: never edit managed Unison source).
 // Page authoring may write only its own page file and project-local
 // components; canonical /src/components/** sections are read-only vocabulary.
@@ -54,10 +63,13 @@ export function composerScopeViolations(
   _pageFilePath: string,
   ops: ReadonlyArray<{ type: string; path: string }>,
   importedSource = false,
+  sourceProject = false,
 ): string[] {
   const violations: string[] = [];
   for (const op of ops) {
-    if (isProtectedComposerPath(op.path) && !(importedSource && isImportedSourceComposerPath(op.path))) {
+    if (task === 'source_project_author' || sourceProject) {
+      if (!isSourceProjectComposerPath(op.path)) violations.push(`${op.path}: outside the project's own source folders`);
+    } else if (isProtectedComposerPath(op.path) && !(importedSource && isImportedSourceComposerPath(op.path))) {
       violations.push(`${op.path}: canonical runtime file`);
     } else if (
       task !== 'builder_source_edit'
@@ -70,8 +82,9 @@ export function composerScopeViolations(
 }
 /** Proposal scope only; not proof of ownership or revision freshness. */
 export function composerProposalViolations(req: AIComposerRequest, response: AIComposerResponse): string[] {
-  const violations = composerScopeViolations(req.task, req.page.filePath, response.fileOps, req.importedSource);
-  if (req.importedSource) {
+  const violations = composerScopeViolations(req.task, req.page.filePath, response.fileOps, req.importedSource, req.sourceProject);
+  if (req.task === 'source_project_author') return violations.concat(sourceProjectAuthorViolations(req, response));
+  if (req.importedSource && !req.sourceProject) {
     if (req.task !== 'builder_source_edit') violations.push('Imported source repairs must use builder_source_edit');
     if ((response.routeOps ?? []).length > 0) violations.push('Imported source repairs cannot change routes');
     const targets = new Set(req.sourceTargets ?? []);
@@ -150,12 +163,36 @@ export function composerProposalViolations(req: AIComposerRequest, response: AIC
     const newPage = createsPages && op.type === 'create'
       && /^\/src\/pages\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.tsx?$/.test(op.path)
       && (response.routeOps ?? []).some(op => op.type === 'add_page');
-    if (!targets.has(op.path) && !newPage) violations.push(`${op.path}: outside this request's source targets`);
+    // Source projects own their structure: new modules (pages, components) are part of an edit.
+    const newSourceModule = req.sourceProject === true && op.type === 'create' && isSourceProjectComposerPath(op.path);
+    if (!targets.has(op.path) && !newPage && !newSourceModule) violations.push(`${op.path}: outside this request's source targets`);
     if (seen.has(op.path)) violations.push(`${op.path}: duplicate file operation`);
     seen.add(op.path);
     const exists = Object.prototype.hasOwnProperty.call(req.files, op.path);
     if (op.type === 'create' && exists) violations.push(`${op.path}: create cannot overwrite supplied source`);
     if (op.type !== 'create' && !exists) violations.push(`${op.path}: existing source must be supplied before editing or deleting`);
+  }
+  return violations;
+}
+/**
+ * Whole-project authorship. Without targets every op creates a new file; with
+ * targets the turn writes exactly those files (create or replace) plus new
+ * modules. Only declarative page announcements (add_page) are accepted.
+ */
+function sourceProjectAuthorViolations(req: AIComposerRequest, response: AIComposerResponse): string[] {
+  const violations: string[] = [];
+  const targets = new Set(req.sourceTargets ?? []);
+  const seen = new Set<string>();
+  for (const op of response.fileOps) {
+    if (seen.has(op.path)) violations.push(`${op.path}: duplicate file operation`);
+    seen.add(op.path);
+    const exists = Object.prototype.hasOwnProperty.call(req.files, op.path);
+    if (op.type === 'delete') violations.push(`${op.path}: whole-project authorship never deletes files`);
+    else if (op.type === 'replace' && !(exists && targets.has(op.path))) violations.push(`${op.path}: only listed targets may be replaced`);
+    else if (op.type === 'create' && exists) violations.push(`${op.path}: create cannot overwrite supplied source`);
+  }
+  for (const op of response.routeOps ?? []) {
+    if (op.type !== 'add_page') violations.push(`${op.type}:${op.pageId}: only add_page announcements are accepted`);
   }
   return violations;
 }
@@ -298,6 +335,8 @@ export const AI_COMPOSER_RUNTIME_CONTEXT_LIMIT = 20_000;
 export const aiComposerRequestSchema = z.object({
   task: z.enum(AI_COMPOSER_TASKS),
   importedSource: z.boolean().optional(),
+  /** The project is a source project (Affinity-written or imported): edits may change any of its own source. */
+  sourceProject: z.boolean().optional(),
   page: z.object({ role: z.string().max(60), title: z.string().max(120), route: z.string().max(200), filePath: pathSchema }),
   brief: z.string().max(AI_COMPOSER_BRIEF_LIMIT),
   instruction: z.string().max(4000).optional(),
@@ -329,9 +368,14 @@ export const aiComposerRequestSchema = z.object({
   }).optional(),
 }).superRefine((request, ctx) => {
   const paths = [request.page.filePath, ...(request.sourceTargets ?? [])];
-  const allowed = request.importedSource
-    ? isImportedSourceComposerPath
-    : (path: string) => STANDARD_COMPOSER_PATH.test(path);
+  const allowed = request.sourceProject || request.task === 'source_project_author'
+    ? isSourceProjectComposerPath
+    : request.importedSource
+      ? isImportedSourceComposerPath
+      : (path: string) => STANDARD_COMPOSER_PATH.test(path);
+  if (request.sourceProject && request.task !== 'builder_source_edit' && request.task !== 'source_project_author') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sourceProject'], message: 'Source project edits require builder_source_edit.' });
+  }
   if (request.importedSource && request.task !== 'builder_source_edit') {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['importedSource'], message: 'Imported source repairs require builder_source_edit.' });
   }
