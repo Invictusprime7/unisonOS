@@ -613,7 +613,7 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
           const url = urlForLocalFile(path);
           if (!url) warnOnce({ level: 'warning', code: 'asset-missing', message: `${path.slice(1)} could not be loaded.`, path });
           if (/(^|&)url($|&)/.test(query) || !isNext || !/\.(png|jpe?g|gif|webp|avif|svg|ico|bmp)$/i.test(path)) {
-            const svgExtra = /\.svg$/i.test(path) && text !== undefined && /(^|\/)react(-dom)?$/.test(plan.jsxImportSource) && !isNext ? `\n${svgComponent(text)}\nexport const ReactComponent = SvgComponent;` : '';
+            const svgExtra = /\.svg$/i.test(path) && text !== undefined && Boolean(plan.packages.react) && !isNext ? `\n${svgComponent(text)}\nexport const ReactComponent = SvgComponent;` : '';
             return { contents: `export default ${JSON.stringify(url ?? '')};${svgExtra}`, loader: 'js', resolveDir };
           }
           // Next.js static image imports are objects ({ src, width, height }).

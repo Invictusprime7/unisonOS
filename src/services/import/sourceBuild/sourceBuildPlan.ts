@@ -326,7 +326,7 @@ export function planSourceBuild(profile: ImportCompatibilityProfile, files: Reco
     } else unpinned.push(name);
   }
   // Workspace packages imported by name without being declared still resolve locally.
-  for (const [name, dir] of Object.entries(localAll)) if (dir !== root && !localPackages[name]) localPackages[name] = dir;
+  for (const [name, dir] of Object.entries(localAll)) if (dir && dir !== root && !localPackages[name]) localPackages[name] = dir;
   // Their own dependencies load at the versions they declare.
   for (const dir of [...new Set(Object.values(localPackages))].sort()) {
     const local = parseJsonc<PackageJson>(sourceFiles[`${dir}/package.json`]);
