@@ -61,7 +61,6 @@ describe('Tailwind 3 imported projects', () => {
   it('evaluates the config to the project theme', async () => {
     const out = await documentFor();
     const source = /<script type="module" data-unison-source="\/tailwind\.config\.ts">([\s\S]*?)<\/script>/.exec(out.document)![1];
-    const tailwind: { config?: any } = { };
     const win = { tailwind: { config: {}, defaultTheme: { fontFamily: { sans: ['ui-sans-serif'] } }, plugin: () => null } };
     const sheets: string[] = [];
     const doc = { createElement: () => ({}), head: { appendChild: (el: { textContent: string }) => sheets.push(el.textContent) } };
@@ -69,7 +68,6 @@ describe('Tailwind 3 imported projects', () => {
     const run = new Function('window', 'document', 'globalThis', 'imp', `return (async () => { ${source.replace(/import\(url\)/g, 'imp(url)')} })();`);
     const g: Record<string, unknown> = {};
     await run(win, doc, g, async () => ({ default: animate }));
-    void tailwind;
     const config = win.tailwind.config as { theme: any; plugins: unknown[]; darkMode: unknown };
     expect(config.darkMode).toEqual(['class']);
     expect(config.theme.extend.colors.primary.DEFAULT).toBe('hsl(var(--primary))');
@@ -80,8 +78,8 @@ describe('Tailwind 3 imported projects', () => {
     expect(sheets[0]).not.toContain('fonts.googleapis.com');
   });
 
-  it('keeps the default runtime when the project has no tailwind.config', async () => {
-    const out = await documentFor({ 'tailwind.config.ts': '' }, '3.4.11');
+  it('uses the project\'s exact Tailwind runtime when that release exists', async () => {
+    const out = await documentFor({}, '3.4.11');
     expect(out.document).toContain('https://cdn.tailwindcss.com/3.4.11');
   });
 });
