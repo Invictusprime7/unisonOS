@@ -7,6 +7,7 @@
 - [x] Industry knowledge and verified photos are advice only
 - [x] Removed 80 unused duplicate files (incl. 2 duplicate migrations) and the retired guided-setup files that had reappeared
 - [ ] Live end-to-end creation (blocked: backend update — new writing mode + migrations — deploys through the GitHub backend workflow; duplicate workflow removed)
+- [x] New Affinity sites save even on the older live save rule (relabel fallback); 12 Nov migrations still not live on UNISON as of 08:32 UTC
 - [x] Convert existing Unison-composed sites (and marketplace installs) to source projects on open — exact preview output, one save parented on the old version; failure leaves the site as it was
 - [ ] Conversion live for real accounts (blocked: new backend step deploys through the GitHub backend workflow)
 - [ ] Delete the older preview compiler and launch pipeline (blocked: it is the conversion source until every older site and template install has been opened and converted)
