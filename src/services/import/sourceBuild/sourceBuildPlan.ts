@@ -327,6 +327,18 @@ export function planSourceBuild(profile: ImportCompatibilityProfile, files: Reco
   }
   // Workspace packages imported by name without being declared still resolve locally.
   for (const [name, dir] of Object.entries(localAll)) if (dir !== root && !localPackages[name]) localPackages[name] = dir;
+  // Their own dependencies load at the versions they declare.
+  for (const dir of [...new Set(Object.values(localPackages))].sort()) {
+    const local = parseJsonc<PackageJson>(sourceFiles[`${dir}/package.json`]);
+    const deps = { ...(local?.peerDependencies ?? {}), ...(local?.dependencies ?? {}) };
+    const lockedLocal = readLockedVersions(sourceFiles, Object.keys(deps), [dir, ...lockDirs]);
+    for (const [name, range] of Object.entries(deps)) {
+      if (packages[name] || localPackages[name] || TOOLING.test(name) || /^(workspace:|file:|link:)/.test(range)) continue;
+      const clean = String(range).replace(/^[~^>=<\s]+/, '').split(/\s|\|\|/)[0];
+      const version = lockedLocal[name] ?? (/^\d/.test(clean) ? clean : null);
+      if (version) { packages[name] = version; versions[name] ??= version; if (!lockedLocal[name]) unpinned.push(name); }
+    }
+  }
 
   const major = (name: string) => Number(/^(\d+)/.exec(versions[name] ?? declared[name]?.replace(/^\D+/, '') ?? '')?.[1] ?? NaN);
   const anyFile = (re: RegExp) => Object.keys(sourceFiles).some((p) => re.test(p));
