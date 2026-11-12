@@ -114,7 +114,7 @@ export interface ConvertLegacyProjectInput {
   compiled: CompiledLegacyPreview;
   projectName: string;
   /** Optional build check, run before anything is saved. */
-  buildCheck?: (files: Record<string, string>) => Promise<{ ok: boolean; errors: string[] }>;
+  buildCheck?: (files: Record<string, string>) => Promise<{ ok: boolean; errors: Array<{ message: string }> }>;
 }
 
 export class LegacyConversionError extends Error {}
@@ -133,7 +133,7 @@ export async function convertLegacyProject(input: ConvertLegacyProjectInput): Pr
   if (plan.status !== 'supported') throw new LegacyConversionError(plan.reason ?? 'The converted site is not a shape the preview can build.');
   if (input.buildCheck) {
     const check = await input.buildCheck(source);
-    if (!check.ok) throw new LegacyConversionError(`The converted site did not build: ${check.errors.slice(0, 3).join('; ')}`);
+    if (!check.ok) throw new LegacyConversionError(`The converted site did not build: ${check.errors.slice(0, 3).map((error) => error.message).join('; ')}`);
   }
 
   const { files } = buildImportedSourceVfs({

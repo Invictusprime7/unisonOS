@@ -55,7 +55,7 @@ export function sourceProjectAdvice(prompt: string): { advice: string; photos: s
 }
 
 /** Builds the files exactly as the preview will, in this browser. */
-async function browserBuildCheck(files: Record<string, string>): Promise<SourceBuildCheck> {
+export async function sourceProjectBuildCheck(files: Record<string, string>): Promise<SourceBuildCheck> {
   const intake = await intakeLooseFiles(Object.entries(files).map(([path, text]) => ({ path: path.slice(1), bytes: new TextEncoder().encode(text) })));
   const profile = analyzeImportedProject({ manifest: intake.manifest, textFiles: intake.textFiles });
   const plan = planSourceBuild(profile, files);
@@ -85,7 +85,7 @@ async function createAndSave(input: CreateAffinitySourceProjectInput, userId: st
     photos,
     signal: input.signal,
     onStatus: input.onStatus,
-    buildCheck: typeof window === 'undefined' ? undefined : browserBuildCheck,
+    buildCheck: typeof window === 'undefined' ? undefined : sourceProjectBuildCheck,
   });
 
   input.onStatus?.('Saving your site');

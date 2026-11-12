@@ -9,13 +9,13 @@
 import { fnv1a, type AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import { newEditorCorrelationId, recordMutationEvent } from '@/services/editor/editorTelemetry';
 
-export type MutationSurface = 'ai-builder' | 'toolbar-ai' | 'toolbar' | 'terminal' | 'command-menu' | 'autosave' | 'catalog';
+export type MutationSurface = 'ai-builder' | 'toolbar-ai' | 'toolbar' | 'terminal' | 'command-menu' | 'autosave' | 'catalog' | 'conversion';
 
 let tail: Promise<unknown> = Promise.resolve();
 /** How long one save may hold the queue before later saves are released. */
 const STALL_BUDGET_MS: Record<MutationSurface, number> = {
   'ai-builder': 300_000, 'toolbar-ai': 300_000, toolbar: 90_000, terminal: 90_000,
-  'command-menu': 90_000, autosave: 90_000, catalog: 60_000,
+  'command-menu': 90_000, autosave: 90_000, catalog: 60_000, conversion: 180_000,
 };
 let activeAiEdits = 0;
 let lastCommit: { surface: MutationSurface; revisionId: string | null; at: number } | null = null;
