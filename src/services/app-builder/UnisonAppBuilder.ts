@@ -257,8 +257,10 @@ export function createUnisonAppBuilder(
         ...input.connectorContext,
         files: input.currentFiles,
         revisionId: input.baseRevisionId,
-        sourceTargets: input.sourceTargets,
-        registryContext: input.connectorContext?.registryContext ?? resolveBuilderRegistryContext({ vfsFiles: { ...input.currentFiles }, pageRole: input.page.role }),
+        // Source projects own root files (package.json, index.html) and no
+        // Unison registry; the connector only checks the selection is current.
+        sourceTargets: sourceProject ? input.sourceTargets.filter(path => path.startsWith('/src/')) : input.sourceTargets,
+        registryContext: sourceProject ? null : input.connectorContext?.registryContext ?? resolveBuilderRegistryContext({ vfsFiles: { ...input.currentFiles }, pageRole: input.page.role }),
       });
       const assembled = await assembleCanonicalAuthoringRequest({
         task: 'builder_source_edit',
