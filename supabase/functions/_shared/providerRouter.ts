@@ -241,7 +241,6 @@ export function buildProviderPlan(
     || task.type === "wizard_content_enrichment"
     || task.type === "wizard_interaction_enrichment"
     || task.type === "site_page_author"
-    || task.type === "source_project_author"
     || task.type === "site_page_repair"
     || task.type === "builder_source_edit"
     || task.type === "source_project_author";
