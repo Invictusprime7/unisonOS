@@ -109,6 +109,14 @@ jobs:
             echo "::error::SUPABASE_DB_PASSWORD secret is required to apply migrations."; exit 1
           fi
           supabase link --project-ref "${SUPABASE_PROJECT_ID}" --password "${SUPABASE_DB_PASSWORD}" --yes
+          # These applied migrations have no corresponding source files in the repository.
+          remote_migrations="$(supabase migration list --linked)"
+          for version in 20261020130742 20261020160706; do
+            if ! compgen -G "supabase/migrations/${version}_*.sql" >/dev/null &&
+              grep -Fq "$version" <<< "$remote_migrations"; then
+              supabase migration repair --status reverted "$version"
+            fi
+          done
           supabase db push --linked --password "${SUPABASE_DB_PASSWORD}" --yes
 
       # Functions deploy even when a migration fails (the job still fails), and one
