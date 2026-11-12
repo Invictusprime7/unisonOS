@@ -98,6 +98,12 @@ export interface ComposerLoopInput {
   pageCheck?: PageCheck;
   /** Continue an interrupted fix round with its accumulated draft. */
   resume?: ComposerLoopResume;
+  /**
+   * Adds files the draft needs before it is checked (source projects copy in
+   * the Unison library sections they import). Receives base + draft files and
+   * returns only the files to add or replace.
+   */
+  augmentCandidate?: (files: Record<string, string>) => Promise<Record<string, string>>;
 }
 
 /** Output rule for App Builder page fix rounds: targeted hunks, never a whole-page resend. */
@@ -250,6 +256,11 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
     Object.assign(aiFiles, accumulatedFiles);
     deletions.push(...accumulatedDeletes);
     activeAuthorshipTrace().recordFiles('rawCandidateFileManifest', accumulatedFiles, { pageId: request.page.filePath, detail: { attempt, deletes: accumulatedDeletes.size } });
+    if (input.augmentCandidate) {
+      const merged: Record<string, string> = { ...input.baseFiles, ...aiFiles };
+      for (const path of deletions) delete merged[path];
+      Object.assign(aiFiles, await input.augmentCandidate(merged));
+    }
     const prepared = await prepareAICandidate({
       aiFiles,
       deletions,

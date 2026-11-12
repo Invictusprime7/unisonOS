@@ -261,7 +261,11 @@ export function createUnisonAppBuilder(
         approvedRouteOps: input.initialRouteOps,
         routes: [...(input.routes ?? [])],
         registryContext: sourceProject ? undefined : input.registryContext,
-        runtimeContext: [sourceProject ? '' : renderUnisonBuilderDirective(connector), input.runtimeContext].filter(Boolean).join('\n'),
+        runtimeContext: [
+          sourceProject ? '' : renderUnisonBuilderDirective(connector),
+          sourceProject && wantsLibrary(input.currentFiles as Record<string, string>, input.instruction) ? await libraryBriefBlock() : '',
+          input.runtimeContext,
+        ].filter(Boolean).join('\n'),
         attachmentContext: input.attachmentContext,
         images: input.images,
         diagnostics: input.diagnostics ? [...input.diagnostics] : undefined,
@@ -294,6 +298,7 @@ export function createUnisonAppBuilder(
         candidateOrigin: input.diagnostics?.length ? 'repair' : 'builder',
         candidateIntent: input.instruction.slice(0, 240),
         resolveDependencies: input.importedSource || sourceProject ? false : undefined,
+        augmentCandidate: sourceProject ? libraryAugment : undefined,
         importAliases: input.importedSource || sourceProject
           ? readImportedSourceRecords(input.currentFiles as Record<string, string>)?.profile.aliases
           : undefined,
