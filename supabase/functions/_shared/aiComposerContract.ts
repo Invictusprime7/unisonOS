@@ -474,11 +474,8 @@ export function conformComposerRequest(raw: unknown): { request: unknown; notes:
       .map((p) => ({ role: String((p as { role?: unknown }).role ?? '').slice(0, 60), summary: String((p as { summary?: unknown }).summary ?? '').slice(0, 2000) }))
       .slice(0, 20);
   }
-  if (Array.isArray(req.images)) {
-    const images = req.images.filter((image) => aiComposerImageSchema.safeParse(image).success).slice(0, 10);
-    if (images.length < req.images.length) notes.push(`${req.images.length - images.length} attached image(s) could not be sent`);
-    req.images = images.length ? images : undefined;
-  }
+  // Attached images are owner input: unsupported ones still fail validation, only an empty list is dropped.
+  if (Array.isArray(req.images) && req.images.length === 0) req.images = undefined;
   if (req.evidence && typeof req.evidence === 'object') {
     const evidence = { ...(req.evidence as Record<string, unknown>) };
     evidence.sourcePaths = clipList(evidence.sourcePaths, 80, (p) => typeof p === 'string' && p.startsWith('/') && p.length <= 240);

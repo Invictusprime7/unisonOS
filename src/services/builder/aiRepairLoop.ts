@@ -219,7 +219,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       return { ok: false, reason: 'invalid_response', attempts: attempt - 1, errors: [`The edit could not be prepared: ${detail}`], response: lastResponse, prepared: lastPrepared };
     }
     if (conformed.notes.length) console.info('[aiRepairLoop] request bounded', conformed.notes.slice(0, 10));
-    const sendTurn = (payload: AIComposerRequest) => invoke({
+    const sendTurn = (payload: AIComposerRequest, windowMs: number) => invoke({
       mode: AI_COMPOSER_MODES[payload.task],
       messages: [{ role: 'user', content: JSON.stringify(payload) }],
       ...(input.guestDemoOperationId
@@ -229,11 +229,11 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
         ...input.gatewayOptions,
         timeoutMs: Math.min(
           typeof input.gatewayOptions?.timeoutMs === 'number' ? input.gatewayOptions.timeoutMs : 145_000,
-          deadline - Date.now() - 5_000,
+          windowMs - 5_000,
         ),
       },
-    }, { timeoutMs: Math.max(5_000, deadline - Date.now()), signal: input.signal });
-    let { data, error } = await sendTurn(checked.data);
+    }, { timeoutMs: windowMs, signal: input.signal });
+    let { data, error } = await sendTurn(checked.data, remainingMs);
     // An edge still on the previous contract refuses source-project fields;
     // resend the same edit in the shape it accepts instead of failing the owner.
     if (error && isComposerRequestRejection(error) && !input.signal?.aborted) {
@@ -241,7 +241,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
       if (legacy) {
         console.warn('[aiRepairLoop] edge refused the request shape; retrying in its previous contract', String((error as { message?: string }).message ?? '').slice(0, 300));
         request = legacy;
-        ({ data, error } = await sendTurn(legacy));
+        ({ data, error } = await sendTurn(legacy, Math.max(5_000, deadline - Date.now())));
       }
     }
 
