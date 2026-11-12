@@ -24,6 +24,7 @@ import {
   type ImportProvenanceRecord,
   type ImportReadiness,
   type ImportedAssetsRecord,
+  type SourceProjectOrigin,
 } from './importedSourceRecords';
 
 export const RECORD_PATHS = [IMPORT_PROVENANCE_PATH, IMPORT_MANIFEST_PATH, IMPORT_PROFILE_PATH, IMPORT_ASSETS_PATH];
@@ -36,7 +37,11 @@ export class ImportedSourceAdoptionError extends Error {
 }
 
 /** Readiness at import time. Never claims preview, parity or publish without evidence. */
-export function deriveImportReadiness(profile: ImportCompatibilityProfile, assets: ImportedAssetsRecord): ImportReadiness {
+export function deriveImportReadiness(
+  profile: ImportCompatibilityProfile,
+  assets: ImportedAssetsRecord,
+  origin: SourceProjectOrigin = 'external-import',
+): ImportReadiness {
   const blockers: ImportReadiness['blockers'] = [];
   const failedAssets = assets.assets.filter((a) => a.status !== 'stored');
   const assetsPreserved = assets.assets.length === 0 ? 'not-applicable' : failedAssets.length === 0 ? 'verified' : failedAssets.length === assets.assets.length ? 'failed' : 'partial';
@@ -46,7 +51,9 @@ export function deriveImportReadiness(profile: ImportCompatibilityProfile, asset
   if (profile.previewAdapter.status !== 'available') {
     blockers.push({ code: 'imported-runtime-unsupported', message: `Preview is off: no source-compatible runtime for this ${profile.framework} project yet (needs ${profile.previewAdapter.requires.join('; ')}).` });
   }
-  blockers.push({ code: 'imported-visual-parity-unverified', message: 'The imported design has not been compared against its original build, so it cannot be published from Unison yet.' });
+  blockers.push(origin === 'affinity-authored'
+    ? { code: 'imported-visual-parity-unverified', message: 'Run the page check in the preview and confirm the site looks right before publishing.' }
+    : { code: 'imported-visual-parity-unverified', message: 'The imported design has not been compared against its original build, so it cannot be published from Unison yet.' });
   return {
     sourcePreserved: 'verified',
     assetsPreserved,
@@ -66,6 +73,8 @@ export function buildImportedSourceVfs(input: {
   assets: ImportedAssetsRecord;
   importedBy: string;
   importedAt: string;
+  /** Defaults to an external import; Affinity-written projects pass `affinity-authored`. */
+  origin?: SourceProjectOrigin;
 }): { files: Record<string, string>; provenance: ImportProvenanceRecord } {
   const { intake, profile, assets } = input;
   const files: Record<string, string> = {};
@@ -78,7 +87,7 @@ export function buildImportedSourceVfs(input: {
   }
   const provenance: ImportProvenanceRecord = {
     version: 1,
-    origin: 'external-import',
+    origin: input.origin ?? 'external-import',
     acceptanceProfile: 'imported-source',
     importedAt: input.importedAt,
     importedBy: input.importedBy,
@@ -87,7 +96,7 @@ export function buildImportedSourceVfs(input: {
     originalSnapshotHash: intake.manifest.snapshotHash,
     ...(intake.manifest.archiveSha256 ? { archiveSha256: intake.manifest.archiveSha256 } : {}),
     framework: profile.framework,
-    readiness: deriveImportReadiness(profile, assets),
+    readiness: deriveImportReadiness(profile, assets, input.origin ?? 'external-import'),
   };
   files[IMPORT_MANIFEST_PATH] = stableJson(intake.manifest);
   files[IMPORT_PROFILE_PATH] = stableJson(profile);
