@@ -454,6 +454,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   const externalPreviewChannelRef = useRef<BroadcastChannel | null>(null);
   const externalPreviewFilesRef = useRef(files);
   const importedPreviewSessionRef = useRef<ImportedPreviewSession | null>(null);
+  const importedFrameRef = useRef<HTMLIFrameElement | null>(null);
   externalPreviewFilesRef.current = files;
 
   useEffect(() => {
@@ -872,6 +873,8 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
   // Resolve a target window for posting bridge messages (Sandpack iframe or docker iframe)
   const getPreviewWindow = useCallback((): Window | null => {
+    // Source projects: the sealed runtime frame hosts the same selection bridge.
+    if (importedFrameRef.current?.isConnected && importedFrameRef.current.contentWindow) return importedFrameRef.current.contentWindow;
     const sp = previewContainerRef.current?.querySelector(
       'iframe.sp-preview-iframe, .sp-preview iframe, iframe[title*="Sandpack"], iframe[src*="csb.app"], iframe[src*="codesandbox"]',
     ) as HTMLIFrameElement | null;
@@ -1491,6 +1494,8 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         projectId={builderSession.runtimeContext?.projectId || builderSession.projectId || undefined}
         onSessionChange={(session) => { importedPreviewSessionRef.current = session; }}
         className={className}
+        editable={Boolean(onElementSelect)}
+        onFrameChange={(frame) => { importedFrameRef.current = frame; bridgeReadyRef.current = false; }}
       />
     );
   }

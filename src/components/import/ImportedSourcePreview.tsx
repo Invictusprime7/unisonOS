@@ -38,12 +38,15 @@ const SIGNED_URL_SECONDS = 60 * 60;
  * Otherwise the truthful status panel is shown; a Unison-rendered substitute
  * is never displayed.
  */
-export function ImportedSourcePreview({ records, files, projectId, onSessionChange, className }: {
+export function ImportedSourcePreview({ records, files, projectId, onSessionChange, className, editable, onFrameChange }: {
   records: ImportedSourceRecords;
   files: Record<string, string>;
   projectId?: string;
   onSessionChange?: (session: ImportedPreviewSession | null) => void;
   className?: string;
+  /** Builder preview: point-and-click editing on built React projects. */
+  editable?: boolean;
+  onFrameChange?: (frame: HTMLIFrameElement | null) => void;
 }) {
   const adapter = useMemo(() => resolveImportPreviewAdapter(records.profile, files), [records.profile, files]);
   const runsStaticHtml = adapter.status === 'available' && adapter.adapter === STATIC_HTML_PREVIEW_ADAPTER;
@@ -200,7 +203,7 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
     if (!assetsReady) {
       return <div className={cn('flex h-full items-center justify-center rounded-lg border border-border bg-background text-xs text-muted-foreground', className)}><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />Preparing your images and media…</div>;
     }
-    return <ImportedSourceRuntimeFrame records={records} files={files} assetUrls={assetUrls} projectId={projectId} adapter={adapter} className={className} />;
+    return <ImportedSourceRuntimeFrame records={records} files={files} assetUrls={assetUrls} projectId={projectId} adapter={adapter} className={className} editable={editable} onFrameChange={onFrameChange} />;
   }
 
   if (session) {
