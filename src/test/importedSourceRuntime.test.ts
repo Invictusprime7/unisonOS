@@ -112,3 +112,15 @@ describe('isolated imported preview session', () => {
     }
   });
 });
+
+describe('imported project start page', () => {
+  it('opens the saved page, else the project entry, never a record file', async () => {
+    const { resolveImportedActivePagePath } = await import('@/services/import/importedSourceRecords');
+    const files = { '/.unison-import/provenance.json': '{}', '/src/router.tsx': 'x', '/src/routes/index.tsx': 'x', '/src/routes/work.tsx': 'x' };
+    expect(resolveImportedActivePagePath(files, '/src/routes/work.tsx')).toBe('/src/routes/work.tsx');
+    expect(resolveImportedActivePagePath(files, null)).toBe('/src/routes/index.tsx');
+    expect(resolveImportedActivePagePath(files, '/src/pages/Gone.tsx')).toBe('/src/routes/index.tsx');
+    expect(resolveImportedActivePagePath(files, '/.unison-import/provenance.json')).toBe('/src/routes/index.tsx');
+    expect(resolveImportedActivePagePath({ '/site/home.html': 'x', '/.unison-import/manifest.json': '{}' })).toBe('/site/home.html');
+  });
+});

@@ -113,7 +113,7 @@ import { supabase as supabaseClient } from "@/integrations/supabase/client";
 const supabase = supabaseClient as any;
 import { buildPageStructureContext } from "@/utils/pageStructureContext";
 import { extractCleanCode, looksLikeCode, ensureReactImports } from "@/utils/aiCodeCleaner";
-import { isImportedSourceVfs } from "@/services/import/importedSourceRecords";
+import { isImportedSourceVfs, resolveImportedActivePagePath } from "@/services/import/importedSourceRecords";
 import { AIActivityPanel } from "@/components/ai-agent/AIActivityPanel";
 import { useAIActivityMonitor } from "@/hooks/useAIActivityMonitor";
 import {
@@ -3143,10 +3143,17 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       .then((projection) => {
         if (cancelled) return;
         setActivePublishedRevisionId(projection.activePublishedRevisionId);
-        setActivePagePath(resolveProjectActivePagePath(
-          revisionSnapshot,
-          projection.activePagePath,
-        ));
+        if (isImportedSourceVfs(hydratedRevision.vfsFiles)) {
+          // Imported versions have no Unison snapshot or page registry; open the project's own entry.
+          const importedPath = resolveImportedActivePagePath(hydratedRevision.vfsFiles, projection.activePagePath);
+          if (!importedPath) throw new Error('This imported project has no files to open.');
+          setActivePagePath(importedPath);
+        } else {
+          setActivePagePath(resolveProjectActivePagePath(
+            revisionSnapshot,
+            projection.activePagePath,
+          ));
+        }
         setRuntimeProjectionRevisionId(hydratedRevision.id);
       })
       .catch((error) => {
@@ -7550,6 +7557,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       !hydratedRevision
       || runtimeProjectionRevisionId !== hydratedRevision.id
       || !builderRuntimeContext?.workspaceId
+      || isImportedSourceVfs(hydratedRevision.vfsFiles)
     ) return undefined;
     return buildProjectRuntimeEnvelope({
       workspaceId: builderRuntimeContext.workspaceId,
@@ -7571,6 +7579,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       && hydratedRevision
       && runtimeProjectionRevisionId === hydratedRevision.id
       && !builderRuntimeContext?.workspaceId
+      // Imported versions keep their original source and carry no Unison runtime snapshot.
+      && !isImportedSourceVfs(hydratedRevision.vfsFiles)
       ? 'Canonical revision is missing its persisted workspace runtime identity.'
       : null);
 
