@@ -34,8 +34,8 @@ vi.mock('@/services/source-authoring/affinitySourceAuthor', () => ({
 vi.mock('@/services/vfsCommitService', () => ({
   commitMutation: async (input: { patch: { files?: Array<{ path: string; content: string }> } & Record<string, unknown> }) => {
     const files: Record<string, string> = {};
-    const ops = (input.patch as { fileOps?: Array<{ path: string; content?: string }> }).fileOps ?? [];
-    for (const op of ops) if (typeof op.content === 'string') files[op.path] = op.content;
+    const ops = (input.patch as { fileOps?: Array<{ path: string; contents?: string }> }).fileOps ?? [];
+    for (const op of ops) if (typeof op.contents === 'string') files[op.path] = op.contents;
     commits.push(files);
     const provenance = JSON.parse(files['/.unison-import/provenance.json'] ?? '{}');
     if (refuseAffinityLabel && provenance.origin === 'affinity-authored') {
