@@ -150,10 +150,11 @@ export function buildProviderPlan(
       break;
     case "site_page_author":
     case "builder_source_edit":
+    case "source_project_author":
       plan = {
         gatewayModels: [m(composerGeminiModel(readEnv), 48_000)],
         // Full-page authoring gets the platform window; scoped EDIT turns are small.
-        perModelTimeoutMs: task.type === "site_page_author" ? 135_000 : 110_000,
+        perModelTimeoutMs: task.type === "site_page_author" || task.type === "source_project_author" ? 135_000 : 110_000,
         fallbackMaxTokens: 32_000,
         preferLongLeadAttempt: true,
       };
@@ -241,7 +242,8 @@ export function buildProviderPlan(
     || task.type === "wizard_interaction_enrichment"
     || task.type === "site_page_author"
     || task.type === "site_page_repair"
-    || task.type === "builder_source_edit";
+    || task.type === "builder_source_edit"
+    || task.type === "source_project_author";
   if (!usesProtectedWizardPlan) {
     const upgrade = applyComplexityUpgrade(plan.gatewayModels, complexity);
     plan.gatewayModels = upgrade.models;
@@ -307,7 +309,7 @@ export function buildProviderPlan(
   const hasExplicitModel = overrides?.autoModelSelection === false && Boolean(overrides.selectedModelId);
   const wizardGeminiConfigured = task.type === "wizard_seed_generation"
     && Boolean(readEnv('GEMINI_API_KEY') || readEnv('GOOGLE_API_KEY') || readEnv('UNISONGEMINI_API_KEY'));
-  const isComposerTask = task.type === "site_page_author" || task.type === "site_page_repair" || task.type === "builder_source_edit";
+  const isComposerTask = task.type === "site_page_author" || task.type === "site_page_repair" || task.type === "builder_source_edit" || task.type === "source_project_author";
   if (isComposerTask) {
     const geminiModel = m(composerGeminiModel(readEnv), Math.min(48_000, overrides?.maxTokens ?? 48_000));
     plan.gatewayModels = [geminiModel];

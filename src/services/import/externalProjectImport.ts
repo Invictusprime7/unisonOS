@@ -47,7 +47,7 @@ function projectNameFrom(intake: IntakeResult, profile: ImportCompatibilityProfi
   return raw.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Imported project';
 }
 
-async function resolveBusinessId(userId: string, preferred: string | null | undefined, name: string): Promise<string> {
+export async function resolveImportBusinessId(userId: string, preferred: string | null | undefined, name: string): Promise<string> {
   if (preferred) return preferred;
   const memberships = await loadBusinessMemberships(userId);
   const editable = memberships.find((m) => m.role === 'owner') ?? memberships.find((m) => canEditBusiness(m.role));
@@ -84,7 +84,7 @@ export async function importExternalProject(
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!user) throw new Error('Sign in before importing a project.');
-  const businessId = await resolveBusinessId(user.id, options.businessId, projectName);
+  const businessId = await resolveImportBusinessId(user.id, options.businessId, projectName);
 
   const { data: draft, error: draftError } = await supabase
     .from('builder_drafts')

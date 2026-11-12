@@ -50,9 +50,9 @@ describe('R6 — legacy AI page generator surface stays deleted', () => {
     expect(creatives).not.toContain('/ai-generator');
   });
 
-  it('keeps the prompt-first launch surface delegated to the canonical launch orchestrator', () => {
+  it('keeps the prompt-first launch surface delegated to Affinity source authorship', () => {
     const launcher = readFileSync('src/components/launch/PromptLaunchPanel.tsx', 'utf8');
-    expect(launcher).toContain('await runLaunchPipeline(input, {');
+    expect(launcher).toContain('await createAffinitySourceProject({');
     expect(launcher).toContain("navigate('/web-builder'");
     expect(launcher).not.toMatch(/\b(?:commitMutation|commitToPipeline|buildCanonicalLaunchArtifacts)\b/);
 

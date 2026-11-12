@@ -1,12 +1,14 @@
 /**
- * UIMP-01 — records that make an externally imported project canonical
- * without rewriting its source.
+ * Source-project records: the one project format Unison creates, imports,
+ * previews, edits and publishes.
  *
- * An imported revision's VFS holds the original files byte-for-byte at their
- * original root-relative paths (prefixed with `/`), plus a small read-only
- * record folder. The presence of a valid provenance record switches every
- * Unison stage (normalization, router sync, preview, commit acceptance) into
- * source-preservation mode.
+ * A source project's VFS holds its own files byte-for-byte at their
+ * root-relative paths (prefixed with `/`), plus a small read-only record
+ * folder. The project either came from outside (`external-import`) or was
+ * written by Affinity (`affinity-authored`); both are the same format and go
+ * through the same acceptance, preview, edit and publish paths. The presence
+ * of a valid provenance record switches every Unison stage (normalization,
+ * router sync, preview, commit acceptance) into source-preservation mode.
  */
 import type { ImportManifest } from './secureIntake';
 import type { ImportCompatibilityProfile } from './importCompatibilityProfile';
@@ -58,9 +60,13 @@ export interface ImportReadiness {
   blockers: Array<{ code: string; message: string }>;
 }
 
+/** Where a source project's files came from. Both origins share every downstream path. */
+export const SOURCE_PROJECT_ORIGINS = ['external-import', 'affinity-authored'] as const;
+export type SourceProjectOrigin = (typeof SOURCE_PROJECT_ORIGINS)[number];
+
 export interface ImportProvenanceRecord {
   version: 1;
-  origin: 'external-import';
+  origin: SourceProjectOrigin;
   acceptanceProfile: typeof IMPORTED_SOURCE_ACCEPTANCE_PROFILE;
   importedAt: string;
   importedBy: string;
@@ -73,7 +79,7 @@ export interface ImportProvenanceRecord {
   readiness: ImportReadiness;
 }
 
-const ORIGIN_MARKER = /"origin"\s*:\s*"external-import"/;
+const ORIGIN_MARKER = /"origin"\s*:\s*"(?:external-import|affinity-authored)"/;
 
 /** Cheap check used on hot paths (normalization, router sync, preview). */
 export function isImportedSourceVfs(files: Record<string, string> | null | undefined): boolean {
@@ -109,7 +115,7 @@ export function readImportedSourceRecords(files: Record<string, string> | null |
   const manifest = parseJson<ImportManifest>(files![IMPORT_MANIFEST_PATH]);
   const profile = parseJson<ImportCompatibilityProfile>(files![IMPORT_PROFILE_PATH]);
   const assets = parseJson<ImportedAssetsRecord>(files![IMPORT_ASSETS_PATH]);
-  if (!provenance || provenance.origin !== 'external-import' || !manifest || !Array.isArray(manifest.files)
+  if (!provenance || !SOURCE_PROJECT_ORIGINS.includes(provenance.origin) || !manifest || !Array.isArray(manifest.files)
     || !profile || !assets || !Array.isArray(assets.assets)) return null;
   return { provenance, manifest, profile, assets };
 }

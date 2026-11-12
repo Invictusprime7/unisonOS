@@ -206,7 +206,7 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
           </Button>
           <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}>
             {showDetails ? <X className="h-3.5 w-3.5" aria-hidden /> : <Info className="h-3.5 w-3.5" aria-hidden />}
-            {showDetails ? 'Close' : 'Import details'}
+            {showDetails ? 'Close' : 'Project details'}
           </Button>
         </div>
       </div>

@@ -39,7 +39,8 @@ import { runBuilderTurn } from '@/services/builderBrainClient';
 import { resolveAppBuilderAIOptions } from './appBuilderAISettings';
 import { listContentTypes } from '@/services/cmsRecordService';
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
-import { readImportedSourceRecords } from '@/services/import/importedSourceRecords';
+import { isImportedSourceVfs, readImportedSourceRecords } from '@/services/import/importedSourceRecords';
+import { sourceProjectEditTargets } from '@/services/source-authoring/sourceProjectEditTargets';
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;
@@ -233,6 +234,12 @@ export function createUnisonAppBuilder(
     },
 
     async edit(input) {
+      // Source projects (Affinity-written or imported) are edited in place by
+      // their own conventions; import repair keeps its narrower contract.
+      const sourceProject = !input.importedSource && isImportedSourceVfs(input.currentFiles as Record<string, string>);
+      if (sourceProject) {
+        input = { ...input, sourceTargets: sourceProjectEditTargets(input.currentFiles, input.page.filePath, input.sourceTargets), initialRouteOps: undefined };
+      }
       const connector = createUnisonBuilderContext({
         ...input.connectorContext,
         files: input.currentFiles,
@@ -243,6 +250,7 @@ export function createUnisonAppBuilder(
       const assembled = await assembleCanonicalAuthoringRequest({
         task: 'builder_source_edit',
         importedSource: input.importedSource,
+        sourceProject,
         page: input.page,
         brief: input.brief ?? 'Edit the accepted React project without changing unrelated source.',
         knowledgeQuery: input.knowledgeQuery ?? `${input.instruction} ${input.page.role}`,
@@ -252,8 +260,8 @@ export function createUnisonAppBuilder(
         sourceTargets: [...input.sourceTargets],
         approvedRouteOps: input.initialRouteOps,
         routes: [...(input.routes ?? [])],
-        registryContext: input.registryContext,
-        runtimeContext: [renderUnisonBuilderDirective(connector), input.runtimeContext].filter(Boolean).join('\n'),
+        registryContext: sourceProject ? undefined : input.registryContext,
+        runtimeContext: [sourceProject ? '' : renderUnisonBuilderDirective(connector), input.runtimeContext].filter(Boolean).join('\n'),
         attachmentContext: input.attachmentContext,
         images: input.images,
         diagnostics: input.diagnostics ? [...input.diagnostics] : undefined,
@@ -285,8 +293,8 @@ export function createUnisonAppBuilder(
         initialRouteOps: input.initialRouteOps,
         candidateOrigin: input.diagnostics?.length ? 'repair' : 'builder',
         candidateIntent: input.instruction.slice(0, 240),
-        resolveDependencies: input.importedSource ? false : undefined,
-        importAliases: input.importedSource
+        resolveDependencies: input.importedSource || sourceProject ? false : undefined,
+        importAliases: input.importedSource || sourceProject
           ? readImportedSourceRecords(input.currentFiles as Record<string, string>)?.profile.aliases
           : undefined,
       });

@@ -229,7 +229,7 @@ export function runAssistantOrchestrator(
     return runCanonicalEnrichmentLane(context, corsHeaders, buildWizardCanonicalEnrichmentBasePrompt(), aiMessages => runProviderLoop({ aiMessages, providerPlan, navPageGen: false, reasoningEffort: 'none', signal: enrichmentSignal }), followUps);
   }
 
-  if (task.type === 'site_page_author' || task.type === 'site_page_repair' || task.type === 'builder_source_edit') {
+  if (task.type === 'site_page_author' || task.type === 'site_page_repair' || task.type === 'builder_source_edit' || task.type === 'source_project_author') {
     const context = extractTextContent(parsed.messages[parsed.messages.length - 1]?.content);
     const deadline = Date.now() + Math.min(145_000, parsed.gatewayOptions?.timeoutMs ?? 110_000);
     const providerPlan = buildProviderPlan(task, true, { timeoutMs: 110000, maxTokens: task.type === 'site_page_author' ? 16000 : 48000, ...parsed.gatewayOptions }, 'complex', context);

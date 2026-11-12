@@ -231,7 +231,7 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
           />
         </div>
         <details className="border-t border-border">
-          <summary className="cursor-pointer px-3 py-2 text-xs text-muted-foreground">Import details</summary>
+          <summary className="cursor-pointer px-3 py-2 text-xs text-muted-foreground">Project details</summary>
           <ImportedSourcePreviewStatus records={records} adapter={adapter} running className="h-auto overflow-visible rounded-none border-0" />
         </details>
       </div>
@@ -284,7 +284,7 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
         </Button>
         <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}>
           {showDetails ? <X className="h-3.5 w-3.5" aria-hidden /> : <Info className="h-3.5 w-3.5" aria-hidden />}
-          {showDetails ? 'Close' : 'Import details'}
+          {showDetails ? 'Close' : 'Project details'}
         </Button>
       </div>
       <div className="relative min-h-0 flex-1">
