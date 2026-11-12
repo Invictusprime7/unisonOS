@@ -8,10 +8,13 @@ no masks.
 
   python3 scripts/import-parity/source-build-parity.py <projectDir> <referenceUrl> <unisonUrl> <routes,comma> [pointerOrigin] [outDir]
 
+Set PARITY_BUILD=browser to build inside the running Unison app (needed for
+Vue, Svelte, Solid, Sass and Less projects).
+
 `pointerOrigin` is where hosted image pointers (*.asset.json) are served; the
 reference fetches the same bytes from it through request routing.
 """
-import asyncio, json, subprocess, sys
+import asyncio, base64, json, os, subprocess, sys
 from pathlib import Path
 from PIL import Image, ImageChops
 from playwright.async_api import async_playwright
@@ -33,11 +36,58 @@ SETTLE_MS = 2500
 FREEZE = "() => { for (const a of document.getAnimations()) { const t = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : null; if (!t || t.iterations === Infinity || t.endTime === Infinity) { a.pause(); a.currentTime = 0; } else { try { a.finish(); } catch (_) { a.pause(); } } } }"
 root = Path(__file__).resolve().parents[2]
 doc_path = OUT / "runtime-document.json"
-args = ["bun", str(root / "scripts/import-parity/render-source-preview.ts"), str(PROJECT), REF, str(doc_path)] + ([POINTER] if POINTER else [])
-build_log = subprocess.run(args, cwd=root, capture_output=True, text=True)
-if build_log.returncode != 0:
-    print(build_log.stdout, build_log.stderr); sys.exit(1)
-DOC = json.loads(doc_path.read_text())
+# PARITY_BUILD=browser builds inside the Unison app exactly as the builder does
+# (esbuild-wasm, Tailwind 4 and the sealed component-compiler frame); the
+# default builds with native esbuild through render-source-preview.ts.
+BROWSER_BUILD = os.environ.get("PARITY_BUILD") == "browser"
+SKIP_DIRS = {"node_modules", ".git", "dist", ".next", ".output", ".vinxi", ".wrangler", ".tanstack", ".svelte-kit", "build", "out"}
+BROWSER_DOC = r"""async ([entries, assetBase, pointer]) => {
+  const { intakeLooseFiles } = await import('/src/services/import/secureIntake.ts');
+  const { analyzeImportedProject } = await import('/src/services/import/importCompatibilityProfile.ts');
+  const { planSourceBuild } = await import('/src/services/import/sourceBuild/sourceBuildPlan.ts');
+  const { buildImportedSourceInBrowser } = await import('/src/services/import/sourceBuild/browserSourceBuild.ts');
+  const decode = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  const intake = await intakeLooseFiles(entries.map(([path, b64]) => ({ path, bytes: decode(b64) })), { name: 'fixture' });
+  const profile = analyzeImportedProject({ manifest: intake.manifest, textFiles: intake.textFiles });
+  const files = Object.fromEntries(Object.entries(intake.textFiles).map(([p, t]) => ['/' + p, t]));
+  const plan = planSourceBuild(profile, files);
+  if (plan.status !== 'supported') return { ok: false, plan };
+  const assetUrls = {};
+  const publicDir = (plan.root ? plan.root.slice(1) + '/' : '') + 'public/';
+  for (const [p, bytes] of Object.entries(intake.binaryFiles)) {
+    if (p.startsWith(publicDir)) { assetUrls['/' + p] = assetBase.replace(/\/$/, '') + '/' + p.slice(publicDir.length).split('/').map(encodeURIComponent).join('/'); continue; }
+    assetUrls['/' + p] = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); const ext = p.split('.').pop().toLowerCase(); fr.readAsDataURL(new Blob([bytes], { type: ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', svg: 'image/svg+xml', webp: 'image/webp', ico: 'image/x-icon', gif: 'image/gif', woff2: 'font/woff2', woff: 'font/woff', ttf: 'font/ttf' })[ext] || 'application/octet-stream' })); });
+  }
+  const result = await buildImportedSourceInBrowser({ plan, files, assetUrls, pointerOrigin: pointer || null });
+  return { ...result, plan: { kind: plan.kind, entry: plan.entry, stack: plan.stack }, framework: profile.framework };
+}"""
+
+async def browser_document():
+    entries = []
+    for path in sorted(PROJECT.rglob("*")):
+        rel = path.relative_to(PROJECT)
+        if any(part in SKIP_DIRS for part in rel.parts) or not path.is_file():
+            continue
+        entries.append([str(rel).replace("\\", "/"), base64.b64encode(path.read_bytes()).decode()])
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(f"{UNISON}/robots.txt")
+        doc = await page.evaluate(BROWSER_DOC, [entries, REF, POINTER])
+        await browser.close()
+    return doc
+
+if BROWSER_BUILD:
+    DOC = asyncio.run(browser_document())
+    if not DOC.get("ok"):
+        print(json.dumps({k: DOC.get(k) for k in ("plan", "diagnostics")}, indent=1)[:4000]); sys.exit(1)
+    doc_path.write_text(json.dumps(DOC))
+else:
+    args = ["bun", str(root / "scripts/import-parity/render-source-preview.ts"), str(PROJECT), REF, str(doc_path)] + ([POINTER] if POINTER else [])
+    build_log = subprocess.run(args, cwd=root, capture_output=True, text=True)
+    if build_log.returncode != 0:
+        print(build_log.stdout, build_log.stderr); sys.exit(1)
+    DOC = json.loads(doc_path.read_text())
 
 GEOMETRY = """() => Array.from(document.querySelectorAll('body *')).filter(e => !['SCRIPT','STYLE','LINK'].includes(e.tagName)).map(e => {
   const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
