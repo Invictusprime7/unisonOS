@@ -40,9 +40,10 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
 }) {
   const plan = useMemo(() => planSourceBuild(records.profile, files), [records.profile, files]);
   const routes = useMemo(() => {
-    const list = records.profile.routing.routes.filter((r) => r.kind === 'page' && !/[$:[*]/.test(r.path) && !r.path.startsWith('/__')).map((r) => r.path);
+    const known = plan.next ? plan.next.routes.map((r) => ({ path: r.path, kind: 'page' as const })) : records.profile.routing.routes;
+    const list = known.filter((r) => r.kind === 'page' && !/[$:[*]/.test(r.path) && !r.path.startsWith('/__')).map((r) => r.path);
     return list.length > 0 ? [...new Set(list)] : ['/'];
-  }, [records.profile.routing.routes]);
+  }, [plan.next, records.profile.routing.routes]);
   const [build, setBuild] = useState<SourceBuildResult | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [buildKey, setBuildKey] = useState(0);
