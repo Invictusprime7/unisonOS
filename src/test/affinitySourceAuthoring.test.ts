@@ -138,15 +138,20 @@ describe('Affinity source authorship under provider time limits', () => {
       () => FOUNDATION,
       () => 'timeout',
       () => page('/src/pages/Home.tsx', "import Hero from '../components/home/Hero';\nexport default function Home() { return <Hero />; }\n"),
-      () => page('/src/components/home/Hero.tsx', 'export default function Hero() { return <h1>Fresh bread</h1>; }\n'),
-      () => page('/src/pages/Menu.tsx', 'export default function Menu() { return <h1>Menu</h1>; }\n'),
+      (r) => r.sourceTargets?.[0] === '/src/pages/Menu.tsx'
+        ? page('/src/pages/Menu.tsx', 'export default function Menu() { return <h1>Menu</h1>; }\n')
+        : page('/src/components/home/Hero.tsx', 'export default function Hero() { return <h1>Fresh bread</h1>; }\n'),
+      (r) => r.sourceTargets?.[0] === '/src/pages/Menu.tsx'
+        ? page('/src/pages/Menu.tsx', 'export default function Menu() { return <h1>Menu</h1>; }\n')
+        : page('/src/components/home/Hero.tsx', 'export default function Hero() { return <h1>Fresh bread</h1>; }\n'),
     ]);
     const result = await authorSourceProject({ prompt: 'Bakery', projectName: 'Harbour Bakery', invoke, libraryBrief: '' });
     expect(requests[2].sourceTargets).toEqual(['/src/pages/Home.tsx']);
     expect(requests[2].instruction).not.toBe(requests[1].instruction);
     expect(requests[2].instruction).toContain('section components in /src/components/home/');
-    expect(requests[3].sourceTargets).toEqual(['/src/components/home/Hero.tsx']);
-    expect(requests[3].page.route).toBe('/');
+    const hero = requests.find((r) => r.sourceTargets?.[0] === '/src/components/home/Hero.tsx');
+    expect(hero?.page).toMatchObject({ role: 'component', route: '/' });
+    expect(requests).toHaveLength(5);
     expect(missingModules(result.files)).toEqual([]);
   });
 
