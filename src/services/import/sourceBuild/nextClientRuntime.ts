@@ -200,7 +200,7 @@ function mountRouteAnnouncer(appRouter) {
     if (first) { first = false; return; }
     setTimeout(() => { live.textContent = document.title || (document.querySelector('h1') || {}).textContent || location.pathname; }, 50);
   };
-  window.addEventListener('unison-next-route', announce);
+  listeners.add(announce);
   announce();
 }
 
