@@ -39,7 +39,8 @@ import { runBuilderTurn } from '@/services/builderBrainClient';
 import { resolveAppBuilderAIOptions } from './appBuilderAISettings';
 import { listContentTypes } from '@/services/cmsRecordService';
 import type { ContentTypeRow } from '@/services/resources/resourceRegistry';
-import { readImportedSourceRecords } from '@/services/import/importedSourceRecords';
+import { isImportedSourceVfs, readImportedSourceRecords } from '@/services/import/importedSourceRecords';
+import { sourceProjectEditTargets } from '@/services/source-authoring/sourceProjectEditTargets';
 
 export interface UnisonAppBuilder {
   generate(input: AppBuildRequest): Promise<AppBuildResult>;

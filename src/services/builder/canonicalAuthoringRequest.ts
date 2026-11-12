@@ -54,6 +54,8 @@ export interface CanonicalAuthorshipEvidence {
 export interface CanonicalAuthoringRequestInput {
   task: AIComposerTask;
   importedSource?: boolean;
+  /** Source project edit (Affinity-written or imported): free in-place edits by the project's own conventions. */
+  sourceProject?: boolean;
   page: AIComposerRequest['page'];
   brief: string;
   knowledgeQuery: string;
@@ -335,6 +337,7 @@ export async function assembleCanonicalAuthoringRequest(input: CanonicalAuthorin
     request: {
       task: input.task,
       importedSource: input.importedSource,
+      ...(input.sourceProject ? { sourceProject: true } : {}),
       page: input.page,
       brief,
       instruction: input.instruction,
