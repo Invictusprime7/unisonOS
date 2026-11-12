@@ -14,6 +14,7 @@ import { AI_COMPOSER_MODES, type AIComposerRequest, type AIComposerResponse } fr
 import { decodeComposerResponse, type ComposerInvoke } from '@/services/builder/aiRepairLoop';
 import { runBuilderTurn } from '@/services/builderBrainClient';
 import { findUnresolvedImports } from '@/services/import/importedSourceAcceptance';
+import { applyVendorResult, libraryBriefBlock, vendorLibrarySections } from './unisonLibrary';
 
 export const SOURCE_TURN_TIMEOUT_MS = 150_000;
 const MAX_REPAIR_ROUNDS = 2;
@@ -44,6 +45,8 @@ export interface AuthorSourceProjectInput {
   invoke?: ComposerInvoke;
   /** Builds the files the way the preview will; returns its errors. */
   buildCheck?: (files: Record<string, string>) => Promise<SourceBuildCheck>;
+  /** Optional Unison library advice; defaults to the library catalog. Pass '' to omit. */
+  libraryBrief?: string;
 }
 
 export interface AuthoredSourceProject {
@@ -62,13 +65,14 @@ export class SourceAuthoringError extends Error {
   }
 }
 
-function brief(input: AuthorSourceProjectInput, pages: AuthoredPage[]): string {
+function brief(input: AuthorSourceProjectInput, pages: AuthoredPage[], library: string): string {
   return [
     `OWNER PROMPT (creative authority):\n${input.prompt.trim()}`,
     `PROJECT NAME: ${input.projectName}`,
     pages.length ? `SITE PLAN (from the foundation turn):\n${pages.map((page) => `- ${page.title} → ${page.route} (/src/pages/${page.pageId}.tsx)`).join('\n')}` : '',
     input.photos?.length ? `PHOTOS (verified URLs you may use; never invent others):\n${input.photos.join('\n')}` : 'PHOTOS: none supplied. Design without photographs unless the owner gave image URLs.',
     input.advice?.trim() ? `ADVICE (optional; the owner's prompt wins wherever they differ):\n${input.advice.trim()}` : '',
+    library,
   ].filter(Boolean).join('\n\n');
 }
 
@@ -147,6 +151,8 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
   let summary = '';
   let turns = 0;
   let repairs = 0;
+  const library = input.libraryBrief ?? await libraryBriefBlock().catch(() => '');
+  let unknownSections: string[] = [];
 
   const turn = async (request: AIComposerRequest, label: string): Promise<AIComposerResponse> => {
     if (input.signal?.aborted) throw new DOMException('Cancelled.', 'AbortError');
@@ -171,15 +177,19 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
     }
     throw new SourceAuthoringError(lastError);
   };
-  const apply = (response: AIComposerResponse) => {
+  const apply = async (response: AIComposerResponse) => {
     for (const op of response.fileOps) {
       if (op.type === 'delete') continue;
       files[op.path] = op.content;
     }
+    // Library sections the source imports are copied in unchanged; nothing else is touched.
+    const vendored = await vendorLibrarySections(files);
+    unknownSections = vendored.unknown;
+    Object.assign(files, applyVendorResult(files, vendored));
   };
   const request = (task: Partial<AIComposerRequest> & Pick<AIComposerRequest, 'page'>): AIComposerRequest => ({
     task: 'source_project_author',
-    brief: brief(input, pages),
+    brief: brief(input, pages, library),
     instruction: input.prompt.slice(0, 4000),
     files: { ...files },
     routes: pages.map((page) => ({ title: page.title, route: page.route })),
@@ -190,7 +200,7 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
   const foundation = await turn(request({
     page: { role: 'project', title: input.projectName.slice(0, 120), route: '/', filePath: '/src/App.tsx' },
   }), 'Designing the site foundation');
-  apply(foundation);
+  await apply(foundation);
   summary = foundation.summary;
   pages = (foundation.routeOps ?? []).flatMap((op) => op.type === 'add_page' ? [{ pageId: op.pageId, title: op.title, route: op.route }] : []);
   if (!files['/src/App.tsx']) throw new SourceAuthoringError('Affinity did not write the site router (src/App.tsx).');
@@ -207,12 +217,16 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
       sourceTargets: [next.path],
       instruction: `${input.prompt.slice(0, 3200)}\n\nWrite ${next.path} now (imported by ${next.from}).`,
     }), next.path.startsWith('/src/pages/') ? `Writing the ${page.title} page` : `Writing ${next.path.split('/').pop()}`);
-    apply(response);
+    await apply(response);
   }
 
   // 3. Static and build checks with targeted repairs.
   for (let round = 0; round <= MAX_REPAIR_ROUNDS; round++) {
     const problems = await staticSourceProblems(files);
+    for (const name of unknownSections) {
+      const path = Object.keys(files).find((p) => !p.startsWith('/src/unison-ui/') && files[p].includes(name)) ?? '/src/App.tsx';
+      problems.push({ path, message: `Imports "${name}" from unison-ui, which is not a Unison library section. Use a listed section or write the component yourself.` });
+    }
     if (problems.length === 0 && input.buildCheck) {
       status('Checking the site builds');
       const built = await input.buildCheck({ ...files });
@@ -233,7 +247,7 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
       sourceTargets: targets,
       diagnostics: problems.slice(0, 30).map((p) => `${p.path}: ${p.message}`.slice(0, 1000)),
     }), 'Fixing what the build check found');
-    apply(response);
+    await apply(response);
   }
   return { files, pages, summary, turns, repairs };
 }
