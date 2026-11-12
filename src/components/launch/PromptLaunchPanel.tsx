@@ -98,10 +98,13 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
     } catch (caught) {
       if (controller.signal.aborted) return;
       const message = caught instanceof Error ? caught.message : String(caught);
-      setError(AI_UNAVAILABLE_PATTERN.test(message)
-        ? 'Affinity is unavailable right now, so nothing was saved. Your conversation is preserved; try again in a moment.'
-        : `${message} Nothing was saved and your conversation is preserved.`);
-      setDetails(caught instanceof SourceAuthoringError ? caught.detail : []);
+      const authoring = caught instanceof SourceAuthoringError ? caught : null;
+      setError(authoring?.options.timedOut
+        ? `${message} Your site is not saved yet, but the parts Affinity finished are kept, so Try again continues from there.`
+        : AI_UNAVAILABLE_PATTERN.test(message)
+          ? `Affinity is unavailable right now, so nothing was saved. Your conversation is preserved${authoring?.options.resumable ? ' and the parts Affinity finished are kept' : ''}; try again in a moment.`
+          : `${message} Nothing was saved and your conversation is preserved.`);
+      setDetails(authoring && !authoring.options.timedOut ? authoring.detail : []);
       console.error('[PromptLaunchPanel] site creation failed', caught);
     } finally {
       if (!controller.signal.aborted) setLaunching(false);

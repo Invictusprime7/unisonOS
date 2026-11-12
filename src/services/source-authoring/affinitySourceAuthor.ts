@@ -18,6 +18,21 @@ import { applyVendorResult, libraryBriefBlock, vendorLibrarySections } from './u
 
 export const SOURCE_TURN_TIMEOUT_MS = 150_000;
 const MAX_REPAIR_ROUNDS = 2;
+const MAX_MODULE_TURNS = 48;
+const TIMEOUT_PATTERN = /timed? ?out|timeout|deadline|took too long/i;
+const FOUNDATION_DIRECTIVE = 'FOUNDATION TURN: write only /package.json, /index.html, /vite.config.ts, /src/main.tsx, /src/index.css and /src/App.tsx, plus ROUTE_OPS for every page. App.tsx imports the shared header, navigation, footer and layout from /src/components/ files, but do not write those files now: each one, and every page, is written in its own later turn.';
+const LEAN_FOUNDATION_DIRECTIVE = 'The previous attempt ran out of time. Write a lean foundation: only /package.json, /index.html, /vite.config.ts, /src/main.tsx, /src/index.css (the @theme tokens and a few base rules) and /src/App.tsx, plus ROUTE_OPS. App.tsx wraps its routes in one /src/components/Layout.tsx that you do not write now.';
+
+/**
+ * Finished work per site request, so "Try again" continues from the last
+ * completed turn instead of paying for the whole site again. Cleared on success.
+ */
+const checkpoints = new Map<string, { files: Record<string, string>; pages: AuthoredPage[]; summary: string }>();
+
+/** Clears a saved checkpoint (tests, or when the owner changes the brief). */
+export function clearSourceAuthoringCheckpoint(resumeKey?: string): void {
+  if (resumeKey === undefined) checkpoints.clear(); else checkpoints.delete(resumeKey);
+}
 const BARE_IMPORT = /(?:import|export)\s+(?:type\s+)?(?:[^'"`;]*?\s+from\s+)?["']([^"'./][^"']*)["']|import\(\s*["']([^"'./][^"']*)["']\s*\)/g;
 
 export interface AuthoredPage {
@@ -47,6 +62,8 @@ export interface AuthorSourceProjectInput {
   buildCheck?: (files: Record<string, string>) => Promise<SourceBuildCheck>;
   /** Optional Unison library advice; defaults to the library catalog. Pass '' to omit. */
   libraryBrief?: string;
+  /** Same key on "Try again" resumes from the last finished turn. */
+  resumeKey?: string;
 }
 
 export interface AuthoredSourceProject {
@@ -59,10 +76,19 @@ export interface AuthoredSourceProject {
 }
 
 export class SourceAuthoringError extends Error {
-  constructor(message: string, readonly detail: string[] = []) {
+  constructor(message: string, readonly detail: string[] = [], readonly options: { timedOut?: boolean; resumable?: boolean } = {}) {
     super(message);
     this.name = 'SourceAuthoringError';
   }
+}
+
+/** Owner prompt plus a turn directive, within the request's instruction limit. */
+function withDirective(prompt: string, directive: string): string {
+  return `${prompt.slice(0, Math.max(0, 3990 - directive.length))}\n\n${directive}`.slice(0, 4000);
+}
+
+function baseName(path: string): string {
+  return path.split('/').pop()!.replace(/\.[^.]+$/, '');
 }
 
 function brief(input: AuthorSourceProjectInput, pages: AuthoredPage[], library: string): string {
@@ -146,36 +172,64 @@ function pageFor(path: string, pages: AuthoredPage[]): AuthoredPage {
 export async function authorSourceProject(input: AuthorSourceProjectInput): Promise<AuthoredSourceProject> {
   const invoke = input.invoke ?? runBuilderTurn;
   const status = input.onStatus ?? (() => undefined);
-  const files: Record<string, string> = {};
-  let pages: AuthoredPage[] = [];
-  let summary = '';
+  const saved = input.resumeKey ? checkpoints.get(input.resumeKey) : undefined;
+  const files: Record<string, string> = { ...(saved?.files ?? {}) };
+  let pages: AuthoredPage[] = [...(saved?.pages ?? [])];
+  let summary = saved?.summary ?? '';
+  const checkpoint = () => {
+    if (input.resumeKey) checkpoints.set(input.resumeKey, { files: { ...files }, pages: [...pages], summary });
+  };
   let turns = 0;
   let repairs = 0;
   const library = input.libraryBrief ?? await libraryBriefBlock().catch(() => '');
   let unknownSections: string[] = [];
 
-  const turn = async (request: AIComposerRequest, label: string): Promise<AIComposerResponse> => {
+  /**
+   * One composer turn. A provider timeout is not retried as-is (the same
+   * request would time out again): the retry asks for a smaller unit of work,
+   * and whatever it leaves out is written by later turns.
+   */
+  const turn = async (
+    request: AIComposerRequest,
+    label: string,
+    smaller: (request: AIComposerRequest) => AIComposerRequest,
+  ): Promise<AIComposerResponse> => {
     if (input.signal?.aborted) throw new DOMException('Cancelled.', 'AbortError');
     status(label);
+    let current = request;
     let lastError = 'Affinity did not return any files.';
+    let timedOut = false;
     for (let attempt = 1; attempt <= 2; attempt++) {
       turns++;
       const { data, error } = await invoke({
-        mode: AI_COMPOSER_MODES[request.task],
-        messages: [{ role: 'user', content: JSON.stringify(conformComposerRequest(request).request) }],
+        mode: AI_COMPOSER_MODES[current.task],
+        messages: [{ role: 'user', content: JSON.stringify(conformComposerRequest(current).request) }],
         gatewayOptions: { timeoutMs: SOURCE_TURN_TIMEOUT_MS - 10_000, reasoningEffort: 'low' },
       }, { timeoutMs: SOURCE_TURN_TIMEOUT_MS, signal: input.signal, functionName: 'ai-code-assistant' });
       const response = error ? null : decodeComposerResponse(data);
       if (response) return response;
-      const status = (error as { status?: number; context?: { status?: number } } | null)?.status
+      const code = (error as { status?: number; context?: { status?: number } } | null)?.status
         ?? (error as { context?: { status?: number } } | null)?.context?.status;
       lastError = (error as { message?: string } | null)?.message
         || (data as { error?: string } | null)?.error
         || lastError;
       // Billing, permission and cancellation are final; only transport/format problems retry once.
-      if (input.signal?.aborted || status === 401 || status === 402 || status === 403 || status === 429) break;
+      if (input.signal?.aborted || code === 401 || code === 402 || code === 403 || code === 429) break;
+      if (TIMEOUT_PATTERN.test(lastError) || code === 504 || code === 546) {
+        timedOut = true;
+        current = smaller(current);
+        status(`${label} (in smaller parts)`);
+      }
     }
-    throw new SourceAuthoringError(lastError);
+    const resumable = Boolean(input.resumeKey) && Object.keys(files).length > 0;
+    if (timedOut) {
+      throw new SourceAuthoringError(
+        `Affinity ran out of time while ${label.charAt(0).toLowerCase()}${label.slice(1)}.`,
+        [lastError.slice(0, 400)],
+        { timedOut: true, resumable },
+      );
+    }
+    throw new SourceAuthoringError(lastError, [], { resumable });
   };
   const apply = async (response: AIComposerResponse) => {
     for (const op of response.fileOps) {
@@ -186,6 +240,7 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
     const vendored = await vendorLibrarySections(files);
     unknownSections = vendored.unknown;
     Object.assign(files, applyVendorResult(files, vendored));
+    checkpoint();
   };
   const request = (task: Partial<AIComposerRequest> & Pick<AIComposerRequest, 'page'>): AIComposerRequest => ({
     task: 'source_project_author',
@@ -196,27 +251,45 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
     ...task,
   });
 
-  // 1. Foundation: build files, router, tokens and shared chrome.
-  const foundation = await turn(request({
-    page: { role: 'project', title: input.projectName.slice(0, 120), route: '/', filePath: '/src/App.tsx' },
-  }), 'Designing the site foundation');
-  await apply(foundation);
-  summary = foundation.summary;
-  pages = (foundation.routeOps ?? []).flatMap((op) => op.type === 'add_page' ? [{ pageId: op.pageId, title: op.title, route: op.route }] : []);
-  if (!files['/src/App.tsx']) throw new SourceAuthoringError('Affinity did not write the site router (src/App.tsx).');
+  // 1. Foundation: build files, router and tokens. Shared chrome and pages
+  //    are separate modules, so no single turn has to write the whole site.
+  if (!files['/src/App.tsx']) {
+    const foundation = await turn(request({
+      page: { role: 'project', title: input.projectName.slice(0, 120), route: '/', filePath: '/src/App.tsx' },
+      instruction: withDirective(input.prompt, FOUNDATION_DIRECTIVE),
+    }), 'Designing the site foundation', (r) => ({ ...r, instruction: withDirective(input.prompt, LEAN_FOUNDATION_DIRECTIVE) }));
+    summary = foundation.summary;
+    pages = (foundation.routeOps ?? []).flatMap((op) => op.type === 'add_page' ? [{ pageId: op.pageId, title: op.title, route: op.route }] : []);
+    await apply(foundation);
+    if (!files['/src/App.tsx']) throw new SourceAuthoringError('Affinity did not write the site router (src/App.tsx).');
+  } else {
+    status('Continuing from what Affinity already wrote');
+  }
 
-  // 2. One turn per page (and any other module the foundation references).
+  // 2. One turn per page and per module the written source references.
   const written = new Set<string>();
-  for (let guard = 0; guard < 24; guard++) {
+  for (let guard = 0; guard < MAX_MODULE_TURNS; guard++) {
     const next = missingModules(files).find((entry) => !written.has(entry.path));
     if (!next) break;
     written.add(next.path);
-    const page = pageFor(next.path, pages);
+    const isPage = next.path.startsWith('/src/pages/');
+    const owner = isPage ? pageFor(next.path, pages) : next.from.startsWith('/src/pages/') ? pageFor(next.from, pages) : undefined;
+    const name = baseName(next.path);
+    const pageRef = isPage
+      ? { role: owner!.pageId.toLowerCase().slice(0, 60), title: owner!.title, route: owner!.route, filePath: next.path }
+      : { role: 'component', title: name.slice(0, 120), route: owner?.route ?? '/', filePath: next.path };
+    const directive = isPage
+      ? `Write ${next.path} now (imported by ${next.from}).`
+      : `Write ${next.path} now. ${next.from} imports it: match the exports and props it uses there.`;
+    const folder = `/src/components/${name.charAt(0).toLowerCase()}${name.slice(1)}/`;
     const response = await turn(request({
-      page: { role: page.pageId.toLowerCase(), title: page.title, route: page.route, filePath: next.path },
+      page: pageRef,
       sourceTargets: [next.path],
-      instruction: `${input.prompt.slice(0, 3200)}\n\nWrite ${next.path} now (imported by ${next.from}).`,
-    }), next.path.startsWith('/src/pages/') ? `Writing the ${page.title} page` : `Writing ${next.path.split('/').pop()}`);
+      instruction: withDirective(input.prompt.slice(0, 3200), directive),
+    }), isPage ? `Writing the ${owner!.title} page` : `Writing ${next.path.split('/').pop()}`, (r) => ({
+      ...r,
+      instruction: withDirective(input.prompt.slice(0, 2800), `${directive}\nThe previous attempt ran out of time. Keep ${next.path} short: compose it from 3-6 section components in ${folder} that it imports by relative path, and do not write those now; each is written in its own later turn.`),
+    }));
     await apply(response);
   }
 
@@ -232,9 +305,12 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
       const built = await input.buildCheck({ ...files });
       if (!built.ok) problems.push(...built.errors.map((error) => ({ path: error.path ?? '/src/App.tsx', message: error.message })));
     }
-    if (problems.length === 0) return { files, pages, summary, turns, repairs };
+    if (problems.length === 0) {
+      if (input.resumeKey) checkpoints.delete(input.resumeKey);
+      return { files, pages, summary, turns, repairs };
+    }
     if (round === MAX_REPAIR_ROUNDS) {
-      throw new SourceAuthoringError('Affinity could not finish a site that builds cleanly.', problems.slice(0, 12).map((p) => `${p.path}: ${p.message}`));
+      throw new SourceAuthoringError('Affinity could not finish a site that builds cleanly.', problems.slice(0, 12).map((p) => `${p.path}: ${p.message}`), { resumable: Boolean(input.resumeKey) });
     }
     const missing = missingModules(files).map((entry) => entry.path);
     const needsManifest = problems.some((p) => /package\.json/.test(p.message) || p.path === '/package.json');
@@ -246,7 +322,11 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
       page: { role: 'repair', title: 'Repair', route: '/', filePath: targets.find((path) => /\.[jt]sx?$/.test(path)) ?? '/src/App.tsx' },
       sourceTargets: targets,
       diagnostics: problems.slice(0, 30).map((p) => `${p.path}: ${p.message}`.slice(0, 1000)),
-    }), 'Fixing what the build check found');
+    }), 'Fixing what the build check found', (r) => ({
+      ...r,
+      sourceTargets: r.sourceTargets?.slice(0, 3),
+      diagnostics: r.diagnostics?.filter((d) => r.sourceTargets?.slice(0, 3).some((t) => d.startsWith(`${t}:`))).slice(0, 10),
+    }));
     await apply(response);
   }
   return { files, pages, summary, turns, repairs };

@@ -95,6 +95,8 @@ async function createAndSave(input: CreateAffinitySourceProjectInput, userId: st
     signal: input.signal,
     onStatus: input.onStatus,
     buildCheck: typeof window === 'undefined' ? undefined : sourceProjectBuildCheck,
+    // "Try again" with the same brief continues from the last finished turn.
+    resumeKey: `${userId}\n${input.projectName}\n${input.prompt}`,
   });
 
   input.onStatus?.('Saving your site');

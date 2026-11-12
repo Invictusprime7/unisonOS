@@ -110,8 +110,8 @@ CONTENT AND HONESTY
 - No network calls, environment variables, secrets, analytics, Node APIs or server code.
 
 TURNS
-- FOUNDATION turn (WRITABLE SOURCE TARGETS absent, FILES empty): write /package.json, /index.html, /vite.config.ts, /src/main.tsx, /src/index.css, /src/App.tsx (routes for EVERY page in the site plan), and the shared header/footer/layout components. Do NOT write the page files yet: App.tsx imports them and later turns write each one. Emit one ROUTE_OPS add_page entry per page, including home, whose pageId is the page file's base name (for /src/pages/Home.tsx the pageId is Home).
-- PAGE turn (one target page file): write that page as a complete default-export module. You may also create new components it needs under /src/components/. Reuse the shared components and tokens in FILES exactly as they are; FILES are read-only context.
+- FOUNDATION turn (WRITABLE SOURCE TARGETS absent, FILES empty): write /package.json, /index.html, /vite.config.ts, /src/main.tsx, /src/index.css and /src/App.tsx (routes for EVERY page in the site plan). App.tsx imports the shared header/footer/layout from /src/components/ and every page from /src/pages/, but do NOT write those files yet: later turns write each one. Keep each turn small so it finishes in time. Emit one ROUTE_OPS add_page entry per page, including home, whose pageId is the page file's base name (for /src/pages/Home.tsx the pageId is Home).
+- MODULE turn (one target file — a page or a shared component another file imports): write it as a complete module whose exports and props match how FILES use it. A long page may import section components from new files under /src/components/ that later turns write. You may also create new components it needs under /src/components/. Reuse the shared components and tokens in FILES exactly as they are; FILES are read-only context.
 - REPAIR turn (diagnostics present): fix only the listed problems in the listed targets; keep everything else byte-for-byte.
 
 OUTPUT (file-block format — raw source, NO JSON escaping, NO markdown fences)

@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AIComposerRequest, AIComposerResponse } from '@/contracts/aiComposerContract';
 import { composerProposalViolations } from '@/contracts/aiComposerContract';
-import { authorSourceProject, missingModules, staticSourceProblems } from '@/services/source-authoring/affinitySourceAuthor';
+import { authorSourceProject, clearSourceAuthoringCheckpoint, missingModules, SourceAuthoringError, staticSourceProblems } from '@/services/source-authoring/affinitySourceAuthor';
 import { sourceProjectEditTargets } from '@/services/source-authoring/sourceProjectEditTargets';
 import { intakeLooseFiles } from '@/services/import/secureIntake';
 import { analyzeImportedProject } from '@/services/import/importCompatibilityProfile';
@@ -98,6 +98,89 @@ describe('Affinity source authorship', () => {
       prompt: 'Bakery', projectName: 'Harbour Bakery', invoke,
       buildCheck: async () => ({ ok: false, errors: [{ path: '/src/App.tsx', message: 'Could not resolve "./Missing"' }] }),
     })).rejects.toThrow('could not finish a site that builds cleanly');
+  });
+});
+
+const TIMEOUT = 'AI providers failed to produce a response. gemini-3.8-flash: timeout.';
+function scriptedAffinity(steps: Array<(request: AIComposerRequest) => AIComposerResponse | 'timeout'>) {
+  const requests: AIComposerRequest[] = [];
+  const invoke = (async (input: { messages: Array<{ content: unknown }> }) => {
+    const request = JSON.parse(String(input.messages[0].content)) as AIComposerRequest;
+    requests.push(request);
+    const next = steps.shift();
+    if (!next) throw new Error('unexpected turn');
+    const out = next(request);
+    if (out === 'timeout') return { data: { success: false, error: TIMEOUT, errorType: 'ai_unavailable' }, error: { message: TIMEOUT, status: 500 } };
+    return { data: { content: JSON.stringify(out) }, error: null };
+  }) as never;
+  return { invoke, requests };
+}
+const LEAN_FOUNDATION: AIComposerResponse = { ...FOUNDATION, fileOps: FOUNDATION.fileOps.filter((op) => op.path !== '/src/components/Layout.tsx') };
+const LAYOUT = page('/src/components/Layout.tsx', "import type { ReactNode } from 'react';\nexport default function Layout({ children }: { children: ReactNode }) { return <main>{children}</main>; }\n");
+
+describe('Affinity source authorship under provider time limits', () => {
+  it('asks the foundation for build files, tokens and router only; shared chrome gets its own turn', async () => {
+    const { invoke, requests } = scriptedAffinity([
+      () => LEAN_FOUNDATION,
+      () => LAYOUT,
+      () => page('/src/pages/Home.tsx', 'export default function Home() { return <h1>Home</h1>; }\n'),
+      () => page('/src/pages/Menu.tsx', 'export default function Menu() { return <h1>Menu</h1>; }\n'),
+    ]);
+    const result = await authorSourceProject({ prompt: 'Bakery', projectName: 'Harbour Bakery', invoke, libraryBrief: '' });
+    expect(requests[0].instruction).toContain('do not write those files now');
+    expect(requests[1].sourceTargets).toEqual(['/src/components/Layout.tsx']);
+    expect(requests[1].page.role).toBe('component');
+    expect(result.files['/src/components/Layout.tsx']).toBeDefined();
+  });
+
+  it('retries a timed-out page as a smaller page built from section files, then writes each section', async () => {
+    const { invoke, requests } = scriptedAffinity([
+      () => FOUNDATION,
+      () => 'timeout',
+      () => page('/src/pages/Home.tsx', "import Hero from '../components/home/Hero';\nexport default function Home() { return <Hero />; }\n"),
+      (r) => r.sourceTargets?.[0] === '/src/pages/Menu.tsx'
+        ? page('/src/pages/Menu.tsx', 'export default function Menu() { return <h1>Menu</h1>; }\n')
+        : page('/src/components/home/Hero.tsx', 'export default function Hero() { return <h1>Fresh bread</h1>; }\n'),
+      (r) => r.sourceTargets?.[0] === '/src/pages/Menu.tsx'
+        ? page('/src/pages/Menu.tsx', 'export default function Menu() { return <h1>Menu</h1>; }\n')
+        : page('/src/components/home/Hero.tsx', 'export default function Hero() { return <h1>Fresh bread</h1>; }\n'),
+    ]);
+    const result = await authorSourceProject({ prompt: 'Bakery', projectName: 'Harbour Bakery', invoke, libraryBrief: '' });
+    expect(requests[2].sourceTargets).toEqual(['/src/pages/Home.tsx']);
+    expect(requests[2].instruction).not.toBe(requests[1].instruction);
+    expect(requests[2].instruction).toContain('section components in /src/components/home/');
+    const hero = requests.find((r) => r.sourceTargets?.[0] === '/src/components/home/Hero.tsx');
+    expect(hero?.page).toMatchObject({ role: 'component', route: '/' });
+    expect(requests).toHaveLength(5);
+    expect(missingModules(result.files)).toEqual([]);
+  });
+
+  it('keeps finished turns when a page times out twice, so Try again continues instead of starting over', async () => {
+    const resumeKey = 'owner\nHarbour Bakery\nBakery';
+    clearSourceAuthoringCheckpoint(resumeKey);
+    const first = scriptedAffinity([
+      () => FOUNDATION,
+      () => page('/src/pages/Home.tsx', 'export default function Home() { return <h1>Home</h1>; }\n'),
+      () => 'timeout',
+      () => 'timeout',
+    ]);
+    const failure = await authorSourceProject({ prompt: 'Bakery', projectName: 'Harbour Bakery', invoke: first.invoke, libraryBrief: '', resumeKey }).catch((e) => e);
+    expect(failure).toBeInstanceOf(SourceAuthoringError);
+    expect((failure as SourceAuthoringError).options).toEqual({ timedOut: true, resumable: true });
+    expect((failure as Error).message).toBe('Affinity ran out of time while writing the Menu page.');
+
+    const again = scriptedAffinity([() => page('/src/pages/Menu.tsx', 'export default function Menu() { return <h1>Menu</h1>; }\n')]);
+    const result = await authorSourceProject({ prompt: 'Bakery', projectName: 'Harbour Bakery', invoke: again.invoke, libraryBrief: '', resumeKey });
+    expect(again.requests.map((r) => r.sourceTargets)).toEqual([['/src/pages/Menu.tsx']]);
+    expect(result.files['/src/pages/Home.tsx']).toContain('Home');
+    expect(result.pages.map((p) => p.route)).toEqual(['/', '/menu']);
+  });
+
+  it('does not retry billing refusals', async () => {
+    const requests: unknown[] = [];
+    const invoke = (async () => { requests.push(1); return { data: null, error: { message: 'Payment required', status: 402 } }; }) as never;
+    await expect(authorSourceProject({ prompt: 'Bakery', projectName: 'Harbour Bakery', invoke, libraryBrief: '' })).rejects.toThrow('Payment required');
+    expect(requests).toHaveLength(1);
   });
 });
 
