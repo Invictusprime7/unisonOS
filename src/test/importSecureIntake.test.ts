@@ -116,6 +116,29 @@ describe('secure import intake', () => {
     });
   });
 
+  it('accepts a project zipped together with its node_modules: dependency files never count toward the file limit', async () => {
+    const entries: Record<string, string> = {
+      'site/package.json': '{"name":"site","dependencies":{"react":"19.0.0"}}',
+      'site/index.html': '<div id="root"></div><script type="module" src="/src/main.tsx"></script>',
+      'site/src/main.tsx': 'export {};',
+    };
+    for (let i = 0; i < 260; i += 1) entries[`site/node_modules/pkg-${i}/index.js`] = `module.exports = ${i};`;
+    const result = await intakeZipArchive(await zipOf(entries), { limits: { maxFiles: 10 } });
+    expect(Object.keys(result.textFiles).sort()).toEqual(['index.html', 'package.json', 'src/main.tsx']);
+    const deps = result.manifest.excluded.filter((e) => e.reason === 'dependency-folder');
+    expect(deps).toHaveLength(101);
+    expect(deps.filter((e) => e.detail)).toEqual([{ path: 'site/node_modules/', reason: 'dependency-folder', detail: '160 more files in this folder not imported.' }]);
+    const tooMany = await rejection(intakeZipArchive(await zipOf(entries), { limits: { maxFiles: 2 } }));
+    expect(tooMany.code).toBe('too-many-files');
+    const listed = await rejection(intakeZipArchive(await zipOf(entries), { limits: { maxArchiveEntries: 100 } }));
+    expect(listed.code).toBe('too-many-files');
+  });
+
+  it('refuses an archive holding only dependency folders', async () => {
+    const error = await rejection(intakeZipArchive(await zipOf({ 'node_modules/react/index.js': 'x' })));
+    expect(error.code).toBe('empty');
+  });
+
   it('refuses archives that expand far beyond their compressed size', async () => {
     const bomb = await zipOf({ 'zeros.txt': new Uint8Array(2 * 1024 * 1024) });
     const error = await rejection(intakeZipArchive(bomb, { limits: { ratioFloorBytes: 1024, maxCompressionRatio: 50 } }));

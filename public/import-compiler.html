@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>Imported project compiler</title>
+<!--
+  UIMP-01 component compiler host. Loaded only inside a sandboxed iframe
+  without allow-same-origin, so third-party compilers (Vue, Svelte, Solid,
+  Sass, Less), fetched at the imported project's own versions, run in an
+  opaque origin with no access to Unison's storage, cookies or session.
+  It receives one file at a time and returns compiled code; it never edits
+  the imported source. A classic script (not type=module) so the dev server
+  serves it unchanged.
+-->
+<script>
+(() => {
+const CDN = 'https://esm.sh';
+const modules = new Map();
+const load = (url) => { if (!modules.has(url)) modules.set(url, import(url).catch((e) => { modules.delete(url); throw e; })); return modules.get(url); };
+const texts = new Map();
+const fetchText = (url) => { if (!texts.has(url)) texts.set(url, fetch(url).then((r) => (r.ok ? r.text() : null)).catch(() => null)); return texts.get(url); };
+const major = (v) => Number(String(v).split('.')[0]) || 0;
+const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i += 1) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).padStart(8, '0'); };
+const dirname = (p) => p.slice(0, p.lastIndexOf('/')) || '/';
+const join = (dir, rel) => { const out = []; for (const seg of (dir + '/' + rel).split('/')) { if (!seg || seg === '.') continue; if (seg === '..') out.pop(); else out.push(seg); } return '/' + out.join('/'); };
+const pkgName = (spec) => { const p = spec.split('/'); return spec.startsWith('@') ? p.slice(0, 2).join('/') : p[0]; };
+
+async function stripTs(code, path) {
+  const { transform } = await load(`${CDN}/sucrase@3.35.0`);
+  return transform(code, { transforms: ['typescript'], keepUnusedImports: true, disableESTransforms: true, filePath: path }).code;
+}
+
+// ── Sass ──────────────────────────────────────────────────────────────────
+async function compileSass(req, source, path, indented) {
+  const sass = await load(`${CDN}/sass@${req.version || '1'}`);
+  const files = req.files || {};
+  const versions = req.versions || {};
+  const loadPaths = (req.options && req.options.loadPaths) || [];
+  const variants = (p) => {
+    const dir = dirname(p); const base = p.slice(dir.length + 1);
+    const out = [];
+    for (const ext of ['', '.scss', '.sass', '.css']) { out.push(`${p}${ext}`); out.push(`${dir}/_${base}${ext}`); }
+    for (const ext of ['.scss', '.sass']) { out.push(`${p}/index${ext}`); out.push(`${p}/_index${ext}`); }
+    return out;
+  };
+  const remote = async (spec) => {
+    const clean = spec.replace(/^~/, '');
+    const name = pkgName(clean);
+    const sub = clean.slice(name.length).replace(/^\//, '');
+    const base = `https://cdn.jsdelivr.net/npm/${name}@${versions[name] || 'latest'}`;
+    for (const candidate of variants(`/${sub}`)) {
+      if (candidate.endsWith('/')) continue;
+      const text = await fetchText(`${base}${candidate}`);
+      if (text != null && !/^Couldn't find/.test(text)) return { url: `${base}${candidate}`, text };
+    }
+    return null;
+  };
+  const importer = {
+    async canonicalize(url, context) {
+      if (/^https:\/\/cdn\.jsdelivr\.net\//.test(url)) return new URL(url);
+      if (url.startsWith('file://')) {
+        const p = decodeURIComponent(new URL(url).pathname);
+        const hit = variants(p).find((c) => c in files);
+        if (hit) return new URL(`file://${hit}`);
+        const fromContainer = context && context.containingUrl && /^https:/.test(context.containingUrl.href);
+        if (fromContainer) {
+          const rel = new URL(p.split('/').pop(), context.containingUrl).href;
+          return new URL(rel);
+        }
+        for (const lp of loadPaths) { const alt = variants(join(lp, p)).find((c) => c in files); if (alt) return new URL(`file://${alt}`); }
+        return null;
+      }
+      if (/^[a-z]+:/.test(url) && !url.startsWith('pkg:')) return null;
+      const spec = url.replace(/^pkg:/, '');
+      for (const lp of loadPaths) { const hit = variants(join(lp, spec)).find((c) => c in files); if (hit) return new URL(`file://${hit}`); }
+      if (context && context.containingUrl && /^https:/.test(context.containingUrl.href)) {
+        const rel = new URL(spec, context.containingUrl).href;
+        return new URL(rel);
+      }
+      const found = await remote(spec);
+      return found ? new URL(found.url) : null;
+    },
+    async load(canonicalUrl) {
+      const href = canonicalUrl.href;
+      if (href.startsWith('file://')) {
+        const p = decodeURIComponent(canonicalUrl.pathname);
+        return { contents: files[p] ?? '', syntax: p.endsWith('.sass') ? 'indented' : p.endsWith('.css') ? 'css' : 'scss' };
+      }
+      let text = await fetchText(href);
+      if (text == null) {
+        const dir = href.slice(0, href.lastIndexOf('/'));
+        const base = href.slice(dir.length + 1);
+        for (const alt of [`${dir}/_${base}`, `${href}.scss`, `${dir}/_${base}.scss`]) { text = await fetchText(alt); if (text != null) break; }
+      }
+      return { contents: text ?? '', syntax: href.endsWith('.sass') ? 'indented' : href.endsWith('.css') ? 'css' : 'scss' };
+    },
+  };
+  const result = await sass.compileStringAsync(source, { syntax: indented ? 'indented' : 'scss', url: new URL(`file://${path}`), importer, importers: [importer], silenceDeprecations: ['import', 'global-builtin', 'mixed-decls', 'legacy-js-api', 'color-functions'], quietDeps: true, logger: sass.Logger ? sass.Logger.silent : undefined });
+  return result.css;
+}
+
+// ── Less ──────────────────────────────────────────────────────────────────
+async function compileLess(req, source, path) {
+  const mod = await load(`${CDN}/less@${req.version || '4'}`);
+  const less = mod.default || mod;
+  const files = req.files || {};
+  const versions = req.versions || {};
+  const plugin = {
+    install(lessInstance, pluginManager) {
+      class Manager extends lessInstance.FileManager {
+        supports() { return true; }
+        supportsSync() { return false; }
+        async loadFile(filename, currentDirectory) {
+          const name = filename.endsWith('.less') || filename.endsWith('.css') ? filename : `${filename}.less`;
+          const local = filename.startsWith('~') ? null : join(currentDirectory || dirname(path), name);
+          if (local && local in files) return { contents: files[local], filename: local };
+          const spec = filename.replace(/^~/, '');
+          const pkg = pkgName(spec);
+          const url = `https://cdn.jsdelivr.net/npm/${pkg}@${versions[pkg] || 'latest'}/${spec.slice(pkg.length + 1)}${/\.(less|css)$/.test(spec) ? '' : '.less'}`;
+          const text = await fetchText(url);
+          if (text == null) throw new Error(`Cannot load ${filename}`);
+          return { contents: text, filename: url };
+        }
+      }
+      pluginManager.addFileManager(new Manager());
+    },
+  };
+  const out = await less.render(source, { filename: path, plugins: [plugin], javascriptEnabled: true });
+  return out.css;
+}
+
+// ── Vue ───────────────────────────────────────────────────────────────────
+async function compileVue(req) {
+  const sfc = await load(`${CDN}/@vue/compiler-sfc@${req.version}`);
+  const path = req.path;
+  const files = req.files || {};
+  const { descriptor, errors } = sfc.parse(req.source, { filename: path });
+  if (errors && errors.length) throw new Error(errors[0].message || String(errors[0]));
+  const id = hash(path);
+  const scoped = descriptor.styles.some((s) => s.scoped);
+  const scriptBlock = descriptor.scriptSetup || descriptor.script;
+  const lang = (scriptBlock && scriptBlock.lang) || 'js';
+  let code;
+  const extra = [];
+  if (scriptBlock) {
+    const script = sfc.compileScript(descriptor, {
+      id, isProd: true, inlineTemplate: Boolean(descriptor.scriptSetup), genDefaultAs: '__sfc__',
+      fs: { fileExists: (f) => f in files, readFile: (f) => files[f] },
+      templateOptions: { compilerOptions: { isTS: lang === 'ts' || lang === 'tsx' } },
+    });
+    code = script.content;
+    if (!/\b__sfc__\b/.test(code)) code = sfc.rewriteDefault ? sfc.rewriteDefault(code, '__sfc__') : code.replace(/export\s+default/, 'const __sfc__ =');
+  } else code = 'const __sfc__ = {};';
+  if (descriptor.template && !descriptor.scriptSetup) {
+    const t = sfc.compileTemplate({ source: descriptor.template.content, filename: path, id, scoped, isProd: true, compilerOptions: { scopeId: scoped ? `data-v-${id}` : undefined, isTS: lang === 'ts' } });
+    if (t.errors && t.errors.length) throw new Error(t.errors[0].message || String(t.errors[0]));
+    code += '\n' + t.code.replace(/\bexport function (render|ssrRender)\b/, 'function $1') + '\n__sfc__.render = render;';
+  }
+  if (scoped) extra.push(`__sfc__.__scopeId = "data-v-${id}";`);
+  extra.push(`__sfc__.__file = ${JSON.stringify(path)};`);
+  const css = [];
+  const cssModules = {};
+  for (const style of descriptor.styles) {
+    let source = style.content;
+    if (style.lang === 'scss' || style.lang === 'sass') source = await compileSass({ ...req, version: (req.versions && (req.versions.sass || req.versions['sass-embedded'])) || '1' }, source, path, style.lang === 'sass');
+    else if (style.lang === 'less') source = await compileLess({ ...req, version: (req.versions && req.versions.less) || '4' }, source, path);
+    const r = await sfc.compileStyleAsync({ source, filename: path, id: `data-v-${id}`, scoped: Boolean(style.scoped), modules: Boolean(style.module), isProd: true });
+    if (r.errors && r.errors.length) throw new Error(r.errors[0].message || String(r.errors[0]));
+    css.push(r.code);
+    if (style.module) cssModules[typeof style.module === 'string' ? style.module : '$style'] = r.modules || {};
+  }
+  if (Object.keys(cssModules).length) extra.push(`__sfc__.__cssModules = ${JSON.stringify(cssModules)};`);
+  code += '\n' + extra.join('\n') + '\nexport default __sfc__;';
+  return { code, lang, css };
+}
+
+// ── Svelte ────────────────────────────────────────────────────────────────
+async function compileSvelte(req, moduleOnly) {
+  const v = major(req.version);
+  const compiler = await load(`${CDN}/svelte@${req.version}/compiler`);
+  let source = req.source;
+  if (moduleOnly) {
+    if (/\.ts$/.test(req.path)) source = await stripTs(source, req.path);
+    const out = compiler.compileModule(source, { filename: req.path, generate: 'client', dev: false });
+    return { code: out.js.code, css: [], lang: 'js', warnings: (out.warnings || []).map((w) => w.message) };
+  }
+  if (v < 5) {
+    source = await replaceAsync(source, /<script([^>]*)lang=["']ts["']([^>]*)>([\s\S]*?)<\/script>/g, async (_, a, b, code) => `<script${a}${b}>${await stripTs(code, req.path + '.ts')}<\/script>`);
+    source = await replaceAsync(source, /<style([^>]*)lang=["'](scss|sass)["']([^>]*)>([\s\S]*?)<\/style>/g, async (_, a, lang, b, css) => `<style${a}${b}>${await compileSass({ ...req, version: (req.versions && req.versions.sass) || '1' }, css, req.path, lang === 'sass')}<\/style>`);
+  } else {
+    source = await replaceAsync(source, /<style([^>]*)lang=["'](scss|sass)["']([^>]*)>([\s\S]*?)<\/style>/g, async (_, a, lang, b, css) => `<style${a}${b}>${await compileSass({ ...req, version: (req.versions && req.versions.sass) || '1' }, css, req.path, lang === 'sass')}<\/style>`);
+  }
+  const options = v >= 5 ? { filename: req.path, generate: 'client', css: 'injected', dev: false }
+    : v === 4 ? { filename: req.path, css: 'injected', dev: false }
+    : { filename: req.path, css: true, format: 'esm', dev: false };
+  const out = compiler.compile(source, options);
+  return { code: out.js.code, css: [], lang: 'js', warnings: (out.warnings || []).filter((w) => !/a11y|unused/i.test(w.code || '')).map((w) => w.message) };
+}
+async function replaceAsync(text, re, fn) {
+  const parts = []; let last = 0;
+  for (const m of text.matchAll(re)) { parts.push(text.slice(last, m.index)); parts.push(await fn(...m)); last = m.index + m[0].length; }
+  parts.push(text.slice(last));
+  return parts.join('');
+}
+
+// ── Solid ─────────────────────────────────────────────────────────────────
+async function compileSolid(req) {
+  const babel = await load(`${CDN}/@babel/standalone@7`);
+  const presetMod = await load(`${CDN}/babel-preset-solid@${req.version && major(req.version) >= 1 ? '1' : '1'}`);
+  const preset = presetMod.default || presetMod;
+  const out = (babel.transform || babel.default.transform)(req.source, {
+    filename: req.path,
+    presets: [[preset, { generate: 'dom', hydratable: false }], ['typescript', { isTSX: /\.tsx$/.test(req.path), allExtensions: true, onlyRemoveTypeImports: true }]],
+    sourceType: 'module',
+  });
+  return { code: out.code, css: [], lang: 'js' };
+}
+
+async function compile(req) {
+  switch (req.kind) {
+    case 'vue': return compileVue(req);
+    case 'svelte': return compileSvelte(req, false);
+    case 'svelte-module': return compileSvelte(req, true);
+    case 'solid': return compileSolid(req);
+    case 'sass': return { code: await compileSass(req, req.source, req.path, Boolean(req.options && req.options.indented)), css: [], lang: 'css' };
+    case 'less': return { code: await compileLess(req, req.source, req.path), css: [], lang: 'css' };
+    default: throw new Error(`Unknown compiler ${req.kind}`);
+  }
+}
+
+addEventListener('message', async (event) => {
+  if (event.source !== parent) return;
+  const req = event.data;
+  if (!req || req.type !== 'unison-compile') return;
+  try {
+    const out = await compile(req);
+    parent.postMessage({ type: 'unison-compile-result', id: req.id, ...out }, '*');
+  } catch (error) {
+    parent.postMessage({ type: 'unison-compile-result', id: req.id, error: String((error && (error.formatted || error.message)) || error).slice(0, 2000) }, '*');
+  }
+});
+parent.postMessage({ type: 'unison-compiler-ready' }, '*');
+})();
+</script>
+</head>
+<body></body>
+</html>

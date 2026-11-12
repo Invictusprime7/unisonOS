@@ -110,7 +110,10 @@ export class ImportIntakeError extends Error {
 
 export interface IntakeLimits {
   maxArchiveBytes: number;
+  /** Project files kept after dependency folders, repository metadata and OS junk are set aside. */
   maxFiles: number;
+  /** Entries an archive may list in total, including dependency folders that are never unpacked. */
+  maxArchiveEntries: number;
   maxFileBytes: number;
   maxTotalBytes: number;
   maxPathDepth: number;
@@ -121,8 +124,9 @@ export interface IntakeLimits {
 }
 
 export const DEFAULT_INTAKE_LIMITS: IntakeLimits = {
-  maxArchiveBytes: 150 * 1024 * 1024,
+  maxArchiveBytes: 300 * 1024 * 1024,
   maxFiles: 5000,
+  maxArchiveEntries: 250_000,
   maxFileBytes: 25 * 1024 * 1024,
   maxTotalBytes: 250 * 1024 * 1024,
   maxPathDepth: 32,
@@ -487,7 +491,11 @@ function readEntryBounded(object: JSZip.JSZipObject, maxBytes: number, onBytes: 
   });
 }
 
-async function readZipEntries(bytes: Uint8Array, limits: IntakeLimits): Promise<{ entries: IntakeEntryInput[]; symlinks: Array<{ path: string; target: string }> }> {
+/** Folders and files that are never part of a project's source; ZIP entries matching these are listed but never unpacked. */
+const notProjectSource = (path: string): ExclusionReason | null =>
+  OS_JUNK.test(path) ? 'os-junk' : DEPENDENCY_DIRS.test(path) ? 'dependency-folder' : REPO_METADATA.test(path) ? 'repository-metadata' : null;
+
+async function readZipEntries(bytes: Uint8Array, limits: IntakeLimits): Promise<{ entries: IntakeEntryInput[]; symlinks: Array<{ path: string; target: string }>; skipped: ImportExclusion[] }> {
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(bytes, { createFolders: false });
@@ -513,12 +521,27 @@ async function readZipEntries(bytes: Uint8Array, limits: IntakeLimits): Promise<
       object,
     });
   });
-  if (raw.length > limits.maxFiles) {
-    throw new ImportIntakeError('too-many-files', `The archive has ${raw.length} files; the limit is ${limits.maxFiles}.`);
+  if (raw.length > limits.maxArchiveEntries) {
+    throw new ImportIntakeError('too-many-files', `The archive lists ${raw.length} entries; the limit is ${limits.maxArchiveEntries}.`);
+  }
+  // Dependency folders (node_modules…), repository metadata and OS junk are
+  // set aside before anything is decompressed: they are reinstalled or
+  // irrelevant, so they never count toward the project's file or size limits.
+  // Their paths are still validated, so an unsafe name is refused anywhere.
+  const skipped: ImportExclusion[] = [];
+  const projectRaw: RawZipEntry[] = [];
+  for (const entry of raw) {
+    const path = normalizeEntryPath(entry.name, limits);
+    const reason = notProjectSource(path);
+    if (reason) skipped.push({ path, reason });
+    else projectRaw.push(entry);
+  }
+  if (projectRaw.length > limits.maxFiles) {
+    throw new ImportIntakeError('too-many-files', `The project has ${projectRaw.length} files (not counting dependency folders); the limit is ${limits.maxFiles}.`);
   }
   // Declared-size checks first: cheap zip-bomb rejection before decompressing anything.
   let declaredTotal = 0;
-  for (const entry of raw) {
+  for (const entry of projectRaw) {
     declaredTotal += entry.declaredSize;
     if (entry.declaredSize > limits.maxFileBytes) {
       throw new ImportIntakeError('file-too-large', `${entry.name} is larger than ${Math.round(limits.maxFileBytes / 1024 / 1024)} MB once unpacked.`, [entry.name]);
@@ -540,7 +563,7 @@ async function readZipEntries(bytes: Uint8Array, limits: IntakeLimits): Promise<
   };
   const entries: IntakeEntryInput[] = [];
   const symlinks: Array<{ path: string; target: string }> = [];
-  for (const entry of raw) {
+  for (const entry of projectRaw) {
     const path = normalizeEntryPath(entry.name, limits);
     const data = await readEntryBounded(entry.object, limits.maxFileBytes, onBytes);
     if (entry.compressedSize > 0 && data.length > limits.ratioFloorBytes && data.length / entry.compressedSize > limits.maxCompressionRatio) {
@@ -552,7 +575,28 @@ async function readZipEntries(bytes: Uint8Array, limits: IntakeLimits): Promise<
     }
     entries.push({ path, bytes: data });
   }
-  return { entries, symlinks };
+  return { entries, symlinks, skipped };
+}
+
+/** Keeps exclusion lists readable: the first entries of each folder are listed, the rest summarised per folder. */
+const EXCLUSIONS_LISTED_PER_REASON = 100;
+function summariseExclusions(list: ImportExclusion[]): ImportExclusion[] {
+  const out: ImportExclusion[] = [];
+  const shown = new Map<ExclusionReason, number>();
+  const folded = new Map<string, ImportExclusion & { count: number }>();
+  for (const item of list) {
+    const n = shown.get(item.reason) ?? 0;
+    const bulk = item.reason === 'dependency-folder' || item.reason === 'repository-metadata';
+    if (!bulk || n < EXCLUSIONS_LISTED_PER_REASON) { out.push(item); shown.set(item.reason, n + 1); continue; }
+    const match = item.reason === 'dependency-folder' ? DEPENDENCY_DIRS.exec(item.path) : REPO_METADATA.exec(item.path);
+    const folder = match ? item.path.slice(0, match.index + match[0].length).replace(/\/?$/, '/') : item.path;
+    const key = `${item.reason}\0${folder}`;
+    const prior = folded.get(key);
+    if (prior) prior.count += 1;
+    else folded.set(key, { path: folder, reason: item.reason, count: 1 });
+  }
+  for (const { count, ...item } of folded.values()) out.push({ ...item, detail: `${count} more file${count === 1 ? '' : 's'} in this folder not imported.` });
+  return out;
 }
 
 // ── main pipeline ──────────────────────────────────────────────────────────
@@ -564,12 +608,10 @@ async function buildIntake(
   symlinks: Array<{ path: string; target: string }>,
   limits: IntakeLimits,
   archiveSha256?: string,
+  preSkipped: ImportExclusion[] = [],
 ): Promise<IntakeResult> {
   if (rawEntries.length === 0 && symlinks.length === 0) {
-    throw new ImportIntakeError('empty', 'There are no files to import.');
-  }
-  if (rawEntries.length > limits.maxFiles) {
-    throw new ImportIntakeError('too-many-files', `There are ${rawEntries.length} files; the limit is ${limits.maxFiles}.`);
+    throw new ImportIntakeError('empty', preSkipped.length > 0 ? 'Only dependency folders or repository metadata were found; there is no project source to import.' : 'There are no files to import.');
   }
 
   // Duplicate and case-collision detection runs on every original path.
@@ -584,14 +626,17 @@ async function buildIntake(
     folded.set(lower, entry.path);
   }
 
-  const excluded: ImportExclusion[] = [];
+  const excludedRaw: ImportExclusion[] = [...preSkipped];
   const kept: IntakeEntryInput[] = [];
   for (const entry of rawEntries) {
-    if (OS_JUNK.test(entry.path)) excluded.push({ path: entry.path, reason: 'os-junk' });
-    else if (DEPENDENCY_DIRS.test(entry.path)) excluded.push({ path: entry.path, reason: 'dependency-folder' });
-    else if (REPO_METADATA.test(entry.path)) excluded.push({ path: entry.path, reason: 'repository-metadata' });
+    const reason = notProjectSource(entry.path);
+    if (reason) excludedRaw.push({ path: entry.path, reason });
     else kept.push(entry);
   }
+  if (kept.length > limits.maxFiles) {
+    throw new ImportIntakeError('too-many-files', `The project has ${kept.length} files (not counting dependency folders); the limit is ${limits.maxFiles}.`);
+  }
+  const excluded: ImportExclusion[] = summariseExclusions(excludedRaw);
 
   const strippedPrefix = detectProjectRootPrefix(kept.map((e) => e.path));
   const rel = (p: string) => (strippedPrefix && p.startsWith(strippedPrefix) ? p.slice(strippedPrefix.length) : p);
@@ -711,8 +756,8 @@ export async function intakeZipArchive(
   }
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input instanceof ArrayBuffer ? input : await input.arrayBuffer());
   const archiveSha256 = await sha256Hex(bytes);
-  const { entries, symlinks } = await readZipEntries(bytes, limits);
-  return buildIntake('zip', options.name ?? 'archive.zip', entries, symlinks, limits, archiveSha256);
+  const { entries, symlinks, skipped } = await readZipEntries(bytes, limits);
+  return buildIntake('zip', options.name ?? 'archive.zip', entries, symlinks, limits, archiveSha256, skipped);
 }
 
 /**
@@ -728,6 +773,7 @@ export async function intakeLooseFiles(
   const limits = { ...DEFAULT_INTAKE_LIMITS, ...options.limits };
   let total = 0;
   const entries = files.map((f) => {
+    if (notProjectSource(normalizeEntryPath(f.path, limits))) return { path: normalizeEntryPath(f.path, limits), bytes: f.bytes };
     if (f.bytes.length > limits.maxFileBytes) throw new ImportIntakeError('file-too-large', `${f.path} is larger than ${Math.round(limits.maxFileBytes / 1024 / 1024)} MB.`, [f.path]);
     total += f.bytes.length;
     if (total > limits.maxTotalBytes) throw new ImportIntakeError('total-too-large', `The selected files are larger than ${Math.round(limits.maxTotalBytes / 1024 / 1024)} MB.`);

@@ -57,8 +57,8 @@ describe('imported source build plan', () => {
 
   it('refuses frameworks that need their own server', async () => {
     const intake = await intakeLooseFiles([
-      { path: 'n/package.json', bytes: enc(JSON.stringify({ dependencies: { next: '15.0.0', react: '19.0.0' } })) },
-      { path: 'n/app/page.tsx', bytes: enc('export default () => null') },
+      { path: 'n/package.json', bytes: enc(JSON.stringify({ dependencies: { astro: '5.0.0' } })) },
+      { path: 'n/src/pages/index.astro', bytes: enc('---\n---\n<h1>Hi</h1>') },
     ]);
     const profile = analyzeImportedProject(intake);
     const files = Object.fromEntries(Object.entries(intake.textFiles).map(([p, t]) => [`/${p}`, t]));
