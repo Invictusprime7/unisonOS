@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { intakeLooseFiles } from '@/services/import/secureIntake';
-import { analyzeImportedProject } from '@/services/import/importCompatibilityProfile';
+import { analyzeImportedProject, resolveImportPreviewAdapter } from '@/services/import/importCompatibilityProfile';
 import { planSourceBuild } from '@/services/import/sourceBuild/sourceBuildPlan';
 
 /** Universal import: each common project shape is recognised from its own files and gets a source build. */
@@ -104,5 +104,24 @@ describe('universal imported project shapes', () => {
     expect(plan.root).toBe('/apps/web');
     expect(plan.localPackages['@acme/ui']).toBe('/packages/ui');
     expect(plan.packages['@acme/ui']).toBeUndefined();
+  });
+
+  it('a module-script site without package.json still gets a source build', async () => {
+    const plan = await planOf({
+      'index.html': VITE_HTML('/main.js'),
+      'main.js': "import { greet } from './greet.js';\ndocument.querySelector('#app').textContent = greet();",
+      'greet.js': "export const greet = () => 'Hi';",
+    });
+    expect(plan.status).toBe('supported');
+    expect(plan.entry).toBe('/main.js');
+  });
+
+  it('plain HTML with classic scripts previews as the original HTML', async () => {
+    const files = { 'index.html': '<!doctype html><html><body><h1>Hi</h1><script src="app.js"></script></body></html>', 'app.js': 'console.log(1);', 'about.html': '<h1>About</h1>' };
+    const intake = await intakeLooseFiles(Object.entries(files).map(([path, text]) => ({ path, bytes: enc(text) })));
+    const profile = analyzeImportedProject({ manifest: intake.manifest, textFiles: intake.textFiles });
+    const vfs = Object.fromEntries(Object.entries(intake.textFiles).map(([p, t]) => [`/${p}`, t]));
+    expect(resolveImportPreviewAdapter(profile, vfs).status).toBe('available');
+    expect(resolveImportPreviewAdapter(profile, vfs).adapter).not.toBe('browser-source-build-v1');
   });
 });
