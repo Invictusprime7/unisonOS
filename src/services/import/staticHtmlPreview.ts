@@ -25,7 +25,7 @@ export interface StaticHtmlPreviewDiagnostic {
 export interface StaticHtmlPreviewDocument {
   html: string;
   /** Out-of-band runtime overlays added to the served copy (never to source). */
-  overlays: Array<'page-navigation-bridge'>;
+  overlays: Array<'page-navigation-bridge' | 'page-check'>;
   resolvedRefs: number;
   diagnostics: StaticHtmlPreviewDiagnostic[];
   /** Local pages this document links to (VFS paths). */

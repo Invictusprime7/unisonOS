@@ -80,7 +80,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
     ...(preview?.plan.customerNeeds ?? []).map((need) => need.replace(/[_-]+/g, ' ')),
   ])];
   const sectionPins = Object.entries(designSelection?.sectionPins ?? {}).map(([section, variant]) =>
-    `${section.replace(/[_-]+/g, ' ')}: ${variant.split(':').at(-1)?.replace(/-/g, ' ') ?? variant}`,
+    `${section.replace(/[_-]+/g, ' ')}: ${variant.split(':').slice(-1)[0]?.replace(/-/g, ' ') ?? variant}`,
   );
   const experience = designSelection?.experience ?? creation?.experienceDirection?.experience.value ?? 'standard';
   const experienceLabel = experience === 'immersive' ? 'Immersive 3D' : experience === 'motion-rich' ? 'Motion rich' : 'Standard';
