@@ -1253,12 +1253,7 @@ async function commitMutationInner(
   // hooks, styles, assets and original components as well as registered pages.
     // The exact media manifest is derived from these reviewed URLs but is added to the preflight map later.
   const reviewedSourceBaseline = reviewedArtifact
-    ? {
-      ...files,
-      ...(typeof projectMediaManifestContent === 'string'
-        ? { [PROJECT_MEDIA_MANIFEST]: projectMediaManifestContent }
-        : {}),
-    }
+    ? preserveProjectMediaManifest(files)
     : null;
   let projectionRestored = false;
   if (sourcePreservationBaseline) {
