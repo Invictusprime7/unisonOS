@@ -4,9 +4,9 @@
 - Load Unison tokens last; hero effects opt in via theme bridge. Why: protect vendor skins.
 - Demo counts settle with canonical revisions. Why: count only saved generations.
 
-- New sites start only in the Affinity chat: `PromptLaunchPanel` calls `createAffinitySourceProject` (`src/services/source-authoring/`), which authors a standalone React+Vite source project (foundation turn, one turn per page, build check, targeted repair) and saves it as a source project (`affinity-authored` origin, `imported-source` profile). Why: one creation path, same as imports.
+- New sites start only in the Affinity chat: `PromptLaunchPanel` calls `createAffinitySourceProject` (`src/services/source-authoring/`), which authors a standalone React+Vite source project and saves it as a source project (`affinity-authored` origin, `imported-source` profile). Why: one creation path, same as imports.
 - Source projects (imported or Affinity-written) share acceptance, preview builder, AI Builder edits (`sourceProject` composer flag, free in-place edits) and publish verification; industry knowledge and photos are brief advice, never gates. Why: Unison passes must not override authored source.
-- Legacy Unison-composed sites still use `UnisonAppBuilder`/canonical compiler until converted; new launches never use them. Why: old sites keep working while conversion is pending.
+- Older Unison sites convert on open: `convertLegacyProject` saves the rendered legacy preview as a source project (`commitMutation` `sourceConversion`); keep the legacy compiler while unconverted drafts/installs exist. Why: it is the conversion source.
 - `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
 - Saved revisions hydrate read-only; role recovery uses explicit role/type before shared route aliases (Visit → contact), preserving source. Candidates stay unsanitized/unsplit; uploads/images survive repairs. Why: preserve saved work and valid page types.
 - Composer contracts mirror `supabase/functions/_shared/aiComposerContract.ts` and `src/contracts/aiComposerContract.ts`; enforce targets/routes/import reads/intents; prefer hunks, accept replaces. Why: vocabulary is not readiness.

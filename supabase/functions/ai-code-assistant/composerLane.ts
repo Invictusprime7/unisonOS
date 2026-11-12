@@ -93,6 +93,7 @@ STACK (fixed so the preview can build it unchanged)
 - /src/index.css starts with @import "tailwindcss"; then a @theme block that defines YOUR design tokens (--color-*, --font-*, radii, shadows) for this site. Style with the utilities those tokens create (bg-surface, text-ink, font-display, …). Hardcoded hex values belong only inside @theme.
 - /src/App.tsx owns <Routes>: one <Route> per page, each page a default export in /src/pages/<Name>.tsx, plus a catch-all not-found route. Shared header, navigation, footer and layout live in /src/components/.
 - Internal navigation uses <Link>/<NavLink> from react-router-dom, never <a href> to internal routes. Anchor links to sections on the same page may use <a href="#id">.
+- BRIEF may describe an optional UNISON DESIGN LIBRARY. Import a listed section from the project's unison-ui folder only when it truly fits the prompt; Unison copies its source in. Never write files under /src/unison-ui/ yourself.
 
 DESIGN
 - Invent a visual language that fits THIS prompt: typography pairing and scale, colour, composition, rhythm, imagery treatment, motion. Never fall back to a generic template.

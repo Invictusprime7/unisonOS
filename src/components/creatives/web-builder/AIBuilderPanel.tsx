@@ -1,3 +1,4 @@
+import { isImportedSourceVfs } from '@/services/import/importedSourceRecords';
 import { resolvePreviewSource } from '@/services/editor/previewSourceResolver';
 import { PROMPT_CREATIVE_AUTHORITY_POLICY, retireLegacyRegistryOnlyDirective } from '@/services/app-builder/creativeAuthorityPolicy';
 import { readAppBuilderAISettings, saveAppBuilderAISettings } from '@/services/app-builder/appBuilderAISettings';
@@ -2013,9 +2014,12 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
               const d = lineDelta(vfsFiles?.[op.path], op.type === 'delete' ? '' : op.content);
               emitAgentEvent({ kind: 'file_change', message: `${op.type === 'delete' ? 'Removing' : 'Editing'} ${op.path}`, path: op.path, status: 'running', ...d });
             }
-            canonicalCandidate = candidate;
-            canonicalRouteOps = candidate.routeOps;
-            const pageOps = candidate.routeOps.filter((operation) => operation.type === 'add_page');
+            // Source projects register new pages in their own router inside the
+            // same edit, so their candidate is complete and file-only.
+            const sourceProjectEdit = isImportedSourceVfs(vfsFiles as Record<string, string>);
+            canonicalCandidate = sourceProjectEdit ? { ...candidate, routeOps: [] } : candidate;
+            canonicalRouteOps = sourceProjectEdit ? [] : candidate.routeOps;
+            const pageOps = sourceProjectEdit ? [] : candidate.routeOps.filter((operation) => operation.type === 'add_page');
             if (pageOps.length > 0) {
               const pageTargetsForGeneration = pageOps.map((operation) => {
                 const { pageId, title, route } = operation;

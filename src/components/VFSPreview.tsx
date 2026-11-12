@@ -128,6 +128,11 @@ export interface VFSPreviewProps {
   forceBackend?: 'docker' | 'sandpack';
   /** Callback when preview is ready */
   onReady?: () => void;
+  /**
+   * Called once an older Unison-pipeline site has rendered, with the exact
+   * preview files it rendered from. The Builder converts the site from them.
+   */
+  onLegacyPreviewRendered?: (compiled: { sandpackFiles: Record<string, string>; dependencies: Record<string, string> }) => void;
   /** Callback on error */
   onError?: (error: string) => void;
   /** Show backend indicator */
@@ -367,6 +372,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   autoStart = true,
   forceBackend,
   onReady,
+  onLegacyPreviewRendered,
   onError,
   showBackendIndicator = true,
   onNavigate,
@@ -454,6 +460,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   const externalPreviewChannelRef = useRef<BroadcastChannel | null>(null);
   const externalPreviewFilesRef = useRef(files);
   const importedPreviewSessionRef = useRef<ImportedPreviewSession | null>(null);
+  const importedFrameRef = useRef<HTMLIFrameElement | null>(null);
   externalPreviewFilesRef.current = files;
 
   useEffect(() => {
@@ -506,6 +513,8 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     emptyDraft: false,
     compiling: true,
   });
+  const previewCompileRef = useRef(previewCompile);
+  previewCompileRef.current = previewCompile;
 
   // Coarse launch signature — LaunchContext re-publishes a new object on every
   // status tick. Only the values the preview compiler actually reads may
@@ -872,6 +881,8 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
 
   // Resolve a target window for posting bridge messages (Sandpack iframe or docker iframe)
   const getPreviewWindow = useCallback((): Window | null => {
+    // Source projects: the sealed runtime frame hosts the same selection bridge.
+    if (importedFrameRef.current?.isConnected && importedFrameRef.current.contentWindow) return importedFrameRef.current.contentWindow;
     const sp = previewContainerRef.current?.querySelector(
       'iframe.sp-preview-iframe, .sp-preview iframe, iframe[title*="Sandpack"], iframe[src*="csb.app"], iframe[src*="codesandbox"]',
     ) as HTMLIFrameElement | null;
@@ -928,8 +939,8 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
     onError?.(message);
   }, [onError]);
 
-  const previewLifecycleRef = useRef({ handleSandpackRunning, handleSandpackError, onReady });
-  previewLifecycleRef.current = { handleSandpackRunning, handleSandpackError, onReady };
+  const previewLifecycleRef = useRef({ handleSandpackRunning, handleSandpackError, onReady, onLegacyPreviewRendered });
+  previewLifecycleRef.current = { handleSandpackRunning, handleSandpackError, onReady, onLegacyPreviewRendered };
 
   useEffect(() => {
     const handlePreviewLifecycleMessage = (event: MessageEvent) => {
@@ -949,6 +960,10 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         }
         reportPreviewRunning();
         previewLifecycleRef.current.onReady?.();
+        const rendered = previewCompileRef.current;
+        if (Object.keys(rendered.sandpackFiles).length > 0 && !rendered.pipelineError) {
+          previewLifecycleRef.current.onLegacyPreviewRendered?.({ sandpackFiles: rendered.sandpackFiles, dependencies: rendered.dependencies });
+        }
         return;
       }
 
@@ -1491,6 +1506,9 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         projectId={builderSession.runtimeContext?.projectId || builderSession.projectId || undefined}
         onSessionChange={(session) => { importedPreviewSessionRef.current = session; }}
         className={className}
+        editable={Boolean(onElementSelect)}
+        revisionId={revisionId ?? null}
+        onFrameChange={(frame) => { importedFrameRef.current = frame; bridgeReadyRef.current = false; }}
       />
     );
   }

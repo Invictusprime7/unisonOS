@@ -3513,6 +3513,58 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     importBuilderFiles,
   ]);
 
+  // Convert on open: once a site from the older Unison pipeline has rendered,
+  // its exact preview files become the site's editable source project (one
+  // attempt per draft; a failed attempt leaves the site working as before).
+  const legacyConversionDraftRef = useRef<string | null>(null);
+  const handleLegacyPreviewRendered = useCallback((compiled: { sandpackFiles: Record<string, string>; dependencies: Record<string, string> }) => {
+    const draftId = currentDraftId;
+    if (!draftId || legacyConversionDraftRef.current === draftId || templateCustomizer.isDirty) return;
+    const currentFiles = virtualFSRef.current.getSandpackFiles();
+    if (isImportedSourceVfs(currentFiles) || !currentRevisionIdRef.current) return;
+    legacyConversionDraftRef.current = draftId;
+    void runExclusive('conversion', async () => {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      const identity = buildCommitIdentity({
+        userId: user?.id,
+        businessId,
+        projectId: resolvedProjectId,
+        draftId,
+        revisionId: currentRevisionIdRef.current,
+      });
+      if (!identity) return;
+      const toastId = toast.loading('Making this site fully editable…', { description: 'Your site stays exactly as it looks now.' });
+      try {
+        const [{ convertLegacyProject }, { sourceProjectBuildCheck }] = await Promise.all([
+          import('@/services/source-authoring/convertLegacyProject'),
+          import('@/services/source-authoring/createAffinitySourceProject'),
+        ]);
+        const commit = await convertLegacyProject({
+          identity,
+          currentFiles: virtualFSRef.current.getSandpackFiles(),
+          compiled,
+          projectName: projectDisplayName || projectNameFromState || 'Site',
+          buildCheck: sourceProjectBuildCheck,
+        });
+        if (commit.status !== 'committed' || !commit.persistedRevisionId) throw new Error('The converted version was not saved.');
+        currentRevisionIdRef.current = commit.persistedRevisionId;
+        setCurrentRevisionId(commit.persistedRevisionId);
+        recordCommit('conversion', commit.persistedRevisionId);
+        // canonical-vfs-exempt: adoption of an accepted commitMutation result
+        importBuilderFiles(commit.vfsFiles, {
+          replace: true,
+          preferredPath: resolveImportedActivePagePath(commit.vfsFiles, null),
+          entryPoint: null,
+          adoption: commitAdoptionRecord(commit),
+        });
+        toast.success('Your site is now fully editable', { id: toastId, description: 'Affinity and point-and-click edits now change its source directly.' });
+      } catch (err) {
+        console.warn('[WebBuilder] legacy conversion failed; the site keeps the older preview:', err);
+        toast.message('This site keeps working as before', { id: toastId, description: (err instanceof Error ? err.message : String(err)).slice(0, 180) });
+      }
+    });
+  }, [currentDraftId, businessId, resolvedProjectId, projectDisplayName, projectNameFromState, templateCustomizer.isDirty, importBuilderFiles]);
+
   /** Code-terminal file commands: one canonical commit, queued behind other saves, then browser-verified. */
   const onTerminalPatch = useCallback((ops: TerminalFileOp[], summary: string, termRouteOps?: TerminalRouteOp[]) => {
     void runExclusive('terminal', async () => {
@@ -8909,6 +8961,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                         device={device}
                         enableSelection={builderMode === 'select' && !templateCustomizer.isDirty}
                         onElementSelect={builderMode === 'select' ? handlePreviewElementSelect : undefined}
+                        onLegacyPreviewRendered={handleLegacyPreviewRendered}
                         onNavigate={(path) => {
                           const pageName = path.replace(/^\//, '').replace(/\.html$/, '') || 'index';
                           if (pageName !== 'index') {

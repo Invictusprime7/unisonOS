@@ -822,9 +822,12 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
     html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${moduleTag}</body></html>`;
   }
   if (tailwind3Sheets.length) {
-    const twVersion = plan.versions.tailwindcss ?? '3';
+    // The Tailwind CDN only serves exact versions ("3" is rejected).
+    const declaredTw = plan.versions.tailwindcss ?? '';
+    const twVersion = /^3\.\d+\.\d+$/.test(declaredTw) ? declaredTw : '3.4.17';
     head.push(...tailwind3Sheets.map((css) => `<style type="text/tailwindcss">${css.replace(/<\/style/gi, '<\\/style')}</style>`));
-    head.push(`<script src="https://cdn.tailwindcss.com/${twVersion}"></script>`);
+    // A page that already loads the Tailwind CDN (with its own config) keeps that one script.
+    if (!/<script\b[^>]*src=["']https:\/\/cdn\.tailwindcss\.com/i.test(html)) head.push(`<script src="https://cdn.tailwindcss.com/${twVersion}"></script>`);
     diagnostics.push({ level: 'info', code: 'tailwind3-runtime', message: 'Tailwind 3 styles are generated in the preview frame; plugins and JavaScript config options from tailwind.config are not applied.' });
   }
   const document = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => `${m}\n${head.join('\n')}`) : `${head.join('\n')}${html}`;

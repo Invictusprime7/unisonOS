@@ -38,7 +38,8 @@ export function isImportedSourceComposerPath(path: string): boolean {
 }
 
 // Source projects (Affinity-written or imported) also own their root build files.
-const SOURCE_PROJECT_ROOT_FILE = /^\/(?:package\.json|index\.html|vite\.config\.(?:ts|js|mjs)|tsconfig(?:\.[a-z]+)?\.json|postcss\.config\.(?:js|mjs|cjs))$/;
+// Root-level entry/app/style modules cover projects without a src/ folder (e.g. converted older sites).
+const SOURCE_PROJECT_ROOT_FILE = /^\/(?:package\.json|index\.html|vite\.config\.(?:ts|js|mjs)|tsconfig(?:\.[a-z]+)?\.json|postcss\.config\.(?:js|mjs|cjs)|(?:App|main|index|router)\.(?:tsx|jsx|ts|js)|(?:index|App|styles|globals)\.css)$/;
 
 /** Writable path inside a source project: its own source folders and root build files, never records or dot-folders. */
 export function isSourceProjectComposerPath(path: string): boolean {

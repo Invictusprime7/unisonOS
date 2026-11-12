@@ -44,7 +44,7 @@ import { createAstIdentityFromSignature, hashSourceIdentity } from '@/services/e
 
 const UI_MANIFEST_PATH = '/.unison/ui-manifest.json';
 
-function injectPreviewSourceLocators(source: string, filePath: string, sourceRevisionId?: string | null): string {
+export function injectPreviewSourceLocators(source: string, filePath: string, sourceRevisionId?: string | null): string {
   if (source.length > 200_000) return source;
   const packages = (Babel as any).packages;
   const edits: Array<{ position: number; attribute: string }> = [];
@@ -830,7 +830,7 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
  * had ElementFloatingToolbar and onElementSelect plumbing, but no script in
  * the iframe ever produced the ELEMENT_SELECTED message.
  */
-const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() {
+export const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() {
   const bridgeWindow = window as Window & { __unisonPreviewSelectionBridgeInstalled?: boolean };
   if (bridgeWindow.__unisonPreviewSelectionBridgeInstalled) return;
   bridgeWindow.__unisonPreviewSelectionBridgeInstalled = true;

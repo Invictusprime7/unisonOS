@@ -168,6 +168,11 @@ export interface CommitMutationInput {
      * Unison compiler stage. Implied whenever the base VFS carries import records.
      */
     acceptanceProfile?: typeof IMPORTED_SOURCE_ACCEPTANCE_PROFILE;
+    /**
+     * Convert on open: the first source-project revision of a site built by the
+     * older Unison pipeline. Its parent is that site's last Unison revision.
+     */
+    sourceConversion?: boolean;
     /** Exact Wizard artifact already approved by the user. */
     reviewedArtifact?: {
       siteBundleSnapshot: SiteBundleSnapshot;
@@ -1073,9 +1078,12 @@ async function commitMutationInner(
   }
   const projectMediaManifest = syncProjectMedia(workingFiles);
   if (projectMediaManifest !== null) workingFiles[PROJECT_MEDIA_MANIFEST] = projectMediaManifest;
-  const preserveProjectMediaManifest = (candidateFiles: Record<string, string>) => projectMediaManifest === null
-    ? candidateFiles
-    : { ...candidateFiles, [PROJECT_MEDIA_MANIFEST]: projectMediaManifest };
+  // The manifest follows the accepted bytes: a reviewed artifact may carry
+  // uploads the working files never showed.
+  const preserveProjectMediaManifest = (candidateFiles: Record<string, string>) => {
+    const manifest = syncProjectMedia({ ...candidateFiles, ...(projectMediaManifest === null ? {} : { [PROJECT_MEDIA_MANIFEST]: projectMediaManifest }) }) ?? projectMediaManifest;
+    return manifest === null ? candidateFiles : { ...candidateFiles, [PROJECT_MEDIA_MANIFEST]: manifest };
+  };
   const projectMediaManifestContent = workingFiles[PROJECT_MEDIA_MANIFEST];
 
   // Everything that intentionally changed before acceptance is the candidate.
@@ -1245,12 +1253,7 @@ async function commitMutationInner(
   // hooks, styles, assets and original components as well as registered pages.
     // The exact media manifest is derived from these reviewed URLs but is added to the preflight map later.
   const reviewedSourceBaseline = reviewedArtifact
-    ? {
-      ...files,
-      ...(typeof projectMediaManifestContent === 'string'
-        ? { [PROJECT_MEDIA_MANIFEST]: projectMediaManifestContent }
-        : {}),
-    }
+    ? { ...preserveProjectMediaManifest(files) }
     : null;
   let projectionRestored = false;
   if (sourcePreservationBaseline) {
@@ -2302,6 +2305,9 @@ async function commitImportedSourceMutation(args: {
     });
   }
 
+  if (input.options?.sourceConversion && (isImportedSourceVfs(input.current.vfsFiles) || restoredRevision || !input.identity.revisionId)) {
+    throw new CommitGuardError('SCOPE_ESCAPE', 'source-conversion', '[VFSCommitService] Only a saved site from the older Unison pipeline can be converted, once.');
+  }
   const before = input.current.vfsFiles;
   let working: Record<string, string>;
   if (restoredRevision) {
@@ -2514,7 +2520,7 @@ async function finalize(args: {
         p_vfs_hash: vfsHash,
       };
       const rpcName = importedSource
-        ? 'commit_imported_source_revision_v1'
+        ? (input.options?.sourceConversion ? 'convert_draft_to_source_project_v1' : 'commit_imported_source_revision_v1')
         : 'commit_canonical_site_revision_v2';
       const compactRpcPayload = importedSource
         ? sharedRpcPayload

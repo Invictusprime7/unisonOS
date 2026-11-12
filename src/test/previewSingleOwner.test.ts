@@ -196,7 +196,7 @@ describe('Web Builder preview ownership', () => {
     expect(sharedPreview).toContain('MAX_SANDPACK_RENDER_RECOVERIES = 2');
     expect(sharedPreview).toContain('PREVIEW_RENDER_READY_TIMEOUT_MS = 20_000');
     expect(sharedPreview).toContain('renderReadyTimeoutRef.current = window.setTimeout');
-    expect(sharedPreview).toContain('const previewLifecycleRef = useRef({ handleSandpackRunning, handleSandpackError, onReady });');
+    expect(sharedPreview).toContain('const previewLifecycleRef = useRef({ handleSandpackRunning, handleSandpackError, onReady, onLegacyPreviewRendered });');
     expect(sharedPreview).toContain('}, [getPreviewWindow]);');
     expect(sharedPreview).toContain("data.type === 'UNISON_PREVIEW_RENDER_READY'");
     expect(sharedPreview).toContain('if (renderReadyRef.current) return;');
