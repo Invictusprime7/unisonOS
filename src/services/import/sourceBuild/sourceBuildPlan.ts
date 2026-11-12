@@ -213,7 +213,7 @@ function aliasesFor(files: Record<string, string>, root: string, compilerOptions
   }
   for (const configName of ['vite.config.ts', 'vite.config.js', 'vite.config.mts', 'vite.config.mjs', 'svelte.config.js', 'next.config.js', 'next.config.mjs', 'next.config.ts']) {
     const config = files[`${root}/${configName}`] ?? '';
-    for (const m of config.matchAll(/["']([@~#$][\w-]*)["']\s*:\s*(?:(?:path\.)?(?:resolve|join)\([^,]*,\s*["']\.?\/?([^"']+)["']\)|fileURLToPath\(new URL\(\s*["']\.?\/?([^"']+)["']))/g)) {
+    for (const m of config.matchAll(/["']([@~#$][\w-]*)["']\s*:\s*(?:(?:path\.)?(?:resolve|join)\([^,]*,\s*["']\.?\/?([^"']+)["']\)|fileURLToPath\(new URL\(\s*["']\.?\/?([^"']+)["'])/g)) {
       const find = `${m[1]}/`;
       const target = (m[2] ?? m[3]).replace(/\/$/, '');
       if (!aliases.some((a) => a.find === find || a.find === m[1])) aliases.push({ find, replacement: `${joinVfs(root || '/', target)}/` });
