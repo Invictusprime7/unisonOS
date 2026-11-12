@@ -98,14 +98,26 @@ serve(async (req) => {
       ? cancelUrl
       : `${baseUrl}/checkout/cancel`;
 
-    // Determine the price ID to use
-    let stripePriceId = sanitizedPriceId;
-    if (!stripePriceId && sanitizedPlan) {
+    // The price always comes from the server's configured plan prices. A
+    // caller-supplied price ID is accepted only when it matches one of them.
+    let stripePriceId: string | undefined;
+    let resolvedPlan: string | undefined;
+    if (sanitizedPriceId) {
+      const match = Object.entries(PLAN_PRICE_IDS).find(([, configured]) => configured && configured === sanitizedPriceId);
+      if (!match) {
+        return errorResponse("Invalid plan or price ID", 400, corsHeaders);
+      }
+      stripePriceId = match[1];
+      resolvedPlan = match[0].replace(/_yearly$/, "");
+    } else if (sanitizedPlan) {
       const planKey = billingCycle === "yearly" ? `${sanitizedPlan}_yearly` : sanitizedPlan;
-      stripePriceId = PLAN_PRICE_IDS[planKey];
+      if (Object.prototype.hasOwnProperty.call(PLAN_PRICE_IDS, planKey)) {
+        stripePriceId = PLAN_PRICE_IDS[planKey];
+        resolvedPlan = sanitizedPlan;
+      }
     }
 
-    if (!stripePriceId) {
+    if (!stripePriceId || !resolvedPlan) {
       return errorResponse("Invalid plan or price ID", 400, corsHeaders);
     }
 
@@ -154,12 +166,12 @@ serve(async (req) => {
       cancel_url: resolvedCancelUrl,
       metadata: {
         supabase_user_id: user.id,
-        plan: sanitizedPlan || "unknown",
+        plan: resolvedPlan,
       },
       subscription_data: {
         metadata: {
           supabase_user_id: user.id,
-          plan: sanitizedPlan || "unknown",
+          plan: resolvedPlan,
         },
       },
       allow_promotion_codes: true,
