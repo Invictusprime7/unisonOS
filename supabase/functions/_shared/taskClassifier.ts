@@ -12,6 +12,7 @@ export type AssistantTaskType =
   | "site_page_author"
   | "site_page_repair"
   | "builder_source_edit"
+  | "source_project_author"
   | "nav_page_generation"
   | "template_json_generation"
   | "template_html_generation"
