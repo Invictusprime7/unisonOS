@@ -2307,6 +2307,9 @@ async function commitImportedSourceMutation(args: {
     });
   }
 
+  if (input.options?.sourceConversion && (isImportedSourceVfs(input.current.vfsFiles) || restoredRevision || !input.identity.revisionId)) {
+    throw new CommitGuardError('SCOPE_ESCAPE', 'source-conversion', '[VFSCommitService] Only a saved site from the older Unison pipeline can be converted, once.');
+  }
   const before = input.current.vfsFiles;
   let working: Record<string, string>;
   if (restoredRevision) {
