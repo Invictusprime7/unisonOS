@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyVendorResult, libraryBriefBlock, requestedLibraryNames, vendorLibrarySections } from '@/services/source-authoring/unisonLibrary';
+import { applyVendorResult, libraryBriefBlock, lowPriorityTokens, requestedLibraryNames, vendorLibrarySections } from '@/services/source-authoring/unisonLibrary';
 
 const PKG = JSON.stringify({ dependencies: { react: '^18.3.1', 'react-dom': '^18.3.1' } });
 
@@ -20,9 +20,6 @@ describe('Unison library as an optional building block', () => {
       '/src/unison-ui/tokens.css',
     ]));
     expect(result.writes['/src/unison-ui/index.tsx']).toContain('export function HeroSplitImage(');
-    // Library defaults never outrank the site's own colours.
-    expect(result.writes['/src/unison-ui/tokens.css']).toMatch(/^:where\(:root\) \{/m);
-    expect(result.writes['/src/unison-ui/tokens.css']).not.toMatch(/^:root\s*\{/m);
     const next = applyVendorResult(files, result);
     expect(next['/src/pages/Home.tsx']).toBe(files['/src/pages/Home.tsx']);
     expect(JSON.parse(next['/package.json']).dependencies['lucide-react']).toBe('^0.462.0');
@@ -32,6 +29,13 @@ describe('Unison library as an optional building block', () => {
     const files = { '/src/pages/Home.tsx': "import { HeroSplitImage } from '../unison-ui';" };
     const first = applyVendorResult(files, await vendorLibrarySections(files));
     expect((await vendorLibrarySections(first)).writes).toEqual({});
+  });
+
+  it('keeps library colour defaults below the site\'s own values', () => {
+    const css = lowPriorityTokens(':root {\n  --primary: 7 72% 51%;\n}\n[data-theme="dark"] {\n  --primary: 7 78% 61%;\n}\n');
+    expect(css).toMatch(/^:where\(:root\) \{/m);
+    expect(css).toMatch(/^:where\(\[data-theme="dark"\]\) \{/m);
+    expect(css).not.toMatch(/^:root\s*\{/m);
   });
 
   it('reports names the library does not provide', async () => {

@@ -171,7 +171,7 @@ function adapterSource(sections: LibrarySection[]): string {
   return `${lines.join('\n')}\n`;
 }
 
-function lowPriorityTokens(css: string): string {
+export function lowPriorityTokens(css: string): string {
   // Defaults only: zero-specificity selectors so the site's own :root values always win.
   return css
     .replace(/^:root\s*\{/m, ':where(:root) {')
