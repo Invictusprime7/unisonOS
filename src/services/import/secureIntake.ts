@@ -124,7 +124,7 @@ export interface IntakeLimits {
 }
 
 export const DEFAULT_INTAKE_LIMITS: IntakeLimits = {
-  maxArchiveBytes: 150 * 1024 * 1024,
+  maxArchiveBytes: 300 * 1024 * 1024,
   maxFiles: 5000,
   maxArchiveEntries: 250_000,
   maxFileBytes: 25 * 1024 * 1024,
