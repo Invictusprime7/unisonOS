@@ -97,7 +97,11 @@
     if (booted || event.source !== parent || !data || data.type !== 'unison-source-runtime:boot' || typeof data.document !== 'string') return;
     booted = true;
     try { history.replaceState(null, '', typeof data.initialPath === 'string' && data.initialPath.startsWith('/') ? data.initialPath : '/'); } catch (_) { /* keep runtime URL */ }
-    const prelude = `<script>(${hostAdapter.toString()})(${JSON.stringify(data.publicUrls || {})}, ${JSON.stringify(String(data.nonce || ''))});<\/script>`;
+    // Builder preview only: the parent's point-and-click selection bridge.
+    const editBridge = typeof data.editBridge === 'string' && data.editBridge
+      ? `<script>${data.editBridge.replace(/<\/script/gi, '<\\/script')}<\/script>`
+      : '';
+    const prelude = `<script>(${hostAdapter.toString()})(${JSON.stringify(data.publicUrls || {})}, ${JSON.stringify(String(data.nonce || ''))});<\/script>${editBridge}`;
     const html = data.document;
     const withPrelude = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + prelude) : prelude + html;
     document.open();
