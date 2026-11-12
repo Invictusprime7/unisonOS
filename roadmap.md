@@ -434,3 +434,5 @@ Fallback production configuration remains unverified; no relay, credential chang
 - [ ] Live AI generation of the three acceptance prompts + scoped hero edit in Preview (needs UNISON deployment, funded Gemini and a signed-in session)
 
 - [x] Imported/source projects: toolbar, inline text and AI Builder edits save to the real source files
+- [x] AI edits (toolbar AI box + AI Builder) reach the AI service on imported/source projects; retry in the live service's older shape until it redeploys
+- [ ] Redeploy the AI service (automatic backend update) so `$`/`[slug]` route files and root settings files are editable by AI (needs the GitHub backend workflow to run)
