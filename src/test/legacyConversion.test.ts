@@ -67,3 +67,17 @@ describe('convert on open: saving', () => {
     expect(commitMutation).not.toHaveBeenCalled();
   });
 });
+
+describe('convert on open: converted sites stay editable by Affinity', () => {
+  it('lets edits reach the root router and styles a converted site uses to add pages', async () => {
+    const { sourceProjectEditTargets } = await import('@/services/source-authoring/sourceProjectEditTargets');
+    const { isSourceProjectComposerPath } = await import('@/contracts/aiComposerContract');
+    const files = standaloneSourceFromPreview(compiled, 'Bloom Salon');
+    files['/pages/Home.tsx'] = 'export default function Home(){return <h1>Home</h1>}';
+    const targets = sourceProjectEditTargets(files, '/pages/Home.tsx');
+    expect(targets).toEqual(expect.arrayContaining(['/pages/Home.tsx', '/App.tsx', '/index.tsx', '/index.html', '/package.json']));
+    expect(isSourceProjectComposerPath('/pages/Gallery.tsx')).toBe(true);
+    expect(isSourceProjectComposerPath('/App.tsx')).toBe(true);
+    expect(isSourceProjectComposerPath('/.unison-import/provenance.json')).toBe(false);
+  });
+});
