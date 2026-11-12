@@ -3543,7 +3543,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           identity,
           currentFiles: virtualFSRef.current.getSandpackFiles(),
           compiled,
-          projectName: projectName || 'Site',
+          projectName: projectNameFromState || 'Site',
           buildCheck: sourceProjectBuildCheck,
         });
         if (commit.status !== 'committed' || !commit.persistedRevisionId) throw new Error('The converted version was not saved.');
@@ -3563,7 +3563,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
         toast.message('This site keeps working as before', { id: toastId, description: (err instanceof Error ? err.message : String(err)).slice(0, 180) });
       }
     });
-  }, [currentDraftId, businessId, resolvedProjectId, projectName, templateCustomizer.isDirty, importBuilderFiles]);
+  }, [currentDraftId, businessId, resolvedProjectId, projectNameFromState, templateCustomizer.isDirty, importBuilderFiles]);
 
   /** Code-terminal file commands: one canonical commit, queued behind other saves, then browser-verified. */
   const onTerminalPatch = useCallback((ops: TerminalFileOp[], summary: string, termRouteOps?: TerminalRouteOp[]) => {
