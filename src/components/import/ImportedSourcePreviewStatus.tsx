@@ -87,12 +87,12 @@ export function ImportedSourcePreviewStatus({ records, adapter, running, publish
         <div className="flex items-start gap-3">
           <FileCode2 className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-foreground">Imported {framework} project</h3>
+            <h3 className="text-sm font-semibold text-foreground">{records.provenance.origin === 'affinity-authored' ? `${framework} project written by Affinity` : `Imported ${framework} project`}</h3>
             <p className="text-xs leading-relaxed text-muted-foreground">{liveAdapter.reason}</p>
           </div>
         </div>
 
-        <ul className="divide-y divide-border rounded-md border border-border" aria-label="Import status">
+        <ul className="divide-y divide-border rounded-md border border-border" aria-label="Project status">
           {rows.map((row) => (
             <li key={row.label} className="flex items-start gap-3 px-3 py-2.5">
               <StateIcon state={row.state} />
