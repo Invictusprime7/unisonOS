@@ -4,7 +4,7 @@
 - Load Unison tokens last; hero effects opt in via theme bridge. Why: protect vendor skins.
 - Demo counts settle with canonical revisions. Why: count only saved generations.
 
-- New sites start only in the Affinity chat: `PromptLaunchPanel` calls `createAffinitySourceProject` (`src/services/source-authoring/`), which authors a standalone React+Vite source project (foundation turn, one turn per page, build check, targeted repair) and saves it as a source project (`affinity-authored` origin, `imported-source` profile). Why: one creation path, same as imports.
+- New sites start only in the Affinity chat: `PromptLaunchPanel` calls `createAffinitySourceProject` (`src/services/source-authoring/`), which authors a standalone React+Vite source project and saves it as a source project (`affinity-authored` origin, `imported-source` profile). Why: one creation path, same as imports.
 - Source projects (imported or Affinity-written) share acceptance, preview builder, AI Builder edits (`sourceProject` composer flag, free in-place edits) and publish verification; industry knowledge and photos are brief advice, never gates. Why: Unison passes must not override authored source.
 - Older Unison sites convert on open: `convertLegacyProject` saves the rendered legacy preview as a source project (`commitMutation` `sourceConversion`); keep the legacy compiler while unconverted drafts/installs exist. Why: it is the conversion source.
 - `commitMutation` remains the only legal canonical writer; initial generation accepts one passing candidate, never repairs or per-page checkpoints as revisions.
