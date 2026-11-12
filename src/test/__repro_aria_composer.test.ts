@@ -1,11 +1,22 @@
-import { describe, it, vi } from 'vitest';
+import { describe, it, vi, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-const sent: unknown[] = [];
+const sent: Array<Record<string, unknown>> = [];
+let mode: 'old' | 'new' = 'old';
 vi.mock('@/services/builderBrainClient', async (orig) => ({
   ...(await orig() as object),
   runBuilderTurn: vi.fn(async (body: { messages: Array<{ content: string }> }) => {
-    sent.push(JSON.parse(body.messages[0].content));
-    return { data: null, error: { message: 'stop' } };
+    const req = JSON.parse(body.messages[body.messages.length - 1].content);
+    sent.push(req);
+    const schema = mode === 'old' ? (await import('./__tmp/oldContract')).aiComposerRequestSchema : (await import('../../supabase/functions/_shared/aiComposerContract')).aiComposerRequestSchema;
+    const conform = mode === 'new' ? (await import('../../supabase/functions/_shared/aiComposerContract')).conformComposerRequest : (x: unknown) => ({ request: x });
+    const r = schema.safeParse(conform(req).request);
+    if (!r.success) {
+      const e = Object.assign(new Error('Invalid composer request'), { context: { status: 400, body: JSON.stringify({ error: 'Invalid composer request', errorType: 'composer_request' }) } });
+      return { data: null, error: e };
+    }
+    const path = req.page.filePath;
+    const page = req.files[path] as string;
+    return { data: { content: JSON.stringify({ summary: 'ok', fileOps: [{ type: 'replace', path, content: page.replace('</h1>', ' Studio</h1>') }] }) }, error: null };
   }),
 }));
 import { intakeZipArchive } from '@/services/import/secureIntake';
@@ -13,28 +24,19 @@ import { analyzeImportedProject } from '@/services/import/importCompatibilityPro
 import { buildImportedSourceVfs } from '@/services/import/importedSourceAcceptance';
 import { unisonAppBuilder } from '@/services/app-builder/UnisonAppBuilder';
 import { resolveCanonicalAuthoringPage } from '@/services/builder/canonicalAuthoringRequest';
-import { aiComposerRequestSchema } from '../../supabase/functions/_shared/aiComposerContract';
 
 describe('repro', () => {
-  it('aria composer request', async () => {
+  for (const m of ['old', 'new'] as const) for (const PAGE of ['/src/routes/index.tsx', '/src/routes/process.$slug.tsx']) it(`${m} ${PAGE}`, async () => {
+    mode = m; sent.length = 0;
     const intake = await intakeZipArchive(new Uint8Array(readFileSync('/tmp/repro/aria.zip')));
     const profile = analyzeImportedProject(intake);
     const files = buildImportedSourceVfs({ intake, profile, assets: { version: 1, assets: [], originalArchive: null }, importedBy: 'u', importedAt: '2026-11-10T00:00:00Z' }).files;
-    const PAGE = '/src/routes/index.tsx';
     const page = resolveCanonicalAuthoringPage(files, PAGE, PAGE)!;
-    try {
-      await unisonAppBuilder.edit({
-        operationId: 'builder:test', page, brief: 'Edit the project.', instruction: 'Make the hero background red',
-        currentFiles: files, baseRevisionId: 'rev-1', connectorContext: { revisionId: 'rev-1' },
-        sourceTargets: [PAGE], routes: [], runtimeContext: '',
-      } as unknown as Parameters<typeof unisonAppBuilder.edit>[0]);
-    } catch (e) { console.log('edit threw', (e as Error).message); }
-    console.log('sent', sent.length);
-    const req = sent[0] as Record<string, unknown>;
-    const r = aiComposerRequestSchema.safeParse(req);
-    console.log('success', r.success);
-    if (!r.success) console.log(JSON.stringify(r.error.issues.slice(0, 20), null, 1));
-    console.log('targets', JSON.stringify(req.sourceTargets));
-    console.log('file sizes', Object.entries(req.files as Record<string,string>).map(([k,v]) => `${k}:${v.length}`).join('\n'));
+    const result = await unisonAppBuilder.edit({
+      operationId: 'builder:test', page, brief: 'Edit the project.', instruction: 'Add Studio to the heading',
+      currentFiles: files, baseRevisionId: 'rev-1', connectorContext: { revisionId: 'rev-1' },
+      sourceTargets: [PAGE], routes: [], runtimeContext: '',
+    } as unknown as Parameters<typeof unisonAppBuilder.edit>[0]);
+    console.log(m, PAGE, 'sent', sent.length, result.candidate.status, JSON.stringify(result.candidate.diagnostics).slice(0, 400), result.changeSet?.fileOps.map(o => o.path));
   }, 60000);
 });
