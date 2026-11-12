@@ -25,7 +25,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { deriveChatLaunchPlan, buildSyncedVisionBrief, projectUniversalCreationInput, type ChatLaunchPlan } from "@/services/launch/chatLaunchPlan";
-import type { ChatWizardStep } from '@/services/launch/chatWizardStep';
+// The guided chat step module was retired with the Wizard; a step is one of this screen's own steps.
+type ChatWizardStep = SelectionStep;
 import {
   Dialog,
   DialogContent,

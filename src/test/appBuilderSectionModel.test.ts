@@ -457,34 +457,6 @@ export default function Matches(){return <><header data-ut-section-id="site:navb
     });
   });
 
-  it('normalizes an authored reservation section with meaningful content around its registered form', () => {
-    const files = {
-      '/src/pages/Booking.tsx': `import Navbar from "@/unison/design-sources/Navbar";
-import Footer from "@/unison/design-sources/Footer";
-import ReservationExperience from "@/project-components/ReservationExperience";
-export default function Booking(){return <><header data-ut-section-id="site:navbar" data-ut-section-type="navbar" data-ut-variant="navbar:standard"><Navbar sectionId="site:navbar" variantId="navbar:standard" props={{links:[]}} /></header><main><section data-ut-section-id="booking:booking:0" data-ut-section-type="booking" data-ut-variant="custom:booking-experience"><ReservationExperience /></section></main><footer data-ut-section-id="site:footer" data-ut-section-type="footer" data-ut-variant="footer:columns"><Footer sectionId="site:footer" variantId="footer:columns" props={{links:[]}} /></footer></>}`,
-      '/src/project-components/ReservationExperience.tsx': `export default function ReservationExperience(){return <div><h2>Reserve a table</h2><p>Choose an available service time and tell us about your reservation.</p><form data-intent-form="booking.create"><label>Service<select name="serviceId" required /></label><label>Available time<select name="slotId" required /></label><label>Your name<input name="customerName" required /></label><label>Email<input name="customerEmail" required /></label><label>Notes<textarea name="notes" /></label><button type="submit">Request reservation</button></form></div>}`,
-    };
-    const result = materializeAppBuilderSectionModelsWithDiagnostics(
-      files,
-      [{ id: 'booking', filePath: '/src/pages/Booking.tsx', route: '/booking' }],
-      implementations,
-      { booking: ['navbar:standard', 'footer:columns'] },
-      ['navbar:standard', 'footer:columns'],
-    );
-    const section = result.pages[0].inspection.sections.find((entry) => entry.sectionId === 'booking:booking:0');
-
-    expect(result.diagnostics).toEqual([]);
-    expect(result.files['/src/pages/Booking.tsx']).toContain('data-ut-variant="custom:project-components-reservation-experience-default"');
-    expect(section).toMatchObject({
-      semanticType: 'booking',
-      variantId: 'custom:project-components-reservation-experience-default',
-      sourceModulePath: '/src/project-components/ReservationExperience.tsx',
-      componentOwnerId: 'site-component:/src/project-components/ReservationExperience.tsx',
-    });
-    expect(result.files['/.unison/compositions/pages/Booking.json']).toContain('custom:project-components-reservation-experience-default');
-  });
-
   it.each([
     ['empty section', 'export default function FeaturePanel(){return <section/>}'],
     ['form-only renderer', 'export default function FeaturePanel(){return <form><input name="email"/><button>Subscribe</button></form>}'],

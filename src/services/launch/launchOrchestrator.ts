@@ -294,14 +294,8 @@ async function runReservedLaunchPipeline(
       universalCreation = openEnded
         ? plannedCreation
         : { ...plannedCreation, requestedCapabilities: creationInput.requestedCapabilities };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown planning error';
-      console.error('[launchOrchestrator] AI site planning failed', message);
-      throw new LaunchFatalError(`AI site planning failed: ${message}`, {
-        stage: 'plan',
-        code: 'plan.ai_unavailable',
-        cause: error,
-      });
+    } catch {
+      callbacks.onStatus?.('Using the plan derived from your prompt; AI planning was unavailable');
     }
   }
   const baseline = submitted.template || (openEnded

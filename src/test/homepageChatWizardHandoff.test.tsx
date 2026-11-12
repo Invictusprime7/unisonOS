@@ -145,7 +145,7 @@ it('resumes an interrupted discovery conversation and opens selections after con
   expect(onSiteConfirmed).toHaveBeenCalledWith(expect.stringContaining('bakery site with online ordering'));
 });
 
-it('opens inline Wizard after the final confirmation marker and an affirmative reply', () => {
+it('opens inline Wizard after a natural confirmation request and the user replies "ya"', () => {
   function ChatHandoff() {
     const [brief, setBrief] = useState<string | null>(null);
     return <AIAssistantCore
@@ -153,7 +153,7 @@ it('opens inline Wizard after the final confirmation marker and an affirmative r
       showFileUpload={false}
       initialMessages={[
         { role: 'user', content: 'I need a UI/UX designer portfolio.', timestamp: new Date(0) },
-        { role: 'assistant', content: `Great! Is that a complete and accurate summary of the website you want to build?\n${SITE_CONFIRMATION_MARKER}`, timestamp: new Date(1) },
+        { role: 'assistant', content: 'Great! Is that a complete and accurate summary of the website you want to build?', timestamp: new Date(1) },
       ]}
       onSiteConfirmed={setBrief}
       selectionActive={Boolean(brief)}

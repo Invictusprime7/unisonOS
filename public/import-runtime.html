@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>Imported project preview</title>
+<!--
+  UIMP-01 source runtime host. Loaded only inside a sandboxed iframe without
+  allow-same-origin, so the imported project runs in an opaque origin with no
+  access to Unison's storage, cookies or session. The parent sends the built
+  document once; this page writes it in place and reports errors, route
+  changes and render state back. Nothing here edits the imported source.
+-->
+<script>
+(() => {
+  const hostAdapter = (publicUrls, nonce) => {
+    const post = (message) => { try { parent.postMessage({ ...message, nonce, source: 'unison-source-runtime' }, '*'); } catch (_) { /* ignore */ } };
+    const mapUrl = (value) => {
+      if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return value;
+      const [path, rest = ''] = value.split(/(?=[?#])/);
+      return Object.prototype.hasOwnProperty.call(publicUrls, path) ? publicUrls[path] + rest : value;
+    };
+    const mapSrcset = (value) => typeof value === 'string' ? value.split(',').map((part) => { const [u, ...d] = part.trim().split(/\s+/); return [mapUrl(u), ...d].join(' '); }).join(', ') : value;
+    const mapCssUrls = (value) => typeof value === 'string' ? value.replace(/url\(\s*(['"]?)(\/[^'")]+)\1\s*\)/g, (whole, q, u) => { const m = mapUrl(u); return m === u ? whole : `url("${m}")`; }) : value;
+    const URL_ATTRS = new Set(['src', 'href', 'poster', 'data']);
+    const setAttribute = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (name, value) {
+      const key = String(name).toLowerCase();
+      if (URL_ATTRS.has(key) && !(this instanceof HTMLAnchorElement)) value = mapUrl(value);
+      else if (key === 'srcset') value = mapSrcset(value);
+      else if (key === 'style') value = mapCssUrls(value);
+      return setAttribute.call(this, name, value);
+    };
+    const patch = (proto, prop, mapper) => {
+      const desc = proto && Object.getOwnPropertyDescriptor(proto, prop);
+      if (!desc || !desc.set) return;
+      Object.defineProperty(proto, prop, { ...desc, set(value) { desc.set.call(this, mapper(value)); } });
+    };
+    patch(HTMLImageElement.prototype, 'src', mapUrl);
+    patch(HTMLImageElement.prototype, 'srcset', mapSrcset);
+    patch(HTMLSourceElement.prototype, 'src', mapUrl);
+    patch(HTMLSourceElement.prototype, 'srcset', mapSrcset);
+    patch(HTMLMediaElement.prototype, 'src', mapUrl);
+    patch(HTMLVideoElement.prototype, 'poster', mapUrl);
+    patch(HTMLLinkElement.prototype, 'href', mapUrl);
+    patch(HTMLScriptElement.prototype, 'src', mapUrl);
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (resource, init) => nativeFetch(typeof resource === 'string' ? mapUrl(resource) : resource, init);
+    new MutationObserver((records) => {
+      for (const r of records) {
+        if (r.type === 'attributes' && r.attributeName === 'style') {
+          const v = r.target.getAttribute('style');
+          const m = mapCssUrls(v);
+          if (m !== v) setAttribute.call(r.target, 'style', m);
+        }
+      }
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['style'] });
+
+    const errors = [];
+    const report = (kind, message) => { const text = String(message).slice(0, 500); if (errors.length < 50) errors.push(text); post({ type: 'unison-source-runtime:error', kind, message: text }); };
+    addEventListener('error', (e) => report('error', e.message || (e.target && e.target.src ? `Failed to load ${e.target.src || e.target.href}` : 'error')), true);
+    addEventListener('unhandledrejection', (e) => report('unhandledrejection', (e.reason && (e.reason.stack || e.reason.message)) || e.reason));
+    const consoleError = console.error.bind(console);
+    console.error = (...args) => { report('console', args.map((a) => (a && a.message) || String(a)).join(' ')); consoleError(...args); };
+
+    const route = () => post({ type: 'unison-source-runtime:route', path: location.pathname + location.search + location.hash });
+    for (const method of ['pushState', 'replaceState']) {
+      const original = history[method].bind(history);
+      history[method] = (...args) => { const r = original(...args); route(); return r; };
+    }
+    addEventListener('popstate', route);
+    addEventListener('message', (event) => {
+      if (event.source !== parent || !event.data || event.data.nonce !== nonce) return;
+      if (event.data.type === 'unison-source-runtime:navigate' && typeof event.data.path === 'string') {
+        history.pushState(null, '', event.data.path);
+        dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+      } else if (event.data.type === 'unison-source-runtime:probe') {
+        const body = document.body;
+        post({
+          type: 'unison-source-runtime:probe-result',
+          requestId: event.data.requestId,
+          path: location.pathname + location.search + location.hash,
+          title: document.title,
+          textLength: body ? body.innerText.trim().length : 0,
+          elementCount: body ? body.getElementsByTagName('*').length : 0,
+          imagesBroken: [...document.images].filter((img) => img.complete && img.naturalWidth === 0 && img.currentSrc).map((img) => img.currentSrc).slice(0, 20),
+          errors: errors.slice(),
+        });
+      }
+    });
+    addEventListener('load', () => requestAnimationFrame(() => { route(); post({ type: 'unison-source-runtime:loaded' }); }));
+  };
+
+  let booted = false;
+  addEventListener('message', (event) => {
+    const data = event.data;
+    if (booted || event.source !== parent || !data || data.type !== 'unison-source-runtime:boot' || typeof data.document !== 'string') return;
+    booted = true;
+    try { history.replaceState(null, '', typeof data.initialPath === 'string' && data.initialPath.startsWith('/') ? data.initialPath : '/'); } catch (_) { /* keep runtime URL */ }
+    const prelude = `<script>(${hostAdapter.toString()})(${JSON.stringify(data.publicUrls || {})}, ${JSON.stringify(String(data.nonce || ''))});<\/script>`;
+    const html = data.document;
+    const withPrelude = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + prelude) : prelude + html;
+    document.open();
+    document.write(withPrelude);
+    document.close();
+  });
+  parent.postMessage({ type: 'unison-source-runtime:ready', source: 'unison-source-runtime' }, '*');
+})();
+</script>
+</head>
+<body></body>
+</html>

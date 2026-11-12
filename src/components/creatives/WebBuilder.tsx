@@ -8103,7 +8103,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
               <Save className="h-4 w-4" />
             </Button>
             <DeployButton
-              getFiles={() => getCurrentCanonicalBuildArtifacts()?.deployFiles || {}}
+              getFiles={() => {
+                // Imported projects publish their checked files; the saved version supplies them.
+                const live = virtualFS.getSandpackFiles();
+                return isImportedSourceVfs(live) ? live : (getCurrentCanonicalBuildArtifacts()?.deployFiles || {});
+              }}
               defaultSiteName={currentTemplateName || 'unison-site'}
               contract={compiledContract}
               snapshot={effectiveRouteState?.siteBundleSnapshot ?? null}
@@ -9519,7 +9523,11 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           </div>
           <div className="border-t border-white/10 pt-3">
             <DeployButton
-              getFiles={() => getCurrentCanonicalBuildArtifacts()?.deployFiles || {}}
+              getFiles={() => {
+                // Imported projects publish their checked files; the saved version supplies them.
+                const live = virtualFS.getSandpackFiles();
+                return isImportedSourceVfs(live) ? live : (getCurrentCanonicalBuildArtifacts()?.deployFiles || {});
+              }}
               defaultSiteName={currentTemplateName || 'unison-site'}
               contract={compiledContract}
               snapshot={effectiveRouteState?.siteBundleSnapshot ?? null}

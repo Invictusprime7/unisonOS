@@ -1,6 +1,6 @@
 /** Candidate-only full-application orchestration behind UnisonAppBuilder. */
 
-import { buildRequirementCoverage, requirementOwnerRoute } from './requirementCoverage';
+import { buildRequirementCoverage } from './requirementCoverage';
 import { COMPOSER_CONTEXT_LIMIT } from './contextBudget';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import type { ComposerLoopInput, ComposerLoopResult, ComposerStopReason } from '@/services/builder/aiRepairLoop';
@@ -272,14 +272,13 @@ export async function orchestrateAppBuild(
         severity: 'blocker' as const, code: 'page-contract', path: page.filePath, message,
       })));
     const requirements = input.contract.business.universalCreation?.requirements ?? [];
-    const coveragePages = input.contract.topology.sitePlan.pages.map((page) => ({
-      route: page.route, filePath: page.filePath, title: page.title, visibleInNav: page.visibleInNav,
-    }));
     const requirementCoverage = requirements.length
       ? buildRequirementCoverage({
         requirements,
         files,
-        pages: coveragePages,
+        pages: input.contract.topology.sitePlan.pages.map((page) => ({
+          route: page.route, filePath: page.filePath, title: page.title, visibleInNav: page.visibleInNav,
+        })),
       })
       : undefined;
     const explicitLiveDataRequested = requirements.some((requirement) =>
@@ -293,9 +292,8 @@ export async function orchestrateAppBuild(
       const explicitlyRequested = requirement?.origin === 'explicit' || requirement?.origin === 'confirmed';
       const requiredSampleLabel = item.id === 'req:data:labelled-sample' && explicitLiveDataRequested;
       if (!explicitlyRequested && !requiredSampleLabel) return [];
-      const ownerRoute = requirement ? requirementOwnerRoute(requirement, coveragePages) : undefined;
-      const page = ownerRoute
-        ? pages.find((candidate) => candidate.route.toLowerCase() === ownerRoute.toLowerCase())
+      const page = requirement?.pageRoute
+        ? pages.find((candidate) => candidate.route.toLowerCase() === requirement.pageRoute!.toLowerCase())
         : pages.find((candidate) => candidate.route === '/') ?? pages[0];
       return [{
         severity: 'blocker' as const,
@@ -343,9 +341,7 @@ export async function orchestrateAppBuild(
   let closure = await validateClosure(candidateFiles);
   let closureRepairAttempts = 0;
 
-  if (generationMode === 'ai'
-    && input.contract.business.universalCreation?.mode !== 'open-ended'
-    && !compatibilityMode && !terminalAuthoringFailure && !incompleteAuthoring) {
+  if (generationMode === 'ai' && !compatibilityMode && !terminalAuthoringFailure && !incompleteAuthoring) {
     const attemptedTargets = new Set<string>();
     while (!closure.ok && !input.signal?.aborted && !closureRepairFailure) {
       const closureTimeLeftMs = startedAt + totalBudgetMs - Date.now();
@@ -356,15 +352,7 @@ export async function orchestrateAppBuild(
       attemptedTargets.add(group.target);
       const closureRepairTimeoutMs = Math.min(closureTimeLeftMs, MAX_CLOSURE_REPAIR_MS);
       input.onStatus?.('Repairing final checks (up to 1:30)');
-      const bookingRepair = group.diagnostics.some((diagnostic) =>
-        /registered-component-duplicate-form|requested-requirement-coverage.*(?:reservation|table reservations|appointment booking)/i.test(diagnostic),
-      );
-      const repairInstruction = [
-        `Fix only the supplied diagnostics owned by ${group.target}. Preserve all completed pages, section identities, content, images and intent bindings. Prefer <<<EDIT SEARCH/REPLACE hunks copied exactly from FILES for existing files; the server applies them into complete source. Do not rewrite the whole page for a small layout fix. Other supplied files are read-only. You may create a missing project-local module required by these diagnostics. Never change routes, canonical infrastructure or capability permissions.`,
-        bookingRepair
-          ? 'BOOKING REPAIR CONTRACT: on the Booking page, create /src/project-components/ReservationExperience.tsx as a default-exported, meaningful site-local section component with a visible heading and explanatory content outside its form. Import/render it exactly once inside a root section with data-ut-section-type="booking" and data-ut-variant="custom:project-components-reservation-experience-default" (the path-derived identity; never use custom:booking-experience). The module itself must implement the interactive reservation prompt and appointment booking controls; page copy does not count. Use serviceId and slotId from the registered booking runtime for service and date/time selection, include all registered required customer fields, and use optional notes for table party size or requests (do not invent payload fields). Put exactly one <form data-intent-form="booking.create"> in that module. Do not render a Contact design host or any other booking.create form on this page. Keep submission on the registered booking runtime and do not claim success locally.'
-          : '',
-      ].filter(Boolean).join('\n\n');
+      const repairInstruction = `Fix only the supplied diagnostics owned by ${group.target}. Preserve all completed pages, section identities, content, images and intent bindings. Prefer <<<EDIT SEARCH/REPLACE hunks copied exactly from FILES for existing files; the server applies them into complete source. Do not rewrite the whole page for a small layout fix. Other supplied files are read-only. You may create a missing project-local module required by these diagnostics. Never change routes, canonical infrastructure or capability permissions.`;
       const assembled = await assembleCanonicalAuthoringRequest({
         task: 'site_page_repair',
         page: group.page,
@@ -421,20 +409,6 @@ export async function orchestrateAppBuild(
     }
   }
 
-  const requirements = input.contract.business.universalCreation?.requirements ?? [];
-  const requirementCoverage = requirements.length
-    ? buildRequirementCoverage({
-      requirements,
-      files: candidateFiles,
-      pages: input.contract.topology.sitePlan.pages.map((page) => ({ route: page.route, filePath: page.filePath, title: page.title, visibleInNav: page.visibleInNav })),
-    })
-    : undefined;
-  const incompleteOwnerRequirements = requirementCoverage?.items.filter((item) =>
-    (item.origin === 'explicit' || item.origin === 'confirmed') && (item.status === 'missing' || item.status === 'partial'),
-  ) ?? [];
-  const requirementDiagnostics = incompleteOwnerRequirements.map((item) =>
-    `Owner-requested requirement "${item.text}" is ${item.status}: ${item.evidence.join('; ')}.`,
-  );
   const cancelled = input.signal?.aborted === true;
   const sectionModelsValid = Boolean(
     latestSectionMaterialization
@@ -443,7 +417,6 @@ export async function orchestrateAppBuild(
     && latestSectionMaterialization.pages.every((page) => typeof page.sidecarContents === 'string'),
   );
   const ready = !incompleteAuthoring && !terminalAuthoringFailure && !closureRepairFailure && sectionModelsValid
-    && incompleteOwnerRequirements.length === 0
     && (compatibilityMode || closure.ok);
   const authorDiagnostics = authored.outcomes.flatMap((outcome) => outcome.errors);
   const closureDiagnostics = closure.issues
@@ -451,7 +424,7 @@ export async function orchestrateAppBuild(
     .map((issue) => issue.message);
   const surfacedDiagnostics = terminalAuthoringFailure
     ? authorDiagnostics
-    : [...(closureRepairFailure?.errors ?? []), ...authorDiagnostics, ...closureDiagnostics, ...requirementDiagnostics,
+    : [...(closureRepairFailure?.errors ?? []), ...authorDiagnostics, ...closureDiagnostics,
       ...closure.issues.filter(issue => issue.severity === 'advisory').map(issue => issue.message)];
   const strategy = generationMode === 'deterministic'
     ? 'deterministic-scaffold' as const
@@ -466,6 +439,14 @@ export async function orchestrateAppBuild(
       id: page.id, path: page.route, filePath: page.filePath, title: page.title, role: page.role,
     })),
   });
+  const requirements = input.contract.business.universalCreation?.requirements ?? [];
+  const requirementCoverage = requirements.length
+    ? buildRequirementCoverage({
+      requirements,
+      files: candidateFiles,
+      pages: input.contract.topology.sitePlan.pages.map((page) => ({ route: page.route, filePath: page.filePath, title: page.title, visibleInNav: page.visibleInNav })),
+    })
+    : undefined;
   const candidate = {
     candidateId: `${input.operationId}:candidate:${closure.sourceHash.replace(':', '_')}`,
     status: cancelled ? 'cancelled' as const : ready ? 'ready-for-commit' as const : 'rejected' as const,

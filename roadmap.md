@@ -5,13 +5,13 @@
 - [x] B — Secure intake (ZIP, folder, files): traversal/symlink/bomb/duplicate/case/quota refusal, secret blocking, .env names only, hashes + frozen manifest; assets stored unchanged in the owner's storage
 - [x] C — Compatibility profile (framework, toolchain, Tailwind, routes, fonts, aliases, env names, server features, Unison brief)
 - [x] D — Canonical adoption: one accepted revision, byte-for-byte, no Unison stages; builder never scaffolds, re-routes or re-themes imports
-- [ ] E — Isolated source-compatible Preview + visual parity: done for plain HTML sites (below); build-based projects still blocked and show "Preserved + blocked"
+- [x] E — Isolated source-compatible Preview + visual parity: plain HTML, React/Vite and TanStack Start (client pages); Next, Remix, Astro, Vue, Svelte and server routes still show "Preserved + blocked"
 - [x] F — Scoped source edits and exact rollback through the same writer; records read-only; structural Unison ops refused
-- [ ] G — Publish the same accepted revision (blocked on E; publish stays blocked)
-- [ ] ARIA fidelity fixture run (blocked: ariastudios.zip not uploaded)
+- [x] G — Publish the exact checked build of the accepted revision (needs the new verification table deployed via the backend workflow)
+- [x] ARIA fidelity run against the ARIA project source (4 pages × 3 sizes × 2 scroll positions; 23/24 identical, 1 tablet capture differs by a 1-px image edge) — `ariastudios.zip` itself still not uploaded
 - [ ] Signed-in end-to-end import in the browser (blocked: the preview sign-in belongs to a different account system than the app's Unison backend)
 - [x] D/E for plain HTML sites: original files run unchanged in an isolated frame; repeatable comparison harness (`scripts/import-parity/`) showed 0 differing pixels at 3 sizes on two sites
-- [ ] D/E for React/Vite, TanStack Start, Next and other build-based projects (blocked: needs a hosted build worker; the existing container preview gateway is not configured)
+- [x] D/E for React/Vite and TanStack Start via in-browser build; [ ] Next/Remix/Astro/server routes (blocked: need a hosted server runtime)
 - [x] Drag and drop files, folders or ZIPs onto the Affinity chat (Home + setup) to import them unchanged
 
 ## Active: App Builder + Affinity LaunchPlan convergence (docs/milestones/APP_BUILDER_AFFINITY_LAUNCHPLAN_CONVERGENCE_2026-11-10.md)

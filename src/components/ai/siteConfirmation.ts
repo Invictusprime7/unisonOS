@@ -40,8 +40,11 @@ export function buildConfirmedSiteBrief(messages: AIMessage[]): string {
 
 export function hasSiteConfirmationRequest(message: AIMessage | undefined): boolean {
   if (message?.role !== "assistant") return false;
-  const content = message.content.trim();
-  return content === SITE_CONFIRMATION_MARKER || content.endsWith(`\n${SITE_CONFIRMATION_MARKER}`);
+  if (message.content.includes(SITE_CONFIRMATION_MARKER)) return true;
+  return /\b(?:is|does|do|are|would|can)\b[^?]{0,220}\b(?:right|correct|accurate|complete|direction|summary|plan|brief|look good|sound good)\b[^?]*\?/i
+    .test(message.content)
+    || /\b(?:clear direction|all set to (?:build|configure|set up)|ready to help you configure)\b/i
+      .test(message.content);
 }
 
 export function describeAssistantFailure(error: unknown): string {

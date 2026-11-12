@@ -10,11 +10,22 @@ import { getServiceRoleClient, verifyAuth, authError } from "../_shared/auth.ts"
 import { safeParseBody, sanitizeString, isNonEmptyString } from "../_shared/validate.ts";
 import { verifyPublishAttestation } from "../_shared/publishAttestation.ts";
 import {
+  computeCanonicalVfsHash,
   verifyCanonicalPublishSource,
   type CanonicalPublishRevisionIdentity,
   type CanonicalPublishRevisionRow,
 } from "../_shared/canonicalPublishRevision.ts";
 import { materializeCanonicalProjectMedia } from "../_shared/canonicalPublishMedia.ts";
+import {
+  isImportedSourceRevision,
+  verifyImportedPublish,
+  type ImportedBinaryPlacement,
+  type ImportedVerificationRow,
+} from "../_shared/importedPublishVerification.ts";
+
+/** Stored images/media of an imported revision, copied byte-for-byte from storage. */
+const MAX_IMPORTED_BINARY_BYTES = 5_000_000;
+const MAX_IMPORTED_BINARY_TOTAL = 15_000_000;
 
 type PublishProvider = "netlify" | "vercel";
 
@@ -103,9 +114,8 @@ function sanitizeSiteName(name: string) {
   return normalized || `site-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-async function generateSha1Hash(input: string) {
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(input);
+async function generateSha1Hash(input: string | Uint8Array) {
+  const bytes: Uint8Array<ArrayBuffer> = typeof input === "string" ? new TextEncoder().encode(input) : new Uint8Array(input);
   const hash = await crypto.subtle.digest("SHA-1", bytes);
   const view = new Uint8Array(hash);
   return Array.from(view).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -191,6 +201,7 @@ Deno.serve(async (req) => {
     const customDomain = sanitizeString(body.customDomain || "", 255).toLowerCase();
     const submittedFiles = body.files || {};
     let canonicalPublishRevision: CanonicalPublishRevisionRow | null = null;
+    let importedPublish: { files: Record<string, string>; placements: ImportedBinaryPlacement[] } | null = null;
 
     const identity = body.canonicalRevision;
     if (typeof body.projectId !== 'string' || !identity
@@ -232,7 +243,7 @@ Deno.serve(async (req) => {
       }
       const { data: revision, error: revisionError } = await admin
         .from("site_revisions")
-        .select("id, project_id, status, publish_ready, vfs_hash, vfs_files")
+        .select("id, project_id, status, publish_ready, vfs_hash, vfs_files, readiness_report")
         .eq("id", identity.revisionId)
         .eq("project_id", identity.projectId)
         .maybeSingle();
@@ -263,6 +274,39 @@ Deno.serve(async (req) => {
         vfs_files: revisionFiles as Record<string, string>,
       } as CanonicalPublishRevisionRow;
       canonicalPublishRevision = canonicalRevisionRow;
+      if (isImportedSourceRevision(revisionRow.readiness_report)) {
+        // UIMP-01: imported projects publish exactly the files their saved,
+        // owner-confirmed check covered (never a Unison rebuild of them).
+        if (canonicalRevisionRow.status !== "committed" || canonicalRevisionRow.publish_ready !== true
+          || !canonicalRevisionRow.vfs_hash || canonicalRevisionRow.vfs_hash !== identity.vfsHash
+          || await computeCanonicalVfsHash(canonicalRevisionRow.vfs_files) !== canonicalRevisionRow.vfs_hash) {
+          return errorResponse("The requested publish revision is no longer the accepted publish-ready revision.", 412, corsHeaders, {
+            status: "error", provider: body.provider ?? "unknown",
+            attestation: { enforced: true, code: "canonical-revision-mismatch" },
+          });
+        }
+        const { data: verification } = await admin
+          .from("imported_source_verifications")
+          .select("revision_id, vfs_hash, artifact_hash, status, owner_confirmed")
+          .eq("project_id", identity.projectId)
+          .eq("revision_id", identity.revisionId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const importedVerdict = await verifyImportedPublish({
+          revision: canonicalRevisionRow,
+          verification: (verification as ImportedVerificationRow | null) ?? null,
+          submittedFiles,
+        });
+        if (!importedVerdict.ok) {
+          const failure = importedVerdict as { code: string; message: string };
+          return errorResponse(failure.message, 412, corsHeaders, {
+            status: "error", provider: body.provider ?? "unknown",
+            attestation: { enforced: true, code: failure.code },
+          });
+        }
+        importedPublish = { files: importedVerdict.files, placements: importedVerdict.placements };
+      } else {
       const expectedPublishedFiles = withPoweredByUnisonAttribution(
         Object.fromEntries(Object.entries(canonicalRevisionRow.vfs_files).map(([path, content]) => [path.replace(/^\/+/, ""), content])),
       );
@@ -278,9 +322,11 @@ Deno.serve(async (req) => {
           attestation: { enforced: true, code: sourceVerdict.code, details: sourceVerdict.details },
         });
       }
+      }
     }
 
-    let files = withPoweredByUnisonAttribution(submittedFiles);
+    let files = withPoweredByUnisonAttribution(importedPublish ? importedPublish.files : submittedFiles);
+    const binaryFiles: Record<string, Uint8Array> = {};
 
     if (provider !== "netlify" && provider !== "vercel") {
       return errorResponse("Unsupported provider", 400, corsHeaders);
@@ -330,7 +376,7 @@ Deno.serve(async (req) => {
         verdict.attestation.filesFingerprint,
         verdict.attestation.evaluatedAt,
       );
-    } else if (REQUIRE_ATTESTATION) {
+    } else if (REQUIRE_ATTESTATION && !importedPublish) {
       return errorResponse(
         "Publish attestation is required but was not supplied.",
         412,
@@ -339,7 +385,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (canonicalPublishRevision) {
+    if (importedPublish) {
+      try {
+        const admin = getServiceRoleClient();
+        let total = 0;
+        for (const placement of importedPublish.placements) {
+          if (!placement.storagePath.startsWith(`${auth.user.id}/imports/${body.projectId}/`)) {
+            throw new Error(`Media file ${placement.path} is outside this project's imported storage.`);
+          }
+          const { data, error } = await admin.storage.from(placement.bucket).download(placement.storagePath);
+          if (error || !data) throw new Error(`Media file ${placement.path} could not be read from storage.`);
+          const bytes = new Uint8Array(await data.arrayBuffer());
+          const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))).map((b) => b.toString(16).padStart(2, "0")).join("");
+          if (digest !== placement.sha256) throw new Error(`Media file ${placement.path} no longer matches the imported bytes.`);
+          if (bytes.length > MAX_IMPORTED_BINARY_BYTES) throw new Error(`Media file ${placement.path} is larger than ${MAX_IMPORTED_BINARY_BYTES} bytes.`);
+          total += bytes.length;
+          if (total > MAX_IMPORTED_BINARY_TOTAL) throw new Error(`Imported media is larger than ${MAX_IMPORTED_BINARY_TOTAL} bytes in total.`);
+          binaryFiles[placement.path] = bytes;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to read imported media.";
+        return errorResponse(`Publish blocked: ${message}`, 412, corsHeaders, {
+          status: "error", provider: provider ?? "unknown",
+          attestation: { enforced: true, code: "imported-media-unresolved" },
+        });
+      }
+    } else if (canonicalPublishRevision) {
       try {
         const admin = getServiceRoleClient();
         const materialized = await materializeCanonicalProjectMedia({
@@ -475,6 +546,9 @@ Deno.serve(async (req) => {
         const normalizedPath = path.replace(/^\/+/, "");
         fileShaMap[normalizedPath] = await generateSha1Hash(content);
       }
+      for (const [path, bytes] of Object.entries(binaryFiles)) {
+        fileShaMap[path] = await generateSha1Hash(bytes);
+      }
 
       const deployInit = await netlifyApi(`/sites/${siteId}/deploys`, NETLIFY_AUTH_TOKEN, {
         method: "POST",
@@ -488,8 +562,8 @@ Deno.serve(async (req) => {
 
       for (const requiredPath of required) {
         const normalizedPath = requiredPath.replace(/^\/+/, "");
-        const content = files[normalizedPath];
-        if (typeof content !== "string") {
+        const content: string | Uint8Array | undefined = files[normalizedPath] ?? binaryFiles[normalizedPath];
+        if (content === undefined) {
           continue;
         }
         const uploadRes = await fetch(`https://api.netlify.com/api/v1/deploys/${deployId}/files/${encodeURIComponent(normalizedPath)}`, {
@@ -498,7 +572,7 @@ Deno.serve(async (req) => {
             Authorization: `Bearer ${NETLIFY_AUTH_TOKEN}`,
             "Content-Type": "application/octet-stream",
           },
-          body: encoder.encode(content),
+          body: typeof content === "string" ? encoder.encode(content) : new Uint8Array(content),
         });
         if (!uploadRes.ok) {
           const text = await uploadRes.text().catch(() => "");
@@ -565,10 +639,17 @@ Deno.serve(async (req) => {
     }
 
 
-    const filesPayload = Object.entries(files).map(([path, content]) => ({
+    const filesPayload: Array<{ file: string; data: string; encoding?: "base64" }> = Object.entries(files).map(([path, content]) => ({
       file: path.replace(/^\/+/, ""),
       data: btoa(unescape(encodeURIComponent(content))),
     }));
+    for (const [path, bytes] of Object.entries(binaryFiles)) {
+      let binary = "";
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+      }
+      filesPayload.push({ file: path, data: btoa(binary), encoding: "base64" });
+    }
 
     const vercelRes = await fetch(`https://api.vercel.com/v13/deployments${vercelScope}`, {
       method: "POST",

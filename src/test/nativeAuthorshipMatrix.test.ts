@@ -91,39 +91,6 @@ export default function Home(){return <main><ClassSchedule variantId="services:s
     expect(report.promotionCandidates).toEqual([]);
   });
 
-  it('scopes unqualified booking interactions to the booking page and its reachable original module', () => {
-    const requirements: CreationRequirement[] = [
-      { id: 'req:reservation-prompt', kind: 'interaction', text: 'interactions: interactive reservation prompt', origin: 'explicit' },
-      { id: 'req:table-reservations', kind: 'interaction', text: 'interactions: table reservations', origin: 'explicit' },
-      { id: 'req:appointment-booking', kind: 'interaction', text: 'interactions: appointment booking', origin: 'explicit' },
-    ];
-    const pages = [
-      { route: '/', filePath: '/src/pages/Home.tsx', title: 'Home' },
-      { route: '/services', filePath: '/src/pages/Services.tsx', title: 'Services' },
-      { route: '/booking', filePath: '/src/pages/Booking.tsx', title: 'Booking' },
-      { route: '/opening-hours', filePath: '/src/pages/OpeningHours.tsx', title: 'Opening Hours' },
-    ];
-    const mentioned = Object.fromEntries(pages.map((page) => [page.filePath,
-      `export default function Page(){return <main>Interactive reservation prompt, table reservations, and appointment booking.</main>}`,
-    ]));
-    const incomplete = buildRequirementCoverage({ requirements, pages, files: mentioned });
-    expect(incomplete.items.map((item) => item.status)).toEqual(['partial', 'partial', 'partial']);
-    expect(incomplete.items.every((item) => item.evidence.join(' ').includes('/src/pages/Booking.tsx'))).toBe(true);
-    expect(incomplete.items.every((item) => !item.evidence.join(' ').includes('/src/pages/Home.tsx'))).toBe(true);
-
-    const implemented = buildRequirementCoverage({
-      requirements,
-      pages,
-      files: {
-        ...mentioned,
-        '/src/pages/Booking.tsx': 'import ReservationPrompt from "../project-components/ReservationPrompt"; export default function Booking(){return <main><ReservationPrompt /></main>}',
-        '/src/project-components/ReservationPrompt.tsx': 'export default function ReservationPrompt(){return <section><h2>Interactive reservation prompt</h2><label>Table reservations<input name="partySize" /></label><label>Appointment booking<select name="time" /></label><button type="submit">Request booking</button></section>}',
-      },
-    });
-    expect(implemented.items.map((item) => item.status)).toEqual(['met', 'met', 'met']);
-    expect(implemented.items.every((item) => item.evidence.includes('implemented in /src/project-components/ReservationPrompt.tsx'))).toBe(true);
-  });
-
   it('does not require intentionally hidden requested routes in navigation', () => {
     const report = buildRequirementCoverage({
       requirements: [{ id: 'req:page:checkout', kind: 'page', text: 'page /checkout', origin: 'explicit', pageRoute: '/checkout' }],

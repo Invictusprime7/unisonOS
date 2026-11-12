@@ -13,6 +13,8 @@ import { IMPORT_RECORD_ROOT } from './importedSourceRecords';
 
 export const STATIC_HTML_PREVIEW_ADAPTER = 'static-html-sandbox';
 export const IMPORT_NAV_MESSAGE = 'unison-import-nav';
+/** Page check request/response (`-result`) between the builder and a static page frame. */
+export const IMPORT_PROBE_MESSAGE = 'unison-import-probe';
 
 export interface StaticHtmlPreviewDiagnostic {
   from: string;
@@ -23,7 +25,7 @@ export interface StaticHtmlPreviewDiagnostic {
 export interface StaticHtmlPreviewDocument {
   html: string;
   /** Out-of-band runtime overlays added to the served copy (never to source). */
-  overlays: Array<'page-navigation-bridge'>;
+  overlays: Array<'page-navigation-bridge' | 'page-check'>;
   resolvedRefs: number;
   diagnostics: StaticHtmlPreviewDiagnostic[];
   /** Local pages this document links to (VFS paths). */
@@ -180,7 +182,7 @@ function navigationBridge(pages: Map<string, string>): string {
   const map: Record<string, { path: string; hash: string }> = {};
   for (const [href, path] of pages) map[href] = { path, hash: href.includes('#') ? href.slice(href.indexOf('#')) : '' };
   const json = JSON.stringify(map).replace(/</g, '\\u003c');
-  return `<script data-unison-import-overlay="navigation">(function(){var P=${json};document.addEventListener('click',function(e){if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;var a=e.target&&e.target.closest?e.target.closest('a[href],area[href]'):null;if(!a)return;var t=a.getAttribute('target');if(t&&t!=='_self')return;var d=P[a.getAttribute('href')];if(!d)return;e.preventDefault();parent.postMessage({type:'${IMPORT_NAV_MESSAGE}',path:d.path,hash:d.hash},'*');});})();</script>`;
+  return `<script data-unison-import-overlay="navigation">(function(){var P=${json};document.addEventListener('click',function(e){if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;var a=e.target&&e.target.closest?e.target.closest('a[href],area[href]'):null;if(!a)return;var t=a.getAttribute('target');if(t&&t!=='_self')return;var d=P[a.getAttribute('href')];if(!d)return;e.preventDefault();parent.postMessage({type:'${IMPORT_NAV_MESSAGE}',path:d.path,hash:d.hash},'*');});var E=[];addEventListener('error',function(e){if(E.length<50)E.push(String(e.message||(e.target&&(e.target.src||e.target.href)?'Failed to load '+(e.target.src||e.target.href):'error')).slice(0,500));},true);addEventListener('message',function(e){if(e.source!==parent||!e.data||e.data.type!=='${IMPORT_PROBE_MESSAGE}')return;var b=document.body;parent.postMessage({type:'${IMPORT_PROBE_MESSAGE}-result',requestId:e.data.requestId,textLength:b?b.innerText.trim().length:0,elementCount:b?b.getElementsByTagName('*').length:0,imagesBroken:Array.prototype.slice.call(document.images).filter(function(i){return i.complete&&i.naturalWidth===0&&i.currentSrc;}).map(function(i){return i.currentSrc;}).slice(0,20),errors:E.slice()},'*');});})();</script>`;
 }
 
 /**
@@ -228,8 +230,9 @@ export function buildStaticHtmlPreviewDocument(input: {
   out.push(source.slice(last));
   let html = out.join('');
   const overlays: StaticHtmlPreviewDocument['overlays'] = [];
-  if (pages.size > 0) {
-    overlays.push('page-navigation-bridge');
+  {
+    // Always present: answers the builder's page check; link handling only when pages link to each other.
+    overlays.push(pages.size > 0 ? 'page-navigation-bridge' : 'page-check');
     const bridge = navigationBridge(pages);
     const body = /<\/body\s*>/i.exec(html);
     html = body ? `${html.slice(0, body.index)}${bridge}${html.slice(body.index)}` : `${html}${bridge}`;

@@ -112,16 +112,7 @@ export async function planUniversalCreation(
   const { data, error } = await supabase.functions.invoke('universal-creation-plan', {
     body: { prompt: input.originalPrompt, existingPages: input.pages },
   });
-  if (error) {
-    const context = (error as { context?: unknown }).context;
-    const payload = context instanceof Response
-      ? await context.clone().json().catch(() => null) as { error?: unknown } | null
-      : null;
-    const message = typeof payload?.error === 'string' && payload.error.trim()
-      ? payload.error.trim()
-      : error.message || 'Universal creation planning failed';
-    throw new Error(message);
-  }
+  if (error) throw new Error(error.message || 'Universal creation planning failed');
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error('Universal creation planner returned an invalid response');
   }

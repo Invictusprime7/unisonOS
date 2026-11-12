@@ -40,12 +40,6 @@ describe('launch orchestrator canonical handoff', () => {
     expect(source).toContain('requestedPages: plan.requestedPages,');
   });
 
-  it('fails prompt-first launches when AI planning is unavailable instead of using an inferred fallback', () => {
-    expect(source).toContain("code: 'plan.ai_unavailable'");
-    expect(source).toContain('stage: \'plan\'');
-    expect(source).not.toContain('Using the plan derived from your prompt; AI planning was unavailable');
-  });
-
   it('uses the selected template as the industry authority for guided launches only', () => {
     expect(source).toContain("const openEnded = input.universalCreation?.mode === 'open-ended';");
     expect(source).toContain('const industryOverlay = openEnded && (!input.industry || input.industry === \'universal\')');

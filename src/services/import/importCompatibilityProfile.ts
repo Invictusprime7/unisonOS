@@ -11,6 +11,7 @@
  */
 import { STATIC_HTML_PREVIEW_ADAPTER } from './staticHtmlPreview';
 import type { ImportManifest } from './secureIntake';
+import { planSourceBuild, SOURCE_BUILD_ADAPTER } from '@/services/import/sourceBuild/sourceBuildPlan';
 
 export type ImportFramework =
   | 'tanstack-start'
@@ -83,8 +84,6 @@ export const STATIC_HTML_ADAPTER_INFO: ImportCompatibilityProfile['previewAdapte
 };
 
 export const ISOLATED_SOURCE_PREVIEW_ADAPTER = 'isolated-source-worker-v1';
-const ISOLATED_SOURCE_FRAMEWORKS = new Set<ImportFramework>(['tanstack-start', 'vite-react', 'vue-vite']);
-const ISOLATED_SOURCE_PACKAGE_MANAGERS = new Set<ImportCompatibilityProfile['packageManager']>(['npm', 'pnpm', 'yarn', 'bun']);
 
 /**
  * Live adapter decision for an imported revision. Imports saved before an
@@ -93,13 +92,20 @@ const ISOLATED_SOURCE_PACKAGE_MANAGERS = new Set<ImportCompatibilityProfile['pac
  */
 export function resolveImportPreviewAdapter(profile: ImportCompatibilityProfile, files: Record<string, string>): ImportCompatibilityProfile['previewAdapter'] {
   if (profile.framework === 'static-html' && Object.keys(files).some((p) => /\.html?$/i.test(p) && !p.startsWith('/.unison-import/'))) return STATIC_HTML_ADAPTER_INFO;
-  if (ISOLATED_SOURCE_FRAMEWORKS.has(profile.framework)
-    && ISOLATED_SOURCE_PACKAGE_MANAGERS.has(profile.packageManager)
-    && (profile.scripts.dev || profile.scripts.start)) {
+  const sourceBuild = planSourceBuild(profile, files);
+  if (sourceBuild.status === 'supported') {
+    return {
+      status: 'available',
+      adapter: SOURCE_BUILD_ADAPTER,
+      reason: `${sourceBuild.reason} The project runs in a sealed frame with no access to your Unison account.`,
+      requires: [],
+    };
+  }
+  if (profile.scripts.dev || profile.scripts.start) {
     return {
       status: 'unavailable',
       adapter: ISOLATED_SOURCE_PREVIEW_ADAPTER,
-      reason: `This ${profile.framework} project requires an isolated source runtime. Start a preview worker to run the original files; Unison will not substitute or rewrite the imported design.`,
+      reason: `${sourceBuild.reason} It can preview only on a build server running its own toolchain, which is not configured in this environment, so Unison will not substitute or rewrite the imported design.`,
       requires: [...new Set([...profile.previewAdapter.requires, 'isolated preview worker'])],
     };
   }
