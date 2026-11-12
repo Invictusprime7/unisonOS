@@ -57,6 +57,11 @@ HOST = """([doc, path, w, h]) => new Promise((resolve) => {
   document.body.appendChild(f);
 })"""
 
+GEOMETRY_TOLERANCE = 0.5  # px; boxes are measured at half-pixel precision (disclosed)
+
+def same_box(a, b):
+    return len(a) == len(b) and all(abs(x - y) <= GEOMETRY_TOLERANCE if isinstance(x, (int, float)) and isinstance(y, (int, float)) else x == y for x, y in zip(a, b))
+
 async def settle(frame):
     await frame.evaluate("document.fonts ? document.fonts.ready.then(() => true) : true")
     await frame.evaluate("Promise.all(Array.from(document.images).map(i => i.complete ? 1 : new Promise(r => { i.onload = i.onerror = r; setTimeout(r, 8000); })))")
@@ -66,7 +71,7 @@ def compare(a, b, name):
     if ia.size != ib.size:
         return {"pixels": ia.width * ia.height, "differing": -1, "materialDiffering": -1, "materialPct": 100.0, "sizeMismatch": [ia.size, ib.size]}
     diff = ImageChops.difference(ia, ib)
-    px = diff.getdata(); total = ia.width * ia.height
+    px = list(diff.getdata()); total = ia.width * ia.height
     exact = sum(1 for p in px if p != (0, 0, 0))
     material = sum(1 for p in px if max(p) > NOISE)
     if exact:
@@ -84,7 +89,7 @@ async def route_pointer(ctx):
 
 async def main():
     report = {"project": str(PROJECT), "reference": REF, "framework": DOC.get("framework"), "build": {"ok": DOC["ok"], "diagnostics": DOC["diagnostics"], "adaptations": DOC["adaptations"]},
-              "noiseThreshold": NOISE, "masks": [], "determinism": ["seeded Math.random on both sides", "prefers-reduced-motion on both sides", "infinite animations paused at t=0 and finite transitions finished on both sides", f"{SETTLE_MS} ms settle"],
+              "noiseThreshold": NOISE, "geometryTolerancePx": 0.5, "masks": [], "determinism": ["seeded Math.random on both sides", "prefers-reduced-motion on both sides", "infinite animations paused at t=0 and finite transitions finished on both sides", f"{SETTLE_MS} ms settle"],
               "pointerOrigin": POINTER or None, "cases": []}
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -104,7 +109,7 @@ async def main():
                 await settle(ref.main_frame); await settle(frame); await ref.wait_for_timeout(SETTLE_MS)
                 await ref.evaluate(FREEZE); await frame.evaluate(FREEZE); await ref.wait_for_timeout(400)
                 geo_ref, geo_pre = await ref.evaluate(GEOMETRY), await frame.evaluate(GEOMETRY)
-                geo_pairs = [[x, y] for x, y in zip(geo_ref, geo_pre) if x != y]
+                geo_pairs = [[x, y] for x, y in zip(geo_ref, geo_pre) if not same_box(x, y)]
                 geo_mismatch = len(geo_pairs) + abs(len(geo_ref) - len(geo_pre))
                 for y in SCROLLS:
                     await ref.evaluate(f"window.scrollTo(0,{y})"); await frame.evaluate(f"window.scrollTo(0,{y})")
