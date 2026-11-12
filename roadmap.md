@@ -6,9 +6,12 @@
 - [x] AI Builder edits on source projects may change any of the project's own files and add pages/components
 - [x] Industry knowledge and verified photos are advice only
 - [x] Removed 80 unused duplicate files (incl. 2 duplicate migrations) and the retired guided-setup files that had reappeared
-- [ ] Live end-to-end creation (blocked: backend update — new writing mode + migration — must deploy through the backend workflow)
-- [ ] Convert existing Unison-composed sites to source projects on open; then delete the old App Builder/compiler path (next milestone)
-- [ ] Point-and-click toolbar edits mapped to source lines for source projects (not checked this turn)
+- [ ] Live end-to-end creation (blocked: backend update — new writing mode + migrations — deploys through the GitHub backend workflow; duplicate workflow removed)
+- [ ] Convert existing Unison-composed sites (and marketplace installs) to source projects on open
+- [ ] Delete old launch remnants with no callers (launch coordinator, stage-4b worker)
+- [ ] Point-and-click toolbar edits mapped to source lines for source projects
+- [ ] Unison design library available to Affinity (vendored into the project only when used)
+- [ ] AI Builder "add page" on source projects stays in the source edit path
 
 ## Active: UIMP-01 Zero-drift external project import (2026-11-10)
 - [x] A — Audit: old ZIP import dropped assets/toolchain, rewrote CSS and never saved a version
