@@ -10,9 +10,11 @@
   Sass, Less), fetched at the imported project's own versions, run in an
   opaque origin with no access to Unison's storage, cookies or session.
   It receives one file at a time and returns compiled code; it never edits
-  the imported source.
+  the imported source. A classic script (not type=module) so the dev server
+  serves it unchanged.
 -->
-<script type="module">
+<script>
+(() => {
 const CDN = 'https://esm.sh';
 const modules = new Map();
 const load = (url) => { if (!modules.has(url)) modules.set(url, import(url).catch((e) => { modules.delete(url); throw e; })); return modules.get(url); };
@@ -239,6 +241,7 @@ addEventListener('message', async (event) => {
   }
 });
 parent.postMessage({ type: 'unison-compiler-ready' }, '*');
+})();
 </script>
 </head>
 <body></body>
