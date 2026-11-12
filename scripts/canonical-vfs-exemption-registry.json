@@ -44,7 +44,7 @@
     "src/components/creatives/WebBuilder.tsx": {
       "optimistic HMR projection; the same mutation is chained through commitMutation below": 2,
       "hydration of a persisted revision into the working set": 1,
-      "adoption of an accepted commitMutation result": 8,
+      "adoption of an accepted commitMutation result": 9,
       "hydration of canonical snapshot files into an empty working set": 1,
       "deterministic router projection from the page registry": 4,
       "registry-owned page removal; the registry is the deletion authority": 1,
