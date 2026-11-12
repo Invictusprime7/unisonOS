@@ -173,7 +173,35 @@ export function mountNext(config) {
     return h(Boundary, { resetKey: path, notFound: () => h(NotFound) }, h(Suspense, { fallback: null }, el));
   }
   const host = document.getElementById('__next') || document.body.appendChild(Object.assign(document.createElement('div'), { id: '__next' }));
+  // Next's own document shape: the App Router renders the root layout's body
+  // children straight into <body> after a hidden boundary marker, so the host
+  // is a display:contents box behind that marker; both routers append the
+  // route announcer that reads the new page title to screen readers.
+  if (config.router === 'app') {
+    host.style.display = 'contents';
+    host.before(Object.assign(document.createElement('div'), { hidden: true }));
+  }
+  mountRouteAnnouncer(config.router === 'app');
   createRoot(host).render(h(Root));
+}
+
+const ANNOUNCER_STYLE = 'border:0;clip:rect(0 0 0 0);height:1px;margin:-1px;overflow:hidden;padding:0;position:absolute;top:0;width:1px;white-space:nowrap;word-wrap:normal';
+function mountRouteAnnouncer(appRouter) {
+  const host = document.createElement('next-route-announcer');
+  const live = document.createElement(appRouter ? 'div' : 'p');
+  live.id = '__next-route-announcer__';
+  live.setAttribute('aria-live', 'assertive');
+  live.setAttribute('role', 'alert');
+  live.setAttribute('style', ANNOUNCER_STYLE);
+  if (appRouter) { host.style.position = 'absolute'; host.attachShadow({ mode: 'open' }).appendChild(live); } else host.appendChild(live);
+  document.body.appendChild(host);
+  let first = true;
+  const announce = () => {
+    if (first) { first = false; return; }
+    setTimeout(() => { live.textContent = document.title || (document.querySelector('h1') || {}).textContent || location.pathname; }, 50);
+  };
+  window.addEventListener('unison-next-route', announce);
+  announce();
 }
 
 function PagesPage({ mod, Page, params, query, path, AppShell }) {
@@ -203,8 +231,12 @@ function fontResult(family, opts, fallback) {
   fontSeq += 1;
   const cls = '__font_' + fontSeq;
   const varCls = '__font_var_' + fontSeq;
-  const stack = "'" + family + "'" + (fallback && fallback.length ? ', ' + fallback.join(', ') : '');
-  fontStyle('.' + cls + '{font-family:' + stack + ';}' + (opts && opts.variable ? '.' + varCls + '{' + opts.variable + ':' + stack + ';}' : ''));
+  // next/font names a local metric fallback "<Family> Fallback" (backed by
+  // Arial) ahead of any declared fallbacks; the same stack is kept here.
+  const fallbackFace = family + ' Fallback';
+  const declared = (opts && opts.fallback) || [];
+  const stack = "'" + family + "', '" + fallbackFace + "'" + (declared.length ? ', ' + declared.join(', ') : '');
+  fontStyle("@font-face{font-family:'" + fallbackFace + "';src:local(\"Arial\");}" + '.' + cls + '{font-family:' + stack + ';}' + (opts && opts.variable ? '.' + varCls + '{' + opts.variable + ':' + stack + ';}' : ''));
   return { className: cls, variable: varCls, style: { fontFamily: stack } };
 }
 export function loadGoogleFont(family, opts = {}) {
