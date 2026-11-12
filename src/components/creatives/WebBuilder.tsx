@@ -8480,7 +8480,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                    // multi-task applies call this callback again after an
                    // earlier task already committed a new revision.
                    const beforeFiles = virtualFSRef.current.getSandpackFiles();
-                   const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0]);
+                   const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0], Object.keys(rawFiles));
                   const snapshotForPreflight = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot
                     ?? (hydratedRevision?.siteBundleSnapshot as SiteBundleSnapshot | null)
                     ?? null;
@@ -8715,7 +8715,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                onApplyToVFS={async (rawFiles, applyMeta) => {
                  // Live refs, not render-time closures (see desktop mount above).
                  const beforeFiles = virtualFSRef.current.getSandpackFiles();
-                 const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0]);
+                 const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0], Object.keys(rawFiles));
                 const snapshotForPreflight = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot
                   ?? (hydratedRevision?.siteBundleSnapshot as SiteBundleSnapshot | null)
                   ?? null;

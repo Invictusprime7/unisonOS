@@ -19,11 +19,15 @@ export function sourceProjectApplySettings(
   files: Readonly<Record<string, string>>,
   pagePath: string | null | undefined,
   selectionOwnerPath?: string | null,
+  proposedPaths: readonly string[] = [],
 ): SourceProjectApplySettings | null {
   if (!isImportedSourceVfs(files as Record<string, string>)) return null;
   const page = [pagePath, selectionOwnerPath].find((p): p is string => typeof p === 'string' && typeof files[p] === 'string')
     ?? pagePath ?? selectionOwnerPath ?? '/src/App.tsx';
-  const sharedPaths = sourceProjectEditTargets(files, page, selectionOwnerPath ? [selectionOwnerPath] : []);
+  // New modules are always allowed in a source project; existing files stay
+  // limited to the page, what it imports and the project-wide files.
+  const created = proposedPaths.filter((p) => typeof files[p] !== 'string');
+  const sharedPaths = [...new Set([...sourceProjectEditTargets(files, page, selectionOwnerPath ? [selectionOwnerPath] : []), ...created])];
   return {
     gate: { resolveDependencies: false, importAliases: readImportedSourceRecords(files as Record<string, string>)?.profile.aliases },
     scope: { pagePath: page, sharedPaths },
