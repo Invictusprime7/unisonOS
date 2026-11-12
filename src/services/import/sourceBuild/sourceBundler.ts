@@ -187,6 +187,14 @@ export function scopeCssModule(css: string, path: string): { css: string; map: R
 }
 
 interface GlobOptions { eager?: boolean; import?: string; query?: string }
+function relativeFrom(fromDir: string, to: string): string {
+  const a = fromDir.split('/').filter(Boolean);
+  const b = to.split('/').filter(Boolean);
+  let i = 0;
+  while (i < a.length && i < b.length - 1 && a[i] === b[i]) i += 1;
+  const up = a.length - i;
+  return `${up ? '../'.repeat(up) : './'}${b.slice(i).join('/')}`;
+}
 function globToRegExp(glob: string): RegExp {
   let re = '';
   for (let i = 0; i < glob.length; i += 1) {
@@ -479,7 +487,7 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
       const hits = Object.keys(files).concat(Object.keys(assetUrls)).filter((f) => f !== path && matchers.some((m) => m.re.test(f)) && !excluders.some((re) => re.test(f))).sort();
       const entries = hits.map((abs) => {
         const raw = matchers.find((m) => m.re.test(abs))!.raw;
-        const key = raw.startsWith('.') ? (() => { const rel = abs.slice(dirname(path).length + 1); return path.startsWith(dirname(abs)) || !rel.startsWith('/') ? (abs.startsWith(`${dirname(path)}/`) ? `./${rel}` : abs) : abs; })() : raw.startsWith('/') ? abs.slice(root.length) : abs;
+        const key = raw.startsWith('.') ? relativeFrom(dirname(path), abs) : abs.slice(root.length);
         const spec = JSON.stringify(`${abs}${opts.query ?? ''}`);
         if (opts.eager) {
           const id = `__unison_glob_${n++}`;
@@ -573,6 +581,10 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
         return { contents: nextShimSource(args.path) ?? 'export {};', loader: 'js', resolveDir: '/' };
       });
       build.onLoad({ filter: /.*/, namespace: 'npm-css' }, async (args: any) => {
+        if (/\.(s[ac]ss)$/.test(args.path)) {
+          const out = await compile({ kind: 'sass', path: `/__packages__/${args.path}`, source: `@import ${JSON.stringify(args.path)};`, files: styleFiles, versions: plan.versions, options: { loadPaths: [`${root}/src`, root || '/'] } }, plan.compilers?.sass ?? '1');
+          return { contents: `__unisonStyle(${JSON.stringify(args.path)}, ${JSON.stringify(out?.code ?? '')});`, loader: 'js' };
+        }
         try {
           const pkg = await packageCss(args.path);
           return { contents: `__unisonStyle(${JSON.stringify(pkg.path)}, ${JSON.stringify(pkg.content)});`, loader: 'js' };
