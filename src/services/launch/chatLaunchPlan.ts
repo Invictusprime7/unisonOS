@@ -7,6 +7,7 @@
  * page authoring is rewritten to state them, so chat wording can never drift
  * from the selections the canonical pipeline compiles.
  */
+import { extractOwnerSiteName, siteNameFromBrief } from '@/services/launch/siteName';
 import { classifyPromptForWizard } from "@/components/onboarding/wizard/wizardPromptClassifier";
 import type { CustomerNeed, PageChoice, PrimaryGoal } from "@/components/onboarding/wizard/wizardCatalog";
 import type { BusinessSystemType } from "@/data/templates/types";
@@ -387,7 +388,7 @@ export function deriveChatLaunchPlan(brief: string, options: { promptFirst?: boo
     creationInput,
     industry: !promptFirst && confident ? analysis!.industry : null,
     systemId: !promptFirst && confident ? analysis!.systemId : null,
-    businessName: (statedBusinessName || analysis?.businessName) ?? null,
+    businessName: (siteNameFromBrief(text) || extractOwnerSiteName(semanticText) || statedBusinessName || analysis?.businessName) ?? null,
     primaryGoal: !promptFirst && confident ? focusedGoal ?? analysis!.primaryGoal : null,
     customerNeeds: !promptFirst && confident ? focusedNeed ? [focusedNeed] : analysis!.customerNeeds : [],
     // Pages the chat named win; industry defaults only fill in when none were named.
