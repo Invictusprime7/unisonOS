@@ -24,6 +24,8 @@ export interface CreateAffinitySourceProjectInput {
   projectName: string;
   businessId?: string | null;
   demoGeneration?: boolean;
+  /** Interpretation of the conversation (e.g. pages it mentions); advice only. */
+  planNotes?: string;
   signal?: AbortSignal;
   onStatus?: (status: string) => void;
 }
@@ -79,7 +81,7 @@ async function createAndSave(input: CreateAffinitySourceProjectInput, userId: st
   const authored = await authorSourceProject({
     prompt: input.prompt,
     projectName: input.projectName,
-    advice,
+    advice: [input.planNotes?.trim(), advice].filter(Boolean).join('\n\n'),
     photos,
     signal: input.signal,
     onStatus: input.onStatus,
