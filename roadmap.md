@@ -7,11 +7,13 @@
 - [x] Industry knowledge and verified photos are advice only
 - [x] Removed 80 unused duplicate files (incl. 2 duplicate migrations) and the retired guided-setup files that had reappeared
 - [ ] Live end-to-end creation (blocked: backend update — new writing mode + migrations — deploys through the GitHub backend workflow; duplicate workflow removed)
-- [ ] Convert existing Unison-composed sites (and marketplace installs) to source projects on open
-- [ ] Delete old launch remnants with no callers (launch coordinator, stage-4b worker)
-- [ ] Point-and-click toolbar edits mapped to source lines for source projects
-- [ ] Unison design library available to Affinity (vendored into the project only when used)
-- [ ] AI Builder "add page" on source projects stays in the source edit path
+- [x] Convert existing Unison-composed sites (and marketplace installs) to source projects on open — exact preview output, one save parented on the old version; failure leaves the site as it was
+- [ ] Conversion live for real accounts (blocked: new backend step deploys through the GitHub backend workflow)
+- [ ] Delete the older preview compiler and launch pipeline (blocked: it is the conversion source until every older site and template install has been opened and converted)
+- [x] Old launch remnants checked: launch coordinator and stage-4b worker still have callers (template installs, legacy preview), so they stay with the older compiler
+- [x] Point-and-click toolbar edits mapped to source lines for source projects (verified in the builder preview on a converted site; signed-in save not run)
+- [x] Unison design library available to Affinity (vendored into the project only when used)
+- [x] AI Builder "add page" on source projects stays in the source edit path (root router/styles of converted sites are editable)
 
 ## Active: UIMP-01 Zero-drift external project import (2026-11-10)
 - [x] A — Audit: old ZIP import dropped assets/toolchain, rewrote CSS and never saved a version
