@@ -10,6 +10,8 @@ const PROJECT_WIDE = [
   '/src/App.tsx', '/src/App.jsx', '/src/main.tsx', '/src/main.jsx', '/src/router.tsx', '/src/routes/__root.tsx',
   '/src/index.css', '/src/styles.css', '/src/app.css', '/src/globals.css', '/src/styles/globals.css', '/app/globals.css',
   '/package.json', '/index.html',
+  // Projects without a src/ folder (converted older sites).
+  '/App.tsx', '/App.jsx', '/index.tsx', '/index.jsx', '/index.css',
 ];
 const MAX_TARGETS = 40;
 const MAX_FILE_CHARS = 60_000;
