@@ -129,8 +129,8 @@ export function classifyTask(opts: {
   } = opts;
 
   // AI Composer (milestone §31): structured candidate file ops, page scope.
-  if (mode === 'site-page-author' || mode === 'site-page-repair' || mode === 'builder-source-edit') {
-    const type = mode === 'site-page-author' ? 'site_page_author' : mode === 'site-page-repair' ? 'site_page_repair' : 'builder_source_edit';
+  if (mode === 'site-page-author' || mode === 'site-page-repair' || mode === 'builder-source-edit' || mode === 'source-project-author') {
+    const type = mode === 'site-page-author' ? 'site_page_author' : mode === 'site-page-repair' ? 'site_page_repair' : mode === 'source-project-author' ? 'source_project_author' : 'builder_source_edit';
     return { type, fastPath: true, shouldUseMemory: false, shouldUseCompactContext: false, prefersJsonOutput: true, skipResearch: true, skipThinking: true };
   }
   if (mode === "site-discovery") {
