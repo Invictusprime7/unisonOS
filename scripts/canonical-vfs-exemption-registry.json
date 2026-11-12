@@ -42,7 +42,7 @@
   },
   "baseline": {
     "src/components/creatives/WebBuilder.tsx": {
-      "optimistic HMR projection; the same mutation is chained through commitMutation below": 2,
+      "optimistic HMR projection; the same mutation is chained through commitMutation below": 3,
       "hydration of a persisted revision into the working set": 1,
       "adoption of an accepted commitMutation result": 9,
       "hydration of canonical snapshot files into an empty working set": 1,
