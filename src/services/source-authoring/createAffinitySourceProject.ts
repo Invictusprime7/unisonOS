@@ -19,6 +19,15 @@ import { getVerticalPack, resolveIndustryVertical } from '@/services/composition
 import { verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
 import { authorSourceProject, type AuthoredSourceProject, type SourceBuildCheck } from './affinitySourceAuthor';
 
+/**
+ * True when the live save rule predates Affinity-written source projects and
+ * refuses the `affinity-authored` label (it accepts only `external-import`).
+ */
+export function isOlderSourceProjectSaveRule(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? error ?? '');
+  return /Imported source (acceptance profile|provenance identity) is invalid/i.test(message);
+}
+
 export interface CreateAffinitySourceProjectInput {
   prompt: string;
   projectName: string;
@@ -95,6 +104,16 @@ async function createAndSave(input: CreateAffinitySourceProjectInput, userId: st
   const profile = analyzeImportedProject({ manifest: intake.manifest, textFiles: intake.textFiles });
   const businessId = await resolveImportBusinessId(userId, input.businessId, input.projectName);
 
+  const draftMetadata = {
+    name: input.projectName,
+    projectName: input.projectName,
+    description: authored.summary.slice(0, 300),
+    source: 'affinity-authored',
+    acceptanceProfile: IMPORTED_SOURCE_ACCEPTANCE_PROFILE,
+    importSnapshotHash: intake.manifest.snapshotHash,
+    importFramework: profile.framework,
+    importedAt: new Date().toISOString(),
+  };
   const { data: draft, error: draftError } = await supabase
     .from('builder_drafts')
     .insert({
@@ -104,45 +123,65 @@ async function createAndSave(input: CreateAffinitySourceProjectInput, userId: st
       code: '',
       editor_code: '',
       vfs_files: {} as Json,
-      metadata: {
-        name: input.projectName,
-        projectName: input.projectName,
-        description: authored.summary.slice(0, 300),
-        source: 'affinity-authored',
-        acceptanceProfile: IMPORTED_SOURCE_ACCEPTANCE_PROFILE,
-        importSnapshotHash: intake.manifest.snapshotHash,
-        importFramework: profile.framework,
-        importedAt: new Date().toISOString(),
-      } as unknown as Json,
+      metadata: draftMetadata as unknown as Json,
     })
     .select('id, project_id')
     .single();
   if (draftError) throw draftError;
   if (!draft?.project_id) throw new Error('The new site could not be linked to a Cloud project.');
 
-  const { files, provenance } = buildImportedSourceVfs({
+  const importedAt = new Date().toISOString();
+  const save = (files: Record<string, string>) => {
+    const patch = legacyFilesToPatchPlan(files, `Affinity wrote ${input.projectName} (${authored.pages.length} pages)`);
+    return commitMutation({
+      source: 'wizard-launch',
+      identity: {
+        userId,
+        businessId,
+        projectId: draft.project_id!,
+        draftId: draft.id,
+        revisionId: '',
+        sessionId: `affinity-authored:${draft.id}`,
+      },
+      current: { vfsFiles: {} },
+      patch: demoOperationId ? { ...patch, operationIds: [`account-demo:${demoOperationId}`] } : patch,
+      options: { acceptanceProfile: IMPORTED_SOURCE_ACCEPTANCE_PROFILE, businessName: input.projectName },
+    });
+  };
+
+  let built = buildImportedSourceVfs({
     intake,
     profile,
     assets: { version: 1, assets: [], originalArchive: null },
     importedBy: userId,
-    importedAt: new Date().toISOString(),
+    importedAt,
     origin: 'affinity-authored',
   });
-  const patch = legacyFilesToPatchPlan(files, `Affinity wrote ${input.projectName} (${authored.pages.length} pages)`);
-  const commit = await commitMutation({
-    source: 'wizard-launch',
-    identity: {
-      userId,
-      businessId,
-      projectId: draft.project_id,
-      draftId: draft.id,
-      revisionId: '',
-      sessionId: `affinity-authored:${draft.id}`,
-    },
-    current: { vfsFiles: {} },
-    patch: demoOperationId ? { ...patch, operationIds: [`account-demo:${demoOperationId}`] } : patch,
-    options: { acceptanceProfile: IMPORTED_SOURCE_ACCEPTANCE_PROFILE, businessName: input.projectName },
-  });
+  let commit: Awaited<ReturnType<typeof commitMutation>>;
+  try {
+    commit = await save(built.files);
+  } catch (error) {
+    if (!isOlderSourceProjectSaveRule(error)) throw error;
+    // The live database still runs the save rule that only knows imported
+    // projects. Save under that label, recording that Affinity wrote the files,
+    // so the site is kept instead of being thrown away.
+    const { error: relabelError } = await supabase
+      .from('builder_drafts')
+      .update({ metadata: { ...draftMetadata, source: 'external-import', authoredBy: 'affinity' } as unknown as Json })
+      .eq('id', draft.id);
+    if (relabelError) throw relabelError;
+    built = buildImportedSourceVfs({
+      intake,
+      profile,
+      assets: { version: 1, assets: [], originalArchive: null },
+      importedBy: userId,
+      importedAt,
+      origin: 'external-import',
+      authoredBy: 'affinity',
+    });
+    commit = await save(built.files);
+  }
+  const { provenance } = built;
   if (!commit.persistedRevisionId) throw new Error('The new site could not be saved as a version.');
   return {
     projectId: draft.project_id,

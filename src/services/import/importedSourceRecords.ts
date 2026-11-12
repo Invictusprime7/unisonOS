@@ -79,6 +79,11 @@ export interface ImportProvenanceRecord {
   readiness: ImportReadiness;
   /** Set when an older Unison-composed site was converted into this source project. */
   convertedFromRevisionId?: string;
+  /**
+   * Who wrote the files when `origin` had to use the older backend label
+   * (`external-import`) because the live save rule predates `affinity-authored`.
+   */
+  authoredBy?: 'affinity';
 }
 
 const ORIGIN_MARKER = /"origin"\s*:\s*"(?:external-import|affinity-authored)"/;

@@ -77,6 +77,8 @@ export function buildImportedSourceVfs(input: {
   origin?: SourceProjectOrigin;
   /** Convert on open: the older Unison revision these files were taken from. */
   convertedFromRevisionId?: string;
+  /** Affinity wrote the files but `origin` uses the older backend label. */
+  authoredBy?: 'affinity';
 }): { files: Record<string, string>; provenance: ImportProvenanceRecord } {
   const { intake, profile, assets } = input;
   const files: Record<string, string> = {};
@@ -98,8 +100,9 @@ export function buildImportedSourceVfs(input: {
     originalSnapshotHash: intake.manifest.snapshotHash,
     ...(intake.manifest.archiveSha256 ? { archiveSha256: intake.manifest.archiveSha256 } : {}),
     framework: profile.framework,
-    readiness: deriveImportReadiness(profile, assets, input.origin ?? 'external-import'),
+    readiness: deriveImportReadiness(profile, assets, input.authoredBy === 'affinity' ? 'affinity-authored' : input.origin ?? 'external-import'),
     ...(input.convertedFromRevisionId ? { convertedFromRevisionId: input.convertedFromRevisionId } : {}),
+    ...(input.authoredBy ? { authoredBy: input.authoredBy } : {}),
   };
   files[IMPORT_MANIFEST_PATH] = stableJson(intake.manifest);
   files[IMPORT_PROFILE_PATH] = stableJson(profile);
