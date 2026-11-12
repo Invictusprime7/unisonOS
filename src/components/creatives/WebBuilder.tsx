@@ -1,4 +1,5 @@
 import { describeSelection, type EditableObjectDescriptor } from '@/services/editor/editableObjectDescriptor';
+import { sourceProjectApplySettings } from '@/services/source-authoring/sourceProjectApply';
 import { IMAGE_GENERATED_EVENT, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 import { selectedSourceFinder, mutateSelectedStructure } from "./web-builder/selectedSourceMutation";
 import { insertImageIntoElement, coverBackgroundStyles, anchoredFinder, textRunsFromHtml } from '@/components/creatives/web-builder/pictureInsertion';
@@ -3302,6 +3303,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     }
 
     const beforeFiles = virtualFSRef.current.getSandpackFiles();
+
     const snapshot = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot
       ?? effectiveRouteState?.siteBundleSnapshot
       ?? null;
@@ -3454,6 +3456,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     if ((!files || Object.keys(files).length === 0) && !options.fileOps?.length && !options.routeOps?.length) return null;
 
     const beforeFiles = virtualFSRef.current.getSandpackFiles();
+
     const source = options.source ?? 'ai-builder';
     if (shouldSkipNoopFilePatch(source, files ?? {}, beforeFiles)) {
       return beforeFiles;
@@ -8477,6 +8480,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                    // multi-task applies call this callback again after an
                    // earlier task already committed a new revision.
                    const beforeFiles = virtualFSRef.current.getSandpackFiles();
+                   const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0], Object.keys(rawFiles));
                   const snapshotForPreflight = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot
                     ?? (hydratedRevision?.siteBundleSnapshot as SiteBundleSnapshot | null)
                     ?? null;
@@ -8494,7 +8498,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                     intent: applyMeta?.candidate?.provenance.intent ?? applyMeta?.actionType ?? 'builder-ai-edit',
                     evidence: applyMeta?.candidate?.provenance.evidence,
                     attempt: applyMeta?.candidate?.attempt,
-                    preflight: (changed) => runFullPreflight(changed, {
+                    ...sourceApply?.gate,
+                    preflight: sourceApply ? undefined : (changed) => runFullPreflight(changed, {
                       siteBundleSnapshot: snapshotForPreflight,
                       industry: snapshotForPreflight?.industry,
                       allowQuarantine: false,
@@ -8502,7 +8507,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                     }).files,
                   });
                   let candidate = firstCandidate;
-                  if (!firstCandidate.ok && firstCandidate.gates.failures.length) {
+                  if (!sourceApply && !firstCandidate.ok && firstCandidate.gates.failures.length) {
                     toast.message('Repairing the AI edit…');
                       const repaired = await repairBuilderCandidate({
                         rawFiles, failed: firstCandidate, baseFiles: beforeFiles,
@@ -8546,8 +8551,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                         label: applyMeta?.prompt ? applyMeta.prompt.slice(0, 120) : undefined,
                         editIntent: applyMeta?.prompt ? editIntentForRequest({
                           prompt: applyMeta.prompt,
-                          activePagePath,
-                          pageImports: resolveLocalImports(beforeFiles, activePagePath),
+                          activePagePath: sourceApply?.scope.pagePath ?? activePagePath,
+                          pageImports: sourceApply?.scope.sharedPaths ?? resolveLocalImports(beforeFiles, activePagePath),
                           expectedRevisionId: currentRevisionIdRef.current || null,
                           structural: Boolean((applyMeta?.candidate?.routeOps ?? applyMeta?.routeOps)?.length),
                           interpretation: applyMeta?.interpretation,
@@ -8710,6 +8715,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                onApplyToVFS={async (rawFiles, applyMeta) => {
                  // Live refs, not render-time closures (see desktop mount above).
                  const beforeFiles = virtualFSRef.current.getSandpackFiles();
+                 const sourceApply = sourceProjectApplySettings(beforeFiles, applyMeta?.pagePath ?? activePagePath, selectedElementRef.current?.descriptor?.sourceLocator?.split(':')[0], Object.keys(rawFiles));
                 const snapshotForPreflight = resolveSnapshot(beforeFiles, effectiveRouteState as any).snapshot
                   ?? (hydratedRevision?.siteBundleSnapshot as SiteBundleSnapshot | null)
                   ?? null;
@@ -8725,7 +8731,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   intent: applyMeta?.candidate?.provenance.intent ?? applyMeta?.actionType ?? 'builder-ai-edit',
                   evidence: applyMeta?.candidate?.provenance.evidence,
                   attempt: applyMeta?.candidate?.attempt,
-                  preflight: (changed) => runFullPreflight(changed, {
+                  ...sourceApply?.gate,
+                  preflight: sourceApply ? undefined : (changed) => runFullPreflight(changed, {
                     siteBundleSnapshot: snapshotForPreflight,
                     industry: snapshotForPreflight?.industry,
                     allowQuarantine: false,
@@ -8733,7 +8740,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   }).files,
                 });
                 let candidate = firstCandidate;
-                if (!firstCandidate.ok && firstCandidate.gates.failures.length) {
+                if (!sourceApply && !firstCandidate.ok && firstCandidate.gates.failures.length) {
                   toast.message('Repairing the AI edit…');
                   const repaired = await repairBuilderCandidate({
                      rawFiles, failed: firstCandidate, baseFiles: beforeFiles,
@@ -8774,8 +8781,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                       label: applyMeta?.prompt ? applyMeta.prompt.slice(0, 120) : undefined,
                       editIntent: applyMeta?.prompt ? editIntentForRequest({
                         prompt: applyMeta.prompt,
-                        activePagePath,
-                        pageImports: resolveLocalImports(beforeFiles, activePagePath),
+                        activePagePath: sourceApply?.scope.pagePath ?? activePagePath,
+                        pageImports: sourceApply?.scope.sharedPaths ?? resolveLocalImports(beforeFiles, activePagePath),
                         expectedRevisionId: currentRevisionIdRef.current || null,
                         structural: Boolean((applyMeta?.candidate?.routeOps ?? applyMeta?.routeOps)?.length),
                         interpretation: applyMeta?.interpretation,

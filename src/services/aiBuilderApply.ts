@@ -15,6 +15,8 @@ export interface AIBuilderApplyMeta {
   routeOps?: TopologyChange[];
   /** Exact Composer candidate, retained through the UI apply boundary. */
   candidate?: AICandidateChangeSet;
+  /** Page file the Composer edited; source projects scope the save to it. */
+  pagePath?: string;
   /** Validated request interpretation; absent when the interpreter degraded. */
   interpretation?: BuilderRequestEnvelope;
   requiresApproval?: boolean;

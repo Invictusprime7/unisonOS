@@ -1,0 +1,3 @@
+# Directory rules
+- AI Builder saves to source projects (imported or Affinity-written) re-check candidates with `sourceProjectApplySettings`: same alias/dependency rules as the Composer, no Unison preflight rewrites or Unison-lane repair, and edit scope = the edited page plus `sourceProjectEditTargets` plus new files. Why: the host re-check used Unison rules and the active tab, so valid source edits were rewritten or refused after the AI wrote them.
+- The Builder connector only validates `/src/` targets for source projects (root files like `package.json` are still sent to the Composer). Why: its `/src/`-only check threw on `package.json` and stopped every imported-project AI edit before the AI was called.

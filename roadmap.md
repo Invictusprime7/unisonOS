@@ -432,3 +432,5 @@ Fallback production configuration remains unverified; no relay, credential chang
 - [x] Creative brief sealed in the site; Affinity edits read it, record scoped refinements and lock the rest
 - [x] Compact Creative Brief in the chat launch summary
 - [ ] Live AI generation of the three acceptance prompts + scoped hero edit in Preview (needs UNISON deployment, funded Gemini and a signed-in session)
+
+- [x] Imported/source projects: toolbar, inline text and AI Builder edits save to the real source files
