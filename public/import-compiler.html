@@ -186,10 +186,10 @@ async function compileSvelte(req, moduleOnly) {
     return { code: out.js.code, css: [], lang: 'js', warnings: (out.warnings || []).map((w) => w.message) };
   }
   if (v < 5) {
-    source = await replaceAsync(source, /<script([^>]*)lang=["']ts["']([^>]*)>([\s\S]*?)<\/script>/g, async (_, a, b, code) => `<script${a}${b}>${await stripTs(code, req.path + '.ts')}</script>`);
-    source = await replaceAsync(source, /<style([^>]*)lang=["'](scss|sass)["']([^>]*)>([\s\S]*?)<\/style>/g, async (_, a, lang, b, css) => `<style${a}${b}>${await compileSass({ ...req, version: (req.versions && req.versions.sass) || '1' }, css, req.path, lang === 'sass')}</style>`);
+    source = await replaceAsync(source, /<script([^>]*)lang=["']ts["']([^>]*)>([\s\S]*?)<\/script>/g, async (_, a, b, code) => `<script${a}${b}>${await stripTs(code, req.path + '.ts')}<\/script>`);
+    source = await replaceAsync(source, /<style([^>]*)lang=["'](scss|sass)["']([^>]*)>([\s\S]*?)<\/style>/g, async (_, a, lang, b, css) => `<style${a}${b}>${await compileSass({ ...req, version: (req.versions && req.versions.sass) || '1' }, css, req.path, lang === 'sass')}<\/style>`);
   } else {
-    source = await replaceAsync(source, /<style([^>]*)lang=["'](scss|sass)["']([^>]*)>([\s\S]*?)<\/style>/g, async (_, a, lang, b, css) => `<style${a}${b}>${await compileSass({ ...req, version: (req.versions && req.versions.sass) || '1' }, css, req.path, lang === 'sass')}</style>`);
+    source = await replaceAsync(source, /<style([^>]*)lang=["'](scss|sass)["']([^>]*)>([\s\S]*?)<\/style>/g, async (_, a, lang, b, css) => `<style${a}${b}>${await compileSass({ ...req, version: (req.versions && req.versions.sass) || '1' }, css, req.path, lang === 'sass')}<\/style>`);
   }
   const options = v >= 5 ? { filename: req.path, generate: 'client', css: 'injected', dev: false }
     : v === 4 ? { filename: req.path, css: 'injected', dev: false }
