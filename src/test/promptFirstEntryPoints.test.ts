@@ -21,25 +21,17 @@ describe('prompt-first creation entry points', () => {
     expect(read(path)).toContain('<PromptLaunchPanel');
   });
 
-  it('runs the one canonical launch pipeline from the prompt-only input', () => {
+  it('creates every new site through the one Affinity source-authoring path', () => {
     const panel = read('src/components/launch/PromptLaunchPanel.tsx');
-    expect(panel).toContain('runLaunchPipeline(input');
+    expect(panel).toContain('createAffinitySourceProject({');
     expect(panel).toContain('buildPromptLaunchInput(brief');
-    expect(panel).not.toMatch(/commitMutation|vfsCommitService/);
+    expect(panel).not.toMatch(/runLaunchPipeline|commitMutation|vfsCommitService/);
   });
 
-  it('shows the UniversalCreation launch plan in Affinity before generation', () => {
+  it('shows what Affinity understood before writing', () => {
     const panel = read('src/components/launch/PromptLaunchPanel.tsx');
     expect(panel).toContain('data-testid="prompt-launch-plan"');
-    expect(panel).toContain('Motion & experience');
-    expect(panel).toContain('Section treatments');
-    expect(panel).toContain('UI Foundation');
-    expect(panel).toContain('Requested pages');
-  });
-
-  it('offers the starter fallback only when the AI provider is unavailable', () => {
-    const panel = read('src/components/launch/PromptLaunchPanel.tsx');
-    expect(panel).toContain("failure.stage === 'app-build' && mode === 'ai' && AI_UNAVAILABLE_PATTERN.test(failure.message)");
+    expect(panel).toContain('Pages you mentioned');
   });
 
   it.each([
