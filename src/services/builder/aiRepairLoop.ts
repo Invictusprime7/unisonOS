@@ -229,7 +229,7 @@ export async function runComposerRepairLoop(input: ComposerLoopInput): Promise<C
         ...input.gatewayOptions,
         timeoutMs: Math.min(
           typeof input.gatewayOptions?.timeoutMs === 'number' ? input.gatewayOptions.timeoutMs : 145_000,
-          remainingMs - 5_000,
+          deadline - Date.now() - 5_000,
         ),
       },
     }, { timeoutMs: Math.max(5_000, deadline - Date.now()), signal: input.signal });
