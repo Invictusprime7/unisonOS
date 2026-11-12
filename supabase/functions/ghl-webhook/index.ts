@@ -3,9 +3,10 @@
  *
  * Public endpoint (verify_jwt = false). GHL posts workflow / contact /
  * opportunity events here. We:
- *   1. Optionally verify a shared-secret signature (GHL_WEBHOOK_SECRET)
+ *   1. Require the per-integration webhook secret (rejected when absent)
  *   2. Normalize the event (type, contact, opportunity, workflow, stage)
- *   3. Resolve business_id from locationId via business_integrations (best-effort)
+ *   3. Resolve business/project only from the matching active integration;
+ *      URL query scope is never trusted on its own
  *   4. Persist to public.ghl_webhook_events for realtime fan-out
  *
  * Clients subscribe via Supabase Realtime to update task/app state when a

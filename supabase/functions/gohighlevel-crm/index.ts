@@ -243,14 +243,27 @@ Deno.serve(async (req) => {
       isInternalRequest,
     );
 
+    // Bind any caller-supplied contact to this project's connected location
+    // before reading or changing it, so a contact ID from elsewhere is refused.
+    let boundContact: Record<string, unknown> | null = null;
+    if (contactId) {
+      const contactData = await fetchGhlJson(`/contacts/${encodeURIComponent(contactId)}`, apiKey).catch(() => null);
+      const contactRecord = contactData?.contact as Record<string, unknown> | undefined;
+      const contactLocation = typeof contactRecord?.locationId === "string" ? contactRecord.locationId : "";
+      if (!contactData || !contactRecord || !contactLocation || contactLocation !== locationId) {
+        return errorResponse("Contact not found for this project", 404, corsHeaders);
+      }
+      boundContact = contactData;
+    }
+
     let result: Record<string, unknown>;
 
     switch (action) {
       case "getContact": {
-        if (!contactId) {
+        if (!contactId || !boundContact) {
           return errorResponse("contactId is required", 400, corsHeaders);
         }
-        result = await fetchGhlJson(`/contacts/${encodeURIComponent(contactId)}`, apiKey);
+        result = boundContact;
         break;
       }
 
@@ -285,8 +298,8 @@ Deno.serve(async (req) => {
 
         const templateData: Record<string, unknown> = {};
 
-        if (contactId) {
-          const contactData = await fetchGhlJson(`/contacts/${encodeURIComponent(contactId)}`, apiKey);
+        if (contactId && boundContact) {
+          const contactData = boundContact;
           templateData.contact = contactData.contact;
           templateData.customFieldValues = (contactData.contact as Record<string, unknown> | undefined)?.customFields || [];
         }

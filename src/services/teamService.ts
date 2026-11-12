@@ -373,35 +373,8 @@ class TeamService {
       if (existingMember) {
         return { success: false, error: 'User is already a member of this organization' };
       }
-
-      // Add directly as member
-      const { error } = await supabase
-        .from('organization_members')
-        .insert({
-          organization_id: organizationId,
-          user_id: existingUser.id,
-          role: input.role,
-          title: input.title,
-          department: input.department,
-          invited_by: user.id,
-        });
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
-      await auditLogger.log({
-        action: 'create',
-        resourceType: 'organization',
-        resourceId: organizationId,
-        metadata: {
-          event: 'member_added',
-          memberEmail: input.email,
-          role: input.role,
-        },
-      });
-
-      return { success: true };
+      // Never add an account directly by email: the person must accept the
+      // invitation from their own confirmed mailbox before they get access.
     }
 
     // Create pending invitation

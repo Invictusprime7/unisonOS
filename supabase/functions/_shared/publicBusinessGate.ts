@@ -9,14 +9,21 @@ import { verifyAuth, verifyBusinessAccess } from "./auth.ts";
 // deno-lint-ignore no-explicit-any
 type AdminClient = any;
 
-export async function businessHasPublishedSite(admin: AdminClient, businessId: string): Promise<boolean> {
-  const { data, error } = await admin
+export async function businessHasPublishedSite(
+  admin: AdminClient,
+  businessId: string,
+  projectId?: string | null,
+): Promise<boolean> {
+  let query = admin
     .from("projects")
     .select("id")
     .eq("business_id", businessId)
     .eq("publish_status", "published")
-    .not("active_published_revision_id", "is", null)
-    .limit(1);
+    .not("active_published_revision_id", "is", null);
+  // When the visitor names the site they are on, that exact site must be a
+  // live published site of this business — not just any of its sites.
+  if (projectId) query = query.eq("id", projectId);
+  const { data, error } = await query.limit(1);
   return !error && Array.isArray(data) && data.length > 0;
 }
 
@@ -33,8 +40,9 @@ export async function publicBusinessWriteAllowed(
   admin: AdminClient,
   req: Request,
   businessId: string,
+  projectId?: string | null,
 ): Promise<boolean> {
   if (!businessId) return false;
-  if (await businessHasPublishedSite(admin, businessId)) return true;
+  if (await businessHasPublishedSite(admin, businessId, projectId)) return true;
   return await callerIsBusinessMember(req, businessId);
 }
