@@ -26,7 +26,7 @@ describe('PromptLaunchPanel (chat-only site creation)', () => {
   it('shows what Affinity understood and offers project import', () => {
     renderPanel({ prefill: { businessId: 'biz-1' } });
     expect(screen.getByRole('heading', { name: 'Ready to create your site' })).toBeInTheDocument();
-    expect(screen.getByText('Black Star Pulse')).toBeInTheDocument();
+    expect(screen.getByLabelText('Site name')).toHaveValue('Black Star Pulse');
     expect(screen.getByText('Already have a site? Import it instead')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Import an exported .zip' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Restore a Unison export' })).toBeInTheDocument();
@@ -54,5 +54,23 @@ describe('PromptLaunchPanel (chat-only site creation)', () => {
     renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'Create my site' }));
     expect(await screen.findByText('/src/App.tsx: Could not resolve "./Missing"')).toBeInTheDocument();
+  });
+
+  it('never invents a generic name: an unnamed site waits for the owner to type one', async () => {
+    createAffinitySourceProject.mockRejectedValueOnce(new Error('Gemini timed out.'));
+    renderPanel({ brief: 'Conversation details:\nCreate a gym website with class schedules, trainer profiles and membership sign-ups.', prefill: { businessId: 'biz-1', businessName: 'Unholy Kitty Nails' } });
+    const field = screen.getByLabelText('Site name');
+    expect(field).toHaveValue('');
+    expect(screen.queryByText(/Gym Website With Class Schedules/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create my site' })).toBeDisabled();
+    fireEvent.change(field, { target: { value: 'Iron Haven' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create my site' }));
+    await waitFor(() => expect(createAffinitySourceProject).toHaveBeenCalledTimes(1));
+    expect(createAffinitySourceProject.mock.calls[0][0].projectName).toBe('Iron Haven');
+  });
+
+  it('uses the name the owner gave when Affinity asked what the site is called', () => {
+    renderPanel({ brief: 'Site name: Iron Haven\n\nConversation details:\nCreate a gym website with class schedules.\nIron Haven' });
+    expect(screen.getByLabelText('Site name')).toHaveValue('Iron Haven');
   });
 });

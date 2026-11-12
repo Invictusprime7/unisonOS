@@ -5,6 +5,7 @@ import { resolveLaunchCapabilities } from "@/services/launch/launchCapabilities"
 import { buildIndustryAuthoringContext } from "@/services/app-builder/appBuilderGenerationContext";
 import {
   buildConfirmedSiteBrief,
+  ownerSiteNameFromMessages,
   describeAssistantFailure,
   isSiteDiscoveryResponse,
   hasSiteConfirmationRequest,
@@ -224,3 +225,47 @@ describe("homepage assistant failures", () => {
     expect(authoringContext).toContain('commerce');
   });
 });
+
+describe("site name from the conversation", () => {
+  const answer = (content: string): AIMessage => ({ role: "user", content, timestamp: new Date(0), setupStepAnswer: "brand" });
+
+  it("records the owner's answer to the naming question and the plan uses it", () => {
+    const messages = [
+      message("user", "Create a gym website with class schedules, trainer profiles and membership sign-ups."),
+      message("assistant", "What should the business or site be called?"),
+      answer("Iron Haven"),
+      message("assistant", `A gym site for Iron Haven with class schedules.\n${SITE_CONFIRMATION_MARKER}`),
+      message("user", "Yes"),
+    ];
+    const brief = buildConfirmedSiteBrief(messages);
+    expect(brief.split("\n")[0]).toBe("Site name: Iron Haven");
+    expect(deriveChatLaunchPlan(brief, { promptFirst: true }).businessName).toBe("Iron Haven");
+  });
+
+  it("reads a bare reply to a naming question even without a setup tag", () => {
+    expect(ownerSiteNameFromMessages([
+      message("user", "A yoga studio site."),
+      message("assistant", "Love it! What's the name of your studio?"),
+      message("user", "It's called Still Water."),
+    ])).toBe("Still Water");
+  });
+
+  it("lets a later rename win", () => {
+    expect(ownerSiteNameFromMessages([
+      message("user", "A bakery called Crumb & Co with online orders."),
+      message("user", "Actually, call it Rise Bakehouse."),
+    ])).toBe("Rise Bakehouse");
+  });
+
+  it("never names an unnamed site from the prompt subject or the assistant summary", () => {
+    const messages = [
+      message("user", "Create a gym website with class schedules."),
+      message("assistant", `Here is FitForge, a gym site with class schedules.\n${SITE_CONFIRMATION_MARKER}`),
+      message("user", "Yes"),
+    ];
+    expect(ownerSiteNameFromMessages(messages)).toBeNull();
+    expect(buildConfirmedSiteBrief(messages)).not.toContain("Site name:");
+    expect(deriveChatLaunchPlan(buildConfirmedSiteBrief(messages), { promptFirst: true }).businessName).toBeNull();
+  });
+});
+
