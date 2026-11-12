@@ -17,7 +17,7 @@ import { resolveCanonicalAuthoringPage } from '@/services/builder/canonicalAutho
 
 it('ai edit imported', async () => {
   const buf = readFileSync('/tmp/user-uploads/ariastudios_2.zip');
-  const intake = await intakeZipArchive(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), { name: 'aria.zip' });
+  const intake = await intakeZipArchive(new Uint8Array(buf) as any, { name: "aria.zip" } as any);
   const profile = analyzeImportedProject(intake);
   const { files } = buildImportedSourceVfs({ intake, profile, assets: { version: 1, assets: [], originalArchive: null }, importedBy: 'u', importedAt: '2026-11-10T00:00:00Z' });
   const page = resolveCanonicalAuthoringPage(files, '/src/routes/index.tsx', '/src/routes/index.tsx');
