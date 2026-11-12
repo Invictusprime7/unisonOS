@@ -66,7 +66,7 @@ export function shrinkBuilderTurnPayload<T extends Record<string, unknown>>(
 
   // Composer messages contain a structured request, not prose. Cutting its
   // string in the generic fallback corrupts JSON as project knowledge grows.
-  if (['site-page-author', 'site-page-repair', 'builder-source-edit'].includes(String(payload.mode))) {
+  if (['site-page-author', 'site-page-repair', 'builder-source-edit', 'source-project-author'].includes(String(payload.mode))) {
     const messages = payload.messages as Array<{ role: string; content: unknown }> | undefined;
     const last = messages?.[messages.length - 1];
     if (last && typeof last.content === 'string') {
@@ -75,9 +75,13 @@ export function shrinkBuilderTurnPayload<T extends Record<string, unknown>>(
         if (context?.files && typeof context.files === 'object' && context.page?.filePath) {
           const sync = () => { payload.messages = [{ ...last, content: JSON.stringify(context) }]; };
           sync();
+          // Read-only context goes first (largest first); files the edit may
+          // write are dropped only when nothing else is left.
+          const writable = new Set<string>(Array.isArray(context.sourceTargets) ? context.sourceTargets : []);
           const optional = Object.keys(context.files)
             .filter((path) => path !== context.page.filePath)
-            .sort((a, b) => String(context.files[b]).length - String(context.files[a]).length);
+            .sort((a, b) => Number(writable.has(a)) - Number(writable.has(b))
+              || String(context.files[b]).length - String(context.files[a]).length);
           for (const path of optional) {
             if (fits()) break;
             delete context.files[path];

@@ -150,3 +150,20 @@ describe('editing imported source projects', () => {
     expect(parsed.data.images).toBeUndefined();
   });
 });
+
+describe('sending large source-project requests', () => {
+  it('drops read-only context before files the edit may write, for edits and Affinity site writing', async () => {
+    const { shrinkBuilderTurnPayload } = await import('@/services/builderPayloadBudget');
+    for (const mode of ['builder-source-edit', 'source-project-author']) {
+      const request = {
+        task: mode === 'builder-source-edit' ? 'builder_source_edit' : 'source_project_author',
+        page: { role: 'page', title: 'index', route: '/', filePath: PAGE },
+        sourceTargets: [PAGE, '/src/components/SiteChrome.tsx'],
+        files: { [PAGE]: 'a'.repeat(20_000), '/src/components/SiteChrome.tsx': 'b'.repeat(30_000), '/src/lib/data.ts': 'c'.repeat(30_000) },
+      };
+      const { payload } = shrinkBuilderTurnPayload({ mode, messages: [{ role: 'user', content: JSON.stringify(request) }] }, 70_000);
+      const sentRequest = JSON.parse((payload.messages as Array<{ content: string }>)[0].content);
+      expect(Object.keys(sentRequest.files).sort(), mode).toEqual([PAGE, '/src/components/SiteChrome.tsx'].sort());
+    }
+  });
+});

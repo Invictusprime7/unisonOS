@@ -27,6 +27,10 @@ concurrency:
   group: supabase-deploy-unison
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  actions: read
+
 env:
   SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
   SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
@@ -63,6 +67,7 @@ jobs:
         id: changes
         env:
           DEPLOY_BASE_SHA: ${{ inputs.base_sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force_deploy }}" = "true" ]; then
@@ -74,8 +79,12 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             BASE="${DEPLOY_BASE_SHA}"
           else
-            BASE="${{ github.event.before }}"
+            # Diff against the last commit this workflow deployed successfully, so
+            # changes from a failed or skipped run are deployed by the next push.
+            BASE="$(gh api "repos/${{ github.repository }}/actions/workflows/supabase-auto-update.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)"
+            if [ -z "$BASE" ] || ! git cat-file -e "$BASE" 2>/dev/null; then BASE="${{ github.event.before }}"; fi
           fi
+          echo "Deploy base: $BASE" 
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
             BASE="$(git rev-parse HEAD~1)"
           fi
@@ -102,16 +111,24 @@ jobs:
           supabase link --project-ref "${SUPABASE_PROJECT_ID}" --password "${SUPABASE_DB_PASSWORD}" --yes
           supabase db push --linked --password "${SUPABASE_DB_PASSWORD}" --yes
 
+      # Functions deploy even when a migration fails (the job still fails), and one
+      # broken function never blocks the rest: AI services must not stay stale.
       - name: Deploy Edge Functions
-        if: steps.changes.outputs.functions != ''
+        if: ${{ !cancelled() && steps.changes.outcome == 'success' && steps.changes.outputs.functions != '' }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          failed=""
           for f in ${{ steps.changes.outputs.functions }}; do
             echo "Deploying $f"
-            supabase functions deploy "$f" --project-ref "${SUPABASE_PROJECT_ID}" --yes
+            if ! supabase functions deploy "$f" --project-ref "${SUPABASE_PROJECT_ID}" --yes; then
+              echo "::error::Edge Function $f failed to deploy"
+              failed="$failed $f"
+            fi
           done
+          if [ -n "$failed" ]; then echo "::error::Failed functions:$failed"; exit 1; fi
 
       - name: Summary
+        if: ${{ always() }}
         run: |
           {
             echo "## UNISON backend deploy"
