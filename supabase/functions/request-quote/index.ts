@@ -20,6 +20,7 @@ const RATE_LIMIT_CONFIG = { maxRequests: 10, windowSeconds: 300 };
 
 interface QuotePayload {
   businessId: string;
+  projectId?: string;
   name?: string;
   email: string;
   phone?: string;
@@ -79,7 +80,12 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  if (!(await publicBusinessWriteAllowed(supabase, req, body.businessId))) {
+  const projectId = typeof body.projectId === "string" && body.projectId ? body.projectId : undefined;
+  if (projectId && !isValidUUID(projectId)) {
+    return errorResponse("Invalid projectId", 400, corsHeaders);
+  }
+
+  if (!(await publicBusinessWriteAllowed(supabase, req, body.businessId, projectId))) {
     return errorResponse("This business is not accepting submissions", 403, corsHeaders);
   }
 
@@ -95,7 +101,7 @@ serve(async (req) => {
   let leadId: string;
   let contactId: string | null;
   try {
-    const result = await createCrmLead(supabase, { businessId: body.businessId }, {
+    const result = await createCrmLead(supabase, { businessId: body.businessId, projectId }, {
       title: leadTitle,
       email: normalizedEmail,
       name: body.name?.trim() || null,
