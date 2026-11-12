@@ -40,6 +40,6 @@ function App() {
   }, []);
   if (!files) return <div>loading</div>;
   const records = readImportedSourceRecords(files)!;
-  return <div style={{ height: '100vh' }}><ImportedSourceRuntimeFrame records={records} files={files} assetUrls={{}} adapter={records.profile.previewAdapter} editable revisionId={REV} onFrameChange={(f) => { frame.current = f; }} /></div>;
+  return <div style={{ height: '100vh' }}><ImportedSourceRuntimeFrame records={records} files={files} assetUrls={{}} adapter={records.profile.previewAdapter} editable={!location.search.includes("view")} revisionId={REV} onFrameChange={(f) => { frame.current = f; }} /></div>;
 }
 createRoot(document.getElementById('root')!).render(<App />);
