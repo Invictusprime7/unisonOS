@@ -8,6 +8,7 @@ import type { ImportCompatibilityProfile } from '@/services/import/importCompati
 import { planSourceBuild, SOURCE_BUILD_ADAPTER } from '@/services/import/sourceBuild/sourceBuildPlan';
 import type { SourceBuildResult } from '@/services/import/sourceBuild/sourceBundler';
 import { buildImportedSourceInBrowser } from '@/services/import/sourceBuild/browserSourceBuild';
+import { instrumentSourceForSelection, selectionBridgeScript } from '@/services/import/sourceBuild/previewInstrumentation';
 import {
   findSavedImportedRevision,
   loadLatestImportedVerification,
@@ -30,15 +31,29 @@ type RuntimeMessage = { source?: string; nonce?: string; type?: string; path?: s
  * every page and confirm the preview matches their original before the same
  * saved version can be published.
  */
-export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectId, adapter, className }: {
+export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectId, adapter, className, editable = false, onFrameChange }: {
   records: ImportedSourceRecords;
   files: Record<string, string>;
   assetUrls: Record<string, string>;
   projectId?: string;
   adapter: ImportCompatibilityProfile['previewAdapter'];
   className?: string;
+  /** Builder preview: clicks map to source lines through the shared selection bridge. */
+  editable?: boolean;
+  /** Reports the live preview frame so the builder can talk to its selection bridge. */
+  onFrameChange?: (frame: HTMLIFrameElement | null) => void;
 }) {
   const plan = useMemo(() => planSourceBuild(records.profile, files), [records.profile, files]);
+  // Locators only for JSX projects compiled by esbuild (not Vue/Svelte/Solid compilers).
+  const selectable = editable && !plan.compilers?.vue && !plan.compilers?.svelte && !plan.compilers?.solid;
+  const previewFiles = useMemo(() => (selectable ? instrumentSourceForSelection(files) : files), [selectable, files]);
+  const [editBridge, setEditBridge] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selectable) { setEditBridge(null); return; }
+    let cancelled = false;
+    void selectionBridgeScript().then((script) => { if (!cancelled) setEditBridge(script); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [selectable]);
   const routes = useMemo(() => {
     const known = plan.next ? plan.next.routes.map((r) => ({ path: r.path, kind: 'page' as const })) : records.profile.routing.routes;
     const list = known.filter((r) => r.kind === 'page' && !/[$:[*]/.test(r.path) && !r.path.startsWith('/__')).map((r) => r.path);
@@ -57,6 +72,14 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [publishReady, setPublishReady] = useState(false);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const editBridgeRef = useRef<string | null>(null);
+  editBridgeRef.current = editBridge;
+  const onFrameChangeRef = useRef(onFrameChange);
+  onFrameChangeRef.current = onFrameChange;
+  const attachFrame = useCallback((frame: HTMLIFrameElement | null) => {
+    frameRef.current = frame;
+    onFrameChangeRef.current?.(frame);
+  }, []);
   const nonce = useMemo(() => crypto.randomUUID(), [build]); // eslint-disable-line react-hooks/exhaustive-deps
   const probeWaiters = useRef(new Map<string, (probe: RouteProbe) => void>());
 
@@ -65,11 +88,11 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
     setBuild(null);
     setBuildError(null);
     setRuntimeErrors([]);
-    buildImportedSourceInBrowser({ plan, files, assetUrls })
+    buildImportedSourceInBrowser({ plan, files: previewFiles, assetUrls })
       .then((result) => { if (!cancelled) setBuild(result); })
       .catch((error: unknown) => { if (!cancelled) setBuildError(error instanceof Error ? error.message : String(error)); });
     return () => { cancelled = true; };
-  }, [plan, files, assetUrls, buildKey]);
+  }, [plan, previewFiles, assetUrls, buildKey]);
 
   // Already-confirmed saved version?
   useEffect(() => {
@@ -90,7 +113,7 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
       const data = event.data as RuntimeMessage | null;
       if (!data || data.source !== 'unison-source-runtime') return;
       if (data.type === 'unison-source-runtime:ready') {
-        frameRef.current?.contentWindow?.postMessage({ type: 'unison-source-runtime:boot', document: build.document, publicUrls: build.publicUrls, initialPath: route, nonce }, '*');
+        frameRef.current?.contentWindow?.postMessage({ type: 'unison-source-runtime:boot', document: build.document, publicUrls: build.publicUrls, initialPath: route, nonce, editBridge: selectable ? editBridgeRef.current : null }, '*');
         return;
       }
       if (data.nonce !== nonce) return;
@@ -213,8 +236,8 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
       <div className="relative min-h-0 flex-1">
         {build?.ok ? (
           <iframe
-            key={nonce}
-            ref={frameRef}
+            key={`${nonce}:${editBridge ? 'edit' : 'view'}`}
+            ref={attachFrame}
             title="Imported project preview"
             className="h-full w-full border-0 bg-background"
             sandbox="allow-scripts allow-forms allow-popups allow-modals"
