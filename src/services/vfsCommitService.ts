@@ -168,6 +168,11 @@ export interface CommitMutationInput {
      * Unison compiler stage. Implied whenever the base VFS carries import records.
      */
     acceptanceProfile?: typeof IMPORTED_SOURCE_ACCEPTANCE_PROFILE;
+    /**
+     * Convert on open: the first source-project revision of a site built by the
+     * older Unison pipeline. Its parent is that site's last Unison revision.
+     */
+    sourceConversion?: boolean;
     /** Exact Wizard artifact already approved by the user. */
     reviewedArtifact?: {
       siteBundleSnapshot: SiteBundleSnapshot;
@@ -2514,7 +2519,7 @@ async function finalize(args: {
         p_vfs_hash: vfsHash,
       };
       const rpcName = importedSource
-        ? 'commit_imported_source_revision_v1'
+        ? (input.options?.sourceConversion ? 'convert_draft_to_source_project_v1' : 'commit_imported_source_revision_v1')
         : 'commit_canonical_site_revision_v2';
       const compactRpcPayload = importedSource
         ? sharedRpcPayload
