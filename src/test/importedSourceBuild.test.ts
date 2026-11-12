@@ -134,3 +134,17 @@ describe('imported publish', () => {
     expect(await verifyImportedPublish({ revision, verification, submittedFiles: tampered })).toMatchObject({ ok: false, code: 'imported-artifact-mismatch' });
   });
 });
+
+describe('imported hosted image pointers', () => {
+  it('loads a pointer image from the project that owns it', async () => {
+    const { profile, files } = await viteProject();
+    const pointer = JSON.stringify({ version: 1, project_id: '6B4FCF4B-D96E-479C-AE30-DB6CD15D5DB1', url: '/__l5e/assets-v1/abc/angel.png' });
+    const withPointer = {
+      ...files,
+      '/src/assets/angel.png.asset.json': pointer,
+      '/src/components/Card.tsx': "import angel from '@/assets/angel.png.asset.json';\nexport const Card = () => <img src={angel.url} />;",
+    };
+    const result = await build(withPointer, planSourceBuild(profile, withPointer), {});
+    expect(result.document).toContain('https://id-preview--6b4fcf4b-d96e-479c-ae30-db6cd15d5db1.lovable.app/__l5e/assets-v1/abc/angel.png');
+  });
+});

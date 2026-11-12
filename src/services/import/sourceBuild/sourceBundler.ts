@@ -226,12 +226,17 @@ export async function buildImportedSource(input: SourceBuildInput): Promise<Sour
   // ── pointer assets (`foo.png.asset.json`) ─────────────────────────────────
   const pointerUrl = (path: string): string | null => {
     try {
-      const pointer = JSON.parse(files[path]) as { url?: string };
+      const pointer = JSON.parse(files[path]) as { url?: string; project_id?: string };
       if (!pointer.url) return null;
       if (/^https?:/.test(pointer.url)) return pointer.url;
       if (input.pointerOrigin) {
         adaptations.add(`Hosted images (${'*.asset.json'}) load from ${input.pointerOrigin}.`);
         return `${input.pointerOrigin.replace(/\/$/, '')}${pointer.url}`;
+      }
+      // A Lovable asset pointer resolves on the preview address of the project that owns it.
+      if (pointer.project_id && /^[0-9a-f-]{36}$/i.test(pointer.project_id) && pointer.url.startsWith('/')) {
+        adaptations.add('Hosted images (*.asset.json) load from the project they were uploaded to.');
+        return `https://id-preview--${pointer.project_id.toLowerCase()}.lovable.app${pointer.url}`;
       }
       diagnostics.push({ level: 'warning', code: 'asset-pointer-origin', message: `${path.slice(1)} points at ${pointer.url} on the site it was published from; add that site address to load it.`, path });
       return pointer.url;
