@@ -1078,9 +1078,12 @@ async function commitMutationInner(
   }
   const projectMediaManifest = syncProjectMedia(workingFiles);
   if (projectMediaManifest !== null) workingFiles[PROJECT_MEDIA_MANIFEST] = projectMediaManifest;
-  const preserveProjectMediaManifest = (candidateFiles: Record<string, string>) => projectMediaManifest === null
-    ? candidateFiles
-    : { ...candidateFiles, [PROJECT_MEDIA_MANIFEST]: projectMediaManifest };
+  // The manifest follows the accepted bytes: a reviewed artifact may carry
+  // uploads the working files never showed.
+  const preserveProjectMediaManifest = (candidateFiles: Record<string, string>) => {
+    const manifest = syncProjectMedia({ ...candidateFiles, ...(projectMediaManifest === null ? {} : { [PROJECT_MEDIA_MANIFEST]: projectMediaManifest }) }) ?? projectMediaManifest;
+    return manifest === null ? candidateFiles : { ...candidateFiles, [PROJECT_MEDIA_MANIFEST]: manifest };
+  };
   const projectMediaManifestContent = workingFiles[PROJECT_MEDIA_MANIFEST];
 
   // Everything that intentionally changed before acceptance is the candidate.
