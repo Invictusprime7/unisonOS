@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Sparkle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { buildPromptLaunchInput, type PromptLaunchPrefill } from '@/services/launch/promptLaunchInput';
 import { createAffinitySourceProject } from '@/services/source-authoring/createAffinitySourceProject';
 import { SourceAuthoringError } from '@/services/source-authoring/affinitySourceAuthor';
@@ -56,7 +57,11 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
   }, [brief, prefill]);
   const creation = preview?.plan.creationInput;
   const planPages = creation?.pages ?? [];
-  const projectName = preview?.input.businessName?.trim() || 'My site';
+  // Only what the owner called the site; never a generic or derived title.
+  const statedName = preview?.input.businessName?.trim() ?? '';
+  const [siteName, setSiteName] = useState(statedName);
+  useEffect(() => { setSiteName(statedName); }, [statedName]);
+  const projectName = siteName.replace(/\s+/g, ' ').trim();
   const [launching, setLaunching] = useState(false);
   const [activity, setActivity] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +71,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const launch = async () => {
-    if (launching || !brief.trim()) return;
+    if (launching || !brief.trim() || !projectName) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setLaunching(true);
@@ -133,8 +138,19 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
         <section aria-label="What Affinity understood" data-testid="prompt-launch-plan" className="space-y-3 rounded-md border border-border bg-background/50 p-3">
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div className="space-y-1">
-              <dt className="text-xs text-muted-foreground">Site</dt>
-              <dd className="font-medium">{projectName}</dd>
+              <dt><label htmlFor="prompt-launch-site-name" className="text-xs text-muted-foreground">Site name</label></dt>
+              <dd className="space-y-1">
+                <Input
+                  id="prompt-launch-site-name"
+                  data-testid="prompt-launch-site-name"
+                  value={siteName}
+                  maxLength={64}
+                  placeholder="What is your site called?"
+                  aria-describedby={projectName ? undefined : 'prompt-launch-site-name-hint'}
+                  onChange={(event) => setSiteName(event.target.value)}
+                />
+                {!projectName && <p id="prompt-launch-site-name-hint" className="text-xs text-muted-foreground">You haven't named your site yet. Type its name to continue.</p>}
+              </dd>
             </div>
             <div className="space-y-1">
               <dt className="text-xs text-muted-foreground">Purpose</dt>
@@ -173,7 +189,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
       )}
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="ghost" onClick={onClose}>Keep chatting</Button>
-        <Button disabled={!preview} onClick={() => void launch()}><Sparkle />{error ? 'Try again' : 'Create my site'}</Button>
+        <Button disabled={!preview || !projectName} onClick={() => void launch()}><Sparkle />{error ? 'Try again' : 'Create my site'}</Button>
       </div>
       <details className="border-t border-border pt-3 text-sm" data-testid="prompt-launch-import">
         <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Already have a site? Import it instead</summary>

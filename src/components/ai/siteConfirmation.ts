@@ -1,4 +1,5 @@
 import type { AIMessage } from "./AIAssistantCore";
+import { asksForSiteName, extractOwnerSiteName, siteNameFromAnswer, SITE_NAME_BRIEF_LABEL } from "@/services/launch/siteName";
 
 export const SITE_CONFIRMATION_MARKER = "<UNISON_SITE_CONFIRMATION>";
 
@@ -18,6 +19,27 @@ function stripConfirmationQuestion(value: string): string {
     .trim();
 }
 
+/**
+ * What the owner called the site: their answer to the naming question, or a
+ * name they stated ("called Iron Haven"). The latest mention wins, so a
+ * rename later in the chat replaces the earlier one. Never derived from the
+ * assistant's summary or the prompt's subject.
+ */
+export function ownerSiteNameFromMessages(messages: readonly AIMessage[]): string | null {
+  let name: string | null = null;
+  let previousAssistant: AIMessage | undefined;
+  for (const message of messages) {
+    if (message.role === "assistant") { previousAssistant = message; continue; }
+    if (message.role !== "user") continue;
+    const content = message.content.trim();
+    if (!content || isSiteConfirmation(content)) continue;
+    const answersNaming = message.setupStepAnswer === "brand" || asksForSiteName(previousAssistant?.content);
+    const found = answersNaming ? siteNameFromAnswer(content) : extractOwnerSiteName(content);
+    if (found) name = found;
+  }
+  return name;
+}
+
 export function buildConfirmedSiteBrief(messages: AIMessage[]): string {
   const lastAssistantMessage = [...messages]
     .reverse()
@@ -30,7 +52,10 @@ export function buildConfirmedSiteBrief(messages: AIMessage[]): string {
     .map((message) => message.content.trim())
     .filter((content) => Boolean(content) && !isSiteConfirmation(content));
 
+  const siteName = ownerSiteNameFromMessages(messages);
+
   return [
+    siteName && `${SITE_NAME_BRIEF_LABEL} ${siteName}`,
     summary && `Confirmed site direction:\n${summary}`,
     userRequests.length > 0 && `Conversation details:\n${userRequests.join("\n")}`,
   ]

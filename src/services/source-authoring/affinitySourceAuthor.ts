@@ -94,7 +94,7 @@ function baseName(path: string): string {
 function brief(input: AuthorSourceProjectInput, pages: AuthoredPage[], library: string): string {
   return [
     `OWNER PROMPT (creative authority):\n${input.prompt.trim()}`,
-    `PROJECT NAME: ${input.projectName}`,
+    `SITE NAME: ${input.projectName}\nThis is exactly what the owner called the site. Use it verbatim as the visible site/brand name (header wordmark, footer, <title> in index.html) and never replace it with another name.`,
     pages.length ? `SITE PLAN (from the foundation turn):\n${pages.map((page) => `- ${page.title} → ${page.route} (/src/pages/${page.pageId}.tsx)`).join('\n')}` : '',
     input.photos?.length ? `PHOTOS (verified URLs you may use; never invent others):\n${input.photos.join('\n')}` : 'PHOTOS: none supplied. Design without photographs unless the owner gave image URLs.',
     input.advice?.trim() ? `ADVICE (optional; the owner's prompt wins wherever they differ):\n${input.advice.trim()}` : '',

@@ -20,6 +20,7 @@ import type { LaunchOrchestratorInput } from '@/services/launch/launchOrchestrat
 import type { AppBuildGenerationMode } from '@/services/app-builder/appBuilderContracts';
 import { createWizardDesignSelection, type WizardExperiencePreference } from '@/services/wizardDesignSelection';
 import { designSelectionFromDirection, isArtDirectionSealed } from '@/services/launch/experienceDirector';
+import { extractOwnerSiteName } from '@/services/launch/siteName';
 
 /** Optional saved business details that pre-fill public/contact parameters. */
 export interface PromptLaunchPrefill {
@@ -53,25 +54,13 @@ export function inferPromptExperience(prompt: string): WizardExperiencePreferenc
   return 'standard';
 }
 
-const LEADING_REQUEST = /^(?:hi|hello|hey)?[,!.\s]*(?:please\s+)?(?:i(?:'d| would)? (?:like|want|need)(?: to)?|help me|can you|could you|let's|lets)?\s*(?:create|build|make|design|launch|start|get)?\s*(?:me\s+)?(?:a|an|the|my)?\s*/i;
-
 /**
- * Revisable site name: an explicitly stated name wins, then saved business
- * details, then a short title derived from the prompt's subject.
+ * The site name the owner gave in conversation, or `null` when they have not
+ * named it. Never a title derived from the prompt, a saved business name or a
+ * generic default — the creation panel asks the owner instead.
  */
-export function inferPromptSiteName(plan: ChatLaunchPlan, prefillName?: string | null): string {
-  const stated = plan.businessName?.trim();
-  if (stated) return stated;
-  const prompt = plan.creationInput.originalPrompt;
-  const named = prompt.match(/\b(?:called|named|brand(?:ed)? as)\s+["“']?([A-Z0-9][\w&'’ .-]{1,48}?)["”']?(?=[,.;!?\n]|$|\s+(?:for|with|that|which|and)\b)/);
-  if (named?.[1]?.trim()) return named[1].trim();
-  const quoted = prompt.match(/["“]([^"”\n]{2,48})["”]/);
-  if (quoted?.[1]?.trim()) return quoted[1].trim();
-  if (prefillName?.trim()) return prefillName.trim();
-  const subject = plan.creationInput.subject.replace(LEADING_REQUEST, '').replace(/\s+/g, ' ').trim();
-  const words = subject.split(' ').filter(Boolean).slice(0, 5).join(' ').replace(/[,:;.!?]+$/, '');
-  if (!words) return 'My Site';
-  return words.replace(/\b\w/g, (letter) => letter.toUpperCase()).slice(0, 48);
+export function inferPromptSiteName(plan: ChatLaunchPlan): string | null {
+  return plan.businessName?.trim() || extractOwnerSiteName(plan.creationInput.originalPrompt);
 }
 
 const SOCIAL_HOSTS: ReadonlyArray<readonly [platform: string, host: RegExp]> = [
@@ -126,7 +115,7 @@ export function buildPromptLaunchInput(prompt: string, options: PromptLaunchOpti
     throw new Error('Describe the site you want to create.');
   }
   const prefill = options.prefill ?? null;
-  const businessName = inferPromptSiteName(plan, prefill?.businessName);
+  const businessName = inferPromptSiteName(plan) ?? '';
   const theme = resolveTheme(plan);
   const socialLinks = { ...(prefill?.socialLinks ?? {}), ...extractPromptSocialLinks(prompt) };
   const phone = prefill?.phone?.trim() || undefined;
