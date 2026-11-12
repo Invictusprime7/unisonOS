@@ -3,7 +3,7 @@ import { resolvePreviewSource } from '@/services/editor/previewSourceResolver';
 import { PROMPT_CREATIVE_AUTHORITY_POLICY, retireLegacyRegistryOnlyDirective } from '@/services/app-builder/creativeAuthorityPolicy';
 import { readAppBuilderAISettings, saveAppBuilderAISettings } from '@/services/app-builder/appBuilderAISettings';
 import { clarifyBuilderRequest } from '@/services/builder/conversationalClarifier';
-import { isThemeOnlyRequest } from '@/services/theme/themeEdit';
+import { isThemeOnlyRequest, shouldUseThemeTokenLane } from '@/services/theme/themeEdit';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 import { generateSiteImage, locateImageSource, isImageGenerationRequest, IMAGE_GENERATED_EVENT, SiteImageBusyError, SiteImageRequestError, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 /**
@@ -1127,7 +1127,7 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
     // say Book now"); they count only next to a color word.
     const themeCue = /\b(colou?rs?|palette|(?:primary|accent)\s+(?:colou?r|hue|shade|tone)|font|typeface|typography|headings? font|rounder|corners|darker|lighter)\b/i.test(userContent);
     let themeApplied = false;
-    if (onRequestThemeEdit && droppedFiles.length === 0 && (themeOnly || themeCue)) {
+    if (onRequestThemeEdit && droppedFiles.length === 0 && (themeOnly || themeCue) && shouldUseThemeTokenLane(userContent, vfsFiles)) {
       try {
         emitAgentEvent({ kind: 'tool_call', message: 'Updating theme colors and fonts', status: 'running' });
         themeApplied = await onRequestThemeEdit(userContent);

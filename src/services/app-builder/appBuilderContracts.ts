@@ -20,6 +20,7 @@ import { resolvePlaygroundBindingDomIntent, type PlaygroundBinding } from '@/pla
 import type { CreatorBusinessInfo, CreatorComponentInstance, CreatorForm, CreatorFormField } from '@/types/creatorData';
 import type { AICandidateChangeSet } from '@/services/builder/aiCandidateChangeSet';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
+import { DEFAULT_APP_BUILDER_DESIGN_REFERENCE_IDS } from '@/services/knowledge/designKnowledge';
 import type { WizardBusinessParameters } from '@/platform/core/playground';
 import { getIntentDef } from '@/platform/core/intentSurfaceRegistry';
 import {
@@ -485,6 +486,8 @@ export interface AppBuildContract {
     compositionPlan: SiteCompositionPlan;
     /** Which design knowledge must be hydrated; ids only, never duplicated source. */
     sourceSelection: AppBuildDesignSourceSelection;
+    /** Optional visual reference IDs; these never override the sealed design contract. */
+    referenceIds?: readonly string[];
   };
   runtime: {
     framework: 'react-vite';
@@ -521,6 +524,7 @@ export interface BuildAppBuildContractInput {
   designContext: ResolvedSiteDesignContext;
   uiFoundation: AppBuilderUIFoundation;
   registryContext: WizardAggregatedRegistryContext;
+  designReferenceIds?: readonly string[];
   protectedPaths: Iterable<string>;
 }
 
@@ -920,6 +924,7 @@ export function buildAppBuildContract(input: BuildAppBuildContractInput): AppBui
       registryContext: input.registryContext,
       compositionPlan,
       sourceSelection,
+      referenceIds: [...(input.designReferenceIds ?? DEFAULT_APP_BUILDER_DESIGN_REFERENCE_IDS)],
     },
     runtime: {
       framework: 'react-vite',

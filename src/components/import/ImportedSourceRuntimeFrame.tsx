@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, ClipboardCheck, Info, Loader2, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -31,7 +32,7 @@ type RuntimeMessage = { source?: string; nonce?: string; type?: string; path?: s
  * every page and confirm the preview matches their original before the same
  * saved version can be published.
  */
-export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectId, adapter, className, editable = false, onFrameChange, revisionId }: {
+export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectId, adapter, className, editable = false, onFrameChange, revisionId, toolbarHost, previewScale = 1, device = 'desktop', onRefreshReady }: {
   records: ImportedSourceRecords;
   files: Record<string, string>;
   assetUrls: Record<string, string>;
@@ -44,6 +45,11 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
   onFrameChange?: (frame: HTMLIFrameElement | null) => void;
   /** Accepted revision the preview shows; stamped on locators so edits target exactly it. */
   revisionId?: string | null;
+  /** Builder header slot for route and source-verification actions. */
+  toolbarHost?: HTMLDivElement | null;
+  previewScale?: number;
+  device?: 'desktop' | 'tablet' | 'mobile';
+  onRefreshReady?: (refresh: (() => void) | null) => void;
 }) {
   const plan = useMemo(() => planSourceBuild(records.profile, files), [records.profile, files]);
   // Locators only for JSX projects compiled by esbuild (not Vue/Svelte/Solid compilers).
@@ -64,6 +70,9 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
   const [build, setBuild] = useState<SourceBuildResult | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [buildKey, setBuildKey] = useState(0);
+  const frameViewportWidth = device === 'desktop'
+    ? `${100 / previewScale}%`
+    : `${(device === 'tablet' ? 768 : 375) / previewScale}px`;
   const [route, setRoute] = useState('/');
   const [runtimeErrors, setRuntimeErrors] = useState<string[]>([]);
   const [showDetails, setShowDetails] = useState(false);
@@ -95,6 +104,14 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
       .catch((error: unknown) => { if (!cancelled) setBuildError(error instanceof Error ? error.message : String(error)); });
     return () => { cancelled = true; };
   }, [plan, previewFiles, assetUrls, buildKey]);
+
+  useEffect(() => {
+    onRefreshReady?.(() => {
+      setBuildError(null);
+      setBuildKey((key) => key + 1);
+    });
+    return () => onRefreshReady?.(null);
+  }, [onRefreshReady]);
 
   // Already-confirmed saved version?
   useEffect(() => {
@@ -193,59 +210,62 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
 
   const buildFailed = buildError || (build && !build.ok);
   const issues = build?.diagnostics.filter((d) => d.level !== 'info') ?? [];
+  const toolbarActions = toolbarHost ? createPortal(
+    <>
+      {routes.length > 1 && (
+        <Select value={routes.includes(route) ? route : routes[0]} onValueChange={navigate}>
+          <SelectTrigger className="h-8 w-auto min-w-24 max-w-36 border-white/[0.08] bg-[#0f0f11] px-3 text-xs text-[#e4e4e7]" aria-label="Imported page">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="border-white/[0.08] bg-[#0f0f11] text-[#e4e4e7]">
+            {routes.map((path) => <SelectItem key={path} value={path} className="text-xs">{path}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+      <span
+        className="hidden max-w-40 truncate px-1 text-[11px] text-white/45 lg:inline"
+        title={build ? 'Built from your original files, unchanged' : buildFailed ? 'Could not build the original files' : 'Building your original files'}
+      >
+        {build ? 'Original files' : buildFailed ? 'Build failed' : 'Building…'}
+      </span>
+      {publishReady && <CheckCircle2 className="hidden h-3.5 w-3.5 text-emerald-400 sm:block" aria-label="Ready to publish" title="Ready to publish" />}
+      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-white/55 hover:bg-white/[0.07] hover:text-white" onClick={runChecks} disabled={!build?.ok || checking} title={checking ? 'Checking pages' : 'Check pages'} aria-label={checking ? 'Checking pages' : 'Check pages'}>
+        {checking ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ClipboardCheck className="h-4 w-4" aria-hidden />}
+      </Button>
+      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-white/55 hover:bg-white/[0.07] hover:text-white" title="Rebuild preview" aria-label="Rebuild preview" onClick={() => setBuildKey((key) => key + 1)}>
+        <RefreshCw className="h-4 w-4" aria-hidden />
+      </Button>
+      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-white/55 hover:bg-white/[0.07] hover:text-white" onClick={() => setShowDetails((value) => !value)} aria-expanded={showDetails} title={showDetails ? 'Close project details' : 'Project details'} aria-label={showDetails ? 'Close project details' : 'Project details'}>
+        {showDetails ? <X className="h-4 w-4" aria-hidden /> : <Info className="h-4 w-4" aria-hidden />}
+      </Button>
+    </>,
+    toolbarHost,
+  ) : null;
 
   return (
-    <div
-      data-unison-imported-source-preview="running"
-      data-import-framework={records.profile.framework}
-      data-import-adapter={SOURCE_BUILD_ADAPTER}
-      className={cn('relative flex h-full flex-col overflow-hidden rounded-lg border border-border bg-background', className)}
-    >
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
-        {routes.length > 1 ? (
-          <Select value={routes.includes(route) ? route : undefined} onValueChange={navigate}>
-            <SelectTrigger className="h-8 w-48 text-xs" aria-label="Page">
-              <SelectValue placeholder={route} />
-            </SelectTrigger>
-            <SelectContent>
-              {routes.map((r) => <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        ) : (
-          <span className="text-xs font-medium text-foreground">{route}</span>
-        )}
-        <span className="truncate text-xs text-muted-foreground">
-          {build ? 'Built from your original files, unchanged' : buildFailed ? 'Could not build' : 'Building your original files…'}
-          {runtimeErrors.length > 0 ? ` · ${runtimeErrors.length} error${runtimeErrors.length === 1 ? '' : 's'} while running` : ''}
-        </span>
-        {publishReady && (
-          <span className="flex items-center gap-1 text-xs text-primary"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden />Ready to publish</span>
-        )}
-        <div className="ml-auto flex items-center gap-1">
-          <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={runChecks} disabled={!build?.ok || checking}>
-            {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <ClipboardCheck className="h-3.5 w-3.5" aria-hidden />}
-            {checking ? 'Checking pages…' : 'Check pages'}
-          </Button>
-          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Rebuild" aria-label="Rebuild preview" onClick={() => setBuildKey((k) => k + 1)}>
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-          </Button>
-          <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}>
-            {showDetails ? <X className="h-3.5 w-3.5" aria-hidden /> : <Info className="h-3.5 w-3.5" aria-hidden />}
-            {showDetails ? 'Close' : 'Project details'}
-          </Button>
-        </div>
-      </div>
-      <div className="relative min-h-0 flex-1">
+    <>
+      {toolbarActions}
+      <div
+        data-unison-imported-source-preview="running"
+        data-import-framework={records.profile.framework}
+        data-import-adapter={SOURCE_BUILD_ADAPTER}
+        className={cn('relative flex h-full flex-col overflow-hidden bg-background', className)}
+      >
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         {build?.ok ? (
-          <iframe
-            key={`${nonce}:${editBridge ? 'edit' : 'view'}`}
-            ref={attachFrame}
-            title="Imported project preview"
-            className="h-full w-full border-0 bg-background"
-            sandbox="allow-scripts allow-forms allow-popups allow-modals"
-            referrerPolicy="no-referrer"
-            src={RUNTIME_URL}
-          />
+          <div className="absolute inset-0 flex justify-center overflow-hidden">
+            <div className="shrink-0" style={{ width: frameViewportWidth, height: `${100 / previewScale}%`, transform: `scale(${previewScale})`, transformOrigin: 'top center' }}>
+              <iframe
+                key={`${nonce}:${editBridge ? 'edit' : 'view'}`}
+                ref={attachFrame}
+                title="Imported project preview"
+                className="h-full w-full border-0 bg-background"
+                sandbox="allow-scripts allow-forms allow-popups allow-modals"
+                referrerPolicy="no-referrer"
+                src={RUNTIME_URL}
+              />
+            </div>
+          </div>
         ) : (
           <div className="flex h-full items-center justify-center p-6 text-center text-xs text-muted-foreground">
             {buildFailed ? (
@@ -296,6 +316,7 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

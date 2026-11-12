@@ -9,20 +9,29 @@ import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 const PROJECT_WIDE = [
   '/src/App.tsx', '/src/App.jsx', '/src/main.tsx', '/src/main.jsx', '/src/router.tsx', '/src/routes/__root.tsx',
   '/src/index.css', '/src/styles.css', '/src/app.css', '/src/globals.css', '/src/styles/globals.css', '/app/globals.css',
-  '/package.json', '/index.html',
+  '/index.html',
   // Projects without a src/ folder (converted older sites).
   '/App.tsx', '/App.jsx', '/index.tsx', '/index.jsx', '/index.css',
 ];
 const MAX_TARGETS = 40;
 const MAX_FILE_CHARS = 60_000;
 
-export function sourceProjectEditTargets(files: Readonly<Record<string, string>>, pagePath: string, requested: readonly string[] = []): string[] {
+export function sourceProjectEditTargets(
+  files: Readonly<Record<string, string>>,
+  pagePath: string,
+  requested: readonly string[] = [],
+  instruction = '',
+): string[] {
   const editable = (path: string) => typeof files[path] === 'string' && files[path].length <= MAX_FILE_CHARS && isSourceProjectComposerPath(path);
+  const packageTarget = /\b(?:package(?:\.json)?|dependenc(?:y|ies)|npm|install)\b/i.test(instruction)
+    ? ['/package.json']
+    : [];
   const ordered = [
     pagePath,
     ...requested,
     ...collectLocalImportClosure(files, pagePath),
     ...PROJECT_WIDE,
+    ...packageTarget,
   ];
   return [...new Set(ordered)].filter(editable).slice(0, MAX_TARGETS);
 }

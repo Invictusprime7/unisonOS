@@ -44,6 +44,8 @@ function createDependencies() {
     setSaveProjectDialogOpen: vi.fn(),
     setCurrentDraftId: vi.fn(),
     setCurrentTemplateName: vi.fn(),
+    setProjectDisplayName: vi.fn(),
+    setSaveProjectName: vi.fn(),
     setHydrationNonce: vi.fn(),
     clearDraft: vi.fn(),
     toast: { success: vi.fn(), error: vi.fn() },
@@ -52,6 +54,28 @@ function createDependencies() {
 }
 
 describe('WebBuilder save outcome', () => {
+  it('persists and renders the name entered when updating an imported project', async () => {
+    const dependencies = createDependencies();
+    dependencies.templateFiles.updateTemplate.mockResolvedValue(true);
+    dependencies.saveProjectName = 'Northstar Studio';
+    dependencies.buildSavePayloadOrFallback = vi.fn(() => ({
+      projectId: 'project-1',
+      metadata: { name: 'Imported project', projectName: 'Imported project' },
+    }));
+
+    await loadSaveCallback('handleSaveToProjects', dependencies)(false);
+
+    expect(dependencies.templateFiles.updateTemplate).toHaveBeenCalledWith(
+      'existing-draft',
+      'source',
+      expect.objectContaining({
+        metadata: expect.objectContaining({ name: 'Northstar Studio', projectName: 'Northstar Studio' }),
+      }),
+    );
+    expect(dependencies.setCurrentTemplateName).toHaveBeenCalledWith('Northstar Studio');
+    expect(dependencies.setProjectDisplayName).toHaveBeenCalledWith('Northstar Studio');
+  });
+
   it('advances the toolbar base revision synchronously after an accepted commit', () => {
     const commitCallback = source.text.slice(
       source.text.indexOf('const commitBuilderFiles = useCallback'),

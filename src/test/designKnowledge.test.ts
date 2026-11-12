@@ -18,6 +18,14 @@ describe('curated design knowledge', () => {
     expect(first.text).toContain('not a mandatory recipe');
     expect(first.text).toContain('no production certification');
   });
+  it('includes optional Unison X Loveable references only when selected', () => {
+    expect(selectDesignKnowledge('').entries.some(item => item.id === 'unison-loveable-foundations')).toBe(false);
+
+    const selected = selectDesignKnowledge('', 5000, ['unison-loveable-foundations']);
+    expect(selected.entries.map(item => item.id)).toContain('unison-loveable-foundations');
+    expect(selected.text).toContain('not automatically materialized into a generated project');
+    expect(() => selectDesignKnowledge('', 5000, ['missing-reference'])).toThrow('Unknown design reference');
+  });
   it('reports budget omissions and refuses to truncate mandatory policy or project briefs', () => {
     const core = selectDesignKnowledge('');
     expect(selectDesignKnowledge('salon', core.text.length).omitted).toContainEqual({ id: 'salon-journey', reason: 'budget' });

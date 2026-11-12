@@ -201,6 +201,38 @@ test('Gemini-primary App Builder turns use Lovable after Gemini fails', async ()
   });
 });
 
+test('Affinity source-project turns stay on direct Gemini when the managed gateway is configured', async () => {
+  await withProviderEnv({ AI_PROVIDER_MODE: 'hybrid', GEMINI_API_KEY: 'test', LOVABLE_API_KEY: 'test' }, async () => {
+    const calls: string[] = [];
+    const sourceTask = {
+      type: 'source_project_author' as const,
+      fastPath: false,
+      shouldUseMemory: false,
+      shouldUseCompactContext: false,
+      prefersJsonOutput: true,
+      skipResearch: true,
+      skipThinking: false,
+    };
+    const providerPlan = buildProviderPlan(sourceTask, true, undefined, 'complex', 'affinity');
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      calls.push(requestUrl);
+      if (requestUrl.includes('generativelanguage.googleapis.com')) return new Response('Gemini failed', { status: 500 });
+      if (requestUrl.includes('lovable')) return new Response(JSON.stringify({ choices: [{ message: { content: 'Must not be used' } }] }));
+      throw new Error(`Unexpected provider request: ${requestUrl}`);
+    }) as typeof fetch;
+
+    let failed = false;
+    try {
+      await runProviderLoop({ aiMessages: messages, providerPlan, navPageGen: false });
+    } catch {
+      failed = true;
+    }
+    assert(failed, 'a direct Gemini failure must remain a failure rather than silently switching providers');
+    assert(calls.length === 1 && calls[0].includes('generativelanguage.googleapis.com'), 'Affinity source projects must call Gemini only');
+  });
+});
+
 test('page design requests cannot be diverted into catalog mutations', () => {
   assert(isPageDesignRequest('home is complete. design the other nav pages.'), 'remaining pages require file output');
   assert(isPageDesignRequest('redesign the Services page'), 'page layout needs file output');

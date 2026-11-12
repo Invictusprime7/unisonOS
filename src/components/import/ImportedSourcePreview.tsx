@@ -38,7 +38,7 @@ const SIGNED_URL_SECONDS = 60 * 60;
  * Otherwise the truthful status panel is shown; a Unison-rendered substitute
  * is never displayed.
  */
-export function ImportedSourcePreview({ records, files, projectId, onSessionChange, className, editable, onFrameChange, revisionId }: {
+export function ImportedSourcePreview({ records, files, projectId, onSessionChange, className, editable, onFrameChange, revisionId, toolbarHost, previewScale = 1, device = 'desktop', onRefreshReady }: {
   records: ImportedSourceRecords;
   files: Record<string, string>;
   projectId?: string;
@@ -48,6 +48,10 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
   editable?: boolean;
   onFrameChange?: (frame: HTMLIFrameElement | null) => void;
   revisionId?: string | null;
+  toolbarHost?: HTMLDivElement | null;
+  previewScale?: number;
+  device?: 'desktop' | 'tablet' | 'mobile';
+  onRefreshReady?: (refresh: (() => void) | null) => void;
 }) {
   const adapter = useMemo(() => resolveImportPreviewAdapter(records.profile, files), [records.profile, files]);
   const runsStaticHtml = adapter.status === 'available' && adapter.adapter === STATIC_HTML_PREVIEW_ADAPTER;
@@ -59,12 +63,16 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
   const [assetsReady, setAssetsReady] = useState(false);
   const [session, setSession] = useState<ImportedPreviewSession | null>(null);
+  const [isolatedRefreshKey, setIsolatedRefreshKey] = useState(0);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const activePage = page && pages.includes(page) ? page : pages[0] ?? null;
   const shownPageRef = useRef<string | null>(null);
   shownPageRef.current = activePage;
+  const frameViewportWidth = device === 'desktop'
+    ? `${100 / previewScale}%`
+    : `${(device === 'tablet' ? 768 : 375) / previewScale}px`;
   const availableForAssetPreview = runsStaticHtml || usesIsolatedWorker || runsSourceBuild;
   const [checking, setChecking] = useState(false);
   const [summary, setSummary] = useState<VerificationSummary | null>(null);
@@ -72,8 +80,15 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [publishReady, setPublishReady] = useState(false);
+  const [staticRefreshKey, setStaticRefreshKey] = useState(0);
   const probeWaiter = useRef<((probe: Omit<RouteProbe, 'path'>) => void) | null>(null);
   const loadWaiter = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!runsStaticHtml) return;
+    onRefreshReady?.(() => setStaticRefreshKey((key) => key + 1));
+    return () => onRefreshReady?.(null);
+  }, [onRefreshReady, runsStaticHtml]);
 
   useEffect(() => {
     if (!projectId || !runsStaticHtml) return;
@@ -133,6 +148,16 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
       setStarting(false);
     }
   };
+
+  useEffect(() => {
+    if (runsSourceBuild || runsStaticHtml) return;
+    if (!session) {
+      onRefreshReady?.(null);
+      return;
+    }
+    onRefreshReady?.(() => setIsolatedRefreshKey((key) => key + 1));
+    return () => onRefreshReady?.(null);
+  }, [onRefreshReady, runsSourceBuild, runsStaticHtml, session]);
 
   const served = useMemo(() => {
     if (!runsStaticHtml || !activePage || !assetsReady) return null;
@@ -204,7 +229,7 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
     if (!assetsReady) {
       return <div className={cn('flex h-full items-center justify-center rounded-lg border border-border bg-background text-xs text-muted-foreground', className)}><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />Preparing your images and media…</div>;
     }
-    return <ImportedSourceRuntimeFrame records={records} files={files} assetUrls={assetUrls} projectId={projectId} adapter={adapter} className={className} editable={editable} onFrameChange={onFrameChange} revisionId={revisionId} />;
+    return <ImportedSourceRuntimeFrame records={records} files={files} assetUrls={assetUrls} projectId={projectId} adapter={adapter} className={className} editable={editable} onFrameChange={onFrameChange} revisionId={revisionId} toolbarHost={toolbarHost} previewScale={previewScale} device={device} onRefreshReady={onRefreshReady} />;
   }
 
   if (session) {
@@ -225,14 +250,19 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
             <Square className="h-3.5 w-3.5" aria-hidden />
           </Button>
         </div>
-        <div className="relative min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          <div className="absolute inset-0 flex justify-center overflow-hidden">
+            <div className="shrink-0" style={{ width: frameViewportWidth, height: `${100 / previewScale}%`, transform: `scale(${previewScale})`, transformOrigin: 'top center' }}>
           <iframe
+            key={`${session.id}:${isolatedRefreshKey}`}
             title="Isolated imported project preview"
             className="h-full w-full border-0 bg-white"
             src={session.iframeUrl}
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
             referrerPolicy="no-referrer"
           />
+            </div>
+          </div>
         </div>
         <details className="border-t border-border">
           <summary className="cursor-pointer px-3 py-2 text-xs text-muted-foreground">Project details</summary>
@@ -261,49 +291,53 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
     <div
       data-unison-imported-source-preview="running"
       data-import-framework={records.profile.framework}
-      className={cn('relative flex h-full flex-col overflow-hidden rounded-lg border border-border bg-background', className)}
+      className={cn('relative flex h-full flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-[#0f0f11] text-white', className)}
     >
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-white/[0.08] bg-[#1f1f1f] px-3 py-2">
         {pages.length > 1 ? (
           <Select value={activePage ?? undefined} onValueChange={setPage}>
-            <SelectTrigger className="h-8 w-56 text-xs" aria-label="Page">
+            <SelectTrigger className="h-8 w-56 rounded-full border border-white/[0.08] bg-[#292929] px-3 text-xs text-white/85" aria-label="Page">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
-              {pages.map((p) => <SelectItem key={p} value={p} className="text-xs">{p.slice(1)}</SelectItem>)}
+            <SelectContent className="border-white/10 bg-[#252525] text-white">
+              {pages.map((p) => <SelectItem key={p} value={p} className="text-xs focus:bg-white/10 focus:text-white">{p.slice(1)}</SelectItem>)}
             </SelectContent>
           </Select>
         ) : (
-          <span className="text-xs font-medium text-foreground">{activePage?.slice(1)}</span>
+          <span className="text-xs font-medium text-white/85">{activePage?.slice(1)}</span>
         )}
-        <span className="truncate text-xs text-muted-foreground">
+        <span className="truncate text-xs text-white/45">
           Original files, unchanged{missing > 0 ? ` · ${missing} file link${missing === 1 ? '' : 's'} could not be found` : ''}
         </span>
         {publishReady && (
-          <span className="flex items-center gap-1 text-xs text-primary"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden />Ready to publish</span>
+          <span className="flex items-center gap-1 text-xs text-emerald-400"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden />Ready to publish</span>
         )}
-        <Button type="button" variant="ghost" size="sm" className="ml-auto h-8 gap-1.5 text-xs" onClick={checkStaticPages} disabled={checking || !served}>
+        <Button type="button" variant="ghost" size="sm" className="ml-auto h-8 gap-1.5 text-xs text-white/75 hover:bg-white/[0.07] hover:text-white" onClick={checkStaticPages} disabled={checking || !served}>
           {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <ClipboardCheck className="h-3.5 w-3.5" aria-hidden />}
           {checking ? 'Checking pages…' : 'Check pages'}
         </Button>
-        <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}>
+        <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-white/75 hover:bg-white/[0.07] hover:text-white" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}>
           {showDetails ? <X className="h-3.5 w-3.5" aria-hidden /> : <Info className="h-3.5 w-3.5" aria-hidden />}
           {showDetails ? 'Close' : 'Project details'}
         </Button>
       </div>
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         {served ? (
-          <iframe
-            key={activePage ?? ''}
-            ref={frameRef}
-            title="Imported site preview"
-            data-import-page={activePage ?? ''}
-            className="h-full w-full border-0 bg-background"
-            sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
-            referrerPolicy="no-referrer"
-            srcDoc={served.html}
-            onLoad={() => { loadWaiter.current?.(); loadWaiter.current = null; }}
-          />
+          <div className="absolute inset-0 flex justify-center overflow-hidden">
+            <div className="shrink-0" style={{ width: frameViewportWidth, height: `${100 / previewScale}%`, transform: `scale(${previewScale})`, transformOrigin: 'top center' }}>
+              <iframe
+                key={`${activePage ?? ''}:${staticRefreshKey}`}
+                ref={frameRef}
+                title="Imported site preview"
+                data-import-page={activePage ?? ''}
+                className="h-full w-full border-0 bg-background"
+                sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
+                referrerPolicy="no-referrer"
+                srcDoc={served.html}
+                onLoad={() => { loadWaiter.current?.(); loadWaiter.current = null; }}
+              />
+            </div>
+          </div>
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading the original files…</div>
         )}
@@ -320,7 +354,7 @@ export function ImportedSourcePreview({ records, files, projectId, onSessionChan
           />
         )}
         {showDetails && (
-          <div className="absolute inset-0 overflow-auto bg-background">
+          <div className="absolute inset-0 overflow-auto bg-[#0f0f11] text-white">
             {served && served.diagnostics.length > 0 && (
               <div className="mx-auto w-full max-w-xl px-6 pt-6">
                 <p className="mb-2 text-xs font-medium text-foreground">Things the original page asks for that this preview could not supply</p>

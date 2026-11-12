@@ -108,14 +108,24 @@ export function resolveCanonicalAuthoringPage(
   } catch {
     pages = [];
   }
-  const normalizedTarget = targetFile ? (targetFile.startsWith('/') ? targetFile : `/${targetFile}`) : null;
+  const isSourceFile = (path?: string | null): path is string =>
+    Boolean(path && typeof files[path] === 'string' && /\.(?:tsx?|jsx?)$/i.test(path));
+  const normalize = (path?: string | null) => path ? (path.startsWith('/') ? path : `/${path}`) : null;
+  const normalizedTarget = normalize(targetFile);
+  const normalizedOwner = normalize(owningPageFile);
+  const sourceTarget = isSourceFile(normalizedTarget) ? normalizedTarget : null;
+  const sourceOwner = isSourceFile(normalizedOwner) ? normalizedOwner : null;
   const page =
-    pages.find(item => item.filePath === normalizedTarget) ??
-    pages.find(item => item.filePath === owningPageFile) ??
+    pages.find(item => item.filePath === sourceTarget) ??
+    pages.find(item => item.filePath === sourceOwner) ??
     pages.find(item => item.path === '/') ??
     pages[0];
+  const registeredSource = isSourceFile(page?.filePath) ? page.filePath : null;
+  const fallbackSource = Object.keys(files).find(path =>
+    /^\/(?:src\/(?:pages|routes)|app\/(?:routes|pages)|pages)\/.+\.(?:tsx?|jsx?)$/i.test(path),
+  ) ?? Object.keys(files).find(isSourceFile);
   const filePath =
-    normalizedTarget ?? page?.filePath ?? Object.keys(files).find(path => /^\/src\/pages\/[^/]+\.(?:tsx|jsx)$/.test(path)) ?? '/src/pages/Home.tsx';
+    sourceTarget ?? registeredSource ?? sourceOwner ?? fallbackSource ?? '/src/pages/Home.tsx';
   const fallbackTitle =
     filePath
       .split('/')
@@ -226,7 +236,19 @@ export async function assembleCanonicalAuthoringRequest(input: CanonicalAuthorin
   request: AIComposerRequest;
   evidence: CanonicalAuthorshipEvidence;
 }> {
-  const targets = input.sourceTargets?.length ? input.sourceTargets : [input.page.filePath];
+  const isSourceTarget = (path: string) =>
+    typeof input.baseFiles[path] === 'string'
+    && (/\.(?:tsx?|jsx?|mjs|cjs|css|scss|html?)$/i.test(path)
+      || (path === '/package.json' && input.sourceProject === true && /\b(?:package(?:\.json)?|dependenc(?:y|ies)|npm|install)\b/i.test(input.instruction ?? '')));
+  const requestedTargets = input.sourceTargets?.length ? input.sourceTargets : [input.page.filePath];
+  const targets = requestedTargets.filter(isSourceTarget);
+  if (targets.length === 0) {
+    const fallbackTarget = Object.keys(input.baseFiles).find(path =>
+      /^\/(?:src\/(?:pages|routes)|app\/(?:routes|pages)|pages)\/.+\.(?:tsx?|jsx?)$/i.test(path),
+    );
+    if (!fallbackTarget) throw new Error('No editable source file is available for this Builder edit.');
+    targets.push(fallbackTarget);
+  }
   const scope = input.sourceScope ?? (input.task === 'builder_source_edit' ? scopeForInstruction(input.instruction) : {});
   // Edit policy: the files being edited must always reach the Composer. Edit
   // requests get a larger transport budget, and if optional context (theme,
@@ -343,7 +365,7 @@ export async function assembleCanonicalAuthoringRequest(input: CanonicalAuthorin
       instruction: input.instruction,
       files: source.files,
       availableRuntimeDependencies: resolveSiteDependencyRuntime(input.baseFiles).packageNames,
-      sourceTargets: input.task === 'builder_source_edit' ? [...new Set(input.sourceTargets?.length ? input.sourceTargets : [input.page.filePath])] : undefined,
+      sourceTargets: input.task === 'builder_source_edit' ? [...new Set(targets)] : undefined,
       approvedRouteOps:
         input.task === 'builder_source_edit'
           ? (input.approvedRouteOps ?? []).map(op => {

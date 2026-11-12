@@ -251,7 +251,7 @@ export function createUnisonAppBuilder(
       // their own conventions; import repair keeps its narrower contract.
       const sourceProject = !input.importedSource && isImportedSourceVfs(input.currentFiles as Record<string, string>);
       if (sourceProject) {
-        input = { ...input, sourceTargets: sourceProjectEditTargets(input.currentFiles, input.page.filePath, input.sourceTargets), initialRouteOps: undefined };
+        input = { ...input, sourceTargets: sourceProjectEditTargets(input.currentFiles, input.page.filePath, input.sourceTargets, input.instruction), initialRouteOps: undefined };
       }
       const connector = createUnisonBuilderContext({
         ...input.connectorContext,

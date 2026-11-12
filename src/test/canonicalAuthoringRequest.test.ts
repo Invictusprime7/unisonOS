@@ -6,6 +6,7 @@ import {
   shouldUseCanonicalComposer,
 } from '@/services/builder/canonicalAuthoringRequest';
 import { buildWizardAggregatedRegistryContext } from '@/services/launch/wizardRegistryAggregation';
+import { sourceProjectEditTargets } from '@/services/source-authoring/sourceProjectEditTargets';
 
 const files = {
   '/src/pages/Home.tsx': "import Hero from '../project-components/Hero'; export default function Home(){return <Hero/>}",
@@ -129,6 +130,39 @@ describe('canonical AI authorship request assembly', () => {
     expect(resolveCanonicalAuthoringPage(withTopology, '/src/pages/Pricing.tsx')).toEqual({
       role: 'pricing', title: 'Pricing', route: '/pricing', filePath: '/src/pages/Pricing.tsx',
     });
+  });
+
+  it('rejects package metadata as an edit target and keeps the owning source page', async () => {
+    const importedFiles = {
+      '/package.json': '{"dependencies":{"react":"18"}}',
+      '/src/routes/index.tsx': 'export default function Home(){return <main/>}',
+    };
+    const page = resolveCanonicalAuthoringPage(importedFiles, '/package.json', '/src/routes/index.tsx');
+    expect(page.filePath).toBe('/src/routes/index.tsx');
+
+    const assembled = await assembleCanonicalAuthoringRequest({
+      task: 'builder_source_edit',
+      sourceProject: true,
+      page,
+      brief: 'Edit the selected source page.',
+      knowledgeQuery: 'source edit',
+      baseFiles: importedFiles,
+      sourceTargets: ['/package.json', '/src/routes/index.tsx'],
+      routes: [],
+    });
+    expect(assembled.request.sourceTargets).toEqual(['/src/routes/index.tsx']);
+    expect(assembled.request.files['/package.json']).toBeUndefined();
+  });
+
+  it('keeps package.json out of visual edit targets unless dependencies are requested', () => {
+    const sourceProjectFiles = {
+      '/package.json': '{"dependencies":{"react":"18"}}',
+      '/src/routes/index.tsx': 'export default function Home(){return <main/>}',
+    };
+    const visualTargets = sourceProjectEditTargets(sourceProjectFiles, '/src/routes/index.tsx', [], 'make the hero red');
+    const dependencyTargets = sourceProjectEditTargets(sourceProjectFiles, '/src/routes/index.tsx', [], 'add the lucide-react dependency');
+    expect(visualTargets).not.toContain('/package.json');
+    expect(dependencyTargets).toContain('/package.json');
   });
 
   it('uses complete transitive source and records hashed evidence', async () => {

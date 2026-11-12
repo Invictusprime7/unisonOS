@@ -62,4 +62,37 @@ describe('source knowledge for authoring and complex repairs', () => {
     expect(result.finalBytes).toBeLessThanOrEqual(8000);
     expect(JSON.stringify(request)).toBe(original);
   });
+
+  it('shrinks source-project turns without truncating the request or dropping build foundations', () => {
+    const request = {
+      task: 'source_project_author',
+      page: { role: 'home', title: 'Home', route: '/', filePath: '/src/pages/Home.tsx' },
+      brief: 'Write a complete bakery site',
+      files: {
+        '/package.json': '{"dependencies":{"react":"^18.3.1"}}',
+        '/index.html': '<div id="root"></div>',
+        '/src/App.tsx': 'export default function App() { return null; }',
+        '/src/main.tsx': "import App from './App';",
+        '/src/index.css': '@import "tailwindcss";',
+        '/src/pages/Home.tsx': 'export default function Home() { return <main />; }',
+        '/src/pages/About.tsx': 'a'.repeat(20_000),
+        '/src/components/Heavy.tsx': 'b'.repeat(20_000),
+      },
+      sourceTargets: ['/src/pages/Home.tsx'],
+      routes: [],
+    };
+    const original = JSON.stringify(request);
+    const result = shrinkBuilderTurnPayload({
+      mode: 'source-project-author',
+      messages: [{ role: 'user', content: original }],
+    }, 8_000);
+    const decoded = JSON.parse(result.payload.messages[0].content);
+
+    expect(aiComposerRequestSchema.safeParse(decoded).success).toBe(true);
+    expect(decoded.files['/package.json']).toBe(request.files['/package.json']);
+    expect(decoded.files['/src/App.tsx']).toBe(request.files['/src/App.tsx']);
+    expect(decoded.files['/src/pages/Home.tsx']).toBe(request.files['/src/pages/Home.tsx']);
+    expect(result.finalBytes).toBeLessThanOrEqual(8_000);
+    expect(JSON.stringify(request)).toBe(original);
+  });
 });

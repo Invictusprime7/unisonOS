@@ -135,6 +135,7 @@ function contract(industry = 'salon', pageRoles: readonly string[] = ['home']): 
       uiFoundation: {} as never, registryContext,
       compositionPlan,
       sourceSelection: deriveDesignSourceSelection(registryContext),
+      referenceIds: ['unison-loveable-foundations'],
     },
     runtime: {
       framework: 'react-vite', language: 'typescript', styling: 'tailwind',
@@ -304,7 +305,17 @@ describe('UnisonAppBuilder facade', () => {
 
     expect(globalContext).toBe('');
     expect(pageContext).toContain('PERSISTABLE SECTION CONTRACT');
+    expect(pageContext).toContain('OPTIONAL DESIGN REFERENCES');
+    expect(pageContext).toContain('Unison X Loveable');
     expect(authorSite).toHaveBeenCalledOnce();
+  });
+
+  it('omits optional design references when the contract selects none', () => {
+    const appContract = contract();
+    appContract.design.referenceIds = [];
+    const generation = buildAppBuilderGenerationContext(appContract);
+
+    expect(generation.runtimeContextForPage('home')).not.toContain('OPTIONAL DESIGN REFERENCES');
   });
 
   it('projects canonical Home objects and bindings before handing the page forward', async () => {

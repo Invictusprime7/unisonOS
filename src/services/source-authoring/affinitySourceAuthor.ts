@@ -210,12 +210,13 @@ export async function authorSourceProject(input: AuthorSourceProjectInput): Prom
       if (response) return response;
       const code = (error as { status?: number; context?: { status?: number } } | null)?.status
         ?? (error as { context?: { status?: number } } | null)?.context?.status;
+      const errorName = (error as { name?: string } | null)?.name;
       lastError = (error as { message?: string } | null)?.message
         || (data as { error?: string } | null)?.error
         || lastError;
       // Billing, permission and cancellation are final; only transport/format problems retry once.
       if (input.signal?.aborted || code === 401 || code === 402 || code === 403 || code === 429) break;
-      if (TIMEOUT_PATTERN.test(lastError) || code === 504 || code === 546) {
+      if (TIMEOUT_PATTERN.test(lastError) || code === 408 || code === 504 || code === 546 || errorName === 'TimeoutError') {
         timedOut = true;
         current = smaller(current);
         status(`${label} (in smaller parts)`);

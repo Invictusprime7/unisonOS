@@ -149,12 +149,16 @@ export interface VFSPreviewProps {
   revisionId?: string | null;
   /** Device breakpoint for responsive preview */
   device?: 'desktop' | 'tablet' | 'mobile';
+  /** Visual fit scale for the rendered site, independent of the Builder shell. */
+  previewScale?: number;
   /** Enable element selection (edit mode) */
   enableSelection?: boolean;
   /** Callback when an element is selected */
   onElementSelect?: (elementData: any) => void;
   /** Commit a text edit performed directly on a selected preview leaf. */
   onInlineTextCommit?: (change: InlineTextEditChange) => boolean | void | Promise<boolean | void>;
+  /** Builder header slot for controls owned by an imported source preview. */
+  toolbarHost?: HTMLDivElement | null;
 }
 
 export interface VFSPreviewHandle {
@@ -381,9 +385,11 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   siteId,
   revisionId = null,
   device = 'desktop',
+  previewScale = 1,
   enableSelection = false,
   onElementSelect,
   onInlineTextCommit,
+  toolbarHost,
 }, ref) => {
   const builderSession = React.useContext(BuilderSessionContext);
   const { launch } = useLaunch();
@@ -460,6 +466,10 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   const externalPreviewChannelRef = useRef<BroadcastChannel | null>(null);
   const externalPreviewFilesRef = useRef(files);
   const importedPreviewSessionRef = useRef<ImportedPreviewSession | null>(null);
+  const importedPreviewRefreshRef = useRef<(() => void) | null>(null);
+  const onImportedPreviewRefreshReady = useCallback((refresh: (() => void) | null) => {
+    importedPreviewRefreshRef.current = refresh;
+  }, []);
   const importedFrameRef = useRef<HTMLIFrameElement | null>(null);
   externalPreviewFilesRef.current = files;
 
@@ -1323,6 +1333,10 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
   }, [dockerService]);
   
   const handleRestart = useCallback(() => {
+    if (importedSourceRecords) {
+      importedPreviewRefreshRef.current?.();
+      return;
+    }
     if (backend === 'docker') {
       const entryPath = resolveLauncherEntryPoint(
         files,
@@ -1337,7 +1351,7 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
       setSandpackRenderExhausted(false);
       setSandpackKey(k => k + 1);
     }
-  }, [backend, dockerService, files, launch]);
+  }, [backend, dockerService, files, importedSourceRecords, launch]);
 
   const handleSandpackTimeout = useCallback(() => {
     if (
@@ -1508,6 +1522,10 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
         className={className}
         editable={Boolean(onElementSelect)}
         revisionId={revisionId ?? null}
+        toolbarHost={toolbarHost}
+        previewScale={previewScale}
+        device={device}
+        onRefreshReady={onImportedPreviewRefreshReady}
         onFrameChange={(frame) => { importedFrameRef.current = frame; bridgeReadyRef.current = false; }}
       />
     );
@@ -1690,10 +1708,13 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
             <iframe
               ref={iframeRef}
               src={dockerUrl}
-              className="h-full border-0 bg-white transition-all duration-300"
+              className="h-full shrink-0 border-0 bg-white transition-all duration-300"
               style={{
-                width: device === 'mobile' ? '375px' : device === 'tablet' ? '768px' : '100%',
-                maxWidth: '100%',
+                width: device === 'mobile' ? '375px' : device === 'tablet' ? '768px' : `${100 / previewScale}%`,
+                height: `${100 / previewScale}%`,
+                maxWidth: device === 'desktop' ? 'none' : '100%',
+                transform: `scale(${previewScale})`,
+                transformOrigin: 'top center',
                 boxShadow: device !== 'desktop' ? '0 4px 20px rgba(0,0,0,0.15)' : 'none',
                 borderRadius: device !== 'desktop' ? '12px' : '0',
                 pointerEvents: enableSelection ? 'auto' : undefined,
@@ -1780,12 +1801,14 @@ export const VFSPreview = forwardRef<VFSPreviewHandle, VFSPreviewProps>(({
               customSetup={sandpackCustomSetup}
             >
               <SandpackLayout
-                className="!flex-1 !min-h-0 !border-0 !rounded-none !bg-transparent"
+                className="!flex-none !min-h-0 !border-0 !rounded-none !bg-transparent"
                 style={{
-                  height: '100%',
-                  width: device === 'mobile' ? '375px' : device === 'tablet' ? '768px' : '100%',
-                  maxWidth: '100%',
+                  height: `${100 / previewScale}%`,
+                  width: device === 'mobile' ? '375px' : device === 'tablet' ? '768px' : `${100 / previewScale}%`,
+                  maxWidth: device === 'desktop' ? 'none' : '100%',
                   marginInline: 'auto',
+                  transform: `scale(${previewScale})`,
+                  transformOrigin: 'top center',
                 }}
               >
                 <SandpackPreview

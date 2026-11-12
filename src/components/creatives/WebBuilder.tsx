@@ -9,7 +9,7 @@ import { rebaseTextEdit } from '@/services/builder/textEditRebase';
 import type { TerminalFileOp, TerminalRouteOp } from '@/services/terminalCommands';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { captureIntentBaseline, deriveIntentChecks, verifyCommittedChange } from '@/services/agent-runtime/browserVerification';
-import { buildPreviewRouteTabs, extractRenderedRoutes, ROUTE_TAB_PREFIX, resolveRouteSourceFile } from '@/components/creatives/web-builder/previewRouteTabs';
+import { extractRenderedRoutes, resolveRouteSourceFile } from '@/components/creatives/web-builder/previewRouteTabs';
 import "./web-builder/obsidian-theme.css";
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense, Component, type ReactNode, type ErrorInfo } from "react";
 import { createPortal } from 'react-dom';
@@ -24,10 +24,19 @@ import {
   Monitor, Tablet, Smartphone, MousePointer2, MoreHorizontal,
   Sparkles, Code, Undo2, Redo2, Save, Keyboard, Zap, RefreshCcw,
   ChevronsDown, ChevronsUp, ArrowDown, ArrowUp, FileCode, Copy, Maximize2, Trash2,
-  FolderOpen, Cloud, CloudOff, Server, Layers, Settings, ExternalLink, GitBranch, Shield, Palette
+  FolderOpen, Cloud, CloudOff, Server, Layers, Settings, ExternalLink, GitBranch, Shield, Palette,
+  Menu, MessageSquare, Globe, FileText, Code2, Share2, ChevronDown, Rocket, Check, X,
 } from "lucide-react";
 import { CloudPanel } from "./web-builder/CloudPanel";
-import { PageNavigationBar, type PageTab } from "./web-builder/PageNavigationBar";
+import { PageRouteSelector, detectRouteConflicts } from "./web-builder/PageRouteSelector";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useCreatorPlayground } from "@/hooks/useCreatorPlayground";
 import { toast } from "sonner";
 import {
@@ -195,7 +204,6 @@ import {
   mutateJSXImageSrc,
   mutateJSXAttributes,
 } from "@/utils/jsxElementMutation";
-import { detectRouteConflicts } from "./web-builder/PageRouteBar";
 import { useUserDesignProfile } from "@/hooks/useUserDesignProfile";
 import type { SystemsBuildContext } from "@/types/systemsBuildContext";
 import { useAIVFS } from '@/hooks/useAIVFS';
@@ -672,6 +680,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
   const [aiPanelOpen, setAiPanelOpen] = useState(true); // AI panel open by default for easy access; force-closed on mount if mobile (see useEffect below)
   const [aiBuilderToolsHost, setAIBuilderToolsHost] = useState<HTMLDivElement | null>(null);
   const [aiBuilderCustomizerHost, setAIBuilderCustomizerHost] = useState<HTMLDivElement | null>(null);
+  const [importedPreviewToolbarHost, setImportedPreviewToolbarHost] = useState<HTMLDivElement | null>(null);
   const [iframeErrors, setIframeErrors] = useState<IframeError[]>([]);
   const dragDropServiceRef = useRef<CanvasDragDropService>(CanvasDragDropService.getInstance());
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -2348,19 +2357,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     }
   }, [creatorPlayground.pageRegistry, virtualFS, handleSelectPage, launchEntryPoint]);
 
-  // ──────────────────────────────────────────────────────────────────────
-  // Page tabs (PageNavigationBar) — derived from canonical PageRegistry.
-  // Tab `path` field carries pageId so selection can route through
-  // navigateToBuilderPage (registry-first, single source of truth).
-  // ──────────────────────────────────────────────────────────────────────
-  const pageTabs = useMemo<PageTab[]>(() => (
-    // Tabs mirror exactly the routes the Live Preview renders from /src/App.tsx.
-    buildPreviewRouteTabs(
-      Object.values(creatorPlayground.pageRegistry.pages),
-      virtualFS.getSandpackFiles()['/src/App.tsx'],
-    )
-  ), [creatorPlayground.pageRegistry, virtualFS.nodes]);
-
   const aiPageTargets = useMemo(() => {
     const files = virtualFS.getSandpackFiles();
     const registryPages = Object.values(creatorPlayground.pageRegistry.pages);
@@ -2380,78 +2376,16 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     activePreviewRoute,
   ) ?? activePagePath;
 
-  const activePageTabId = useMemo(() => {
-    const routeTab = `${ROUTE_TAB_PREFIX}${activePreviewRoute}`;
-    if (pageTabs.some((t) => t.path === routeTab)) return routeTab;
-    if (activePageId && creatorPlayground.pageRegistry.pages[activePageId]) {
-      return activePageId;
-    }
-    // Fallback: match active editor file → registry page
-    const match = Object.values(creatorPlayground.pageRegistry.pages).find(
-      (p) => p.filePath && p.filePath === activePagePath,
-    );
-    return match?.pageId ?? (creatorPlayground.pageRegistry.homePageId || '');
-  }, [activePageId, activePagePath, activePreviewRoute, pageTabs, creatorPlayground.pageRegistry]);
-
-  const handlePageTabSelect = useCallback((pageId: string) => {
-    if (pageId.startsWith(ROUTE_TAB_PREFIX)) {
-      const route = pageId.slice(ROUTE_TAB_PREFIX.length) || '/';
-      setActivePreviewRoute(route);
-      livePreviewRef.current?.navigateToRoute(route);
-      return;
-    }
-    navigateToBuilderPage(pageId);
-  }, [navigateToBuilderPage]);
-
   const handlePageTabAdd = useCallback(() => {
     // Open Creator Playground (Pages section) for canonical add flow
     setPlaygroundModalOpen(true);
   }, []);
 
-  const handlePageTabRemove = useCallback((pageId: string) => {
-    if (pageId.startsWith(ROUTE_TAB_PREFIX)) return;
-    const page = creatorPlayground.pageRegistry.pages[pageId];
-    if (!page) return;
-    if (page.isHome) {
-      toast.error('Cannot remove the home page');
-      return;
-    }
-    if (!confirm(`Delete page "${page.title}"?`)) return;
-
-    // Remove VFS file (if any), then drop from registry, then resync router.
-    const vfsFiles = virtualFS.getSandpackFiles();
-    if (page.filePath && vfsFiles[page.filePath]) {
-      const next = { ...vfsFiles };
-      delete next[page.filePath];
-      // canonical-vfs-exempt: registry-owned page removal; the registry is the deletion authority
-      virtualFS.importFiles(next);
-    }
-    creatorPlayground.removePage(pageId);
-
-    // The registry-version effect regenerates the router automatically,
-    // but doing it inline keeps file removal + router update atomic.
-    const result = syncRouterAndValidate(
-      { ...creatorPlayground.pageRegistry, pages: Object.fromEntries(
-        Object.entries(creatorPlayground.pageRegistry.pages).filter(([id]) => id !== pageId)
-      ) },
-      virtualFS.getSandpackFiles(),
-    );
-    if (result.routerCode) {
-      // canonical-vfs-exempt: deterministic router projection from the page registry
-      virtualFS.importFiles({ [launchEntryPoint]: result.routerCode });
-    }
-
-    if (activePagePath === page.filePath) {
-      handleSelectPage(launchEntryPoint);
-    }
-    toast.success(`Removed "${page.title}"`);
-  }, [creatorPlayground, virtualFS, launchEntryPoint, activePagePath, handleSelectPage]);
-
   // ──────────────────────────────────────────────────────────────────────
   // Auto-register VFS pages into PageRegistry.
   // When the in-builder AI (or any code path) writes a new
   // /src/pages/*.tsx file that has no corresponding registry entry,
-  // register it so it appears in the PageNavigationBar and routing.
+  // register it so it appears in the PageRouteSelector and routing.
   // ──────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const files = virtualFS.getSandpackFiles();
@@ -6805,7 +6739,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
 
   // Handle save to projects from preview
   const handleSaveToProjects = useCallback(async (saveAsNew: boolean = false) => {
-    if (!saveProjectName.trim()) {
+    const savedName = saveProjectName.trim();
+    if (!savedName) {
       toast.error("Please enter a project name");
       return;
     }
@@ -6815,19 +6750,27 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       const isUpdating = templateFiles.currentDraftId && !saveAsNew;
       const finalCode = getFinalCodeWithOverrides();
       const basePayload = buildSavePayloadOrFallback(virtualFSRef.current.getSandpackFiles());
+      const namedPayload = {
+        ...basePayload,
+        metadata: {
+          ...(basePayload.metadata || {}),
+          name: savedName,
+          projectName: savedName,
+        },
+      };
       
       if (isUpdating) {
         // Update existing project
-        const updated = await templateFiles.updateTemplate(templateFiles.currentDraftId, finalCode, basePayload);
+        const updated = await templateFiles.updateTemplate(templateFiles.currentDraftId, finalCode, namedPayload);
         if (!updated) throw new Error('Project update did not complete.');
-        toast.success(`Updated "${saveProjectName}"`);
+        toast.success(`Updated "${savedName}"`);
       } else {
         // Save as new project — strip source projectId + flag forceNew so a
         // brand-new builder_draft (and projects row via trigger) is created
         // instead of silently overwriting the currently-open project.
         const sourceDraftId = templateFiles.currentDraftId || null;
         const newPayload = {
-          ...basePayload,
+          ...namedPayload,
           projectId: null,
           forceNew: true,
           metadata: {
@@ -6837,7 +6780,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           },
         };
         const newDraftId = await templateFiles.saveTemplate(
-          saveProjectName,
+          savedName,
           saveProjectDescription,
           false,
           finalCode,
@@ -6849,10 +6792,14 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           // and history entries target the copy, not the original.
           templateFiles.setCurrentDraftId(newDraftId);
           setCurrentDraftId(newDraftId);
-          setCurrentTemplateName(saveProjectName);
+          setCurrentTemplateName(savedName);
         }
-        toast.success(saveAsNew ? `Saved "${saveProjectName}" as a new project` : `Saved "${saveProjectName}" to Projects`);
+        toast.success(saveAsNew ? `Saved "${savedName}" as a new project` : `Saved "${savedName}" to Projects`);
       }
+
+      setCurrentTemplateName(savedName);
+      setProjectDisplayName(savedName);
+      setSaveProjectName(savedName);
       
       setHydrationNonce(current => current + 1);
       setSaveProjectDialogOpen(false);
@@ -6943,6 +6890,22 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     livePreviewRef.current?.refresh();
     setTimeout(() => setIsRefreshing(false), 600);
   }, []);
+
+  const handleShareProject = useCallback(async () => {
+    const url = window.location.href;
+    const title = projectDisplayName.trim() || currentTemplateName || projectNameFromState || 'Site';
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success('Link copied to clipboard');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      toast.error('Could not share the site link');
+    }
+  }, [projectDisplayName, currentTemplateName, projectNameFromState]);
 
   const handlePreviewCartQuantityChange = useCallback(async (productId: string, quantity: number) => {
     await previewCartManager.update(productId, quantity);
@@ -7371,9 +7334,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     const sourceFiles = getSandpackFiles();
     return buildCanonicalArtifacts(sourceFiles, {
       entryPoint: activePagePath,
-      title: currentTemplateName || 'Unison Site',
+      title: currentTemplateName || projectDisplayName || saveProjectName || projectNameFromState,
     });
-  }, [getSandpackFiles, activePagePath, currentTemplateName]);
+  }, [getSandpackFiles, activePagePath, currentTemplateName, projectDisplayName, saveProjectName, projectNameFromState]);
 
   const handleExport = (format: string) => {
     const canonicalBuildArtifacts = getCurrentCanonicalBuildArtifacts();
@@ -7943,8 +7906,195 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       {/* Interactive Element Highlighting Styles */}
       <InteractiveElementHighlight isInteractiveMode={isInteractiveMode} />
 
-      {/* Global builder toolbar */}
-      <div className="z-20 flex min-h-11 flex-shrink-0 flex-col gap-1 border-b border-white/[0.06] bg-[#0a0a14] px-2 py-1 lg:h-11 lg:flex-row lg:items-center lg:gap-1.5 lg:px-3 lg:py-0">
+      <header className="z-30 flex h-11 shrink-0 items-center gap-1 border-b border-white/[0.06] bg-[#09090b] px-2 sm:gap-2 sm:px-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md text-white/55 hover:bg-white/[0.07] hover:text-white" title="Builder menu" aria-label="Builder menu">
+                <Menu className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-60 border-white/[0.08] bg-[#0f0f11] text-[#e4e4e7]">
+              <DropdownMenuLabel className="truncate text-xs text-white/55">{projectDisplayName || currentTemplateName || 'Site'}</DropdownMenuLabel>
+              {projectId && (
+                <div className="px-2 pb-2">
+                  <input
+                    value={projectDisplayName}
+                    onChange={(event) => setProjectDisplayName(event.target.value)}
+                    onBlur={(event) => handleRenameProject(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') (event.target as HTMLInputElement).blur();
+                      if (event.key === 'Escape') {
+                        setProjectDisplayName(projectNameFromState || '');
+                        (event.target as HTMLInputElement).blur();
+                      }
+                    }}
+                    disabled={renamingProject}
+                    placeholder="Untitled project"
+                    aria-label="Project name"
+                    className="h-8 w-full rounded-md border border-white/10 bg-black/20 px-2 text-xs text-white outline-none focus:border-white/30"
+                  />
+                </div>
+              )}
+              <DropdownMenuSeparator className="bg-white/10" />
+              <DropdownMenuItem onClick={handleBackNavigation} className="text-xs focus:bg-white/10 focus:text-white">
+                <ExternalLink className="mr-2 h-3.5 w-3.5" /> Back
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSaveProjectDialogOpen(true)} className="text-xs focus:bg-white/10 focus:text-white">
+                <Save className="mr-2 h-3.5 w-3.5" /> Save project
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFileManagerOpen(true)} className="text-xs focus:bg-white/10 focus:text-white">
+                <FolderOpen className="mr-2 h-3.5 w-3.5" /> Files and templates
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setPlaygroundInitialBindingId(undefined); setPlaygroundModalOpen(true); }} className="text-xs focus:bg-white/10 focus:text-white">
+                <Play className="mr-2 h-3.5 w-3.5" /> Creator's Playground
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-white/10" />
+              <DropdownMenuItem onClick={() => { setViewMode('changes'); setAiPanelOpen(false); }} className="text-xs focus:bg-white/10 focus:text-white">
+                <GitBranch className="mr-2 h-3.5 w-3.5" /> Changes
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/cloud')} className="text-xs focus:bg-white/10 focus:text-white">
+                <Cloud className="mr-2 h-3.5 w-3.5" /> Cloud projects
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-white/10" />
+              <DropdownMenuItem onClick={checkpointsEnabled ? () => void handleCheckpointUndo() : handleUndo} disabled={checkpointsEnabled ? checkpointBusy : !codeHistory.canUndo} className="text-xs focus:bg-white/10 focus:text-white">
+                <Undo2 className="mr-2 h-3.5 w-3.5" /> Undo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={checkpointsEnabled ? () => void handleCheckpointRedo() : handleRedo} disabled={checkpointsEnabled ? checkpointBusy || checkpointRedo.length === 0 : !codeHistory.canRedo} className="text-xs focus:bg-white/10 focus:text-white">
+                <Redo2 className="mr-2 h-3.5 w-3.5" /> Redo
+              </DropdownMenuItem>
+              {checkpointsEnabled && (
+                <div className="px-2 py-1">
+                  <CheckpointsPopover
+                    draftId={currentDraftId}
+                    currentRevisionId={checkpointEffectiveRef.current ?? currentRevisionId}
+                    refreshKey={checkpointTick}
+                    disabled={checkpointBusy}
+                    onRestore={async (checkpoint) => {
+                      const effective = checkpointEffectiveRef.current ?? currentRevisionId;
+                      if (await applyCheckpoint(checkpoint, 'Restored') && effective) setCheckpointRedo([]);
+                    }}
+                  />
+                </div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setAiPanelOpen((open) => !open)}
+            className={cn("hidden h-8 w-8 rounded-md border border-white/10 text-white/65 hover:bg-white/[0.07] hover:text-white sm:inline-flex", aiPanelOpen && "bg-white/[0.08] text-white")}
+            title={aiPanelOpen ? "Close Affinity" : "Open Affinity"}
+            aria-label={aiPanelOpen ? "Close Affinity" : "Open Affinity"}
+            aria-pressed={aiPanelOpen}
+          >
+            <MessageSquare className="h-4 w-4" />
+          </Button>
+
+          <div className="ml-0.5 flex h-8 items-center gap-0.5 rounded-full border border-white/[0.06] bg-[#18181b] p-0.5 sm:ml-1 sm:h-9">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const nextMode = builderMode === 'select' ? 'preview' : 'select';
+                setViewMode('canvas');
+                setBuilderMode(nextMode);
+                setIsInteractiveMode(nextMode === 'preview');
+                if (nextMode === 'preview') {
+                  setSelectedHTMLElement(null);
+                  clearSelection();
+                  clearLivePreviewSelection();
+                }
+              }}
+              className="h-7 gap-1 rounded-full px-2 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white sm:h-8 sm:gap-1.5 sm:px-3"
+              aria-pressed={builderMode === 'preview'}
+              title={builderMode === 'select' ? 'Switch to preview mode' : 'Switch to edit mode'}
+              aria-label={builderMode === 'select' ? 'Edit' : 'Preview'}
+            >
+              {builderMode === 'select' ? <MousePointer2 className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">{builderMode === 'select' ? 'Edit' : 'Preview'}</span>
+            </Button>
+            <div className="mx-0.5 h-5 w-px bg-white/10" />
+            <Button variant="ghost" size="icon" onClick={() => { setViewMode('canvas'); setBuilderMode('select'); setIsInteractiveMode(false); }} className={cn("hidden h-8 w-8 rounded-full md:inline-flex", viewMode === 'canvas' && builderMode === 'select' ? "text-white" : "text-white/50 hover:bg-white/[0.07] hover:text-white")} title="Design canvas" aria-label="Design canvas">
+              <FileText className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setViewMode('code')} className={cn("hidden h-8 w-8 rounded-full md:inline-flex", viewMode === 'code' ? "text-white" : "text-white/50 hover:bg-white/[0.07] hover:text-white")} title="Code" aria-label="Code" aria-pressed={viewMode === 'code'}>
+              <Code2 className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => { setRightPanelCollapsed(false); setAiPanelOpen(false); }} className="hidden h-8 w-8 rounded-full text-white/50 hover:bg-white/[0.07] hover:text-white lg:inline-flex" title="Layers and properties" aria-label="Layers and properties">
+              <Layers className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="hidden min-w-2 flex-1 lg:block" />
+
+        <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="hidden h-8 w-8 shrink-0 text-white/55 hover:bg-white/[0.07] hover:text-white sm:inline-flex" title={`Preview size: ${device}`} aria-label={`Preview size: ${device}`}>
+                {device === 'desktop' ? <Monitor className="h-4 w-4" /> : device === 'tablet' ? <Tablet className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="border-white/[0.08] bg-[#0f0f11] text-[#e4e4e7]">
+              <DropdownMenuItem onClick={() => setDevice('desktop')} className="text-xs focus:bg-white/10 focus:text-white"><Monitor className="mr-2 h-3.5 w-3.5" /> Desktop</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDevice('tablet')} className="text-xs focus:bg-white/10 focus:text-white"><Tablet className="mr-2 h-3.5 w-3.5" /> Tablet</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDevice('mobile')} className="text-xs focus:bg-white/10 focus:text-white"><Smartphone className="mr-2 h-3.5 w-3.5" /> Mobile</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="ghost" size="icon" onClick={handleRefreshPreview} className="h-8 w-8 shrink-0 text-white/55 hover:bg-white/[0.07] hover:text-white" title="Refresh preview" aria-label="Refresh preview">
+            <RefreshCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+          </Button>
+          {isImportedSourceVfs(virtualFS.getSandpackFiles()) ? (
+            <div ref={setImportedPreviewToolbarHost} className="flex min-w-0 items-center gap-1" />
+          ) : (
+            <PageRouteSelector
+              activePagePath={activePagePath}
+              activePageId={activePageId}
+              activePreviewRoute={activePreviewRoute}
+              pageRegistry={creatorPlayground.pageRegistry}
+              onNavigateToPage={navigateToBuilderPage}
+              onToggleNavVisibility={(pageId, visible) => creatorPlayground.updatePage(pageId, { showInNav: visible })}
+              onSetHomePage={creatorPlayground.setHomePage}
+              onAddPage={handlePageTabAdd}
+              onOpenPlayground={() => setPlaygroundModalOpen(true)}
+              routeConflicts={routeConflicts}
+            />
+          )}
+          <Button variant="ghost" size="icon" onClick={() => livePreviewRef.current?.openInNewTab()} className="hidden h-8 w-8 shrink-0 text-white/50 hover:bg-white/[0.07] hover:text-white md:inline-flex" title="Open preview in new tab" aria-label="Open preview in new tab">
+            <ExternalLink className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="hidden min-w-2 flex-1 lg:block" />
+
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleShareProject} className="h-8 gap-1.5 rounded-full border-white/15 bg-transparent px-2 text-xs text-white/80 hover:bg-white/[0.07] hover:text-white sm:px-3">
+            <Share2 className="h-3.5 w-3.5" /><span className="hidden sm:inline">Share</span>
+          </Button>
+          <DeployButton
+            getFiles={() => {
+              const live = virtualFS.getSandpackFiles();
+              return isImportedSourceVfs(live) ? live : (getCurrentCanonicalBuildArtifacts()?.deployFiles || {});
+            }}
+            defaultSiteName={currentTemplateName || projectDisplayName || saveProjectName || projectNameFromState || undefined}
+            buttonLabel="Publish"
+            contract={compiledContract}
+            snapshot={effectiveRouteState?.siteBundleSnapshot ?? null}
+            systemId={activeSystemType}
+            projectId={projectId ?? null}
+            expectedRevisionId={currentRevisionId || null}
+            variant="default"
+            size="sm"
+            showProviderSelect={false}
+            onDeployComplete={(url) => toast.success('Site published!', { description: `Live at ${url}` })}
+          />
+        </div>
+      </header>
+
+      {/* Legacy toolbar retained temporarily for its existing panels; replaced visually by the topbar above. */}
+      {false && <div>
         {/* Left Section: AI Toggle, Back, Device, Mode */}
         <div className="flex w-full items-center justify-between gap-1.5 lg:w-auto lg:justify-start lg:gap-2">
           <Button
@@ -8189,7 +8339,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                 const live = virtualFS.getSandpackFiles();
                 return isImportedSourceVfs(live) ? live : (getCurrentCanonicalBuildArtifacts()?.deployFiles || {});
               }}
-              defaultSiteName={currentTemplateName || 'unison-site'}
+              defaultSiteName={currentTemplateName || projectDisplayName || saveProjectName || projectNameFromState || undefined}
               contract={compiledContract}
               snapshot={effectiveRouteState?.siteBundleSnapshot ?? null}
               systemId={activeSystemType}
@@ -8277,7 +8427,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
           </Button>
           </div>{/* end hidden sm:flex right panel+playground */}
         </div>
-      </div>
+      </div>}
 
       {/* Creator's Playground Modal */}
       {playgroundModalOpen && (
@@ -8936,33 +9086,6 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   'flex-1 overflow-hidden relative flex flex-col',
                   viewMode === 'split' && 'bg-white',
                 )}>
-                  {/* Page tabs — synced with PageRegistry (Creator Playground + AI-generated pages) */}
-                  <PageNavigationBar
-                    pages={pageTabs}
-                    activePage={activePageTabId}
-                    onSelectPage={handlePageTabSelect}
-                    onAddPage={handlePageTabAdd}
-                    onRemovePage={handlePageTabRemove}
-                    onUndo={checkpointsEnabled ? () => void handleCheckpointUndo() : handleUndo}
-                    onRedo={checkpointsEnabled ? () => void handleCheckpointRedo() : handleRedo}
-                    onRefresh={handleRefreshPreview}
-                    onOpenPreview={() => livePreviewRef.current?.openInNewTab()}
-                    canUndo={checkpointsEnabled ? !checkpointBusy : codeHistory.canUndo}
-                    canRedo={checkpointsEnabled ? !checkpointBusy && checkpointRedo.length > 0 : codeHistory.canRedo}
-                    extraActions={checkpointsEnabled ? (
-                      <CheckpointsPopover
-                        draftId={currentDraftId}
-                        currentRevisionId={checkpointEffectiveRef.current ?? currentRevisionId}
-                        refreshKey={checkpointTick}
-                        disabled={checkpointBusy}
-                        onRestore={async (checkpoint) => {
-                          const effective = checkpointEffectiveRef.current ?? currentRevisionId;
-                          if (await applyCheckpoint(checkpoint, 'Restored') && effective) setCheckpointRedo([]);
-                        }}
-                      />
-                    ) : undefined}
-                    isRefreshing={isRefreshing}
-                  />
                   <div 
                     ref={viewMode === 'split' ? splitViewDropZoneRef : scrollContainerRef}
                     data-drop-zone="true"
@@ -8982,6 +9105,8 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                         forceBackend="sandpack"
                         showBackendIndicator={false}
                         device={device}
+                        previewScale={0.82}
+                        toolbarHost={importedPreviewToolbarHost}
                         enableSelection={builderMode === 'select' && !templateCustomizer.isDirty}
                         onElementSelect={builderMode === 'select' ? handlePreviewElementSelect : undefined}
                         onLegacyPreviewRendered={handleLegacyPreviewRendered}

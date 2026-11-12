@@ -26,6 +26,15 @@
   color: var(--wb-text);
 }
 
+@media (min-width: 1024px) {
+  .wb-obsidian {
+    zoom: 0.9;
+    width: 100%;
+    height: 111.111dvh;
+    min-height: 111.111dvh;
+  }
+}
+
 /* ---- Backgrounds ------------------------------------------------------- */
 .wb-obsidian .bg-\[\#1a0a14\],
 .wb-obsidian .bg-\[\#0a0a14\],

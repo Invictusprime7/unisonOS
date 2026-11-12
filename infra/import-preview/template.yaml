@@ -1,0 +1,394 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Isolated per-import Fargate preview gateway and worker tasks.
+
+Parameters:
+  PreviewBaseDomain:
+    Type: String
+    AllowedPattern: '^[a-z0-9.-]+$'
+    Description: DNS suffix on a registrable domain different from Unison for api.<domain> and <session-id>.<domain>.
+  CertificateArn:
+    Type: String
+    Description: ACM certificate covering api.<PreviewBaseDomain> and *.<PreviewBaseDomain>.
+  AppOrigin:
+    Type: String
+    Default: https://www.unisontasks.com
+    Description: Unison origin allowed to frame imported preview pages.
+  SupabaseUrl:
+    Type: String
+    Default: https://nfrdomdvyrbwuokathtw.supabase.co
+  SupabasePublishableKey:
+    Type: String
+    NoEcho: true
+    Description: UNISON publishable key used only with user-scoped RLS requests.
+  GatewayImageTag:
+    Type: String
+    Default: latest
+  WorkerImageTag:
+    Type: String
+    Default: latest
+  GatewayDesiredCount:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 1
+    Description: Leave at zero for the first stack creation, push both images, then update to one.
+
+Resources:
+  PreviewVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.77.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-preview'
+
+  PreviewInternetGateway:
+    Type: AWS::EC2::InternetGateway
+  PreviewInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref PreviewVpc
+      InternetGatewayId: !Ref PreviewInternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PreviewVpc
+      CidrBlock: 10.77.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-a'
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PreviewVpc
+      CidrBlock: 10.77.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-b'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref PreviewVpc
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: PreviewInternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref PreviewInternetGateway
+  PublicSubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  GatewaySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Preview gateway accepts traffic only from the public ALB.
+      VpcId: !Ref PreviewVpc
+  GatewayIngressFromAlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref GatewaySecurityGroup
+      IpProtocol: tcp
+      FromPort: 3001
+      ToPort: 3001
+      SourceSecurityGroupId: !Ref AlbSecurityGroup
+  WorkerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Per-project workers accept traffic only from the gateway.
+      VpcId: !Ref PreviewVpc
+  WorkerIngressFromGateway:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref WorkerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 4173
+      ToPort: 4173
+      SourceSecurityGroupId: !Ref GatewaySecurityGroup
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTPS entry for the isolated preview gateway.
+      VpcId: !Ref PreviewVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 3001
+          ToPort: 3001
+          DestinationSecurityGroupId: !Ref GatewaySecurityGroup
+
+  PreviewAlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${AWS::StackName}-preview'
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
+      SecurityGroups: [!Ref AlbSecurityGroup]
+  GatewayTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref PreviewVpc
+      TargetType: ip
+      Port: 3001
+      Protocol: HTTP
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      Matcher:
+        HttpCode: '200'
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref PreviewAlb
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref GatewayTargetGroup
+
+  PreviewCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub '${AWS::StackName}-preview'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  GatewayRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${AWS::StackName}-preview-gateway'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+  WorkerRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${AWS::StackName}-preview-worker'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-preview-source
+            Status: Enabled
+            ExpirationInDays: 1
+
+  GatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${AWS::StackName}/gateway'
+      RetentionInDays: 14
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${AWS::StackName}/worker'
+      RetentionInDays: 7
+
+  EcsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  GatewayTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: start-preview-tasks-and-stage-source
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [ecs:RunTask]
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/${AWS::StackName}-import-preview-worker:*'
+                  - !GetAtt PreviewCluster.Arn
+                Condition:
+                  ArnEquals:
+                    ecs:cluster: !GetAtt PreviewCluster.Arn
+              - Effect: Allow
+                Action: [ecs:DescribeTasks, ecs:StopTask]
+                Resource: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/${AWS::StackName}-preview/*'
+              - Effect: Allow
+                Action: [iam:PassRole]
+                Resource: !GetAtt EcsExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject, s3:DeleteObject]
+                Resource: !Sub '${SourceBucket.Arn}/source/*'
+
+  WorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: WorkerLogGroup
+    Properties:
+      Family: !Sub '${AWS::StackName}-import-preview-worker'
+      Cpu: '1024'
+      Memory: '2048'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt EcsExecutionRole.Arn
+      EphemeralStorage:
+        SizeInGiB: 30
+      ContainerDefinitions:
+        - Name: import-preview-worker
+          Image: !Sub '${WorkerRepository.RepositoryUri}:${WorkerImageTag}'
+          Essential: true
+          User: '1000:1000'
+          StopTimeout: 120
+          PortMappings:
+            - ContainerPort: 4173
+              HostPort: 4173
+              Protocol: tcp
+          LinuxParameters:
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WorkerLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: preview
+
+  GatewayTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: GatewayLogGroup
+    Properties:
+      Family: !Sub '${AWS::StackName}-preview-gateway'
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt EcsExecutionRole.Arn
+      TaskRoleArn: !GetAtt GatewayTaskRole.Arn
+      ContainerDefinitions:
+        - Name: import-preview-gateway
+          Image: !Sub '${GatewayRepository.RepositoryUri}:${GatewayImageTag}'
+          Essential: true
+          User: '1000:1000'
+          PortMappings:
+            - ContainerPort: 3001
+              HostPort: 3001
+              Protocol: tcp
+          Environment:
+            - Name: PORT
+              Value: '3001'
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: ECS_CLUSTER
+              Value: !Ref PreviewCluster
+            - Name: WORKER_TASK_DEFINITION
+              Value: !Ref WorkerTaskDefinition
+            - Name: WORKER_SUBNETS
+              Value: !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+            - Name: WORKER_SECURITY_GROUP
+              Value: !Ref WorkerSecurityGroup
+            - Name: PREVIEW_SOURCE_BUCKET
+              Value: !Ref SourceBucket
+            - Name: PREVIEW_BASE_DOMAIN
+              Value: !Ref PreviewBaseDomain
+            - Name: APP_ORIGIN
+              Value: !Ref AppOrigin
+            - Name: SUPABASE_URL
+              Value: !Ref SupabaseUrl
+            - Name: SUPABASE_PUBLISHABLE_KEY
+              Value: !Ref SupabasePublishableKey
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref GatewayLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: gateway
+
+  GatewayService:
+    Type: AWS::ECS::Service
+    DependsOn: HttpsListener
+    Properties:
+      ServiceName: !Sub '${AWS::StackName}-preview-gateway'
+      Cluster: !Ref PreviewCluster
+      TaskDefinition: !Ref GatewayTaskDefinition
+      DesiredCount: !Ref GatewayDesiredCount
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 0
+        MaximumPercent: 100
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
+          SecurityGroups: [!Ref GatewaySecurityGroup]
+      LoadBalancers:
+        - TargetGroupArn: !Ref GatewayTargetGroup
+          ContainerName: import-preview-gateway
+          ContainerPort: 3001
+
+Outputs:
+  GatewayUrl:
+    Value: !Sub 'https://api.${PreviewBaseDomain}'
+  LoadBalancerDnsName:
+    Value: !GetAtt PreviewAlb.DNSName
+  GatewayRepositoryUri:
+    Value: !GetAtt GatewayRepository.RepositoryUri
+  WorkerRepositoryUri:
+    Value: !GetAtt WorkerRepository.RepositoryUri
+  WorkerTaskDefinitionArn:
+    Value: !Ref WorkerTaskDefinition

@@ -75,13 +75,22 @@ export function shrinkBuilderTurnPayload<T extends Record<string, unknown>>(
         if (context?.files && typeof context.files === 'object' && context.page?.filePath) {
           const sync = () => { payload.messages = [{ ...last, content: JSON.stringify(context) }]; };
           sync();
-          // Read-only context goes first (largest first); files the edit may
-          // write are dropped only when nothing else is left.
-          const writable = new Set<string>(Array.isArray(context.sourceTargets) ? context.sourceTargets : []);
+          const sourceProject = context.task === 'source_project_author';
+          const sourceProjectFoundation = new Set([
+            '/package.json', '/index.html', '/vite.config.ts', '/vite.config.js', '/vite.config.mjs',
+            '/tsconfig.json', '/postcss.config.js', '/postcss.config.mjs', '/postcss.config.cjs',
+            '/src/App.tsx', '/src/main.tsx', '/src/index.css',
+          ]);
+          const protectedPaths = new Set([
+            context.page.filePath,
+            ...(Array.isArray(context.sourceTargets) ? context.sourceTargets : []),
+            ...(sourceProject ? sourceProjectFoundation : []),
+          ]);
+          // Read-only context goes first (largest first); targets and source-project
+          // foundation files stay intact while optional context is removed.
           const optional = Object.keys(context.files)
-            .filter((path) => path !== context.page.filePath)
-            .sort((a, b) => Number(writable.has(a)) - Number(writable.has(b))
-              || String(context.files[b]).length - String(context.files[a]).length);
+            .filter((path) => !protectedPaths.has(path))
+            .sort((a, b) => String(context.files[b]).length - String(context.files[a]).length);
           for (const path of optional) {
             if (fits()) break;
             delete context.files[path];

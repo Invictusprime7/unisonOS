@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Sparkle } from 'lucide-react';
+import { Check, Loader2, Sparkle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,6 @@ import { SourceAuthoringError } from '@/services/source-authoring/affinitySource
 import { prepareImportedProjectHandoff } from '@/services/import/importHandoff';
 import { ImportProjectZipButton } from '@/components/onboarding/ImportProjectZipButton';
 import { ImportUnisonSiteZipButton } from '@/components/onboarding/ImportUnisonSiteZipButton';
-import { CreativeBriefInspector } from '@/components/launch/CreativeBriefInspector';
 
 /** Key prefix of answers saved by the retired guided setup; they may hold private contact details. */
 export const RETIRED_INTERVIEW_DRAFT_PREFIX = 'unison.launch-interview.';
@@ -67,6 +66,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
   const [error, setError] = useState<string | null>(null);
   const [details, setDetails] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const activeActivity = activity[activity.length - 1] || 'Reading your conversation';
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -90,7 +90,7 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
         signal: controller.signal,
         onStatus: (next) => {
           if (controller.signal.aborted) return;
-          setActivity((current) => current[current.length - 1] === next ? current : [...current, next].slice(-8));
+          setActivity((current) => current[current.length - 1] === next ? current : [...current, next]);
         },
       });
       if (controller.signal.aborted) return;
@@ -118,10 +118,27 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
 
   if (launching) {
     return (
-      <div className="mt-3 space-y-3 rounded-lg border border-border bg-card p-4 text-card-foreground" aria-live="polite" data-testid="prompt-launch-progress">
-        <p className="flex items-center gap-2 text-sm font-medium"><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />Affinity is writing your site</p>
-        <ol className="space-y-1 text-xs text-muted-foreground">
-          {activity.map((step, index) => <li key={`${index}-${step}`}>{step}</li>)}
+      <div className="mt-3 space-y-3 rounded-lg border border-border bg-card p-4 text-card-foreground" data-testid="prompt-launch-progress">
+        <p className="flex items-center gap-2 text-sm font-medium"><Sparkle className="h-4 w-4 text-primary" />Affinity is writing your site</p>
+        <p className="sr-only" role="status" aria-live="polite">{activeActivity}</p>
+        <ol aria-label="Site generation steps" className="max-h-48 space-y-1 overflow-y-auto">
+          {activity.map((step, index) => {
+            const completed = index < activity.length - 1;
+            return (
+              <li
+                key={`${index}-${step}`}
+                aria-current={completed ? undefined : 'step'}
+                data-step-status={completed ? 'complete' : 'active'}
+                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs ${completed ? 'text-muted-foreground' : 'bg-muted/50 font-medium text-foreground'}`}
+              >
+                {completed
+                  ? <Check aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  : <Loader2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0 animate-spin motion-reduce:animate-none" />}
+                <span className="min-w-0 flex-1">{step}</span>
+                <span className="sr-only">{completed ? 'Completed' : 'In progress'}</span>
+              </li>
+            );
+          })}
         </ol>
         <Button variant="ghost" onClick={() => { abortRef.current?.abort(); setLaunching(false); setActivity([]); }}>Stop</Button>
       </div>
@@ -177,9 +194,6 @@ export function PromptLaunchPanel({ brief, demoGeneration, prefill, onClose, onL
         </section>
       ) : (
         <p role="alert" className="text-sm text-destructive">Describe the site you want to create in the chat first.</p>
-      )}
-      {creation?.experienceDirection && (
-        <CreativeBriefInspector direction={creation.experienceDirection} pages={creation.pages} />
       )}
       {error && (
         <div role="alert" className="space-y-2 rounded-md border border-destructive p-3 text-sm text-destructive">

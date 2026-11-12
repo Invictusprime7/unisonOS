@@ -17,6 +17,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     root: projectRoot,
+    cacheDir: process.env.VITE_CACHE_DIR || (process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, 'UnisonOS', 'vite-cache')
+      : undefined),
     // Babel 7 reads this Node-only feature flag during module initialization.
     // Replace only the flag, not process or the host environment.
     define: {

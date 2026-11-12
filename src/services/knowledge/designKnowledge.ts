@@ -1,5 +1,6 @@
 /** Curated from the 2026-09-29 milestone. Guidance is not executable vocabulary. */
-export const DESIGN_KNOWLEDGE_VERSION = '2026-09-29.2';
+export const DESIGN_KNOWLEDGE_VERSION = '2026-11-12.1';
+export const DEFAULT_APP_BUILDER_DESIGN_REFERENCE_IDS = ['unison-loveable-foundations'] as const;
 export interface DesignKnowledgeEntry {
   id: string;
   version: string;
@@ -42,6 +43,12 @@ export const DESIGN_KNOWLEDGE: readonly DesignKnowledgeEntry[] = [
     compatibility: { composer: 'design inspiration only; adapt routing and source paths', registry: 'local components, not canonical registry exports', runtime: 'TanStack Router / Tailwind 4 reference; not a drop-in Builder runtime' },
     supersedes: ['aria-reference@2026-09-29.1'],
   },
+  {
+    ...entry('unison-loveable-foundations', 'reference', ['unison', 'loveable', 'design', 'composition', 'hero', 'services', 'gallery', 'navigation', 'cta'],
+      'Optional visual reference: the attached Unison X Loveable catalog includes HeroEditorialBanner, HeroFullBleed and HeroSplitImage compositions; ServicesAlternating and ServicesEditorialRows; GalleryCinematicGrid and GalleryEditorialMosaic; plus distinct navigation, CTA and footer treatments. Use these verified export names to understand the examples, not as generated-project imports or required recipes. Translate their hierarchy, rhythm and composition into the current page job while preserving the App Build Contract’s sealed art direction, theme tokens and responsive/accessibility requirements. The attached library is not automatically materialized into a generated project: use its package alias only when the exact module exists in that project’s available source and import context. Recreate suitable ideas with approved design-source modules or project-local components, and never infer working business behavior from a visual reference.'),
+    source: '.lovable/rules/libraries/unison-x-loveable-design-d5be96/library-guidelines.md and src/design-system/unison-x-loveable-design-d5be96/index.ts',
+    compatibility: { composer: 'inspiration only; follow the current App Builder contract', registry: 'not a canonical registry or generated-project import', runtime: 'attached library is not automatically materialized into generated projects' },
+  },
 ];
 
 export interface DesignKnowledgeSelection {
@@ -54,17 +61,35 @@ export interface DesignKnowledgeSelection {
 const render = (item: DesignKnowledgeEntry) => `[${item.id}@${item.version}] ${item.text}`;
 
 /** Mandatory policy is independent of search. Guidance uses stable lexical ranking. */
-export function selectDesignKnowledge(query: string, maxCharacters = 5000): DesignKnowledgeSelection {
+export function selectDesignKnowledge(
+  query: string,
+  maxCharacters = 5000,
+  includeReferenceIds: readonly string[] = [],
+): DesignKnowledgeSelection {
   if (!Number.isFinite(maxCharacters) || maxCharacters < 0) throw new Error('Knowledge budget cannot fit mandatory policy.');
   const terms = new Set(query.toLowerCase().match(/[a-z0-9]+/g) ?? []);
   const entries = DESIGN_KNOWLEDGE.filter(item => item.status === 'active' && item.scope === 'core-policy');
   let text = entries.map(render).join('\n');
   if (text.length > maxCharacters) throw new Error('Knowledge budget cannot fit mandatory policy.');
   const omitted: DesignKnowledgeSelection['omitted'] = [];
-  const ranked = DESIGN_KNOWLEDGE.filter(item => item.scope !== 'core-policy').map(item => ({
+  const requestedIds = [...new Set(includeReferenceIds)];
+  const byId = new Map(DESIGN_KNOWLEDGE.map(item => [item.id, item]));
+  for (const id of requestedIds) {
+    const item = byId.get(id);
+    if (!item || item.scope !== 'reference') throw new Error(`Unknown design reference: ${id}.`);
+  }
+  const explicitlySelected = requestedIds.flatMap((id) => {
+    const item = byId.get(id);
+    return item ? [item] : [];
+  });
+  const explicitlySelectedIds = new Set(requestedIds);
+  const ranked = DESIGN_KNOWLEDGE.filter(item => item.scope !== 'core-policy' && !explicitlySelectedIds.has(item.id)).map(item => ({
     item, score: item.tags.reduce((sum, tag) => sum + Number(terms.has(tag)), 0),
   })).sort((a, b) => b.score - a.score || a.item.id.localeCompare(b.item.id));
-  for (const { item, score } of ranked) {
+  for (const { item, score } of [
+    ...explicitlySelected.map((item) => ({ item, score: 1 })),
+    ...ranked,
+  ]) {
     const reason = item.status !== 'active' ? 'inactive' : !score ? 'not-relevant'
       : text.length + render(item).length + 1 > maxCharacters ? 'budget' : null;
     if (reason) omitted.push({ id: item.id, reason });

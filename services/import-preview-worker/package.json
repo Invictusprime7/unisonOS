@@ -1,0 +1,17 @@
+{
+  "name": "@unison/import-preview-worker",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start:gateway": "node gateway.mjs",
+    "start:worker": "node worker.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ecs": "^3.840.0",
+    "@aws-sdk/client-s3": "^3.840.0",
+    "@aws-sdk/s3-request-presigner": "^3.840.0",
+    "@supabase/server": "^1.9.2",
+    "@supabase/supabase-js": "^2.95.3"
+  }
+}

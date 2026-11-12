@@ -1,4 +1,5 @@
 import { buildThemedIndexCss } from '@/components/onboarding/themePresetToIndexCss';
+import { isImportedSourceVfs } from '@/services/import/importedSourceRecords';
 import { z } from 'zod';
 import type { SiteBundleSnapshot } from '@/platform/core/canonicalPipeline';
 import { THEME_PRESETS } from '@/components/onboarding/themePresets';
@@ -30,6 +31,10 @@ export function isThemeOnlyRequest(prompt: string): boolean {
     || /\b(to|read|say)\s*[:]?\s*["'“‘]/i.test(prompt)
   )) return false;
   return /\b(theme|palette|typography|font|typeface|appearance|aesthetic|style|headings?|colou?r|darker|lighter|contrast|rounder|corners|restyle)\b|\b(?:use|switch to|make it|make (?:the )?site)\s+(?:more\s+)?(?:bold|organic|modern|editorial|futuristic|minimal(?:ist)?)\b/i.test(prompt);
+}
+
+export function shouldUseThemeTokenLane(prompt: string, files: Record<string, string> | null | undefined): boolean {
+  return isThemeOnlyRequest(prompt) && !isImportedSourceVfs(files);
 }
 
 export function decodeThemeEdit(response: unknown): ThemeEdit {

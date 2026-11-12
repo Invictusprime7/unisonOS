@@ -1,0 +1,9 @@
+FROM node:24-bookworm-slim
+ENV NODE_ENV=production
+RUN npm install --global bun@1.4.4 && corepack enable
+WORKDIR /workspace
+COPY worker.mjs /opt/worker.mjs
+RUN chown -R node:node /workspace /opt/worker.mjs
+USER node
+EXPOSE 4173
+CMD ["node", "/opt/worker.mjs"]

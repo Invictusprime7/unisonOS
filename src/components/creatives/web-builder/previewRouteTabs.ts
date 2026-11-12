@@ -4,8 +4,13 @@
  * pages that the preview does not route are hidden, and every rendered route
  * gets a tab even if the registry lacks it, so the two can never disagree.
  */
-import type { PageTab } from './PageNavigationBar';
 export { resolveLocalImports, resolveRouteSourceFile } from '@/utils/routeSourceResolver';
+
+export interface PageTab {
+  path: string;
+  label: string;
+  isMain: boolean;
+}
 
 export interface RegistryPageLike {
   pageId: string;

@@ -41,6 +41,21 @@ Deno.test('Composer uses the configured Gemini model and honors lower request ca
   assertEquals(capped.perModelTimeoutMs, 20000);
 });
 
+Deno.test('Affinity source projects use direct Gemini without a managed gateway fallback', () => {
+  const sourceTask = { ...task, type: 'source_project_author' as const };
+  const env = (name: string) => ({
+    GEMINI_API_KEY: 'test-gemini-key',
+    LOVABLE_API_KEY: 'must-not-be-used',
+  }[name]);
+  const plan = buildProviderPlan(sourceTask, true, undefined, 'complex', 'affinity', env);
+
+  assertEquals(plan.primaryProvider, 'gemini');
+  assertEquals(plan.geminiOnly, false);
+  assertEquals(plan.disableManagedFallback, true);
+  assertEquals(plan.gatewayModels.map((model) => model.id), ['google/gemini-3.8-flash']);
+  assertEquals(plan.gatewayModels[0].maxTokens, 48_000);
+});
+
 Deno.test('OpenAI-only configuration never creates a provider plan', () => {
   const plan = buildProviderPlan(task, true, undefined, 'moderate', 'stale-openai',
     (name) => name === 'OPENAI_API_KEY' ? 'must-be-ignored' : undefined);

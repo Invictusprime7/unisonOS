@@ -233,7 +233,8 @@ export async function runProviderLoop(opts: {
   const geminiExclusive = isGeminiExclusiveProviderMode();
   const geminiOnlyTurn = geminiExclusive || Boolean(providerPlan.geminiOnly);
   // Guest actions use only models with a configured, enforceable price schedule.
-  const hasLastResortGateway = !guestOnly && allowDirectFallbacks && hasLovableGatewayAccess();
+  const hasLastResortGateway = !guestOnly && allowDirectFallbacks
+    && !providerPlan.disableManagedFallback && hasLovableGatewayAccess();
   // The remembered out-of-credit pause only exists to hand work to a backup
   // faster. With no backup, always re-check the key: a 402 answers instantly
   // and costs nothing, and the owner may have just added credits.

@@ -30,6 +30,8 @@ export interface ProviderPlan {
   raceGateway?: boolean;
   /** Only Gemini models may serve this turn (direct Gemini API first, Gemini on the managed gateway as backup). */
   geminiOnly?: boolean;
+  /** Do not use the managed gateway for Affinity source-project authorship. */
+  disableManagedFallback?: boolean;
 }
 
 export interface GatewayOverrides {
@@ -315,6 +317,7 @@ export function buildProviderPlan(
     plan.gatewayModels = [geminiModel];
     plan.primaryProvider = 'gemini';
     plan.geminiOnly = isGeminiExclusiveProviderMode(readEnv);
+    plan.disableManagedFallback = task.type === 'source_project_author';
     plan.raceGateway = false;
   } else if (!hasExplicitModel) {
     plan.primaryProvider = wizardGeminiConfigured

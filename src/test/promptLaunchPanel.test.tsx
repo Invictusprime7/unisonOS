@@ -2,14 +2,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-const { createAffinitySourceProject } = vi.hoisted(() => ({ createAffinitySourceProject: vi.fn() }));
+const { createAffinitySourceProject, SourceAuthoringError } = vi.hoisted(() => ({
+  createAffinitySourceProject: vi.fn(),
+  SourceAuthoringError: class extends Error {
+    detail: string[];
+    constructor(message: string, detail: string[] = []) { super(message); this.detail = detail; }
+  },
+}));
 vi.mock('@/services/source-authoring/createAffinitySourceProject', () => ({ createAffinitySourceProject }));
+vi.mock('@/services/source-authoring/affinitySourceAuthor', () => ({ SourceAuthoringError }));
 vi.mock('@/services/import/importHandoff', () => ({ prepareImportedProjectHandoff: () => ({ fromImportedSource: true }) }));
 vi.mock('@/components/onboarding/ImportProjectZipButton', () => ({ ImportProjectZipButton: () => <button type="button">Import an exported .zip</button> }));
 vi.mock('@/components/onboarding/ImportUnisonSiteZipButton', () => ({ ImportUnisonSiteZipButton: () => <button type="button">Restore a Unison export</button> }));
 
 import { PromptLaunchPanel } from '@/components/launch/PromptLaunchPanel';
-import { SourceAuthoringError } from '@/services/source-authoring/affinitySourceAuthor';
 
 const BRIEF = 'Build a Ghanaian football publication called Black Star Pulse with an interactive match centre.';
 
@@ -28,6 +34,7 @@ describe('PromptLaunchPanel (chat-only site creation)', () => {
     expect(screen.getByRole('heading', { name: 'Ready to create your site' })).toBeInTheDocument();
     expect(screen.getByLabelText('Site name')).toHaveValue('Black Star Pulse');
     expect(screen.getByText('Already have a site? Import it instead')).toBeInTheDocument();
+    expect(screen.queryByTestId('creative-brief-inspector')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Import an exported .zip' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Restore a Unison export' })).toBeInTheDocument();
   });
@@ -39,6 +46,22 @@ describe('PromptLaunchPanel (chat-only site creation)', () => {
     await waitFor(() => expect(createAffinitySourceProject).toHaveBeenCalledTimes(1));
     const [input] = createAffinitySourceProject.mock.calls[0];
     expect(input).toMatchObject({ prompt: BRIEF, projectName: 'Black Star Pulse', businessId: 'biz-1', demoGeneration: true });
+  });
+
+  it('shows completed and active generation steps as Affinity reports them', async () => {
+    createAffinitySourceProject.mockImplementationOnce((input: { onStatus: (status: string) => void }) => {
+      input.onStatus('Designing the site foundation');
+      input.onStatus('Writing the Home page');
+      return new Promise<never>(() => undefined);
+    });
+    renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'Create my site' }));
+
+    const steps = await screen.findByRole('list', { name: 'Site generation steps' });
+    expect(steps.querySelector('[data-step-status="complete"]')).toHaveTextContent('Reading your conversation');
+    expect(screen.getByText('Designing the site foundation').closest('li')).toHaveAttribute('data-step-status', 'complete');
+    expect(steps.querySelector('[aria-current="step"]')).toHaveTextContent('Writing the Home page');
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
   });
 
   it('says plainly when Affinity is unavailable and keeps the conversation', async () => {

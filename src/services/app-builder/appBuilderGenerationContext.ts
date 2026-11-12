@@ -13,6 +13,7 @@ import { COMPOSER_CONTEXT_LIMIT, packContextBlocks } from './contextBudget';
 import { renderCreativeRequirements } from '@/services/launch/creativePlan';
 import { renderVerticalKnowledge, verticalForIndustry } from '@/services/composition/verticals';
 import { ARCHETYPE_ADVISORY_POLICY, CREATIVE_AUTHORITY_ORDER, MIXED_SECTION_AUTHORING_POLICY, SECTION_CONTENT_DEPTH_POLICY } from './creativeAuthorityPolicy';
+import { selectDesignKnowledge } from '@/services/knowledge/designKnowledge';
 
 /** Home references stay compact so later pages keep room for their own design vocabulary. */
 export const HOME_OBJECT_CONTEXT_LIMIT = 2_500;
@@ -203,6 +204,14 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
   const { business, runtime } = contract;
   const designSources = resolveDesignSourceBundle(contract);
   const materialization = materializeDesignSources(designSources);
+  const designReferences = selectDesignKnowledge('', 5000, contract.design.referenceIds ?? []).entries
+    .filter((entry) => entry.scope === 'reference');
+  const designReferenceContext = designReferences.length
+    ? [
+        'OPTIONAL DESIGN REFERENCES (inspiration only; sealed selections and available runtime are authoritative):',
+        ...designReferences.map((reference) => `[${reference.id}@${reference.version}] ${reference.text}`),
+      ].join('\n')
+    : '';
   const creation = business.universalCreation;
   const openEnded = creation?.mode === 'open-ended';
   // Every build gets trade knowledge: the prompt's vertical, else the industry's own pack.
@@ -334,6 +343,7 @@ export function buildAppBuilderGenerationContext(contract: AppBuildContract, con
     { priority: 1, text: creationContext },
     { priority: 1, text: pageIntentContext(pageId) },
     { priority: 1, text: modules },
+    { priority: 4, text: designReferenceContext },
     { priority: 1, text: pageId ? pageIdentityContext(pageId) : '' },
     { priority: 1, text: renderEligiblePresentation(designSources, pageId) },
     // Prop contracts are what make certified sections render real copy; without

@@ -77,7 +77,7 @@ export function buildCanonicalArtifacts(
   const bodyFromCompiledIndex = compiledIndexHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1]?.trim() || '';
   const htmlBody = (bundle.html || bodyFromCompiledIndex || '<div id="root"></div>').trim();
   const jsContent = (bundle.javascript || '').trim();
-  const title = options?.title || 'Unison Site';
+  const title = options?.title?.trim() || '';
 
   const deployHtml = `<!DOCTYPE html>
 <html lang="en">

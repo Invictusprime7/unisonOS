@@ -45,6 +45,8 @@ interface DeployButtonProps {
   getFiles?: () => Record<string, string> | null | undefined;
   /** Default site name */
   defaultSiteName?: string;
+  /** Visible action label, for Builder toolbar contexts that call deployment publishing. */
+  buttonLabel?: string;
   /** Callback when deployment completes */
   onDeployComplete?: (url: string) => void;
   /** Button variant */
@@ -87,6 +89,7 @@ export function DeployButton({
   files = {},
   getFiles,
   defaultSiteName,
+  buttonLabel = 'Deploy',
   onDeployComplete,
   variant = 'default',
   size = 'default',
@@ -213,7 +216,7 @@ export function DeployButton({
               title={iconOnly ? 'Deploy' : undefined}
             >
               <Rocket className={iconOnly ? 'h-4 w-4' : 'h-4 w-4 mr-2'} />
-              {iconOnly ? <span className="sr-only">Deploy</span> : <>Deploy<ChevronDown className="h-4 w-4 ml-2" /></>}
+              {iconOnly ? <span className="sr-only">{buttonLabel}</span> : <>{buttonLabel}<ChevronDown className="h-4 w-4 ml-2" /></>}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -241,7 +244,7 @@ export function DeployButton({
           title={iconOnly ? 'Deploy' : undefined}
         >
           <Rocket className={iconOnly ? 'h-4 w-4' : 'h-4 w-4 mr-2'} />
-          {iconOnly ? <span className="sr-only">Deploy</span> : 'Deploy'}
+          {iconOnly ? <span className="sr-only">{buttonLabel}</span> : buttonLabel}
         </Button>
       )}
 
