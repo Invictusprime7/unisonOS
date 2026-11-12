@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { intakeZipArchive } from '@/services/import/secureIntake';
 import { analyzeImportedProject } from '@/services/import/importCompatibilityProfile';
 import { buildImportedSourceVfs } from '@/services/import/importedSourceAcceptance';
-import { readImportedSourceRecords } from '@/services/import/importedSourceRecords';
+import { readImportedSourceRecords, toVfsPath } from '@/services/import/importedSourceRecords';
 import { ImportedSourceRuntimeFrame } from '@/components/import/ImportedSourceRuntimeFrame';
 import { describeSelection } from '@/services/editor/editableObjectDescriptor';
 import { selectedSourceFinder } from '@/components/creatives/web-builder/selectedSourceMutation';
@@ -12,12 +12,16 @@ import { mutateJSXText, mutateJSXStyles } from '@/utils/jsxElementMutation';
 const REV = 'rev-1';
 function App() {
   const [files, setFiles] = useState<Record<string, string> | null>(null);
+  const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
   const frame = useRef<HTMLIFrameElement | null>(null);
   useEffect(() => { (async () => {
     const bytes = await (await fetch('/__h/aria.zip')).arrayBuffer();
     const intake = await intakeZipArchive(bytes, { name: 'aria.zip' });
     const profile = analyzeImportedProject(intake);
     const { files } = buildImportedSourceVfs({ intake, profile, assets: { version: 1, assets: [], originalArchive: null }, importedBy: 'u', importedAt: '2026-11-10T00:00:00Z' });
+    const urls: Record<string,string> = {};
+    for (const [p, b] of Object.entries(intake.binaryFiles)) { const blob = new Blob([b as BlobPart]); urls[toVfsPath(p)] = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.readAsDataURL(blob); }); }
+    setAssetUrls(urls);
     (window as any).__files = files; setFiles(files);
   })(); }, []);
   useEffect(() => {
@@ -40,6 +44,6 @@ function App() {
   }, []);
   if (!files) return <div>loading</div>;
   const records = readImportedSourceRecords(files)!;
-  return <div style={{ height: '100vh' }}><ImportedSourceRuntimeFrame records={records} files={files} assetUrls={{}} adapter={records.profile.previewAdapter} editable={!location.search.includes("view")} revisionId={REV} onFrameChange={(f) => { frame.current = f; }} /></div>;
+  return <div style={{ height: '100vh' }}><ImportedSourceRuntimeFrame records={records} files={files} assetUrls={assetUrls} adapter={records.profile.previewAdapter} editable={!location.search.includes("view")} revisionId={REV} onFrameChange={(f) => { frame.current = f; }} /></div>;
 }
 createRoot(document.getElementById('root')!).render(<App />);
