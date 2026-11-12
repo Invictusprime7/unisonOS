@@ -43,7 +43,7 @@ export function extractOwnerSiteName(text: string | null | undefined): string | 
   return found;
 }
 
-const ANSWER_PREFIX = /^(?:(?:it'?s|it is|its|we'?re|we are|i'?m|our (?:site|business|brand) is)\s+)?(?:(?:called|named)\s+)?|^(?:call it|name it|the name is|its name is|our name is|name:|site name:)\s*/i;
+const ANSWER_PREFIX = /^(?:call it|name it|the name is|its name is|our name is|name:|site name:|(?:it'?s|it is|its|we'?re|we are|i'?m|our (?:site|business|brand) is)(?:\s+(?:called|named))?)\s*/i;
 
 /** A direct answer to "What should the site be called?" ("Iron Haven", "It's called Iron Haven"). */
 export function siteNameFromAnswer(answer: string | null | undefined): string | null {
