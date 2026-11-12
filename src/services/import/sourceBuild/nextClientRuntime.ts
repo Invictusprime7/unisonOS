@@ -174,13 +174,10 @@ export function mountNext(config) {
   }
   const host = document.getElementById('__next') || document.body.appendChild(Object.assign(document.createElement('div'), { id: '__next' }));
   // Next's own document shape: the App Router renders the root layout's body
-  // children straight into <body> after a hidden boundary marker, so the host
-  // is a display:contents box behind that marker; both routers append the
-  // route announcer that reads the new page title to screen readers.
-  if (config.router === 'app') {
-    host.style.display = 'contents';
-    host.before(Object.assign(document.createElement('div'), { hidden: true }));
-  }
+  // children straight into <body> (after a box-less boundary marker), so the
+  // host is a display:contents box in that marker's place; both routers append
+  // the route announcer that reads the new page title to screen readers.
+  if (config.router === 'app') host.style.display = 'contents';
   mountRouteAnnouncer(config.router === 'app');
   createRoot(host).render(h(Root));
 }
