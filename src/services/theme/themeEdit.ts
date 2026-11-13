@@ -25,12 +25,12 @@ export function isThemeOnlyRequest(prompt: string): boolean {
   if (/\b(add|remove|delete|reorder|rewrite|replace|move)\b.{0,30}\b(section|page|text|copy|heading|headline|image|photo|gallery|form|navigation)\b|\b(layout|grid|columns|booking|checkout)\b/i.test(prompt)) return false;
   // Copy edits ("change the main heading to 'X'") are source edits, not restyles,
   // unless the request names a visual property of that text.
-  const namesVisualProperty = /\b(font|typeface|typography|colou?r|palette|size|weight|bold|italic|serif|sans|gold|black|white|dark|light)\b/i.test(prompt);
+  const namesVisualProperty = /\b(font|typeface|typography|colou?rs?|palette|size|weight|bold|italic|serif|sans|gold|black|white|dark|light)\b/i.test(prompt);
   if (!namesVisualProperty && (
     /\b(change|update|edit|rename|set|make|say|reword)\b.{0,50}\b(heading|headline|title|text|copy|tagline|button|label|cta|subtitle|subheading|paragraph|wording)\b.{0,50}\b(to|into|read|say)\b/i.test(prompt)
     || /\b(to|read|say)\s*[:]?\s*["'“‘]/i.test(prompt)
   )) return false;
-  return /\b(theme|palette|typography|font|typeface|appearance|aesthetic|style|headings?|colou?r|darker|lighter|contrast|rounder|corners|restyle)\b|\b(?:use|switch to|make it|make (?:the )?site)\s+(?:more\s+)?(?:bold|organic|modern|editorial|futuristic|minimal(?:ist)?)\b/i.test(prompt);
+  return /\b(theme|palette|typography|font|typeface|appearance|aesthetic|style|headings?|colou?rs?|darker|lighter|contrast|rounder|corners|restyle)\b|\b(?:use|switch to|make it|make (?:the )?site)\s+(?:more\s+)?(?:bold|organic|modern|editorial|futuristic|minimal(?:ist)?)\b/i.test(prompt);
 }
 
 export function shouldUseThemeTokenLane(prompt: string, files: Record<string, string> | null | undefined): boolean {

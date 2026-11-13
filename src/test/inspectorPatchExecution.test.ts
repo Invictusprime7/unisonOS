@@ -80,6 +80,19 @@ describe('inspector patch execution', () => {
     expect(next).toContain('data-ut-slot="hero.media"');
   });
 
+  it('resolves duplicate slots against the selected page before rejecting another page', () => {
+    const selectedPage = '<section data-ut-section-id="hero-1"><h1 data-ut-slot="hero.headline">Selected headline</h1></section>';
+    const otherPage = '<section data-ut-section-id="hero-1"><h1 data-ut-slot="hero.headline">{copy.headline}</h1></section>';
+    const result = planInspectorExecution(
+      plan({ type: 'set-slot-text', sectionId: 'hero-1', selector: '', slotId: 'hero.headline', value: 'Updated headline' }),
+      { files: { '/src/pages/Selected.tsx': selectedPage, '/src/pages/Other.tsx': otherPage }, sourceFilePath: '/src/pages/Selected.tsx' },
+    );
+    expect(result.kind).toBe('source');
+    if (result.kind !== 'source') return;
+    expect(result.fileOps[0]).toMatchObject({ path: '/src/pages/Selected.tsx' });
+    expect(result.fileOps[0].type !== 'delete' && result.fileOps[0].contents).toContain('>Updated headline<');
+  });
+
   it('does not edit a matching slot from a different section', () => {
     const result = planInspectorExecution(
       plan({ type: 'set-slot-text', sectionId: 'missing-section', selector: '', slotId: 'hero.headline', value: 'Wrong page' }),

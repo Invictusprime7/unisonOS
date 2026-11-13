@@ -3767,6 +3767,10 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       : null;
     const execution = planInspectorExecution(plan, {
       files,
+      sourceFilePath: plan.pagePath && files[plan.pagePath]
+        ? plan.pagePath
+        : resolveRouteSourceFile(files, plan.pagePath ?? null)
+          ?? (activePagePath && files[activePagePath] ? activePagePath : null),
       snapshotId: snapshot?.snapshotId ?? null,
       revisionId: currentRevisionIdRef.current || null,
       pageRole,

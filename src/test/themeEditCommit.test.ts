@@ -88,7 +88,13 @@ describe('Theme edit canonical closure', () => {
     expect(shouldUseThemeTokenLane('make navbar color red', importedFiles)).toBe(false);
     expect(shouldUseThemeTokenLane('make navbar color red', { '/src/index.css': ':root{}' })).toBe(true);
     for (const text of ['add a dark gallery section', 'change the grid layout', "Change the main heading on the Home page to 'Timeless Craft, Modern Lines'", 'update the hero title to read Welcome']) expect(isThemeOnlyRequest(text)).toBe(false);
-    for (const text of ['Change color scheme to Gold and black', 'change the heading font to a serif']) expect(isThemeOnlyRequest(text)).toBe(true);
+    for (const text of [
+      'Change color scheme to Gold and black',
+      'change the heading font to a serif',
+      'change colors sitewide',
+      'change the colours across all pages',
+      'use pink background color for all pages',
+    ]) expect(isThemeOnlyRequest(text)).toBe(true);
     expect(decodeThemeEdit({ version: '1.0', snapshotId: 's', revisionId: null, presetId: null, set: {}, reset: [] }).presetId).toBeNull();
     expect(() => decodeThemeEdit({ version: '1.0', snapshotId: 's', revisionId: null, files: {} })).toThrow();
   });

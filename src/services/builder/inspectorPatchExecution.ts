@@ -55,6 +55,8 @@ export interface InspectorExecutionContext {
   bindings?: Record<string, PlaygroundBinding> | null;
   /** `data-ut-resource` mark of the selected element (resourceKey#id.field). */
   resourceMark?: string | null;
+  /** Source file resolved from the selected page, when known. */
+  sourceFilePath?: string | null;
 }
 
 /** Copy slots the composition plan owns directly. */
@@ -78,14 +80,18 @@ function findSlotTag(
   files: Record<string, string>,
   sectionId: string | null,
   slotId: string,
+  sourceFilePath?: string | null,
 ): { path: string; content: string; start: number; end: number } | null {
   const attr = new RegExp(`data-ut-slot=["']${escapeRe(slotId)}["']`);
   const candidates = Object.entries(files).filter(
     ([path, content]) => SOURCE_FILE_RE.test(path) && typeof content === 'string' && attr.test(content),
   );
-  const scopedCandidates = sectionId
-    ? candidates.filter(([, content]) => new RegExp(`data-ut-section-id=["']${escapeRe(sectionId)}["']`).test(content))
+  const pageCandidates = sourceFilePath
+    ? candidates.filter(([path]) => path === sourceFilePath)
     : candidates;
+  const scopedCandidates = sectionId
+    ? pageCandidates.filter(([, content]) => new RegExp(`data-ut-section-id=["']${escapeRe(sectionId)}["']`).test(content))
+    : pageCandidates;
   if (scopedCandidates.length !== 1) return null;
 
   const [path, content] = scopedCandidates[0];
@@ -196,7 +202,7 @@ export function planInspectorExecution(
     }
   }
 
-  const target = findSlotTag(context.files, op.sectionId, op.slotId);
+  const target = findSlotTag(context.files, op.sectionId, op.slotId, context.sourceFilePath);
   if (!target) {
     return {
       kind: 'rejected',
