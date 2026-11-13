@@ -316,7 +316,7 @@ export function mutateJSXText(
   if (/<[A-Za-z]|\{/.test(existing)) {
     const fragment = source.slice(bounds.start, bounds.end);
     const leaves: Array<{ start: number; end: number; value: string }> = [];
-    const inline = new Set(['span', 'strong', 'em', 'b', 'i', 'u', 's', 'small', 'mark', 'a', 'sup', 'sub', 'code']);
+    const inline = new Set(['span', 'strong', 'em', 'b', 'i', 'u', 's', 'small', 'mark', 'a', 'sup', 'sub', 'code', 'br']);
     let valid = true;
     try {
       const root = parseExpression(fragment, { plugins: ['jsx', 'typescript'] });

@@ -1042,19 +1042,19 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
 
     // Upload attached files so the AI can place them on the site by URL.
     let uploadBlock = '';
+    const placedUploads: PlacedUpload[] = [];
     if (droppedFiles.some((f) => f.file)) {
-      const placed: PlacedUpload[] = [];
       for (const f of droppedFiles) {
         if (!f.file) continue;
         try {
           emitAgentEvent({ kind: 'understanding', message: `Uploading ${f.name}` });
           const up = await uploadForPlacement(f.file, projectId);
-          placed.push(f.content ? { ...up, text: f.content } : up);
+          placedUploads.push(f.content ? { ...up, text: f.content } : up);
         } catch (err) {
           toast.error(err instanceof Error ? err.message : `Couldn't upload ${f.name}`);
         }
       }
-      uploadBlock = buildUploadPlacementBlock(placed, systemType ?? null);
+      uploadBlock = buildUploadPlacementBlock(placedUploads, systemType ?? null);
     }
     const placementContext = uploadBlock + CERTIFIED_VOCABULARY_NOTE;
 
@@ -2057,6 +2057,9 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
                 businessName: templateName?.trim() || 'Website',
                 industry: userDesignProfile?.industryHints?.[0] ?? systemType ?? 'generic',
                 visionBrief: _userContent.slice(0, 1200),
+                attachmentContext: _fileContext,
+                images: _attachments.length > 0 ? _attachments.map((attachment) => ({ name: attachment.name, data: attachment.data })) : undefined,
+                requiredImageUrls: placedUploads.filter((upload) => upload.kind === 'image').map((upload) => upload.url),
                 registryContext: builderRegistryContext ?? undefined,
                 runtimeContext: [
                   themeContextBlock,

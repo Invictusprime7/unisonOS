@@ -31,7 +31,7 @@ import { buildAICandidateChangeSet, type AICandidateChangeSet } from '@/services
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { assembleCanonicalAuthoringRequest } from '@/services/builder/canonicalAuthoringRequest';
 import { selectSourceKnowledge } from '@/services/builder/sourceKnowledgeContext';
-import { isImageLedRole, verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
+import { isImageLedRole, pageRendersImageUrl, verifiedPhotosFor } from '@/services/app-builder/design/pageStructureGate';
 import { resolveIndustryVertical } from '@/services/composition/verticals';
 import { createSectionAuthoringInvoke, DEFAULT_PAGE_AUTHORING_CONCURRENCY, partitionPageSections, sectionPageBudgetMs } from '@/services/launch/sectionAuthoringInvoke';
 import { resolvedCompositionPathFor } from '@/platform/core/resolvedComposition';
@@ -87,6 +87,12 @@ export interface SiteAuthoringInput {
   businessName: string;
   /** Owner's own description from the home-page planning chat. */
   visionBrief?: string;
+  /** Durable file links/extracted text attached to this authoring request. */
+  attachmentContext?: string;
+  /** Image previews attached to this authoring request. */
+  images?: AIComposerRequest['images'];
+  /** Uploaded image URLs that every requested page must render. */
+  requiredImageUrls?: readonly string[];
   generatedHeroImage?: { url: string; prompt: string };
   /** Sealed launch vertical; wins over re-reading a short edit instruction. */
   vertical?: import('@/platform/core/universalCreation').CreationVertical | null;
@@ -327,8 +333,11 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
         const photos = isImageLedRole(page.role)
           ? `PHOTO LIBRARY (required — this page is image-led and is rejected without photos): render at least one <img src="..."> in the page file itself using these verified URLs, copied exactly; never invent other image URLs:\n${verifiedPhotosFor(input.designContext?.contract.industry ?? input.industry, 6, (() => { const vertical = input.vertical ?? resolveIndustryVertical(input.visionBrief ?? ''); return [vertical?.packId, vertical?.blendPackId]; })()).join('\n')}`
           : '';
-        const room = COMPOSER_PAGE_BRIEF_LIMIT - owner.length - (generatedHero ? generatedHero.length + 1 : 0) - (photos ? photos.length + 1 : 0) - (continued ? continued.length + 1 : 0) - 3;
-        return [owner, generatedHero, photos, continued, layout.slice(0, Math.max(0, room))].filter(Boolean).join('\n').slice(0, COMPOSER_PAGE_BRIEF_LIMIT);
+        const uploadedImages = input.requiredImageUrls?.length
+          ? `USER-UPLOADED IMAGES (required): render each exact URL in this page as an <img> with meaningful alt text. Do not substitute stock imagery:\n${input.requiredImageUrls.join('\n')}`
+          : '';
+        const room = COMPOSER_PAGE_BRIEF_LIMIT - owner.length - (uploadedImages ? uploadedImages.length + 1 : 0) - (generatedHero ? generatedHero.length + 1 : 0) - (photos ? photos.length + 1 : 0) - (continued ? continued.length + 1 : 0) - 4;
+        return [owner, uploadedImages, generatedHero, photos, continued, layout.slice(0, Math.max(0, room))].filter(Boolean).join('\n').slice(0, COMPOSER_PAGE_BRIEF_LIMIT);
       })(),
       knowledgeQuery: `${input.businessName} ${page.role} ${page.title} ${page.route}`,
       baseFiles,
@@ -339,6 +348,8 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
       routes,
       priorPages: priorPages.slice(-20),
       registryContext: input.registryContext,
+      attachmentContext: input.attachmentContext,
+      images: input.images,
       runtimeContext: (() => {
         // Small fixed facts lead so the packed page vocabulary that follows is never cut off.
         const fixed = runtimeFixed();
@@ -386,7 +397,10 @@ export async function authorSitePages(input: SiteAuthoringInput): Promise<SiteAu
             .filter(reference => candidateFiles && candidateFiles[reference] !== baseFiles[reference])
             .map(reference => `${reference} is a read-only Home object reference; author only the current page.`)
           : [];
-        return [...referenceErrors, ...(input.pageCheck?.(path, source, candidateFiles) ?? [])];
+        const missingUploads = (input.requiredImageUrls ?? [])
+          .filter((url) => !pageRendersImageUrl(path, source, url))
+          .map((url) => `${path} must render this user-uploaded image using its exact URL: ${url}`);
+        return [...referenceErrors, ...missingUploads, ...(input.pageCheck?.(path, source, candidateFiles) ?? [])];
       },
     });
     const runLoop = (request: AIComposerRequest) => runComposerRepairLoop(loopInput(request));

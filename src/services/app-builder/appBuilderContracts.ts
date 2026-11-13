@@ -595,6 +595,12 @@ export interface AppBuilderPageGenerationRequest {
   industry?: string;
   designContext?: ResolvedSiteDesignContext | null;
   visionBrief?: string;
+  /** Durable links and extracted upload text for each generated page. */
+  attachmentContext?: string;
+  /** Uploaded image previews for multimodal page authoring and repair. */
+  images?: import('@/contracts/aiComposerContract').AIComposerRequest['images'];
+  /** Exact uploaded image URLs that each new page must render. */
+  requiredImageUrls?: readonly string[];
   registryContext?: unknown;
   runtimeContext?: string;
   signal?: AbortSignal;

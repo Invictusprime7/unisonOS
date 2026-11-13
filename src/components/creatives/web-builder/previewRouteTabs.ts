@@ -31,6 +31,11 @@ export interface PageSourceTarget {
 /** Prefix for tabs that map to a rendered route with no registry page. */
 export const ROUTE_TAB_PREFIX = "route:";
 
+export function routeFromPreviewTabPath(path: string): string | null {
+  if (!path.startsWith(ROUTE_TAB_PREFIX)) return null;
+  return normalizeRoute(path.slice(ROUTE_TAB_PREFIX.length));
+}
+
 const normalizeRoute = (route: string) => {
   const trimmed = route.trim().replace(/[?#].*$/, '');
   if (!trimmed || trimmed === '/') return '/';

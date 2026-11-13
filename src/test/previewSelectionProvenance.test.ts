@@ -98,6 +98,15 @@ describe('preview selection provenance bridge', () => {
     expect(updated).toContain('Temporary source edit');
   });
 
+  it('edits text across a line break without removing the break', () => {
+    const source = '<h1 data-ut-slot="hero.headline">ARIANN<br />NORORI</h1>';
+    const updated = mutateJSXText(source, '[data-ut-slot="hero.headline"]', 'ARIANN NORORI', findElementBoundsInJSX);
+
+    expect(updated).not.toBeNull();
+    expect(updated).toContain('<br />');
+    expect(updated).toContain('NORORI');
+  });
+
   it('refuses a selector that matches multiple candidate source files', () => {
     const source = '<h1 data-ut-slot="hero.headline">Original</h1>';
     const result = findUniqueSourceMutation({

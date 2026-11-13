@@ -73,6 +73,34 @@ export function pageStructureRequirement(role: string, contractMinSections?: num
   };
 }
 
+export function pageRendersImageUrl(path: string, source: string, url: string): boolean {
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let found = false;
+  const visit = (node: ts.Node) => {
+    if (found) return;
+    const opening = ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node) ? node : null;
+    if (opening && opening.tagName.getText(file).toLowerCase() === 'img') {
+      const src = opening.attributes.properties.find((attribute): attribute is ts.JsxAttribute =>
+        ts.isJsxAttribute(attribute) && ts.isIdentifier(attribute.name) && attribute.name.text === 'src',
+      )?.initializer;
+      const value = src && ts.isStringLiteral(src)
+        ? src.text
+        : src && ts.isJsxExpression(src) && src.expression
+          ? ts.isStringLiteral(src.expression) || ts.isNoSubstitutionTemplateLiteral(src.expression)
+            ? src.expression.text
+            : null
+          : null;
+      if (value === url) {
+        found = true;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return found;
+}
+
 const LOCAL_IMPORT = /import\s+(?:(\w+)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*['"]((?:\.{1,2}\/|@\/)[^'"]+)['"]/g;
 const IMAGE_SIGNAL = /<img\b|\bbackgroundImage\b|url\(\s*['"`]?https?:|['"`]https?:\/\/[^'"`\s]+\.(?:jpe?g|png|webp|avif)|['"`]https?:\/\/images\.unsplash\.com|\b(?:image|imageUrl|imageSrc|src|images|photo|photos|media|cover|poster)\s*[:=]\s*[{'"`[]/i;
 const NAV_NAME = /(?:Nav|Navbar|Navigation|Header|Menu)\b/;

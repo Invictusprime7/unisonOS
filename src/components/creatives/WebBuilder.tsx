@@ -9,7 +9,7 @@ import { rebaseTextEdit } from '@/services/builder/textEditRebase';
 import type { TerminalFileOp, TerminalRouteOp } from '@/services/terminalCommands';
 import type { TopologyChange } from '@/services/pageTopologyOrchestrator';
 import { captureIntentBaseline, deriveIntentChecks, verifyCommittedChange } from '@/services/agent-runtime/browserVerification';
-import { extractRenderedRoutes, resolveRouteSourceFile } from '@/components/creatives/web-builder/previewRouteTabs';
+import { extractRenderedRoutes, resolveRouteSourceFile, routeFromPreviewTabPath } from '@/components/creatives/web-builder/previewRouteTabs';
 import "./web-builder/obsidian-theme.css";
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense, Component, type ReactNode, type ErrorInfo } from "react";
 import { createPortal } from 'react-dom';
@@ -1070,7 +1070,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     );
     if (!res.ok) {
       if (res.reason === 'ambiguous') return false;
-      toast.error('Could not locate editable text for this selection. Reselect the text; linked content must be edited in its saved item.');
+      toast.error('Could not locate editable text for this selection. Refresh the preview or reselect the text and try again.');
       return false;
     }
     return true;
@@ -2321,6 +2321,15 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
     options?: { openFile?: boolean; updatePreview?: boolean }
   ) => {
     const { openFile = true, updatePreview = true } = options || {};
+    const route = routeFromPreviewTabPath(pageId);
+    if (route) {
+      const filePath = resolveRouteSourceFile(virtualFS.getSandpackFiles(), route);
+      setActivePageId(null);
+      setActivePreviewRoute(route);
+      if (filePath && openFile) handleSelectPage(filePath);
+      if (updatePreview) livePreviewRef.current?.navigateToRoute(route);
+      return;
+    }
     const page = creatorPlayground.pageRegistry.pages[pageId];
     if (!page) {
       console.warn('[WebBuilder] navigateToBuilderPage: page not found:', pageId);
@@ -8745,6 +8754,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                     return { success: false, errors: outcome.errors };
                   }
 
+                  const committedPageRegistry = outcome.commit?.siteBundleSnapshot?.pageRegistry;
+                  if (committedPageRegistry) hydrateCanonicalPlayground({ pageRegistry: committedPageRegistry });
+
                    const mergedFiles = outcome.committedFiles ?? beforeSnapshotFiles;
                   setCodeChanges((current) => {
                     const keepRunBaseline = current?.isLive === true;
@@ -8971,6 +8983,9 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
                   toast.error('AI edit could not be applied', { description: outcome.reason });
                   return { success: false, errors: outcome.errors };
                 }
+
+                const committedPageRegistry = outcome.commit?.siteBundleSnapshot?.pageRegistry;
+                if (committedPageRegistry) hydrateCanonicalPlayground({ pageRegistry: committedPageRegistry });
 
                  const mergedFiles = outcome.committedFiles ?? beforeFiles;
                 setCodeChanges((current) => {

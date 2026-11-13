@@ -33,6 +33,31 @@ describe('Affinity same-site page generation', () => {
     expect(result.changeSet?.routeOps).toContainEqual(expect.objectContaining(addition));
     expect(result.baseRevisionId).toBe('r1');
   });
+  it('carries uploaded images into new-page authoring and repairs pages that omit them', async () => {
+    const imageUrl = 'https://storage.example.test/user-files/portrait.jpg?token=durable';
+    const attachmentContext = `[UPLOADED FILES]\nurl: ${imageUrl}`;
+    const images = [{ name: 'portrait.jpg', data: 'data:image/jpeg;base64,cG9ydHJhaXQ=' }];
+    const withoutImage = source.replace('</main>', `{/* ${imageUrl} */}</main>`);
+    const withImage = source.replace('</main>', `<img src="${imageUrl}" alt="Portrait" /></main>`);
+    vi.mocked(runBuilderTurn)
+      .mockResolvedValueOnce({ data: { content: JSON.stringify({ summary: 'Prepared Contact', fileOps: [{ type: 'create', path: page.filePath, content: withoutImage }] }) }, error: null })
+      .mockResolvedValueOnce({ data: { content: JSON.stringify({ summary: 'Added uploaded portrait', fileOps: [{ type: 'create', path: page.filePath, content: withImage }] }) }, error: null });
+
+    const result = await createUnisonAppBuilder().generatePages({
+      operationId: 'new-contact-with-image', baseRevisionId: 'r1', currentFiles: files, businessName: 'Northstar', pages: [page],
+      attachmentContext, images, requiredImageUrls: [imageUrl],
+    });
+
+    expect(result.status).toBe('ready-for-commit');
+    expect(runBuilderTurn).toHaveBeenCalledTimes(2);
+    for (const [request] of vi.mocked(runBuilderTurn).mock.calls) {
+      const authored = JSON.parse(String(request.messages[0].content));
+      expect(authored.images).toEqual(images);
+      expect(authored.runtimeContext).toContain(attachmentContext);
+      expect(authored.brief).toContain(imageUrl);
+    }
+    expect(result.candidateFiles[page.filePath]).toContain(imageUrl);
+  });
   it('allows a requested new page plan but still refuses unrelated source changes', () => {
     const request: AIComposerRequest = { task: 'builder_source_edit', page, instruction: 'Generate a Contact page', brief: '', files, routes: [], sourceTargets: ['/src/pages/Start.tsx'] };
     const response = { summary: '', routeOps: [addition], fileOps: [{ type: 'create' as const, path: page.filePath, content: source }] };

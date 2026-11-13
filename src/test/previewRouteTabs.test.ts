@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPreviewRouteTabs, extractRenderedRoutes } from '@/components/creatives/web-builder/previewRouteTabs';
+import { buildPreviewRouteTabs, extractRenderedRoutes, routeFromPreviewTabPath } from '@/components/creatives/web-builder/previewRouteTabs';
 
 const app = `
 <HashRouter><Routes>
@@ -22,6 +22,12 @@ describe('preview route tabs', () => {
     ], app);
     expect(tabs.map((t) => t.path)).toEqual(['home', 'svc', 'route:/book-now']);
     expect(tabs.map((t) => t.label)).toEqual(['Home', 'Our Services', 'Book Now']);
+  });
+
+  it('resolves registry-missing route tabs to the normalized preview route', () => {
+    expect(routeFromPreviewTabPath('route:/about/')).toBe('/about');
+    expect(routeFromPreviewTabPath('route:/')).toBe('/');
+    expect(routeFromPreviewTabPath('about')).toBeNull();
   });
 });
 
