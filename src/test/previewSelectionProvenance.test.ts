@@ -3,10 +3,18 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { findElementBoundsInJSX, findUniqueSourceMutation, countImageLiteral, replaceImageLiteral } from '@/components/creatives/web-builder/jsxSourceUtils';
 import { mutateJSXText } from '@/utils/jsxElementMutation';
+import { selectionBridgeScript } from '@/services/import/sourceBuild/previewInstrumentation';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 
 describe('preview selection provenance bridge', () => {
+  it('emits a syntactically valid selection bridge for edit-mode activation', async () => {
+    const bridge = await selectionBridgeScript();
+    expect(() => new Function(bridge)).not.toThrow();
+    expect(bridge).toContain("keyEvent.key === 'Enter' && !keyEvent.shiftKey");
+    expect(bridge).toContain("getData('text/plain')");
+  });
+
   it('stamps catalog, component, behavior, and revision identity into Sandpack selections', () => {
     const bridge = read('src/utils/sandpackFilePrep.ts');
     for (const attribute of [
@@ -29,6 +37,10 @@ describe('preview selection provenance bridge', () => {
 
     expect(bridge).toContain("element.setAttribute('contenteditable', 'true')");
     expect(bridge).toContain("type: 'INLINE_TEXT_EDIT_COMMIT'");
+    expect(bridge).toContain("keyEvent.key === 'Enter' && !keyEvent.shiftKey");
+    expect(bridge).toContain("keyEvent.key === 'Enter' && keyEvent.shiftKey");
+    expect(bridge).toContain("clipboardData?.getData('text/plain')");
+    expect(bridge).toContain("element.addEventListener('paste', inlinePasteHandler)");
     expect(bridge).toContain("finishInlineTextEdit(false)");
     expect(preview).toContain("type: 'INLINE_TEXT_EDIT_RESULT'");
     expect(preview).toContain('onInlineTextCommit');

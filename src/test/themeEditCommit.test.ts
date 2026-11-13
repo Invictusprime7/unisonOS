@@ -57,7 +57,7 @@ import { THEME_PRESETS } from '@/components/onboarding/themePresets';
 import { themePresetToThemeTokens } from '@/components/onboarding/themePresetToTokens';
 
 
-import { decodeThemeEdit, isThemeOnlyRequest, prepareThemeEdit, shouldUseThemeTokenLane } from '@/services/theme/themeEdit';
+import { decodeThemeEdit, isThemeOnlyRequest, prepareThemeEdit, resolveImportedThemeSourceTargets, shouldUseImportedThemeSourceEdit, shouldUseThemeTokenLane } from '@/services/theme/themeEdit';
 import { readThemeOverrides } from '@/services/theme/themeTokenOverrides';
 describe('Theme edit canonical closure', () => {
   it('saves and reloads futuristic color edits containing the reported elevation value', async () => {
@@ -86,7 +86,17 @@ describe('Theme edit canonical closure', () => {
     for (const text of ['make it darker', 'use Bold', 'soften the typography', 'Use Bold. Keep all text, pages, images, sections and layout unchanged.']) expect(isThemeOnlyRequest(text)).toBe(true);
     const importedFiles = { '/.unison-import/provenance.json': '{"origin":"external-import"}' };
     expect(shouldUseThemeTokenLane('make navbar color red', importedFiles)).toBe(false);
+    expect(shouldUseImportedThemeSourceEdit('make entire site pink themed', importedFiles)).toBe(true);
+    expect(shouldUseImportedThemeSourceEdit('make entire site pink themed', { '/src/index.css': ':root{}' })).toBe(false);
     expect(shouldUseThemeTokenLane('make navbar color red', { '/src/index.css': ':root{}' })).toBe(true);
+    expect(resolveImportedThemeSourceTargets({
+      ...importedFiles,
+      '/src/index.css': ':root {}',
+      '/src/components/Card.module.css': '.card {}',
+      '/src/pages/Home.tsx': 'export default function Home() {}',
+    }, ['/src/pages/Home.tsx'])).toEqual(['/src/index.css']);
+    expect(resolveImportedThemeSourceTargets({ ...importedFiles, '/src/pages/Home.tsx': 'export default function Home() {}' }, ['/src/pages/Home.tsx']))
+      .toEqual(['/src/pages/Home.tsx']);
     for (const text of ['add a dark gallery section', 'change the grid layout', "Change the main heading on the Home page to 'Timeless Craft, Modern Lines'", 'update the hero title to read Welcome']) expect(isThemeOnlyRequest(text)).toBe(false);
     for (const text of [
       'Change color scheme to Gold and black',

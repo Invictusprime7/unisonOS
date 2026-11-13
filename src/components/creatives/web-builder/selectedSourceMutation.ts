@@ -21,7 +21,12 @@ export interface SourceSelection {
 export function selectedSourceFinder(selection?: SourceSelection | null): SelectionBoundsFinder {
   const locator = selection?.descriptor?.sourceLocator;
   const parsed = parseSourceLocator(locator);
-  if (locator) return (source) => {
+  const textRuns = textRunsFromHtml(selection?.html);
+  const hasTextAnchor = Boolean(selection?.tagName && textRuns.length);
+  const textFallback = anchoredFinder(findElementBoundsInJSX, {
+    tag: selection?.tagName?.toLowerCase(), runs: textRuns,
+  });
+  if (locator) return (source, selector) => {
     if (!parsed) return null;
     const resolved = resolvePreviewSource({
       locator, files: { [parsed.path]: source }, instanceIndex: selection?.descriptor?.instanceId,
@@ -29,17 +34,20 @@ export function selectedSourceFinder(selection?: SourceSelection | null): Select
       astIdentity: selection?.descriptor?.astIdentity,
       sourceRevisionId: selection?.descriptor?.sourceRevisionId,
       acceptedRevisionId: selection?.descriptor?.revisionId,
+      allowUnversionedExactSource: Boolean(selection?.descriptor?.sourceHash && selection?.descriptor?.astIdentity),
     });
-    if (!resolved.span || resolved.protection?.directMutation === 'denied'
+    if (resolved.protection?.directMutation === 'denied'
       || resolved.reason === 'repeated-instance-unknown'
-      || resolved.reason === 'repeated-source-template'
-      || (selection?.tagName && resolved.tagName?.toLowerCase() !== selection.tagName.toLowerCase())) return null;
+      || resolved.reason === 'repeated-source-template') return null;
+    if (!resolved.span || (selection?.tagName && resolved.tagName?.toLowerCase() !== selection.tagName.toLowerCase())) {
+      // Incomplete preview metadata may still identify text uniquely within
+      // this exact owner file; never widen the fallback to other source files.
+      return hasTextAnchor ? textFallback(source, selector) : null;
+    }
     // Dynamic children forbid literal text rewriting in mutateJSXText, not changing the container's style.
     return resolved.span;
   };
-  return anchoredFinder(findElementBoundsInJSX, {
-    tag: selection?.tagName?.toLowerCase(), runs: textRunsFromHtml(selection?.html),
-  });
+  return textFallback;
 }
 
 /** Structural edits operate on whole source, including non-first returns and imported components. */

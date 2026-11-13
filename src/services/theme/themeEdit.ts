@@ -30,11 +30,31 @@ export function isThemeOnlyRequest(prompt: string): boolean {
     /\b(change|update|edit|rename|set|make|say|reword)\b.{0,50}\b(heading|headline|title|text|copy|tagline|button|label|cta|subtitle|subheading|paragraph|wording)\b.{0,50}\b(to|into|read|say)\b/i.test(prompt)
     || /\b(to|read|say)\s*[:]?\s*["'“‘]/i.test(prompt)
   )) return false;
-  return /\b(theme|palette|typography|font|typeface|appearance|aesthetic|style|headings?|colou?rs?|darker|lighter|contrast|rounder|corners|restyle)\b|\b(?:use|switch to|make it|make (?:the )?site)\s+(?:more\s+)?(?:bold|organic|modern|editorial|futuristic|minimal(?:ist)?)\b/i.test(prompt);
+  return /\b(theme(?:d|s)?|palette|typography|font|typeface|appearance|aesthetic|style|headings?|colou?rs?|darker|lighter|contrast|rounder|corners|restyle)\b|\b(?:use|switch to|make it|make (?:the )?site)\s+(?:more\s+)?(?:bold|organic|modern|editorial|futuristic|minimal(?:ist)?)\b/i.test(prompt);
 }
 
 export function shouldUseThemeTokenLane(prompt: string, files: Record<string, string> | null | undefined): boolean {
   return isThemeOnlyRequest(prompt) && !isImportedSourceVfs(files);
+}
+
+export function shouldUseImportedThemeSourceEdit(prompt: string, files: Record<string, string> | null | undefined): boolean {
+  return isThemeOnlyRequest(prompt) && isImportedSourceVfs(files);
+}
+
+const GLOBAL_STYLE_FILE = /^(?:index|global|globals|main|app|style|styles|theme|tokens)\.(?:css|scss|sass|less)$/i;
+
+export function resolveImportedThemeSourceTargets(
+  files: Record<string, string>,
+  pageFiles: readonly string[],
+): string[] {
+  const stylesheets = Object.keys(files)
+    .filter((path) => /\.(?:css|scss|sass|less)$/i.test(path) && !/\.module\.(?:css|scss|sass|less)$/i.test(path))
+    .sort();
+  const globalStyles = stylesheets.filter((path) => GLOBAL_STYLE_FILE.test(path.split('/').pop() ?? ''));
+  if (globalStyles.length) return globalStyles;
+  if (stylesheets.length) return stylesheets;
+  const existingPages = pageFiles.filter((path) => typeof files[path] === 'string');
+  return existingPages.length ? [...new Set(existingPages)] : [];
 }
 
 export function decodeThemeEdit(response: unknown): ThemeEdit {

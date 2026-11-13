@@ -30,6 +30,11 @@ describe('selected source text editing', () => {
     expect(next).toContain('{"A & B < C {value}"}');
     expect(() => parseExpression(next ?? '', { plugins: ['jsx'] })).not.toThrow();
   });
+  it('persists pasted multiline copy as JSX line breaks', () => {
+    const next = edit('<h1 id="title">Old</h1>', 'First line\nSecond & final');
+    expect(next).toBe('<h1 id="title">{"First line"}<br />{"Second & final"}</h1>');
+    expect(() => parseExpression(next ?? '', { plugins: ['jsx'] })).not.toThrow();
+  });
   it('does not overwrite dynamic data bindings or section content', () => {
     expect(edit('<h1 id="title">Hello <span>{customer.name}</span></h1>', 'New')).toBeNull();
     expect(edit('<section id="title"><h1>Heading</h1><p>Body</p></section>', 'New')).toBeNull();

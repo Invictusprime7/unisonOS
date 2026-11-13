@@ -849,6 +849,7 @@ export const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBr
   let inlineOriginalEditable: string | null = null;
   let inlineBlurHandler: (() => void) | null = null;
   let inlineKeyHandler: ((event: KeyboardEvent) => void) | null = null;
+  let inlinePasteHandler: ((event: ClipboardEvent) => void) | null = null;
 
   const STYLE_ID = '__ut-select-style';
   function ensureStyles() {
@@ -1194,6 +1195,7 @@ export const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBr
     const text = (element.innerText || element.textContent || '').replace(/\u00a0/g, ' ').trim();
     if (inlineBlurHandler) element.removeEventListener('blur', inlineBlurHandler);
     if (inlineKeyHandler) element.removeEventListener('keydown', inlineKeyHandler);
+    if (inlinePasteHandler) element.removeEventListener('paste', inlinePasteHandler);
     element.classList.remove('__ut-inline-edit');
     if (inlineOriginalEditable === null) element.removeAttribute('contenteditable');
     else element.setAttribute('contenteditable', inlineOriginalEditable);
@@ -1228,6 +1230,35 @@ export const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBr
     }, '*');
   }
 
+  function insertInlinePlainText(element: HTMLElement, text: string) {
+    if (!text) return;
+    const doc = element.ownerDocument;
+    const selection = doc.getSelection();
+    const range = selection?.rangeCount && element.contains(selection.anchorNode)
+      ? selection.getRangeAt(0)
+      : doc.createRange();
+    if (!selection?.rangeCount || !element.contains(selection.anchorNode)) {
+      range.selectNodeContents(element);
+      range.collapse(false);
+    }
+    range.deleteContents();
+    const fragment = doc.createDocumentFragment();
+    const lines = text.replace(/\\r\\n?/g, '\\n').split('\\n');
+    lines.forEach((line, index) => {
+      if (index > 0) fragment.appendChild(doc.createElement('br'));
+      if (line) fragment.appendChild(doc.createTextNode(line));
+    });
+    const last = fragment.lastChild;
+    range.insertNode(fragment);
+    if (selection && last) {
+      const caret = doc.createRange();
+      caret.setStartAfter(last);
+      caret.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(caret);
+    }
+  }
+
   function beginInlineTextEdit(element: HTMLElement, event: MouseEvent) {
     if (inlineEditingEl === element) return;
     if (inlineEditingEl) finishInlineTextEdit(true);
@@ -1255,13 +1286,23 @@ export const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBr
       if (keyEvent.key === 'Escape') {
         keyEvent.preventDefault();
         finishInlineTextEdit(false);
-      } else if ((keyEvent.metaKey || keyEvent.ctrlKey) && keyEvent.key === 'Enter') {
+      } else if (keyEvent.key === 'Enter' && keyEvent.shiftKey) {
+        keyEvent.preventDefault();
+        insertInlinePlainText(element, '\\n');
+      } else if (keyEvent.key === 'Enter' && !keyEvent.shiftKey) {
         keyEvent.preventDefault();
         finishInlineTextEdit(true);
       }
     };
+    inlinePasteHandler = (pasteEvent) => {
+      const text = pasteEvent.clipboardData?.getData('text/plain');
+      if (typeof text !== 'string') return;
+      pasteEvent.preventDefault();
+      insertInlinePlainText(element, text);
+    };
     element.addEventListener('blur', inlineBlurHandler);
     element.addEventListener('keydown', inlineKeyHandler);
+    element.addEventListener('paste', inlinePasteHandler);
   }
 
   (bridgeWindow as any).__unisonPreviewSelectElement = selectPreviewElement;

@@ -65,6 +65,8 @@ export function resolvePreviewSource(input: {
   astIdentity?: string | null;
   sourceRevisionId?: string | null;
   acceptedRevisionId?: string | null;
+  /** Permit a direct edit when exact source + AST identity match but no revision exists yet. */
+  allowUnversionedExactSource?: boolean;
 }): PreviewSourceResolution {
   const empty: PreviewSourceResolution = {
     mode: 'inspect-only', reason: 'malformed-locator', ownerPath: null, componentOwnerId: null, tagName: null, repeated: false,
@@ -116,7 +118,9 @@ export function resolvePreviewSource(input: {
   if (input.astIdentity !== astIdentity) {
     return { ...empty, reason: input.sourceHash !== sourceHash ? 'source-hash-mismatch' : 'ast-identity-mismatch', ownerPath: parsed.path, sourceHash, astIdentity };
   }
-  if (!input.sourceRevisionId || !input.acceptedRevisionId) {
+  if ((!input.sourceRevisionId || !input.acceptedRevisionId) && !(
+    input.allowUnversionedExactSource && input.sourceHash === sourceHash && input.astIdentity === astIdentity
+  )) {
     return { ...empty, reason: 'revision-unknown', ownerPath: parsed.path, sourceHash, astIdentity };
   }
 
@@ -143,7 +147,7 @@ export function resolvePreviewSource(input: {
     dynamicText, protection, span: { start: element.getStart(file), end: element.getEnd() },
     sourceHash,
     astIdentity,
-    revisionId: input.acceptedRevisionId,
+    revisionId: input.acceptedRevisionId ?? null,
     rebased: input.sourceHash !== sourceHash || input.sourceRevisionId !== input.acceptedRevisionId
       || (offset !== null && opening.getStart(file) !== offset),
   };

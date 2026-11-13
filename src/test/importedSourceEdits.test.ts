@@ -74,6 +74,20 @@ describe('editing imported source projects', () => {
     expect(styled).toMatch(/<h1 className="font-display text-7xl" style=\{\{\s*color: ["']var\(--primary\)["']\s*\}\}>ARIA<\/h1>/);
   });
 
+  it('edits an exactly identified imported heading before its first accepted revision', async () => {
+    const files = await importedProject();
+    const built = instrumentSourceForSelection({ [PAGE]: files[PAGE] })[PAGE];
+    const attrs = /<h1[^>]*data-ut-source-locator="([^"]+)" data-ut-source-ast="([^"]+)" data-ut-source-hash="([^"]+)"/.exec(built)!;
+    const finder = selectedSourceFinder({
+      tagName: 'H1',
+      html: '<h1>ARIA</h1>',
+      descriptor: { sourceLocator: attrs[1], astIdentity: attrs[2], sourceHash: attrs[3] },
+    });
+
+    expect(mutateJSXText(files[PAGE], 'div > section > h1', 'ARIANN NORORI', finder))
+      .toContain('<h1 className="font-display text-7xl">ARIANN NORORI</h1>');
+  });
+
   it('an AI Builder edit reaches the AI with the page and root files and comes back ready to save', async () => {
     const files = await importedProject();
     sent.length = 0;

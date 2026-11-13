@@ -42,6 +42,15 @@ describe('selected source edits', () => {
     expect(mutateJSXText(source, selector, 'Changed', finder)).toContain('>First</section>\n<section data-component="intent-newsletter">Changed</section>');
     expect(mutateJSXStyles(source, selector, { display: 'none' }, finder)).toContain('>First</section>\n<section data-component="intent-newsletter" style=');
   });
+  it('uses unique clicked text within the located owner when preview identity metadata is incomplete', () => {
+    const finder = selectedSourceFinder({
+      tagName: 'section',
+      html: '<section data-component="intent-newsletter">Second</section>',
+      descriptor: { sourceLocator: '/src/components/News.tsx:3:1' },
+    });
+    expect(mutateJSXText(source, selector, 'Changed', finder))
+      .toContain('>First</section>\n<section data-component="intent-newsletter">Changed</section>');
+  });
   it('moves adjacent JSX siblings without swallowing earlier siblings', () => {
     const moved = mutateSelectedStructure(source, selector, 'up', selectedSourceFinder(selection));
     expect(moved).toContain('>Second</section>\n<section data-component="intent-newsletter">First</section>');

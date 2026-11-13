@@ -120,6 +120,8 @@ describe('preview source resolution', () => {
     expect(resolvePreviewSource({ locator, files, sourceHash, astIdentity: 'stale' }).reason).toBe('ast-identity-mismatch');
     expect(resolvePreviewSource({ locator, files }).reason).toBe('source-identity-unknown');
     expect(resolvePreviewSource({ locator, files, sourceHash, astIdentity }).reason).toBe('revision-unknown');
+    expect(resolvePreviewSource({ locator, files, sourceHash, astIdentity, allowUnversionedExactSource: true }))
+      .toMatchObject({ mode: 'editable', reason: 'static-node', span: expect.any(Object), revisionId: null });
   });
 
   it('reacquires an unchanged JSX node after unrelated edits shift its locator', () => {

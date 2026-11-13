@@ -3,7 +3,7 @@ import { resolvePreviewSource } from '@/services/editor/previewSourceResolver';
 import { PROMPT_CREATIVE_AUTHORITY_POLICY, retireLegacyRegistryOnlyDirective } from '@/services/app-builder/creativeAuthorityPolicy';
 import { readAppBuilderAISettings, saveAppBuilderAISettings } from '@/services/app-builder/appBuilderAISettings';
 import { clarifyBuilderRequest } from '@/services/builder/conversationalClarifier';
-import { isThemeOnlyRequest, shouldUseThemeTokenLane } from '@/services/theme/themeEdit';
+import { isThemeOnlyRequest, resolveImportedThemeSourceTargets, shouldUseImportedThemeSourceEdit, shouldUseThemeTokenLane } from '@/services/theme/themeEdit';
 import { collectLocalImportClosure } from '@/services/laneBCompanionModules';
 import { generateSiteImage, locateImageSource, isImageGenerationRequest, IMAGE_GENERATED_EVENT, SiteImageBusyError, SiteImageRequestError, type ImageGeneratedDetail } from '@/services/media/generateSiteImage';
 /**
@@ -1458,14 +1458,21 @@ export const AIBuilderPanel: React.FC<AIBuilderPanelProps> = ({
           // New-page requests ("add a case study page") are site-level but
           // own no existing source part: they author a new file plus nav.
           const createsPage = /\b(add|create|make|build|new|generate)\b[^.]{0,80}?\bpages?\b/i.test(rawInput);
-          const siteScope = !createsPage && !requestedPageTarget && !selectedSourceFile && (capabilityInterpretation.envelope.scope.level === 'site' || /\b(across (?:the |all )?(?:site|pages)|site[ -]wide|whole site|every page|all pages)\b/i.test(rawInput));
-          resolvedSourceTargets = resolveEditSourceTargets(rawInput, analysis, {
-            files: vfsFiles,
-            pageFiles: pageTargets.map(page => page.filePath),
-            preferredFile: visiblePageFile ?? resolveCanonicalAuthoringPage(vfsFiles).filePath,
-            siteScope,
-            pinnedFile: selectedSourceFile,
-          });
+          const importedThemeEdit = droppedFiles.length === 0
+            && shouldUseImportedThemeSourceEdit(rawInput, vfsFiles)
+            && !createsPage
+            && !requestedPageTarget
+            && !selectedSourceFile;
+          const siteScope = !importedThemeEdit && !createsPage && !requestedPageTarget && !selectedSourceFile && (capabilityInterpretation.envelope.scope.level === 'site' || /\b(across (?:the |all )?(?:site|pages)|site[ -]wide|whole site|every page|all pages)\b/i.test(rawInput));
+          resolvedSourceTargets = importedThemeEdit
+            ? resolveImportedThemeSourceTargets(vfsFiles, pageTargets.map((page) => page.filePath))
+            : resolveEditSourceTargets(rawInput, analysis, {
+                files: vfsFiles,
+                pageFiles: pageTargets.map(page => page.filePath),
+                preferredFile: visiblePageFile ?? resolveCanonicalAuthoringPage(vfsFiles).filePath,
+                siteScope,
+                pinnedFile: selectedSourceFile,
+              });
           if (siteScope && resolvedSourceTargets.length === 0) throw new Error('Could not identify the requested site part in the page sources. Select it in Preview or name its component.');
           resolvedTargetFile = resolvedSourceTargets[0] ?? resolvedTargetFile;
         }

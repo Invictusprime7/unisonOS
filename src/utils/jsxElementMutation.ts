@@ -376,14 +376,17 @@ export function mutateJSXText(
     let next = source;
     for (const edit of edits.reverse()) {
       // A literal expression renders &, braces and angle brackets as text, never JSX.
-      const value = edit.next ? `{${JSON.stringify(edit.next)}}` : '';
+      const value = edit.next.split(/\r\n?|\n/).map((line) => `{${JSON.stringify(line)}}`).join('<br />');
       next = next.slice(0, bounds.start + edit.start) + value + next.slice(bounds.start + edit.end);
     }
     return next;
   }
 
   // Escape JSX-significant characters in the new text
-  const safe = /[&{}<>]/.test(text) ? `{${JSON.stringify(text)}}` : text;
+  const lines = text.split(/\r\n?|\n/);
+  const safe = lines.length > 1
+    ? lines.map((line) => `{${JSON.stringify(line)}}`).join('<br />')
+    : /[&{}<>]/.test(text) ? `{${JSON.stringify(text)}}` : text;
   return source.substring(0, childStart) + safe + source.substring(childEnd);
 }
 
