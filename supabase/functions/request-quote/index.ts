@@ -164,7 +164,7 @@ serve(async (req) => {
       html: `
         <div>
           <h1>New quote request</h1>
-          <p><strong>Business:</strong> ${biz?.name ?? body.businessId}</p>
+          <p><strong>Business:</strong> ${escapeHtml(biz?.name ?? body.businessId)}</p>
           <p><strong>Name:</strong> ${escapeHtml(body.name || "—")}</p>
           <p><strong>Email:</strong> ${escapeHtml(normalizedEmail)}</p>
           ${body.phone ? `<p><strong>Phone:</strong> ${escapeHtml(body.phone)}</p>` : ""}
@@ -186,7 +186,7 @@ serve(async (req) => {
         <h1>Thanks for reaching out${body.name ? `, ${escapeHtml(body.name)}` : ""}</h1>
         <p>We received your request and will send a personalized quote within one business day.</p>
         ${body.serviceInterest ? `<p><strong>You asked about:</strong> ${escapeHtml(body.serviceInterest)}</p>` : ""}
-        <p>Talk soon,<br/>${biz?.name ?? "The team"}</p>
+        <p>Talk soon,<br/>${escapeHtml(biz?.name ?? "The team")}</p>
       </div>
     `,
   });

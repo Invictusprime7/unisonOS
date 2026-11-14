@@ -243,7 +243,7 @@ serve(async (req) => {
           html: `
             <div>
               <h1>New lead</h1>
-              <p><strong>Business:</strong> ${biz?.name ?? businessId}</p>
+              <p><strong>Business:</strong> ${escapeHtml(biz?.name ?? businessId)}</p>
               <p><strong>Email:</strong> ${escapeHtml(email)}</p>
               ${name ? `<p><strong>Name:</strong> ${escapeHtml(name)}</p>` : ""}
               ${phone ? `<p><strong>Phone:</strong> ${escapeHtml(phone)}</p>` : ""}
