@@ -1,5 +1,4 @@
 /**
-import { publicSiteWriteAllowed } from "../_shared/publicBusinessGate.ts";
  * CREATE LEAD LITE - Simplified lead creation without npm dependencies
  *
  * Uses fetch for Resend API instead of npm:resend package.
@@ -12,12 +11,15 @@ import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.t
 import { secureJsonResponse, errorResponse } from "../_shared/response.ts";
 import { safeParseBody, sanitizeString, isValidUUID , escapeHtml } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
+import { publicSiteWriteAllowed } from "../_shared/publicBusinessGate.ts";
 
 const corsHeaders = publicCorsHeaders;
 const RATE_LIMIT_CONFIG = { maxRequests: 20, windowSeconds: 300 };
 
 interface LeadPayload {
   businessId?: string;
+  siteId?: string;
+  projectId?: string;
   name?: string;
   email?: string;
   phone?: string;
@@ -100,6 +102,11 @@ serve(async (req) => {
 
     if (!isValidUUID(businessId)) {
       return errorResponse("Invalid business ID", 400, corsHeaders);
+    }
+
+    const siteId = sanitizeString(rawBody.siteId || rawBody.projectId || "", 100) || null;
+    if (!(await publicSiteWriteAllowed(supabase, req, businessId, siteId))) {
+      return errorResponse("This business is not accepting submissions", 403, corsHeaders);
     }
 
     const validEmail = safeEmail(email);

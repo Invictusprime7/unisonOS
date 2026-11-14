@@ -143,7 +143,8 @@ serve(async (req) => {
       return errorResponse("Invalid business ID", 400, corsHeaders);
     }
 
-    if (!(await publicBusinessWriteAllowed(supabase, req, businessId))) {
+    const siteId = sanitizeString(rawBody.siteId || rawBody.projectId || "", 100) || null;
+    if (!(await publicSiteWriteAllowed(supabase, req, businessId, siteId))) {
       return errorResponse("This business is not accepting submissions", 403, corsHeaders);
     }
 
