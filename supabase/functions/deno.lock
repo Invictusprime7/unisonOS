@@ -3,9 +3,11 @@
   "specifiers": {
     "jsr:@std/encoding@1": "1.0.11",
     "npm:@babel/parser@7.29.8": "7.29.8",
-    "npm:@supabase/server@1": "1.9.2_@supabase+supabase-js@2.89.0",
+    "npm:@supabase/server@1": "1.9.2_@supabase+supabase-js@2.89.0_hono@4.6.3",
     "npm:@supabase/supabase-js@2": "2.89.0",
-    "npm:jszip@3.10.1": "3.10.1"
+    "npm:hono@4.6.3": "4.6.3",
+    "npm:jszip@3.10.1": "3.10.1",
+    "npm:mcp-lite@0.10": "0.10.0"
   },
   "jsr": {
     "@std/encoding@1.0.11": {
@@ -32,6 +34,9 @@
         "@babel/helper-string-parser",
         "@babel/helper-validator-identifier"
       ]
+    },
+    "@standard-schema/spec@1.1.0": {
+      "integrity": "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="
     },
     "@supabase/auth-js@2.89.0": {
       "integrity": "sha512-wiWZdz8WMad8LQdJMWYDZ2SJtZP5MwMqzQq3ehtW2ngiI3UTgbKiFrvMUUS3KADiVlk4LiGfODB2mrYx7w2f8w==",
@@ -66,12 +71,16 @@
         "ws"
       ]
     },
-    "@supabase/server@1.9.2_@supabase+supabase-js@2.89.0": {
+    "@supabase/server@1.9.2_@supabase+supabase-js@2.89.0_hono@4.6.3": {
       "integrity": "sha512-zkvU157ivZ268Ffs+2aEaYvavfchZ8IiB/Rt5tW4JTfew2JeX0TN46Do3XD5U8ganGhfAJr3BUsMHswY56+iLA==",
       "dependencies": [
         "@supabase/middleware",
         "@supabase/supabase-js",
+        "hono",
         "jose"
+      ],
+      "optionalPeers": [
+        "hono"
       ]
     },
     "@supabase/storage-js@2.89.0": {
@@ -109,6 +118,9 @@
     "core-util-is@1.0.3": {
       "integrity": "sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ=="
     },
+    "hono@4.6.3": {
+      "integrity": "sha512-0LeEuBNFeSHGqZ9sNVVgZjB1V5fmhkBSB0hZrpqStSMLOWgfLy0dHOvrjbJh0H2khsjet6rbHfWTHY0kpYThKQ=="
+    },
     "iceberg-js@0.8.1": {
       "integrity": "sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA=="
     },
@@ -137,6 +149,12 @@
       "integrity": "sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==",
       "dependencies": [
         "immediate"
+      ]
+    },
+    "mcp-lite@0.10.0": {
+      "integrity": "sha512-ts1PgXO5+MER3W77YjYUMqngF45l6eyh2V4Vc0O4S+oKU55ghvd3Q+/XpA4kqtMISqI9v5s1E8pChDICudxwXQ==",
+      "dependencies": [
+        "@standard-schema/spec"
       ]
     },
     "pako@1.0.11": {
