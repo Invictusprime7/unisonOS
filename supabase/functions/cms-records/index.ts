@@ -73,7 +73,7 @@ function describeWriteFailure(verb: string, resource: string, error: { code?: st
     case "23505": return `${base}: a matching record already exists.`;
     case "42501": return `${base}: the backend refused permission for this table.`;
     case undefined: return `${base}: no record was returned.`;
-    default: return `${base} (database error ${error.code}).`;
+    default: return `${base} (database error ${error?.code}).`;
   }
 }
 
