@@ -8107,6 +8107,7 @@ export const WebBuilder = ({ initialHtml, initialCss, onSave }: WebBuilderProps)
       </header>
 
       {/* Legacy toolbar retained temporarily for its existing panels; replaced visually by the topbar above. */}
+      {/* eslint-disable-next-line no-constant-binary-expression */}
       {false && <div>
         {/* Left Section: AI Toggle, Back, Device, Mode */}
         <div className="flex w-full items-center justify-between gap-1.5 lg:w-auto lg:justify-start lg:gap-2">
