@@ -159,7 +159,7 @@ serve(async (req) => {
   if (ownerTo) {
     await sendEmailSafe({
       to: ownerTo,
-      subject: `New quote request — ${body.name?.trim() || normalizedEmail}`,
+      subject: `New quote request — ${(body.name?.trim() || normalizedEmail).replace(/[\r\n]+/g, " ")}`,
       replyTo: normalizedEmail,
       html: `
         <div>
@@ -179,7 +179,7 @@ serve(async (req) => {
 
   await sendEmailSafe({
     to: normalizedEmail,
-    subject: `We received your quote request${biz?.name ? ` — ${biz.name}` : ""}`,
+    subject: `We received your quote request${biz?.name ? ` — ${String(biz.name).replace(/[\r\n]+/g, " ")}` : ""}`,
     replyTo: ownerTo,
     html: `
       <div>
