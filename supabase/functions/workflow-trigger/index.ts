@@ -86,7 +86,8 @@ export default async (req: Request) => {
         console.warn("Workflow trigger rejected: business access denied", { workflowId, userId, businessId: workflow.business_id });
         return errorResponse(access.error || "Forbidden", 403, corsHeaders);
       }
-    } else if (workflow.user_id && workflow.user_id !== userId) {
+    } else if (!workflow.user_id || workflow.user_id !== userId) {
+      // A workflow with no business must be owned by the caller; unowned workflows never run.
       console.warn("Workflow trigger rejected: user does not own workflow", { workflowId, userId, workflowOwner: workflow.user_id });
       return errorResponse("Forbidden", 403, corsHeaders);
     }
