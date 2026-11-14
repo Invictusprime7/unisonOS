@@ -4,7 +4,7 @@
  * Unison preview uses, so a click maps to an exact line in the saved file.
  * Saved bytes, page checks for publishing and published builds never see this.
  */
-import { injectPreviewSourceLocators, PREVIEW_SELECTION_BRIDGE } from '@/utils/sandpackFilePrep';
+import { injectPreviewSourceLocators, PREVIEW_SELECTION_BRIDGE, previewEditorOriginsLiteral } from '@/utils/sandpackFilePrep';
 
 const JSX_SOURCE = /\.(jsx|tsx)$/;
 
@@ -24,7 +24,7 @@ let bridgeScript: Promise<string> | null = null;
 /** The selection bridge compiled to plain script for the sealed runtime frame. */
 export function selectionBridgeScript(): Promise<string> {
   bridgeScript ??= import('typescript').then(({ default: ts }) => ts.transpileModule(
-    `${PREVIEW_SELECTION_BRIDGE}\n__initUnisonPreviewSelectionBridge();`,
+    `${PREVIEW_SELECTION_BRIDGE}\n__initUnisonPreviewSelectionBridge(${previewEditorOriginsLiteral()});`,
     { compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.None } },
   ).outputText).catch((error) => { bridgeScript = null; throw error; });
   return bridgeScript;
