@@ -122,18 +122,14 @@ serve(async (req) => {
       .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
       .maybeSingle();
 
-    if (existing) {
-      return secureJsonResponse(
-        {
-          success: true,
-          message: "Already received",
-          leadId: existing.id,
-          duplicate: true,
-        },
-        200,
-        corsHeaders,
-      );
-    }
+    // Public replies never reveal whether this email already submitted, nor any lead ID.
+    const receivedResponse = () => secureJsonResponse(
+      { success: true, message: "Thank you! We'll be in touch." },
+      200,
+      corsHeaders,
+    );
+
+    if (existing) return receivedResponse();
 
     const { data: lead, error } = await supabase.from("leads").insert({
       business_id: businessId,
@@ -172,15 +168,7 @@ serve(async (req) => {
       );
     }
 
-    return secureJsonResponse(
-      {
-        success: true,
-        message: "Thank you! We'll be in touch.",
-        leadId: lead.id,
-      },
-      200,
-      corsHeaders,
-    );
+    return receivedResponse();
   } catch (err) {
     console.error("[create-lead-lite] Error:", err);
     return errorResponse("Internal error", 500, corsHeaders);
