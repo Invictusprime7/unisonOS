@@ -18,8 +18,9 @@ serve(async req => {
   const buyer = auth.user.id;
   try {
     if (body?.action === 'complete') {
-      const { installationId, projectId, draftId, revisionId } = body;
-      if (![installationId, projectId, draftId, revisionId].every(v => typeof v === 'string' && isValidUUID(v))) return json({ success: false, error: 'Valid saved draft identifiers are required.' }, 400);
+      const ids = [body.installationId, body.projectId, body.draftId, body.revisionId];
+      if (!ids.every(v => typeof v === 'string' && isValidUUID(v))) return json({ success: false, error: 'Valid saved draft identifiers are required.' }, 400);
+      const [installationId, projectId, draftId, revisionId] = ids as string[];
       const { data: revision } = await admin.from('site_revisions').select('id, project_id, draft_id, business_id, status').eq('id', revisionId).eq('project_id', projectId).eq('draft_id', draftId).eq('status', 'committed').maybeSingle();
       const { data: draft } = await admin.from('builder_drafts').select('id, user_id, site_id, last_revision_id').eq('id', draftId).eq('user_id', buyer).maybeSingle();
       if (!revision || !draft?.site_id || draft.last_revision_id !== revisionId) return json({ success: false, error: 'A saved draft owned by your account is required.' }, 403);
@@ -32,12 +33,12 @@ serve(async req => {
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug) || !isValidUUID(key)) return json({ success: false, error: 'Valid template and request identifiers are required.' }, 400);
     const { data: listing } = await admin.from('marketplace_listings').select('id, status, current_release_id, price_cents').eq('slug', slug).eq('status', 'published').maybeSingle();
     if (!listing?.current_release_id) return json({ success: false, error: 'Template is no longer published.' }, 404);
-    const { data: release } = await admin.from('marketplace_releases').select('id, listing_id, status').eq('id', listing.current_release_id).eq('status', 'published').maybeSingle();
+    const { data: release } = await admin.from('marketplace_releases').select('id, listing_id, status').eq('id', String(listing.current_release_id)).eq('status', 'published').maybeSingle();
     if (!release || release.listing_id !== listing.id) return json({ success: false, error: 'The published release is unavailable.' }, 409);
-    const { data: artifact } = await admin.from('marketplace_release_artifacts').select('storage_key, review_id').eq('release_id', release.id).maybeSingle();
-    const { data: review } = artifact ? await admin.from('marketplace_release_reviews').select('id, revoked_at').eq('id', artifact.review_id).eq('release_id', release.id).maybeSingle() : { data: null };
+    const { data: artifact } = await admin.from('marketplace_release_artifacts').select('storage_key, review_id').eq('release_id', String(release.id)).maybeSingle();
+    const { data: review } = artifact ? await admin.from('marketplace_release_reviews').select('id, revoked_at').eq('id', String(artifact.review_id)).eq('release_id', String(release.id)).maybeSingle() : { data: null };
     if (!artifact || !review || review.revoked_at) return json({ success: false, error: 'This template package is unavailable.' }, 409);
-    const { data: owned } = await admin.from('marketplace_entitlements').select('id').eq('buyer_user_id', buyer).eq('release_id', release.id).eq('status', 'active').limit(1).maybeSingle();
+    const { data: owned } = await admin.from('marketplace_entitlements').select('id').eq('buyer_user_id', buyer).eq('release_id', String(release.id)).eq('status', 'active').limit(1).maybeSingle();
     if (!canClaimRelease(Number(listing.price_cents), !!owned)) return json({ success: false, error: 'Purchase this template before installing it. Checkout is not available yet.' }, 402);
     let entitlement = owned;
     if (!entitlement) {
