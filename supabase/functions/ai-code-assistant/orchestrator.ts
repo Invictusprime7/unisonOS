@@ -57,7 +57,7 @@ import { buildApplyState, type ApplyState } from "./applyState.ts";
 import { preprocessPrompt } from "../_shared/promptPreprocessor.ts";
 import { buildLaunchDeskSystemPrompt, buildLaunchDeskUserMessage } from "./prompts/launchDeskPrompt.ts";
 import { CATALOG_CHAT_TOOLS, renderCatalogToolDirective, isPageDesignRequest } from "../_shared/catalogTools.ts";
-import { buildEnvelopeDirective, type EnvelopeShape } from "./envelopeContext.ts";
+import { appendEnvelopeToLastUserMessage, buildEnvelopeDirective, type EnvelopeShape } from "./envelopeContext.ts";
 import { verifyAgainstEnvelope, buildRepairInstruction } from "./envelopeVerifier.ts";
 import { recordEnvelopeRun, type EnvelopeRunContext } from "./envelopeRunLog.ts";
 import {
