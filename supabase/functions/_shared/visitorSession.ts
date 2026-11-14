@@ -36,11 +36,13 @@ function toBase64Url(bytes: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function fromBase64Url(value: string): Uint8Array | null {
+function fromBase64Url(value: string): Uint8Array<ArrayBuffer> | null {
   if (!/^[A-Za-z0-9_-]{20,100}$/.test(value)) return null;
   try {
     const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/"));
-    return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    const bytes = new Uint8Array(new ArrayBuffer(binary.length));
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
   } catch {
     return null;
   }
