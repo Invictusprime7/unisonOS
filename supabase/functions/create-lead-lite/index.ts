@@ -1,4 +1,5 @@
 /**
+import { publicSiteWriteAllowed } from "../_shared/publicBusinessGate.ts";
  * CREATE LEAD LITE - Simplified lead creation without npm dependencies
  *
  * Uses fetch for Resend API instead of npm:resend package.
