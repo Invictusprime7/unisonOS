@@ -1,17 +1,34 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { generateUUID } from '@/utils/uuid';
 
-// Generate or retrieve session ID for anonymous users
-const getSessionId = () => {
-  let sessionId = localStorage.getItem('template_session_id');
-  if (!sessionId) {
-    sessionId = generateUUID();
-    localStorage.setItem('template_session_id', sessionId);
+// Cart and order requests carry a session token signed by the backend, so a
+// visitor can only reach their own cart and orders.
+const SESSION_TOKEN_KEY = 'template_session_token';
+
+const readSessionToken = (): string | null => {
+  try {
+    return localStorage.getItem(SESSION_TOKEN_KEY);
+  } catch {
+    return null;
   }
-  return sessionId;
 };
+
+const startSession = async (): Promise<string> => {
+  const { data, error } = await supabase.functions.invoke('template-automation', {
+    body: { action: 'startSession', data: {} },
+  });
+  if (error || typeof data?.sessionToken !== 'string') throw error || new Error('Could not start a cart session');
+  try {
+    localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
+    localStorage.removeItem('template_session_id');
+  } catch {
+    // Storage may be unavailable; the token still works for this page.
+  }
+  return data.sessionToken;
+};
+
+const sessionIdFromToken = (token: string | null): string => (token ? token.split('.')[0] : '');
 
 interface CartItem {
   id: string;
@@ -41,12 +58,21 @@ export const useTemplateAutomation = () => {
   const [cartTotal, setCartTotal] = useState(0);
   const [cartCount, setCartCount] = useState(0);
   const [loading, setLoading] = useState(false);
-  const sessionId = getSessionId();
+  const [sessionToken, setSessionToken] = useState<string | null>(() => readSessionToken());
+  const sessionId = sessionIdFromToken(sessionToken);
 
   const callAutomation = async (action: string, data: any) => {
-    const { data: result, error } = await supabase.functions.invoke('template-automation', {
-      body: { action, data: { ...data, sessionId } }
+    const send = (token: string) => supabase.functions.invoke('template-automation', {
+      body: { action, data: { ...data, sessionToken: token } }
     });
+    let token = readSessionToken() || await startSession();
+    let { data: result, error } = await send(token);
+    const status = (error as { context?: { status?: number } } | null)?.context?.status;
+    if (error && status === 401) {
+      token = await startSession();
+      ({ data: result, error } = await send(token));
+    }
+    if (token !== sessionToken) setSessionToken(token);
     if (error) throw error;
     return result;
   };

@@ -52,6 +52,9 @@ if (!JWT_SECRET_RAW) {
 }
 const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_RAW || "");
 
+// One reply for every failed sign-up, so it never reveals existing accounts.
+const REGISTER_FAILED_MESSAGE = "We couldn't create an account with these details. Try signing in instead.";
+
 // Session duration: 24 hours (reduced from 7 days for security)
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
@@ -141,22 +144,6 @@ serve(async (req) => {
           return errorResponse("Password must contain at least one letter and one number", 400, corsHeaders);
         }
 
-        // Check if user already exists for THIS site (not globally)
-        const { data: existingUser } = await supabase
-          .from("site_users")
-          .select("id")
-          .eq("site_id", normalizedSiteId)
-          .eq("email", normalizedEmail)
-          .single();
-
-        if (existingUser) {
-          return errorResponse(
-            "An account with this email already exists for this site",
-            409,
-            corsHeaders
-          );
-        }
-
         // The visitor must never choose a tenant. Resolve the business from
         // the canonical generated-site record, not from request data.
         const { data: site, error: siteError } = await supabase
@@ -166,6 +153,34 @@ serve(async (req) => {
           .maybeSingle();
         if (siteError || !site || !["preview", "published"].includes(site.status)) {
           return errorResponse("Site authentication is unavailable", 404, corsHeaders);
+        }
+
+        // Registration never reveals whether an email already has an account.
+        // An existing account is signed in only when the caller proves its
+        // password; otherwise the reply matches any other failed sign-up.
+        const { data: existingUser } = await supabase
+          .from("site_users")
+          .select("id, email, name, metadata, password_hash, created_at")
+          .eq("site_id", normalizedSiteId)
+          .eq("email", normalizedEmail)
+          .maybeSingle();
+
+        if (existingUser) {
+          const passwordValid = await bcrypt.compare(password, existingUser.password_hash);
+          if (!passwordValid) {
+            return errorResponse(REGISTER_FAILED_MESSAGE, 400, corsHeaders);
+          }
+          await supabase
+            .from("site_users")
+            .update({ last_login_at: new Date().toISOString() })
+            .eq("id", existingUser.id);
+          const existingSession = await createSession(existingUser.id, normalizedSiteId, normalizedEmail);
+          return secureJsonResponse({
+            success: true,
+            message: "Account created successfully",
+            user: sanitizeUser(existingUser),
+            session: existingSession,
+          }, 200, corsHeaders);
         }
 
         // Hash password with bcrypt
@@ -186,14 +201,14 @@ serve(async (req) => {
           .single();
 
         if (insertError) {
-          console.error("[site-auth] Insert error:", insertError);
-          return errorResponse("Failed to create account", 500, corsHeaders);
+          console.error("[site-auth] Insert error:", insertError.code ?? "unknown");
+          return errorResponse(REGISTER_FAILED_MESSAGE, 400, corsHeaders);
         }
 
         // Generate session token
         const session = await createSession(newUser.id, normalizedSiteId, normalizedEmail);
 
-        console.log(`[site-auth] User registered: ${normalizedEmail} for site ${normalizedSiteId}`);
+        console.log(`[site-auth] User registered for site ${normalizedSiteId}`);
 
         return secureJsonResponse({
           success: true,
@@ -225,14 +240,14 @@ serve(async (req) => {
           .single();
 
         if (findError || !user) {
-          console.log(`[site-auth] Login failed - user not found: ${normalizedEmail} on site ${normalizedSiteId}`);
+          console.log(`[site-auth] Login failed for site ${normalizedSiteId}`);
           return errorResponse("Invalid email or password", 401, corsHeaders);
         }
 
         // Verify password
         const passwordValid = await bcrypt.compare(password, user.password_hash);
         if (!passwordValid) {
-          console.log(`[site-auth] Login failed - invalid password for: ${normalizedEmail}`);
+          console.log(`[site-auth] Login failed for site ${normalizedSiteId}`);
           return errorResponse("Invalid email or password", 401, corsHeaders);
         }
 
@@ -245,7 +260,7 @@ serve(async (req) => {
         // Generate session token
         const session = await createSession(user.id, normalizedSiteId, normalizedEmail);
 
-        console.log(`[site-auth] User logged in: ${normalizedEmail} for site ${normalizedSiteId}`);
+        console.log(`[site-auth] User logged in for site ${normalizedSiteId}`);
 
         return secureJsonResponse({
           success: true,

@@ -144,13 +144,22 @@ async function submitAuth(form: HTMLFormElement, intent: string) {
   showActionStatus(form, intent === 'auth.register' ? 'Account created.' : 'Signed in.');
 }
 
+function randomUuid(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+}
+
 function createSessionId(): string {
   const storageKey = 'unison-runtime-session:' + PUBLISHED_RUNTIME_CONFIG.siteId;
   const existing = window.sessionStorage.getItem(storageKey);
   if (existing) return existing;
+  // Session keys must be unguessable random UUIDs; checkout refuses anything else.
   const sessionId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
-    : 'session-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    : randomUuid();
   window.sessionStorage.setItem(storageKey, sessionId);
   return sessionId;
 }
@@ -177,6 +186,33 @@ function createIdempotencyKey(form: HTMLFormElement): string {
     : 'booking-' + Date.now() + '-' + Math.random().toString(36).slice(2);
   form.dataset.utIdempotencyKey = key;
   return key;
+}
+
+// The visitor's latest booking is remembered only in their own browser tab;
+// the public runtime never returns bookings looked up by a session key.
+function latestBookingKey(): string {
+  return 'unison-runtime-latest-booking:' + PUBLISHED_RUNTIME_CONFIG.siteId;
+}
+
+function rememberLatestBooking(serviceName: unknown, status: unknown) {
+  if (typeof serviceName !== 'string' || !serviceName) return;
+  try {
+    window.sessionStorage.setItem(latestBookingKey(), JSON.stringify({
+      serviceName: serviceName.slice(0, 200),
+      status: typeof status === 'string' && status ? status.slice(0, 40) : 'confirmed',
+    }));
+  } catch {
+    // Storage may be unavailable; the confirmation message was already shown.
+  }
+}
+
+function readLatestBooking(): { serviceName: string; status: string } | null {
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(latestBookingKey()) || 'null');
+    return parsed && typeof parsed.serviceName === 'string' && typeof parsed.status === 'string' ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function bookingComponent(form: HTMLFormElement) {
@@ -283,6 +319,7 @@ async function submitBooking(form: HTMLFormElement) {
   }
   form.dataset.utIdempotencyKey = '';
   const serviceName = result.state?.booking?.serviceName || result.booking?.serviceName;
+  rememberLatestBooking(serviceName, result.state?.booking?.status || result.booking?.status);
   const notifications = result.state?.notifications || {};
   const customerStatus = notifications.customer;
   const ownerStatus = notifications.owner;
@@ -335,7 +372,7 @@ async function hydrateBookingForm(form: HTMLFormElement) {
         operation: 'read',
         runtimeVersion: runtime.runtimeVersion,
         siteId: runtime.siteId,
-        read: { type: 'booking', sessionId: createSessionId() },
+        read: { type: 'booking' },
       }),
     });
     const result = await response.json().catch(() => ({})) as Record<string, any>;
@@ -364,8 +401,8 @@ async function hydrateBookingForm(form: HTMLFormElement) {
     renderSlots();
     if (services.length === 0) showActionStatus(form, 'Booking is not configured yet: no services are available.');
     else if (slots.length === 0) showActionStatus(form, 'Booking is not available yet: no appointment times are available.');
-    const latest = Array.isArray(result.state?.bookings) ? result.state.bookings[0] : null;
-    if (latest) showActionStatus(form, String(latest.service_name) + ' is ' + String(latest.status) + '.');
+    const latest = readLatestBooking();
+    if (latest) showActionStatus(form, latest.serviceName + ' is ' + latest.status + '.');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Booking availability is unavailable.';
     markUnavailable('Booking unavailable', message);

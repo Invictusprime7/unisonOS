@@ -268,10 +268,24 @@ function ensureSemanticTailwindPreviewHtml(html: string): string {
 }
 
 
-const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
+/**
+ * The editor origin(s) a preview bridge accepts commands from, as a source
+ * literal. Bridges are built inside the editor, so this is the editor's own
+ * origin; an unknown origin yields an empty list and the bridge stays closed.
+ */
+export function previewEditorOriginsLiteral(): string {
+  const origin = typeof window !== 'undefined' ? window.location?.origin : undefined;
+  return JSON.stringify(origin && origin !== 'null' ? [origin] : []);
+}
+
+const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge(trustedOrigins?: string[]) {
   const bridgeWindow = window as Window & { __unisonPreviewNavBridgeInstalled?: boolean };
   if (bridgeWindow.__unisonPreviewNavBridgeInstalled) return;
   bridgeWindow.__unisonPreviewNavBridgeInstalled = true;
+  // Commands are accepted only from the editor window that hosts this preview,
+  // at the exact editor origin it was built for.
+  const editorOrigins = Array.isArray(trustedOrigins) ? trustedOrigins.filter((origin) => typeof origin === 'string' && origin !== '*' && origin !== 'null') : [];
+  const fromEditor = (event: MessageEvent) => window.parent !== window && event.source === window.parent && editorOrigins.indexOf(event.origin) !== -1;
 
   const normalizePath = (rawPath: string) => rawPath.replace(/^\\//, '').replace(/\\.html(?:[?#].*)?$/, '').replace(/[?#].*$/, '') || 'index';
 
@@ -563,7 +577,7 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
   // ── Message handlers for navigation and intent commands ──
   window.addEventListener('message', function (event) {
     // Commands are only accepted from the builder that hosts this preview.
-    if (event.source !== window.parent || window.parent === window) return;
+    if (!fromEditor(event)) return;
     if (event.data?.type === 'NAV_ROUTE' && event.data.route) {
       window.location.hash = event.data.route;
     }
@@ -830,10 +844,13 @@ const PREVIEW_NAV_BRIDGE = `function __initUnisonPreviewNavBridge() {
  * had ElementFloatingToolbar and onElementSelect plumbing, but no script in
  * the iframe ever produced the ELEMENT_SELECTED message.
  */
-export const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge() {
+export const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBridge(trustedOrigins?: string[]) {
   const bridgeWindow = window as Window & { __unisonPreviewSelectionBridgeInstalled?: boolean };
   if (bridgeWindow.__unisonPreviewSelectionBridgeInstalled) return;
   bridgeWindow.__unisonPreviewSelectionBridgeInstalled = true;
+  // Edit-mode commands are accepted only from the hosting editor window, at the
+  // exact editor origin this preview was built for.
+  const editorOrigins = Array.isArray(trustedOrigins) ? trustedOrigins.filter((origin) => typeof origin === 'string' && origin !== '*' && origin !== 'null') : [];
 
   let active = false;
   let activationKey = 0;
@@ -1365,6 +1382,7 @@ export const PREVIEW_SELECTION_BRIDGE = `function __initUnisonPreviewSelectionBr
 
   window.addEventListener('message', function (event) {
     if (event.source !== window.parent || window.parent === window) return;
+    if (editorOrigins.indexOf(event.origin) === -1) return;
     const data = event.data;
     if (!data || typeof data !== 'object') return;
     if (data.type === 'EDIT_MODE_TOGGLE') {
@@ -1676,10 +1694,10 @@ const __loadTailwindUtilities = () => new Promise<void>((resolve) => {
 });
 
 ${PREVIEW_NAV_BRIDGE}
-__initUnisonPreviewNavBridge();
+__initUnisonPreviewNavBridge(${previewEditorOriginsLiteral()});
 
 ${PREVIEW_SELECTION_BRIDGE}
-__initUnisonPreviewSelectionBridge();
+__initUnisonPreviewSelectionBridge(${previewEditorOriginsLiteral()});
 
 // Error boundary as secondary safety net
 class PreviewErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -2570,7 +2588,8 @@ function injectPreviewNavBridge(code: string, filePath: string): string {
   if (!/^\/index\.(?:tsx?|jsx?)$/.test(filePath)) return code;
   if (code.includes('__initUnisonPreviewNavBridge')) return code;
 
-  const bridges = `${PREVIEW_NAV_BRIDGE}\n__initUnisonPreviewNavBridge();\n\n${PREVIEW_SELECTION_BRIDGE}\n__initUnisonPreviewSelectionBridge();`;
+  const origins = previewEditorOriginsLiteral();
+  const bridges = `${PREVIEW_NAV_BRIDGE}\n__initUnisonPreviewNavBridge(${origins});\n\n${PREVIEW_SELECTION_BRIDGE}\n__initUnisonPreviewSelectionBridge(${origins});`;
 
   const importBlock = code.match(/^(?:import[^\n]*\n)+/);
   if (importBlock) {

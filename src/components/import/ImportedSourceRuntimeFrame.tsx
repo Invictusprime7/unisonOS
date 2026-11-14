@@ -228,7 +228,7 @@ export function ImportedSourceRuntimeFrame({ records, files, assetUrls, projectI
       >
         {build ? 'Original files' : buildFailed ? 'Build failed' : 'Building…'}
       </span>
-      {publishReady && <CheckCircle2 className="hidden h-3.5 w-3.5 text-emerald-400 sm:block" aria-label="Ready to publish" title="Ready to publish" />}
+      {publishReady && <CheckCircle2 className="hidden h-3.5 w-3.5 text-emerald-400 sm:block" role="img" aria-label="Ready to publish"><title>Ready to publish</title></CheckCircle2>}
       <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-white/55 hover:bg-white/[0.07] hover:text-white" onClick={runChecks} disabled={!build?.ok || checking} title={checking ? 'Checking pages' : 'Check pages'} aria-label={checking ? 'Checking pages' : 'Check pages'}>
         {checking ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ClipboardCheck className="h-4 w-4" aria-hidden />}
       </Button>

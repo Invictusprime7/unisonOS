@@ -54,6 +54,22 @@ interface ScannedItem extends ScannedCatalogItem { meta?: { date?: string | null
 const SCAN_GROUP: Record<string, "catalog" | "content"> = { menu: "catalog", products: "catalog", services: "catalog", testimonials: "content", articles: "content", faqs: "content", team: "content", gallery: "content" };
 const SCAN_LABEL: Record<string, string> = { menu: "Menu", products: "Products", services: "Services", testimonials: "Testimonials", articles: "Articles", faqs: "FAQs", team: "Team", gallery: "Gallery & portfolio" };
 
+/** Origin a preview frame's messages must come from; null when it cannot be known. */
+function previewFrameOrigin(frame: HTMLIFrameElement): string | null {
+  const src = frame.getAttribute("src") || "";
+  if (!src || src.startsWith("about:")) {
+    // srcdoc/blank frames share this page's origin unless sandboxed without it.
+    const sandbox = frame.getAttribute("sandbox");
+    return sandbox !== null && !sandbox.split(/\s+/).includes("allow-same-origin") ? null : window.location.origin;
+  }
+  try {
+    const url = new URL(src, window.location.href);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Read-only Live Preview scan: lists items actually rendered on the current
  *  page, whether or not they are saved. Saving goes through seedLaunchAssets. */
 function SiteScanList({ group, businessId, projectId, onSaved }: { group: "catalog" | "content"; businessId: string; projectId?: string | null; onSaved: () => void }) {
@@ -62,17 +78,22 @@ function SiteScanList({ group, businessId, projectId, onSaved }: { group: "catal
   const [saved, setSaved] = useState<Set<number>>(new Set());
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    const requestId = `scan-${Date.now()}`;
+    const requestId = `scan-${crypto.randomUUID()}`;
+    // Each preview frame is asked, and answered, only at its own origin.
+    const previewFrames = () => Array.from(document.querySelectorAll("iframe")).flatMap((frame) => {
+      const origin = previewFrameOrigin(frame);
+      return origin && frame.contentWindow ? [{ win: frame.contentWindow, origin }] : [];
+    });
     const onMsg = (e: MessageEvent) => {
-      // Accept scans only from a preview frame on this page.
-      const fromPreview = Array.from(document.querySelectorAll("iframe")).some((f) => f.contentWindow === e.source);
+      // Accept scans only from a preview frame on this page, at that frame's origin.
+      const fromPreview = previewFrames().some((f) => f.win === e.source && f.origin === e.origin);
       if (!fromPreview) return;
       const d = e.data as { type?: string; requestId?: string; items?: ScannedItem[]; css?: string };
       if (d?.type !== "ASSET_SCAN" || d.requestId !== requestId) return;
       setScan({ items: d.items ?? [], css: d.css ?? "" });
     };
     window.addEventListener("message", onMsg);
-    const ask = () => document.querySelectorAll("iframe").forEach((f) => f.contentWindow?.postMessage({ type: "SCAN_ASSETS", requestId }, "*"));
+    const ask = () => previewFrames().forEach((f) => f.win.postMessage({ type: "SCAN_ASSETS", requestId }, f.origin));
     ask();
     const retry = setTimeout(ask, 900);
     return () => { window.removeEventListener("message", onMsg); clearTimeout(retry); };

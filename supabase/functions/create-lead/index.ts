@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { publicBusinessWriteAllowed } from "../_shared/publicBusinessGate.ts";
+import { publicSiteWriteAllowed } from "../_shared/publicBusinessGate.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { sendResendEmail, DEFAULT_FROM_EMAIL } from "../_shared/resend.ts";
 import { publicCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
@@ -13,6 +13,8 @@ const RATE_LIMIT_CONFIG = { maxRequests: 20, windowSeconds: 300 };
 
 interface LeadPayload {
   businessId: string;
+  siteId?: string;
+  projectId?: string;
   name?: string;
   email: string;
   phone?: string;
@@ -141,7 +143,8 @@ serve(async (req) => {
       return errorResponse("Invalid business ID", 400, corsHeaders);
     }
 
-    if (!(await publicBusinessWriteAllowed(supabase, req, businessId))) {
+    const siteId = sanitizeString(rawBody.siteId || rawBody.projectId || "", 100) || null;
+    if (!(await publicSiteWriteAllowed(supabase, req, businessId, siteId))) {
       return errorResponse("This business is not accepting submissions", 403, corsHeaders);
     }
 

@@ -595,7 +595,7 @@ describe('launch business runtime persistence', () => {
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('sessionId');
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('new FormData(form)');
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('runtime.runtimeEndpoint');
-    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("read: { type: 'booking', sessionId: createSessionId() }");
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("read: { type: 'booking' }");
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("form.elements.namedItem('serviceId')");
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("form.elements.namedItem('slotId')");
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("window.dispatchEvent(new CustomEvent('unison:booking.updated'");
@@ -755,7 +755,8 @@ describe('launch business runtime persistence', () => {
     expect(dispatcher).toContain('{ success: true, state }');
     expect(dispatcher).toContain('loadBookingState');
     expect(dispatcher).toContain('read?.type === "booking"');
-    expect(dispatcher).toContain('.eq("session_id", sessionId)');
+    // Public booking reads return availability only, never bookings looked up by a session key.
+    expect(dispatcher).not.toContain('.from("bookings")');
     expect(dispatcher).toContain('This runtime action is not configured for the site');
     expect(dispatcher).toContain('/functions/v1/site-runtime-read');
   });
