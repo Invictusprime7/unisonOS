@@ -416,13 +416,29 @@ const server = http.createServer(async (req, res) => {
   previewRequest(req, res, session, requestUrl);
 });
 
+function isSessionOrigin(origin, host) {
+  if (typeof origin !== 'string' || !origin) return false;
+  try {
+    const url = new URL(origin);
+    return url.protocol === 'https:' && url.hostname.toLowerCase() === host && (url.port === '' || url.port === '443');
+  } catch {
+    return false;
+  }
+}
+
 server.on('upgrade', (req, socket, head) => {
   const host = String(req.headers.host || '').toLowerCase().split(':')[0];
   const baseDomain = String(process.env.PREVIEW_BASE_DOMAIN || '').replace(/^\*\./, '').toLowerCase();
   const suffix = `.${baseDomain}`;
   const id = baseDomain && host.endsWith(suffix) ? host.slice(0, -suffix.length) : '';
   const session = SESSION_ID.test(id) ? sessions.get(id) : null;
-  if (!session || session.status !== 'running' || !session.privateIp) return socket.destroy();
+  if (!session || session.expiresAt <= Date.now() || session.status !== 'running' || !session.privateIp) return socket.destroy();
+  // Only the preview page itself (served from this session's own origin) may open
+  // a live socket; other sites cannot ride a visitor's browser into the session.
+  if (!isSessionOrigin(req.headers.origin, host)) {
+    socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+    return socket.destroy();
+  }
   proxyWebSocket(req, socket, head, session, new URL(req.url || '/', 'https://preview.invalid'));
 });
 
