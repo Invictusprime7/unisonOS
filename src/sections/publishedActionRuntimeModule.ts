@@ -144,13 +144,22 @@ async function submitAuth(form: HTMLFormElement, intent: string) {
   showActionStatus(form, intent === 'auth.register' ? 'Account created.' : 'Signed in.');
 }
 
+function randomUuid(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+}
+
 function createSessionId(): string {
   const storageKey = 'unison-runtime-session:' + PUBLISHED_RUNTIME_CONFIG.siteId;
   const existing = window.sessionStorage.getItem(storageKey);
   if (existing) return existing;
+  // Session keys must be unguessable random UUIDs; checkout refuses anything else.
   const sessionId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
-    : 'session-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    : randomUuid();
   window.sessionStorage.setItem(storageKey, sessionId);
   return sessionId;
 }
