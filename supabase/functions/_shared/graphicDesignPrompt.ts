@@ -39,6 +39,7 @@ const MAX_DOCUMENT_CHARS = 120_000;
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const clean = (value: unknown, max: number) => typeof value === "string"
   // deno-lint-ignore no-control-regex
+  // eslint-disable-next-line no-control-regex
   ? value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim().slice(0, max)
   : "";
 const clamp = (value: unknown, min: number, max: number, fallback: number) => {

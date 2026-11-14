@@ -163,6 +163,8 @@ export function scopeCssModule(css: string, path: string): { css: string; map: R
     let s = selector.replace(/:global\(([^)]*)\)/g, (_, inner: string) => { globals.push(inner); return `\u0000${globals.length - 1}\u0000`; });
     s = s.replace(/:local\(([^)]*)\)/g, '$1');
     s = s.replace(/\.(-?[_a-zA-Z][\w-]*)/g, (_, name: string) => { map[name] ??= `${name}_${suffix}`; return `.${map[name]}`; });
+    // The NUL marker is an intentional private placeholder for :global selectors.
+    // eslint-disable-next-line no-control-regex
     return s.replace(/\u0000(\d+)\u0000/g, (_, i: string) => globals[Number(i)]);
   };
   let out = '';
