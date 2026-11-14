@@ -649,7 +649,8 @@ function sendSMS(config: Record<string, unknown>, context: RunContext, _settings
   const to = interpolate(config.to as string || context.contact?.phone || context.payload?.phone as string, context);
   const message = interpolate(config.message as string || "", context);
   
-  console.log("[automation-runtime] SMS action (placeholder):", { to, message });
+  // Never log the phone number or message text.
+  console.log("[automation-runtime] SMS action (placeholder): not sent", { hasRecipient: Boolean(to), messageLength: message.length });
   return { sent: false, reason: "SMS not configured", to, message };
 }
 

@@ -82,9 +82,9 @@ const notifyTeam: ToolHandler = async (payload, context) => {
 
   const notifyEmail = business?.notification_email
 
+  // Never log the recipient address or message text.
   console.log('[agent-runner] notify.team:', {
-    to: notifyEmail || 'owner',
-    message: payload.message,
+    recipient: notifyEmail ? 'notification_email' : 'owner',
     priority: payload.priority || 'normal',
   })
 
