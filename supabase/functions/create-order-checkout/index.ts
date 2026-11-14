@@ -15,6 +15,14 @@ import {
 } from "../_shared/validate.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../_shared/rateLimit.ts";
 import { hasRequiredSiteCapabilities, requiredSiteCapabilitiesForIntent } from "../_shared/siteCapabilityPolicy.ts";
+import { callerIsBusinessMember, siteIsPublishedForBusiness } from "../_shared/publicBusinessGate.ts";
+
+// Visitor sessions are private random keys; guessable values are refused so
+// one visitor can never attach orders to another visitor's session.
+const VISITOR_SESSION = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Pending orders never carry a caller-typed identity; the paid order takes
+// the customer's details from the payment provider's verified checkout.
+const PENDING_CUSTOMER_EMAIL = "pending@checkout.com";
 
 /**
  * create-order-checkout — Guest-friendly ecommerce checkout.
@@ -152,8 +160,8 @@ serve(async (req) => {
     if (!normalizedSiteId || !isValidUUID(normalizedSiteId)) {
       return errorResponse("A valid siteId is required", 400, publicCorsHeaders);
     }
-    if (!normalizedSessionId) {
-      return errorResponse("sessionId is required", 400, publicCorsHeaders);
+    if (!normalizedSessionId || !VISITOR_SESSION.test(normalizedSessionId)) {
+      return errorResponse("A valid sessionId is required", 400, publicCorsHeaders);
     }
 
     const { data: site, error: siteError } = await supabase
@@ -171,6 +179,14 @@ serve(async (req) => {
       .eq("business_id", normalizedBusinessId)
       .maybeSingle();
     if (projectError || !project) return errorResponse("The site project is unavailable", 404, publicCorsHeaders);
+    // Visitors can only check out on a live published site of this business;
+    // unpublished sites accept checkout only from signed-in team members.
+    if (
+      !(await siteIsPublishedForBusiness(supabase, normalizedBusinessId, normalizedSiteId)) &&
+      !(await callerIsBusinessMember(req, normalizedBusinessId))
+    ) {
+      return errorResponse("This site is not accepting orders", 403, publicCorsHeaders);
+    }
 
     const requiredCapabilities = requiredSiteCapabilitiesForIntent("cart.checkout") ?? [];
     const { data: enabledCapabilities, error: capabilityError } = await supabase
@@ -266,7 +282,7 @@ serve(async (req) => {
         business_id: normalizedBusinessId,
         session_id: normalizedSessionId,
         user_id: normalizedUserId || null,
-        customer_email: normalizedCustomerEmail || "pending@checkout.com",
+        customer_email: PENDING_CUSTOMER_EMAIL,
         items: JSON.stringify(sanitizedItems),
         subtotal,
         total: subtotal,

@@ -359,6 +359,10 @@ async function handleOrderPaymentComplete(
     .from("orders")
     .update({
       status: "paid",
+      // The customer's identity comes only from the provider's verified
+      // checkout details, never from what the visitor typed before paying.
+      ...(session.customer_details?.email ? { customer_email: session.customer_details.email.toLowerCase() } : {}),
+      ...(session.customer_details?.name ? { customer_name: session.customer_details.name } : {}),
       // Confirm payment_intent_id in case create-order-checkout missed it
       payment_intent_id: typeof session.payment_intent === "string"
         ? session.payment_intent
