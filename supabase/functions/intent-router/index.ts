@@ -145,7 +145,7 @@ async function loadBusinessSettings(supabase: any, businessId: string) {
     
     if (profile?.email) {
       data.notification_email = profile.email;
-      console.log("[intent-router] Using owner profile email:", profile.email);
+      console.log("[intent-router] Using owner profile email for business notifications");
     }
   }
   
@@ -338,7 +338,7 @@ async function handleContactSubmit(
     `;
     
     await sendNotificationEmail(notificationEmail, subject, html, customerEmail);
-    console.log("[intent-router] Contact notification sent to:", notificationEmail);
+    console.log("[intent-router] Contact notification sent for business:", businessId);
   } else {
     console.warn("[intent-router] No notification_email for business:", businessId);
   }
@@ -478,7 +478,7 @@ async function handleQuoteRequest(
     `;
     
     await sendNotificationEmail(notificationEmail, subject, html, customerEmail);
-    console.log("[intent-router] Quote notification sent to:", notificationEmail);
+    console.log("[intent-router] Quote notification sent for business:", businessId);
   } else {
     console.warn("[intent-router] No notification_email for business:", businessId);
   }

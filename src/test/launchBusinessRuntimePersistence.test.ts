@@ -595,7 +595,7 @@ describe('launch business runtime persistence', () => {
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('sessionId');
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('new FormData(form)');
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain('runtime.runtimeEndpoint');
-    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("read: { type: 'booking', sessionId: createSessionId() }");
+    expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("read: { type: 'booking' }");
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("form.elements.namedItem('serviceId')");
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("form.elements.namedItem('slotId')");
     expect(PUBLISHED_ACTION_RUNTIME_MODULE).toContain("window.dispatchEvent(new CustomEvent('unison:booking.updated'");

@@ -193,7 +193,7 @@ serve(async (req) => {
         // Generate session token
         const session = await createSession(newUser.id, normalizedSiteId, normalizedEmail);
 
-        console.log(`[site-auth] User registered: ${normalizedEmail} for site ${normalizedSiteId}`);
+        console.log(`[site-auth] User registered for site ${normalizedSiteId}`);
 
         return secureJsonResponse({
           success: true,
@@ -225,14 +225,14 @@ serve(async (req) => {
           .single();
 
         if (findError || !user) {
-          console.log(`[site-auth] Login failed - user not found: ${normalizedEmail} on site ${normalizedSiteId}`);
+          console.log(`[site-auth] Login failed for site ${normalizedSiteId}`);
           return errorResponse("Invalid email or password", 401, corsHeaders);
         }
 
         // Verify password
         const passwordValid = await bcrypt.compare(password, user.password_hash);
         if (!passwordValid) {
-          console.log(`[site-auth] Login failed - invalid password for: ${normalizedEmail}`);
+          console.log(`[site-auth] Login failed for site ${normalizedSiteId}`);
           return errorResponse("Invalid email or password", 401, corsHeaders);
         }
 
@@ -245,7 +245,7 @@ serve(async (req) => {
         // Generate session token
         const session = await createSession(user.id, normalizedSiteId, normalizedEmail);
 
-        console.log(`[site-auth] User logged in: ${normalizedEmail} for site ${normalizedSiteId}`);
+        console.log(`[site-auth] User logged in for site ${normalizedSiteId}`);
 
         return secureJsonResponse({
           success: true,

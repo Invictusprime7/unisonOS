@@ -171,13 +171,14 @@ function buildReadPayload(body: Record<string, unknown>, siteId: string): Record
   };
 }
 
+// Public booking reads return availability only. A visitor's own bookings are
+// never looked up by a browser-supplied session key: the confirmation comes
+// from the create response and is remembered in that visitor's browser.
 async function loadBookingState(
   supabase: ServerSupabaseClient,
   context: RuntimeContext,
-  siteId: string,
-  sessionId: string,
 ) {
-  const [servicesResult, slotsResult, bookingsResult] = await Promise.all([
+  const [servicesResult, slotsResult] = await Promise.all([
     supabase.from("services")
       .select("id,name,duration_minutes,price_cents,currency")
       .eq("business_id", context.businessId)
@@ -190,20 +191,13 @@ async function loadBookingState(
       .gt("starts_at", new Date().toISOString())
       .order("starts_at", { ascending: true })
       .limit(100),
-    supabase.from("bookings")
-      .select("id,service_id,service_name,starts_at,ends_at,status")
-      .eq("site_id", siteId)
-      .eq("session_id", sessionId)
-      .order("created_at", { ascending: false })
-      .limit(10),
   ]);
-  if (servicesResult.error || slotsResult.error || bookingsResult.error) {
+  if (servicesResult.error || slotsResult.error) {
     throw new RuntimeActionError(503, "Booking availability is unavailable");
   }
   return {
     services: servicesResult.data ?? [],
     slots: slotsResult.data ?? [],
-    bookings: bookingsResult.data ?? [],
   };
 }
 
@@ -420,16 +414,13 @@ Deno.serve(async (req) => {
   const read = asRecord(body.read);
   if (read?.type === "booking") {
     if (
-      typeof read.sessionId !== "string" ||
-      read.sessionId.length < 8 ||
-      read.sessionId.length > 200 ||
       !context.manifest.enabledCapabilities.includes("booking") ||
       !(await bookingCapabilityIsEnabled(supabase, body.siteId))
     ) {
       return errorResponse("Booking runtime is unavailable", 409, publicCorsHeaders);
     }
     try {
-      const state = await loadBookingState(supabase, context, body.siteId, read.sessionId);
+      const state = await loadBookingState(supabase, context);
       return secureJsonResponse({ success: true, state }, 200, publicCorsHeaders, rateHeaders);
     } catch (error) {
       if (error instanceof RuntimeActionError) return errorResponse(error.message, error.status, publicCorsHeaders);
