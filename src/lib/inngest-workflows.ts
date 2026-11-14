@@ -462,7 +462,7 @@ export const newsletterWelcomeWorkflow = inngest.createFunction(
 
     // Step 1: Immediate welcome email
     await step.run("send-welcome-email", async () => {
-      console.log(`[Newsletter] Welcome email sent`);
+      console.log(`[Newsletter] Welcome email for subscription ${subscriptionId}`);
       // TODO: Send welcome email with intro content
       return { sent: true, type: "welcome" };
     });
@@ -471,7 +471,7 @@ export const newsletterWelcomeWorkflow = inngest.createFunction(
     await step.sleep("wait-value-email", "3d");
 
     await step.run("send-value-email", async () => {
-      console.log(`[Newsletter] Value email sent`);
+      console.log(`[Newsletter] Value email for subscription ${subscriptionId}`);
       // TODO: Send helpful content/tips
       return { sent: true, type: "value" };
     });
@@ -480,7 +480,7 @@ export const newsletterWelcomeWorkflow = inngest.createFunction(
     await step.sleep("wait-engagement-email", "7d");
 
     await step.run("send-engagement-email", async () => {
-      console.log(`[Newsletter] Engagement email sent`);
+      console.log(`[Newsletter] Engagement email for subscription ${subscriptionId}`);
       // TODO: Send CTA or offer
       return { sent: true, type: "engagement" };
     });
