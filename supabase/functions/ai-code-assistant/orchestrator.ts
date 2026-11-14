@@ -57,7 +57,7 @@ import { buildApplyState, type ApplyState } from "./applyState.ts";
 import { preprocessPrompt } from "../_shared/promptPreprocessor.ts";
 import { buildLaunchDeskSystemPrompt, buildLaunchDeskUserMessage } from "./prompts/launchDeskPrompt.ts";
 import { CATALOG_CHAT_TOOLS, renderCatalogToolDirective, isPageDesignRequest } from "../_shared/catalogTools.ts";
-import { buildEnvelopeDirective, type EnvelopeShape } from "./envelopeContext.ts";
+import { appendEnvelopeToLastUserMessage, buildEnvelopeDirective, type EnvelopeShape } from "./envelopeContext.ts";
 import { verifyAgainstEnvelope, buildRepairInstruction } from "./envelopeVerifier.ts";
 import { recordEnvelopeRun, type EnvelopeRunContext } from "./envelopeRunLog.ts";
 import {
@@ -351,7 +351,8 @@ async function runLaunchDeskLane(
   const { messages, launchBrief } = parsed;
 
   let systemPrompt = buildLaunchDeskSystemPrompt();
-  systemPrompt += buildEnvelopeDirective(parsed.requestEnvelope as EnvelopeShape | undefined);
+  // The caller-supplied envelope rides in the user turn, never the system prompt.
+  const launchEnvelopeDirective = buildEnvelopeDirective(parsed.requestEnvelope as EnvelopeShape | undefined);
   systemPrompt += buildUnisonContextDirective(parsed.unisonContext);
 
   // Build the user turn — synthesise the brief from launchBrief fields,
@@ -363,6 +364,8 @@ async function runLaunchDeskLane(
     const lastUser = [...messages].reverse().find(m => m.role === 'user');
     userContent = typeof lastUser?.content === 'string' ? lastUser.content : 'No brief provided.';
   }
+
+  if (launchEnvelopeDirective) userContent += `\n\n${launchEnvelopeDirective.trim()}`;
 
   const aiMessages = [
     { role: 'system', content: systemPrompt },
@@ -701,7 +704,7 @@ async function runBuilderLane(
     (parsed as { requestEnvelope?: EnvelopeShape }).requestEnvelope,
   );
   if (envelopeDirective) {
-    finalSystemPrompt += envelopeDirective;
+    // Caller-supplied: appended to the user's own turn below, never to the system prompt.
     const env = (parsed as { requestEnvelope?: EnvelopeShape }).requestEnvelope;
     console.log('[orchestrator] envelope directive injected', {
       kinds: env?.requestKinds ?? [],
@@ -753,9 +756,10 @@ async function runBuilderLane(
     }
   }
 
+  const conversationMessages = appendEnvelopeToLastUserMessage(processedMessages, envelopeDirective);
   const aiMessages = [
     { role: 'system', content: finalSystemPrompt },
-    ...processedMessages,
+    ...conversationMessages,
   ];
 
   // ── 8. Call AI providers (complexity-aware model selection) ─────────────
@@ -783,7 +787,7 @@ async function runBuilderLane(
     finalSystemPrompt += renderCatalogToolDirective();
   }
   const aiMessagesForCall = enableCatalogTools
-    ? [{ role: 'system', content: finalSystemPrompt }, ...processedMessages]
+    ? [{ role: 'system', content: finalSystemPrompt }, ...conversationMessages]
     : aiMessages;
   const providerResult = await runProviderLoop({
     aiMessages: aiMessagesForCall,

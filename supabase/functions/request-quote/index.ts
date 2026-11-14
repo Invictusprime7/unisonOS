@@ -159,12 +159,12 @@ serve(async (req) => {
   if (ownerTo) {
     await sendEmailSafe({
       to: ownerTo,
-      subject: `New quote request — ${body.name?.trim() || normalizedEmail}`,
+      subject: `New quote request — ${(body.name?.trim() || normalizedEmail).replace(/[\r\n]+/g, " ")}`,
       replyTo: normalizedEmail,
       html: `
         <div>
           <h1>New quote request</h1>
-          <p><strong>Business:</strong> ${biz?.name ?? body.businessId}</p>
+          <p><strong>Business:</strong> ${escapeHtml(biz?.name ?? body.businessId)}</p>
           <p><strong>Name:</strong> ${escapeHtml(body.name || "—")}</p>
           <p><strong>Email:</strong> ${escapeHtml(normalizedEmail)}</p>
           ${body.phone ? `<p><strong>Phone:</strong> ${escapeHtml(body.phone)}</p>` : ""}
@@ -179,14 +179,14 @@ serve(async (req) => {
 
   await sendEmailSafe({
     to: normalizedEmail,
-    subject: `We received your quote request${biz?.name ? ` — ${biz.name}` : ""}`,
+    subject: `We received your quote request${biz?.name ? ` — ${String(biz.name).replace(/[\r\n]+/g, " ")}` : ""}`,
     replyTo: ownerTo,
     html: `
       <div>
         <h1>Thanks for reaching out${body.name ? `, ${escapeHtml(body.name)}` : ""}</h1>
         <p>We received your request and will send a personalized quote within one business day.</p>
         ${body.serviceInterest ? `<p><strong>You asked about:</strong> ${escapeHtml(body.serviceInterest)}</p>` : ""}
-        <p>Talk soon,<br/>${biz?.name ?? "The team"}</p>
+        <p>Talk soon,<br/>${escapeHtml(biz?.name ?? "The team")}</p>
       </div>
     `,
   });

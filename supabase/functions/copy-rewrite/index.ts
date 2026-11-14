@@ -35,7 +35,10 @@ serve(async (req) => {
     }
 
     const text = typeof body.text === "string" ? sanitizeString(body.text, 20_000) : "";
-    const tone = typeof body.tone === "string" ? sanitizeString(body.tone, 100) : "professional";
+    // Only known tones reach the instructions; anything else falls back to professional.
+    const ALLOWED_TONES = new Set(["professional", "casual", "persuasive", "friendly", "urgent", "authoritative"]);
+    const requestedTone = typeof body.tone === "string" ? body.tone.trim().toLowerCase() : "";
+    const tone = ALLOWED_TONES.has(requestedTone) ? requestedTone : "professional";
     const purpose = typeof body.purpose === "string" ? sanitizeString(body.purpose, 100) : "";
     if (!text) {
       return errorResponse("text is required", 400, corsHeaders);
