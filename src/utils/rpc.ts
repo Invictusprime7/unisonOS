@@ -106,9 +106,17 @@ export class RPCHost {
 export class RPCClient {
   private handlers = new Map<RPCMethod, RPCHandler>();
   private pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (error: any) => void }>();
+  private readonly onMessage = (event: MessageEvent) => { void this.handleMessage(event); };
 
-  constructor() {
-    window.addEventListener('message', this.handleMessage.bind(this));
+  /**
+   * @param parentOrigin The editor's origin. Messages from any other window or
+   * origin are ignored, and requests and replies are only sent to it.
+   */
+  constructor(private readonly parentOrigin: string) {
+    if (!parentOrigin || parentOrigin === '*') {
+      throw new Error('RPCClient requires the exact parent origin');
+    }
+    window.addEventListener('message', this.onMessage);
   }
 
   register(method: RPCMethod, handler: RPCHandler) {
@@ -116,13 +124,13 @@ export class RPCClient {
   }
 
   async call(method: RPCMethod, ...params: any[]): Promise<any> {
-    const id = Math.random().toString(36).substring(7);
+    const id = crypto.randomUUID();
     const request: RPCRequest = { id, method, params };
 
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject });
-      window.parent.postMessage(request, '*');
-      
+      window.parent.postMessage(request, this.parentOrigin);
+
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
@@ -133,12 +141,15 @@ export class RPCClient {
   }
 
   private async handleMessage(event: MessageEvent) {
+    // Only the parent editor window, at its exact origin, may answer or call.
+    if (event.source !== window.parent || event.origin !== this.parentOrigin) return;
     const data = event.data;
+    if (!data || typeof data !== 'object') return;
 
     if (data.id && this.pendingRequests.has(data.id)) {
       const { resolve, reject } = this.pendingRequests.get(data.id)!;
       this.pendingRequests.delete(data.id);
-      
+
       if (data.error) {
         reject(new Error(data.error));
       } else {
@@ -157,12 +168,12 @@ export class RPCClient {
         response.error = error instanceof Error ? error.message : 'Unknown error';
       }
 
-      window.parent.postMessage(response, '*');
+      window.parent.postMessage(response, this.parentOrigin);
     }
   }
 
   destroy() {
-    window.removeEventListener('message', this.handleMessage.bind(this));
+    window.removeEventListener('message', this.onMessage);
     this.pendingRequests.clear();
     this.handlers.clear();
   }
